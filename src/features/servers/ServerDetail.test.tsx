@@ -1,0 +1,130 @@
+﻿import { cleanup, render, screen } from "../../test/render";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppSettingsProvider } from "../../i18n";
+import { ServerDetail } from "./ServerDetail";
+import { useServerUiStore } from "./serverUiStore";
+import type { ServerProfile } from "./types";
+
+vi.mock("../../lib/desktop-runtime", () => ({
+  invokeDesktopCommand: vi.fn(async (command: string) => {
+    if (command === "get_server_process_status") {
+      return null;
+    }
+    if (command === "list_process_events") {
+      return [];
+    }
+    return null;
+  }),
+}));
+
+vi.mock("../console/ConsoleView", () => ({
+  ConsoleView: () => {
+    throw new Error("console render failed");
+  },
+}));
+
+const server: ServerProfile = {
+  id: "server-1",
+  name: "Review Server",
+  rootDir: "C:/Temp/review-server",
+  minecraftVersion: "1.20.4",
+  loaderType: "paper",
+  loaderVersion: null,
+  javaPath: null,
+  serverPort: 25565,
+  minMemoryMb: 1024,
+  maxMemoryMb: 4096,
+  autoStart: false,
+  createdAt: "2026-07-01T00:00:00Z",
+  updatedAt: "2026-07-01T00:00:00Z",
+  restartPolicy: {
+    enabled: true,
+    maxAttempts: 3,
+    cooldownSeconds: 30,
+  },
+};
+
+function renderDetail() {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
+
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <AppSettingsProvider>
+        <ServerDetail server={server} />
+      </AppSettingsProvider>
+    </QueryClientProvider>,
+  );
+}
+
+describe("ServerDetail", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    useServerUiStore.setState({ selectedTabs: {} });
+  });
+
+  it("keeps the server detail view usable when a lazy tab panel crashes", async () => {
+    renderDetail();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Console" }));
+
+    expect(
+      await screen.findByText("This panel could not load"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("console render failed")).toBeInTheDocument();
+    expect(screen.getByText("Review Server")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(await screen.findByText("Root folder")).toBeInTheDocument();
+  });
+
+  it("renders invalid profile dates without crashing the activity panel", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppSettingsProvider>
+          <ServerDetail server={{ ...server, updatedAt: "not-a-date" }} />
+        </AppSettingsProvider>
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
+
+    expect(await screen.findByText("Invalid date")).toBeInTheDocument();
+    expect(screen.getByText("Review Server")).toBeInTheDocument();
+  });
+
+  it("localizes every server detail tab", () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+
+    renderDetail();
+
+    [
+      "控制台",
+      "文件",
+      "内容",
+      "备份",
+      "设置",
+      "活动",
+    ].forEach((label) => {
+      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
+    });
+  });
+});
+
