@@ -74,7 +74,13 @@ function RecentActivityTimeline({ serverId }: { serverId: string }) {
   );
 }
 
-function OverviewPanel({ server }: { server: ServerProfile }) {
+function OverviewPanel({
+  server,
+  onViewAllActivity,
+}: {
+  server: ServerProfile;
+  onViewAllActivity: () => void;
+}) {
   const { t } = useAppSettings();
 
   return (
@@ -111,7 +117,11 @@ function OverviewPanel({ server }: { server: ServerProfile }) {
       <section className="activity-recent-section">
         <div className="activity-recent-header">
           <h3>{t("activity.recent")}</h3>
-          <button className="button-link" type="button">
+          <button
+            className="button-link"
+            type="button"
+            onClick={onViewAllActivity}
+          >
             {t("activity.viewAll")}
             <ChevronRight aria-hidden="true" size={12} />
           </button>
@@ -141,7 +151,10 @@ export function ServerActivityView({ server }: { server: ServerProfile }) {
       </Tabs.List>
 
       <Tabs.Content value="overview">
-        <OverviewPanel server={server} />
+        <OverviewPanel
+          server={server}
+          onViewAllActivity={() => setActiveSubTab("logs")}
+        />
       </Tabs.Content>
       <Tabs.Content value="players">
         <PlayersView server={server} />

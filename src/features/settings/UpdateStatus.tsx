@@ -14,6 +14,7 @@ interface AppUpdateStatus {
   updateAvailable: boolean;
   installerEnabled: boolean;
   installBlockedByRunningServers: boolean;
+  runningServerCount?: number;
   latestVersion?: string | null;
   releaseNotes?: string | null;
   releaseDate?: string | null;
@@ -123,7 +124,9 @@ export function UpdateStatus() {
           {status.releaseNotes ? <p>{status.releaseNotes}</p> : null}
           {status.installBlockedByRunningServers ? (
             <p className="danger-text">
-              {t("settings.updates.blockedRunningServers")}
+              {t("settings.updates.blockedRunningServers", {
+                count: status.runningServerCount ?? 0,
+              })}
             </p>
           ) : null}
           {installMutation.error ? (

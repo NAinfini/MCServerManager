@@ -30,8 +30,6 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - uses: dtolnay/rust-toolchain@stable
-
       - run: pnpm install --frozen-lockfile
 
       - name: Verify release version
@@ -43,30 +41,16 @@ jobs:
           }
           $version = $tag.Substring(1)
           $packageVersion = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          $cargoVersion = (Select-String -Path src-tauri/Cargo.toml -Pattern '^\s*version\s*=\s*"([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
-          if ($packageVersion -ne $version -or $tauriVersion -ne $version -or $cargoVersion -ne $version) {
-            throw "Release tag $tag does not match package=$packageVersion tauri=$tauriVersion cargo=$cargoVersion"
+          if ($packageVersion -ne $version) {
+            throw "Release tag $tag does not match package.json version $packageVersion"
           }
 
       - run: pnpm build
 
       - run: pnpm vitest run
 
-      - run: cargo test --locked
-        working-directory: src-tauri
-
-      - run: cargo clippy --locked --all-targets -- -D warnings
-        working-directory: src-tauri
-
-      - uses: tauri-apps/tauri-action@v0
+      - name: Publish Windows Electron release
+        run: pnpm exec electron-builder --win --publish always
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          releaseName: "MC Server Manager ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
-          releaseBody: "Signed Windows updater artifacts for MC Server Manager."
-          releaseDraft: false
-          prerelease: false
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false

@@ -22,19 +22,3 @@ export function detectServerVersion(rootDir: string) {
   );
 }
 
-/**
- * Detect Java installations available on this system.
- * Returns paths and version info for each found JRE/JDK.
- */
-export interface DetectedJava {
-  path: string;
-  version: string;
-  vendor: string | null;
-  architecture: string | null;
-}
-
-export function detectSystemJava() {
-  return invokeDesktopCommandWithErrorHandling<DetectedJava[]>(
-    "detect_system_java",
-  );
-}

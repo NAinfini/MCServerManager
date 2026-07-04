@@ -10,6 +10,7 @@ const closedDatabases = new WeakSet();
 const databaseAppDataDirs = new WeakMap();
 const databaseProcessSpawners = new WeakMap();
 const restartRuntimeState = new Map();
+const restartCountdownTimers = new Map();
 
 const loaderToDb = {
   vanilla: "vanilla",
@@ -257,6 +258,7 @@ function createBackend(app) {
       for (const [serverId, managed] of managedChildren.entries()) {
         if (managed.db === db) {
           clearRestartState(serverId);
+          clearRestartCountdown(serverId);
           managed.stopRequested = true;
           managed.child.kill();
           managedChildren.delete(serverId);
@@ -300,6 +302,8 @@ function handleCommand(db, command, args) {
       return createServerProfile(db, args?.input);
     case "get_default_server_root":
       return { path: managedServerRoot(db, args?.input?.name || "server", false) };
+    case "detect_server_version":
+      return detectServerVersion(args?.rootDir || args?.input?.rootDir);
     case "update_server_profile":
       return updateServerProfile(db, args?.input);
     case "delete_server_profile":
@@ -328,6 +332,8 @@ function handleCommand(db, command, args) {
       return stopServer(db, args?.serverId);
     case "restart_server":
       return restartServer(db, args?.serverId);
+    case "restart_server_with_countdown":
+      return restartServerWithCountdown(db, args?.input);
     case "send_server_command":
       return sendServerCommand(db, args?.serverId, args?.command);
     case "list_server_files":
@@ -393,6 +399,12 @@ function handleCommand(db, command, args) {
       return saveContentUpdatePolicy(db, args?.input);
     case "plan_content_updates":
       return planContentUpdates(db, args?.input);
+    case "check_content_updates":
+      return checkContentUpdates(db, args?.input);
+    case "install_content_update":
+      return installContentUpdate(db, args?.input);
+    case "install_all_content_updates":
+      return installAllContentUpdates(db, args?.input);
     case "list_tunnel_providers":
       return listTunnelProviders(db);
     case "list_tunnel_statuses":
@@ -1028,6 +1040,86 @@ function safeServerPath(db, serverId, relativePath = "") {
     throw new Error("path escapes server root");
   }
   return { root, target };
+}
+
+function readPropertiesFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return {};
+  }
+  return Object.fromEntries(
+    fs
+      .readFileSync(filePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((line) => {
+        const separator = line.indexOf("=");
+        if (separator === -1) {
+          return [line, ""];
+        }
+        return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+      }),
+  );
+}
+
+function parseServerJarName(fileName) {
+  const lower = fileName.toLowerCase();
+  const minecraftVersion = fileName.match(/(\d+\.\d+(?:\.\d+)?)/)?.[1] ?? null;
+  let loaderType = null;
+  let loaderVersion = null;
+
+  if (lower.includes("paper") || lower.includes("spigot")) {
+    loaderType = "paper";
+    loaderVersion =
+      fileName.match(/\d+\.\d+(?:\.\d+)?[-+_ ]+(\d+)/)?.[1] ?? null;
+  } else if (lower.includes("neoforge")) {
+    loaderType = "neoForge";
+    loaderVersion =
+      fileName.match(/neoforge[-+_ ]*([0-9][\w.+-]*)/i)?.[1] ?? null;
+  } else if (lower.includes("forge")) {
+    loaderType = "forge";
+    loaderVersion =
+      fileName.match(/forge[-+_ ]*(?:\d+\.\d+(?:\.\d+)?[-+_ ])?([0-9][\w.+-]*)/i)
+        ?.[1] ?? null;
+  } else if (lower.includes("fabric")) {
+    loaderType = "fabric";
+    loaderVersion =
+      fileName.match(/fabric[-+_ ]*(?:server[-+_ ])?([0-9][\w.+-]*)/i)?.[1] ??
+      null;
+  } else if (lower.includes("server") || lower.includes("minecraft")) {
+    loaderType = "vanilla";
+  }
+
+  return { loaderType, minecraftVersion, loaderVersion };
+}
+
+function detectServerVersion(rootDir) {
+  const root = stringFilePath(rootDir, "server root directory");
+  if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
+    throw new Error("server root path does not exist or is not a directory");
+  }
+
+  const propertiesPath = path.join(root, "server.properties");
+  const properties = readPropertiesFile(propertiesPath);
+  const jars = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".jar"))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+  const parsedJar =
+    jars.map(parseServerJarName).find((jar) => jar.loaderType || jar.minecraftVersion) ??
+    {};
+  const port = Number.parseInt(properties["server-port"] || "", 10);
+
+  return {
+    loaderType: parsedJar.loaderType ?? null,
+    minecraftVersion: parsedJar.minecraftVersion ?? null,
+    loaderVersion: parsedJar.loaderVersion ?? null,
+    serverJarName: jars[0] ?? null,
+    hasEula: fs.existsSync(path.join(root, "eula.txt")),
+    hasServerProperties: fs.existsSync(propertiesPath),
+    serverPort: Number.isFinite(port) ? port : null,
+  };
 }
 
 function directorySizeBytes(target) {
@@ -1935,6 +2027,7 @@ function startServer(db, serverId, options = {}) {
 
 function stopServer(db, serverId) {
   const id = requireServerId(serverId);
+  clearRestartCountdown(id);
   const managed = managedChildren.get(id);
   if (managed) {
     managed.stopRequested = true;
@@ -2004,6 +2097,7 @@ function waitForManagedExitBeforeRestart(db, serverId, managed) {
 
 async function restartServer(db, serverId) {
   const id = requireServerId(serverId);
+  clearRestartCountdown(id);
   const managed = managedChildren.get(id);
   if (!managed) {
     return startServer(db, id);
@@ -2012,6 +2106,100 @@ async function restartServer(db, serverId) {
   stopServer(db, id);
   await exitPromise;
   return startServer(db, id);
+}
+
+function clearRestartCountdown(serverId) {
+  const timers = restartCountdownTimers.get(serverId);
+  if (!timers) {
+    return;
+  }
+  for (const timer of timers) {
+    clearTimeout(timer);
+  }
+  restartCountdownTimers.delete(serverId);
+}
+
+function normalizeCountdownSteps(steps) {
+  const values = Array.isArray(steps) && steps.length > 0 ? steps : [300, 60, 10];
+  return Array.from(
+    new Set(
+      values
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .map((value) => Math.floor(value)),
+    ),
+  ).sort((left, right) => right - left);
+}
+
+function formatCountdownTime(seconds) {
+  if (seconds % 60 === 0 && seconds >= 60) {
+    const minutes = seconds / 60;
+    return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  }
+  return `${seconds} second${seconds === 1 ? "" : "s"}`;
+}
+
+function restartServerWithCountdown(db, input) {
+  const id = requireServerId(input?.serverId);
+  const managed = managedChildren.get(id);
+  if (!managed) {
+    return startServer(db, id);
+  }
+  const stepsSeconds = normalizeCountdownSteps(input?.stepsSeconds);
+  const durationSeconds = stepsSeconds[0] ?? 0;
+  const messageTemplate =
+    typeof input?.messageTemplate === "string" && input.messageTemplate.trim()
+      ? input.messageTemplate.trim()
+      : "Server restarting in {time}";
+  clearRestartCountdown(id);
+  const timers = [];
+  const sendCountdownMessage = (seconds) => {
+    const current = managedChildren.get(id);
+    if (!current) {
+      return;
+    }
+    const time = formatCountdownTime(seconds);
+    sendServerCommand(db, id, `say ${messageTemplate.replace("{time}", time)}`);
+  };
+
+  for (const seconds of stepsSeconds) {
+    if (seconds === durationSeconds) {
+      continue;
+    }
+    const delayMs = Math.max(0, durationSeconds - seconds) * 1000;
+    const timer = setTimeout(() => sendCountdownMessage(seconds), delayMs);
+    timer.unref?.();
+    timers.push(timer);
+  }
+
+  const restartTimer = setTimeout(() => {
+    restartCountdownTimers.delete(id);
+    Promise.resolve(restartServer(db, id)).catch((error) => {
+      addProcessEvent(
+        db,
+        id,
+        "error",
+        `Restart countdown failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }, durationSeconds * 1000);
+  restartTimer.unref?.();
+  timers.push(restartTimer);
+  restartCountdownTimers.set(id, timers);
+  addProcessEvent(
+    db,
+    id,
+    "info",
+    `Restart countdown scheduled for ${formatCountdownTime(durationSeconds)}.`,
+  );
+  if (stepsSeconds.includes(durationSeconds)) {
+    sendCountdownMessage(durationSeconds);
+  }
+  return {
+    serverId: id,
+    stepsSeconds,
+    scheduledFor: new Date(Date.now() + durationSeconds * 1000).toISOString(),
+  };
 }
 
 function listServerFiles(db, serverId, relativePath) {
@@ -2360,6 +2548,10 @@ function restoreWorldBackup(db, input) {
     backup.server_id,
     trimRequired(input.targetWorldDir, "target world directory is required"),
   );
+  fs.rmSync(target, {
+    recursive: true,
+    force: true,
+  });
   fs.cpSync(sourceWorld, target, {
     recursive: true,
     force: true,
@@ -2804,6 +2996,267 @@ function planContentUpdates(db, input) {
   };
 }
 
+function parseInstalledContentProvider(contentId) {
+  const parts = String(contentId || "").split(":");
+  if (parts.length < 3) {
+    return null;
+  }
+  const [provider, projectId, versionId] = parts;
+  if (!provider || !projectId || !versionId) {
+    return null;
+  }
+  return { provider, projectId, versionId };
+}
+
+function versionMatchesServer(version, profile) {
+  const loaders = version.loaders || [];
+  const gameVersions = version.gameVersions || [];
+  return (
+    (loaders.length === 0 || loaders.includes(profile.loaderType)) &&
+    (gameVersions.length === 0 || gameVersions.includes(profile.minecraftVersion))
+  );
+}
+
+function firstCompatibleVersion(versions, profile, currentVersionId) {
+  return versions.find(
+    (version) =>
+      version.id !== currentVersionId &&
+      version.name !== currentVersionId &&
+      versionMatchesServer(version, profile),
+  );
+}
+
+function contentUpdateFile(update) {
+  const files = update.files || [];
+  return (
+    files.find((file) => file.primary && file.url) ||
+    files.find((file) => file.url) ||
+    null
+  );
+}
+
+async function resolveContentUpdate(db, profile, content) {
+  const parsed = parseInstalledContentProvider(content.content_id);
+  if (!parsed) {
+    return {
+      warning: `${content.name} has no marketplace source metadata and must be updated manually.`,
+    };
+  }
+
+  if (parsed.provider === "modrinth") {
+    const latest = firstCompatibleVersion(
+      await listModrinthVersions({ projectId: parsed.projectId }),
+      profile,
+      parsed.versionId,
+    );
+    if (!latest) return null;
+    const file = contentUpdateFile(latest);
+    if (!file?.url) {
+      return { warning: `${content.name} has no downloadable Modrinth file.` };
+    }
+    return {
+      installedContentId: content.id,
+      provider: "modrinth",
+      projectId: parsed.projectId,
+      versionId: latest.id,
+      currentVersion: content.version,
+      latestVersion: latest.versionNumber,
+      name: content.name,
+      fileName: file.filename,
+      downloadUrl: file.url,
+      nextContentId: `modrinth:${parsed.projectId}:${latest.id}`,
+      warnings: latest.warnings || [],
+    };
+  }
+
+  if (parsed.provider === "hangar") {
+    const latest = (await listHangarVersions({ projectId: parsed.projectId })).find(
+      (version) => version.name !== parsed.versionId,
+    );
+    if (!latest) return null;
+    const projectName =
+      parsed.projectId.split("/").filter(Boolean).pop() || parsed.projectId;
+    return {
+      installedContentId: content.id,
+      provider: "hangar",
+      projectId: parsed.projectId,
+      versionId: latest.name,
+      currentVersion: content.version,
+      latestVersion: latest.name,
+      name: content.name,
+      fileName: `${projectName}-${latest.name}.jar`,
+      downloadUrl: `https://hangar.papermc.io/api/v1/projects/${encodeHangarProjectId(parsed.projectId)}/versions/${encodeURIComponent(latest.name)}/PAPER/download`,
+      nextContentId: `hangar:${parsed.projectId}:${latest.name}`,
+      warnings: [],
+    };
+  }
+
+  if (parsed.provider === "curseforge") {
+    const latest = firstCompatibleVersion(
+      await listCurseForgeFiles({ modId: parsed.projectId }),
+      profile,
+      parsed.versionId,
+    );
+    if (!latest) return null;
+    const file = latest.files?.[0];
+    return {
+      installedContentId: content.id,
+      provider: "curseforge",
+      projectId: parsed.projectId,
+      versionId: latest.id,
+      currentVersion: content.version,
+      latestVersion: latest.versionNumber,
+      name: content.name,
+      fileName: file?.filename || `${parsed.projectId}-${latest.id}.jar`,
+      downloadUrl: await curseForgeDownloadUrl(parsed.projectId, latest.id),
+      headers: { "x-api-key": curseForgeApiKey() },
+      nextContentId: `curseforge:${parsed.projectId}:${latest.id}`,
+      warnings: latest.warnings || [],
+    };
+  }
+
+  if (parsed.provider === "bbsmc") {
+    const latest = firstCompatibleVersion(
+      await listBbsmcVersions({ projectId: parsed.projectId }),
+      profile,
+      parsed.versionId,
+    );
+    if (!latest) return null;
+    const file = selectInstallableBbsmcFile(latest);
+    try {
+      ensureBbsmcFileIsDirect(file, latest);
+    } catch (error) {
+      return {
+        warning: error instanceof Error ? error.message : String(error),
+      };
+    }
+    return {
+      installedContentId: content.id,
+      provider: "bbsmc",
+      projectId: parsed.projectId,
+      versionId: latest.id,
+      currentVersion: content.version,
+      latestVersion: latest.versionNumber,
+      name: content.name,
+      fileName: file.filename,
+      downloadUrl: file.url,
+      nextContentId: `bbsmc:${parsed.projectId}:${latest.id}`,
+      warnings: latest.warnings || [],
+    };
+  }
+
+  return {
+    warning: `${content.name} uses unsupported content provider ${parsed.provider}.`,
+  };
+}
+
+async function checkContentUpdates(db, input) {
+  const profile = getServerProfile(db, requireServerId(input?.serverId));
+  const rows = db
+    .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+    .all(profile.id);
+  const updates = [];
+  const warnings = [];
+  for (const row of rows) {
+    const result = await resolveContentUpdate(db, profile, row);
+    if (!result) continue;
+    if (result.warning) {
+      warnings.push(result.warning);
+      continue;
+    }
+    updates.push(result);
+  }
+  return {
+    serverId: profile.id,
+    checkedAt: nowIso(),
+    updates,
+    warnings,
+  };
+}
+
+function uniqueBackupPath(filePath) {
+  let candidate = `${filePath}.mcsm-backup`;
+  let suffix = 1;
+  while (fs.existsSync(candidate)) {
+    candidate = `${filePath}.${suffix}.mcsm-backup`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+async function installResolvedContentUpdate(db, content, update) {
+  const targetDir = path.dirname(content.installed_path);
+  fs.mkdirSync(targetDir, { recursive: true });
+  const targetPath = uniqueTargetPath(targetDir, update.fileName);
+  await downloadRemoteFile(update.downloadUrl, targetPath, update.headers || {});
+  let backupPath = null;
+  if (fs.existsSync(content.installed_path)) {
+    backupPath = uniqueBackupPath(content.installed_path);
+    fs.renameSync(content.installed_path, backupPath);
+  }
+  const now = nowIso();
+  db.prepare(
+    `UPDATE installed_content
+        SET content_id = ?,
+            version = ?,
+            source_path = ?,
+            installed_path = ?,
+            sha256 = ?,
+            warnings_json = ?,
+            installed_at = ?
+      WHERE id = ?`,
+  ).run(
+    update.nextContentId,
+    update.latestVersion,
+    update.downloadUrl,
+    targetPath,
+    sha256File(targetPath),
+    JSON.stringify(update.warnings || []),
+    now,
+    content.id,
+  );
+  return {
+    content: mapInstalledContent(
+      db.prepare("SELECT * FROM installed_content WHERE id = ?").get(content.id),
+    ),
+    backupPath,
+  };
+}
+
+async function installContentUpdate(db, input) {
+  const profile = getServerProfile(db, requireServerId(input?.serverId));
+  const content = db
+    .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
+    .get(input?.installedContentId, profile.id);
+  if (!content) {
+    throw new Error("installed content not found");
+  }
+  const update = await resolveContentUpdate(db, profile, content);
+  if (!update || update.warning) {
+    throw new Error(update?.warning || "installed content is already current");
+  }
+  return installResolvedContentUpdate(db, content, update);
+}
+
+async function installAllContentUpdates(db, input) {
+  const profile = getServerProfile(db, requireServerId(input?.serverId));
+  const plan = await checkContentUpdates(db, { serverId: profile.id });
+  const installed = [];
+  for (const update of plan.updates) {
+    const content = db
+      .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
+      .get(update.installedContentId, profile.id);
+    if (content) {
+      installed.push(await installResolvedContentUpdate(db, content, update));
+    }
+  }
+  return {
+    serverId: profile.id,
+    installed,
+    warnings: plan.warnings,
+  };
+}
+
 function listTunnelProviders(db) {
   return db
     .prepare("SELECT * FROM tunnel_providers ORDER BY created_at DESC")
@@ -3183,10 +3636,7 @@ async function runScheduledTaskAction(db, task) {
         targetVersion: task.command || undefined,
       });
     case "content_update_check":
-      return planContentUpdates(db, {
-        serverId: task.server_id,
-        availableUpdates: [],
-      });
+      return checkContentUpdates(db, { serverId: task.server_id });
     default:
       throw new Error(`unsupported scheduled task kind: ${task.kind}`);
   }

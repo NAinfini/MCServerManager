@@ -1,5 +1,7 @@
 # Product
 
+[简体中文](PRODUCT.zh-CN.md)
+
 ## Register
 
 product
@@ -26,8 +28,16 @@ Avoid marketing-page visuals, oversized hero sections, decorative gradients, toy
 - Use familiar desktop tool patterns over decorative novelty.
 - Prefer compact, aligned controls for repeated server operations.
 - Make errors explicit and recoverable.
-- Preserve keyboard and screen-reader access in every control.
+- Preserve keyboard and screen-reader access in every control without using browser-default focus outlines.
+- Require explicit confirmation for destructive or interrupting actions.
 
 ## Accessibility & Inclusion
 
-Target WCAG AA contrast. Support keyboard navigation, visible focus states, reduced motion, and color-independent status labels.
+Target WCAG AA contrast, reduced motion, and color-independent status labels. Keyboard navigation should remain functional, but default focus outlines are intentionally suppressed to preserve the app's desktop visual style.
+
+## Update & Content Policy
+
+- App updates are checked from GitHub Releases and installed only after user confirmation.
+- App update installation is blocked while managed servers are running.
+- Mods, plugins, modpacks, and server jars are never silently auto-installed.
+- Installed content updates are manual: detect updates, then update all or update individual items.

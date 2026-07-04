@@ -64,4 +64,33 @@ describe("UpdateStatus", () => {
       });
     });
   });
+
+  it("blocks app update installation while managed servers are running", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "check_app_update") {
+        return {
+          currentVersion: "1.0.0",
+          channel: "stable",
+          checkedAt: "2026-07-01T00:00:00Z",
+          updateAvailable: true,
+          installerEnabled: false,
+          installBlockedByRunningServers: true,
+          runningServerCount: 2,
+          latestVersion: "1.1.0",
+          releaseNotes: null,
+          releaseDate: "2026-07-01T00:00:00Z",
+          message: "Update available",
+        };
+      }
+      return {};
+    });
+    renderUpdateStatus();
+
+    expect(
+      await screen.findByText(/2 managed servers are running/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /install update/i }),
+    ).toBeDisabled();
+  });
 });

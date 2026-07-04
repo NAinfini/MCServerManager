@@ -1,5 +1,10 @@
+packages:
+  - "."
+
 allowBuilds:
   electron: true
   electron-winstaller: true
   esbuild: true
 confirmModulesPurge: false
+overrides:
+  dompurify: 3.4.11

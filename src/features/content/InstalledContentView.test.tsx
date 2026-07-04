@@ -108,4 +108,58 @@ describe("InstalledContentView", () => {
       });
     });
   });
+
+  it("checks content updates and lets users update one item or all items manually", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_installed_content") {
+        return [content];
+      }
+      if (command === "check_content_updates") {
+        return {
+          serverId: server.id,
+          checkedAt: "2026-07-03T00:00:00Z",
+          updates: [
+            {
+              installedContentId: content.id,
+              provider: "modrinth",
+              name: "Fabric API",
+              currentVersion: "1.0.0",
+              latestVersion: "2.0.0",
+              warnings: [],
+            },
+          ],
+          warnings: [],
+        };
+      }
+      if (command === "install_content_update") {
+        return { content: { ...content, version: "2.0.0" } };
+      }
+      if (command === "install_all_content_updates") {
+        return { serverId: server.id, installed: [], warnings: [] };
+      }
+      return {};
+    });
+    renderContent();
+
+    await user.click(await screen.findByRole("button", { name: "Check updates" }));
+
+    expect(await screen.findByText("2.0.0")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Update Fabric API" }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_content_update", {
+        input: {
+          serverId: server.id,
+          installedContentId: content.id,
+        },
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: "Update all" }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_all_content_updates", {
+        input: { serverId: server.id },
+      });
+    });
+  });
 });

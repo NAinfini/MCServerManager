@@ -27,6 +27,12 @@ export interface ProcessSummary {
   crashedCount: number;
 }
 
+export interface RestartCountdownResult {
+  serverId: string;
+  stepsSeconds: number[];
+  scheduledFor: string;
+}
+
 export function startServer(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<ManagedProcess>("start_server", { serverId });
 }
@@ -44,6 +50,15 @@ export function sendServerCommand(serverId: string, command: string) {
 
 export function restartServer(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<ManagedProcess>("restart_server", { serverId });
+}
+
+export function restartServerWithCountdown(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<RestartCountdownResult>(
+    "restart_server_with_countdown",
+    {
+      input: { serverId },
+    },
+  );
 }
 
 export function getServerProcessStatus(serverId: string) {

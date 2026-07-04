@@ -40,6 +40,29 @@ export interface ContentUpdatePlan {
   requiresConfirmation: boolean;
 }
 
+export interface InstalledContentUpdate {
+  installedContentId: string;
+  provider: string;
+  projectId: string;
+  versionId: string;
+  name: string;
+  currentVersion?: string | null;
+  latestVersion: string;
+  warnings: string[];
+}
+
+export interface InstalledContentUpdateCheck {
+  serverId: string;
+  checkedAt: string;
+  updates: InstalledContentUpdate[];
+  warnings: string[];
+}
+
+export interface InstalledContentUpdateResult {
+  content: InstalledContent;
+  backupPath?: string | null;
+}
+
 export interface ContentUpdateCandidate {
   contentId?: string | null;
   name: string;
@@ -123,5 +146,36 @@ export function planContentUpdates(
       installAnyway: options.installAnyway ?? false,
       confirmBatch: options.confirmBatch ?? false,
     },
+  });
+}
+
+export function checkContentUpdates(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<InstalledContentUpdateCheck>(
+    "check_content_updates",
+    {
+      input: { serverId },
+    },
+  );
+}
+
+export function installContentUpdate(
+  serverId: string,
+  installedContentId: string,
+) {
+  return invokeDesktopCommandWithErrorHandling<InstalledContentUpdateResult>(
+    "install_content_update",
+    {
+      input: { serverId, installedContentId },
+    },
+  );
+}
+
+export function installAllContentUpdates(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<{
+    serverId: string;
+    installed: InstalledContentUpdateResult[];
+    warnings: string[];
+  }>("install_all_content_updates", {
+    input: { serverId },
   });
 }

@@ -8,7 +8,7 @@ import { useAppSettings } from "../../i18n";
 import { useState } from "react";
 import {
   getServerProcessStatus,
-  restartServer,
+  restartServerWithCountdown,
   startServer,
   stopServer,
 } from "../process/api";
@@ -76,7 +76,7 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
     onSuccess: refreshRuntimeState,
   });
   const restartMutation = useMutation({
-    mutationFn: () => restartServer(server.id),
+    mutationFn: () => restartServerWithCountdown(server.id),
     onSuccess: refreshRuntimeState,
   });
   const actionError =

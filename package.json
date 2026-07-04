@@ -71,6 +71,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "MC-Server-Manager-Setup-${version}.${ext}",
     "files": [
       "dist/**",
       "electron/**",

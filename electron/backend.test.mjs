@@ -453,6 +453,34 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("detects existing server folders from server properties and jar names", () => {
+    const backend = createTestBackend();
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-import-"));
+    tempDirs.push(rootDir);
+    fs.writeFileSync(
+      path.join(rootDir, "server.properties"),
+      "motd=Imported\nserver-port=25570\n",
+    );
+    fs.writeFileSync(path.join(rootDir, "eula.txt"), "eula=true\n");
+    fs.writeFileSync(path.join(rootDir, "paper-1.21.4-120.jar"), "jar");
+
+    try {
+      const detected = backend.handle("detect_server_version", { rootDir });
+
+      expect(detected).toMatchObject({
+        loaderType: "paper",
+        minecraftVersion: "1.21.4",
+        loaderVersion: "120",
+        serverJarName: "paper-1.21.4-120.jar",
+        hasEula: true,
+        hasServerProperties: true,
+        serverPort: 25570,
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
   it("persists app preferences and clears only the cache directory", () => {
     const { appDataDir, backend } = createTestBackendWithAppData();
 
@@ -782,6 +810,20 @@ describe("Electron backend resource lifecycle management", () => {
       expect(
         fs.existsSync(path.join(exported.exportedPath, "world", "level.dat")),
       ).toBe(true);
+      fs.writeFileSync(path.join(serverRoot, "world", "stale.dat"), "stale");
+      backend.handle("restore_world_backup", {
+        input: {
+          backupId: backup.id,
+          targetWorldDir: "world",
+          confirm: true,
+        },
+      });
+
+      expect(fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"))
+        .toBe("world");
+      expect(fs.existsSync(path.join(serverRoot, "world", "stale.dat"))).toBe(
+        false,
+      );
       expect(() =>
         backend.handle("restore_world_backup", {
           input: {
@@ -983,6 +1025,55 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("schedules restart countdown broadcasts before restarting a running server", async () => {
+    vi.useFakeTimers();
+    const children = [];
+    const spawnImpl = vi.fn(() => {
+      const child = createFakeChild(21000 + children.length);
+      children.push(child);
+      return child;
+    });
+    const backend = createTestBackend({ spawn: spawnImpl });
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      backend.handle("start_server", { serverId: server.id });
+
+      const scheduled = backend.handle("restart_server_with_countdown", {
+        input: {
+          serverId: server.id,
+          stepsSeconds: [2, 1],
+          messageTemplate: "Restarting in {time}",
+        },
+      });
+
+      expect(scheduled).toMatchObject({
+        serverId: server.id,
+        stepsSeconds: [2, 1],
+      });
+      expect(children[0].stdin.writes).toEqual(["say Restarting in 2 seconds\n"]);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(children[0].stdin.writes).toContain(
+        "say Restarting in 1 second\n",
+      );
+      expect(spawnImpl).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(children[0].stdin.writes).toContain("stop\n");
+      children[0].emit("exit", 0);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(spawnImpl).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+      backend.close();
+    }
+  });
+
   it("installs a local server jar and records rollback history", () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
@@ -1051,6 +1142,101 @@ describe("Electron backend resource lifecycle management", () => {
 
       expect(enabled.installedPath.endsWith(".disabled")).toBe(false);
       expect(fs.existsSync(enabled.installedPath)).toBe(true);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("checks and manually installs updates for installed Modrinth content", async () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+    const server = createServer(backend, serverRoot, "fabric");
+    globalThis.fetch = vi.fn(async (url) => {
+      const href = String(url);
+      if (href.endsWith("/project/main-project/version")) {
+        return jsonResponse([
+          {
+            id: "latest-version",
+            project_id: "main-project",
+            name: "Main Mod",
+            version_number: "2.0.0",
+            loaders: ["fabric"],
+            game_versions: ["1.21.4"],
+            files: [
+              {
+                filename: "main-2.jar",
+                size: 6,
+                primary: true,
+                url: "https://cdn.modrinth.test/main-2.jar",
+              },
+            ],
+            dependencies: [],
+          },
+          {
+            id: "current-version",
+            project_id: "main-project",
+            name: "Main Mod",
+            version_number: "1.0.0",
+            loaders: ["fabric"],
+            game_versions: ["1.21.4"],
+            files: [
+              {
+                filename: "main-1.jar",
+                size: 6,
+                primary: true,
+                url: "https://cdn.modrinth.test/main-1.jar",
+              },
+            ],
+            dependencies: [],
+          },
+        ]);
+      }
+      if (href === "https://cdn.modrinth.test/main-1.jar") {
+        return binaryResponse("old");
+      }
+      if (href === "https://cdn.modrinth.test/main-2.jar") {
+        return binaryResponse("new");
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    try {
+      const installed = await backend.handle("install_modrinth_version", {
+        input: {
+          serverId: server.id,
+          projectId: "main-project",
+          versionId: "current-version",
+        },
+      });
+
+      const plan = await backend.handle("check_content_updates", {
+        input: { serverId: server.id },
+      });
+
+      expect(plan.updates).toMatchObject([
+        {
+          installedContentId: installed.content.id,
+          currentVersion: "1.0.0",
+          latestVersion: "2.0.0",
+          provider: "modrinth",
+        },
+      ]);
+
+      const result = await backend.handle("install_content_update", {
+        input: {
+          serverId: server.id,
+          installedContentId: installed.content.id,
+        },
+      });
+
+      expect(result.content.version).toBe("2.0.0");
+      expect(fs.existsSync(path.join(serverRoot, "mods", "main-2.jar"))).toBe(
+        true,
+      );
+      expect(fs.existsSync(installed.content.installedPath)).toBe(false);
+      expect(fs.existsSync(result.backupPath)).toBe(true);
+      expect(result.backupPath.endsWith(".mcsm-backup")).toBe(true);
     } finally {
       backend.close();
     }

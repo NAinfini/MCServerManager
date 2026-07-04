@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getServerProcessStatus,
   restartServer,
+  restartServerWithCountdown,
   startServer,
   stopServer,
 } from "../process/api";
@@ -14,6 +15,7 @@ import type { ServerProfile } from "./types";
 vi.mock("../process/api", () => ({
   getServerProcessStatus: vi.fn(),
   restartServer: vi.fn(),
+  restartServerWithCountdown: vi.fn(),
   startServer: vi.fn(),
   stopServer: vi.fn(),
 }));
@@ -71,6 +73,11 @@ describe("ServerActions", () => {
       command: "java -jar server.jar",
       status: "running",
     });
+    vi.mocked(restartServerWithCountdown).mockResolvedValue({
+      serverId: "server-1",
+      stepsSeconds: [300, 60, 10],
+      scheduledFor: "2026-07-02T00:05:00Z",
+    });
   });
 
   afterEach(() => {
@@ -98,9 +105,10 @@ describe("ServerActions", () => {
       await screen.findByRole("button", { name: /restart survival/i }),
     );
 
-    expect(restartServer).not.toHaveBeenCalled();
+    expect(restartServerWithCountdown).not.toHaveBeenCalled();
 
     await userEvent.click(screen.getByRole("button", { name: "Restart" }));
-    expect(restartServer).toHaveBeenCalledWith("server-1");
+    expect(restartServerWithCountdown).toHaveBeenCalledWith("server-1");
+    expect(restartServer).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Package, PackagePlus } from "lucide-react";
+import {
+  AlertTriangle,
+  Download,
+  Package,
+  PackagePlus,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -12,8 +18,12 @@ import { LocalImportDialog } from "./LocalImportDialog";
 import {
   disableInstalledContent,
   enableInstalledContent,
+  checkContentUpdates,
+  installAllContentUpdates,
+  installContentUpdate,
   importLocalContent,
   type InstalledContent,
+  type InstalledContentUpdateCheck,
   listInstalledContent,
   uninstallInstalledContent,
 } from "./contentApi";
@@ -37,6 +47,8 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
     kind: "disable" | "uninstall";
     item: InstalledContent;
   } | null>(null);
+  const [updateCheck, setUpdateCheck] =
+    useState<InstalledContentUpdateCheck | null>(null);
   const contentQuery = useQuery({
     queryKey: ["installedContent", server.id],
     queryFn: () => listInstalledContent(server.id),
@@ -80,7 +92,39 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
       });
     },
   });
+  const checkUpdatesMutation = useMutation({
+    mutationFn: () => checkContentUpdates(server.id),
+    onSuccess: (result) => setUpdateCheck(result),
+  });
+  const installUpdateMutation = useMutation({
+    mutationFn: (contentId: string) => installContentUpdate(server.id, contentId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["installedContent", server.id],
+        }),
+        checkUpdatesMutation.mutateAsync().catch(() => null),
+      ]);
+    },
+  });
+  const installAllUpdatesMutation = useMutation({
+    mutationFn: () => installAllContentUpdates(server.id),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["installedContent", server.id],
+        }),
+        checkUpdatesMutation.mutateAsync().catch(() => null),
+      ]);
+    },
+  });
   const content = contentQuery.data ?? [];
+  const updateByContentId = new Map(
+    (updateCheck?.updates ?? []).map((update) => [
+      update.installedContentId,
+      update,
+    ]),
+  );
 
   return (
     <section className="content-panel" aria-label={t("content.installed.aria")}>
@@ -89,10 +133,30 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
           <strong>{t("content.installed.title")}</strong>
           <span>{t("content.installed.description")}</span>
         </div>
-        <Button variant="primary" onClick={() => setShowImport(true)}>
-          <PackagePlus aria-hidden="true" size={15} />
-          {t("content.installed.importJar")}
-        </Button>
+        <div className="content-toolbar-actions">
+          <Button
+            disabled={checkUpdatesMutation.isPending}
+            variant="secondary"
+            onClick={() => checkUpdatesMutation.mutate()}
+          >
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("content.installed.checkUpdates")}
+          </Button>
+          <Button
+            disabled={
+              !updateCheck?.updates.length || installAllUpdatesMutation.isPending
+            }
+            variant="secondary"
+            onClick={() => installAllUpdatesMutation.mutate()}
+          >
+            <Download aria-hidden="true" size={15} />
+            {t("content.installed.updateAll")}
+          </Button>
+          <Button variant="primary" onClick={() => setShowImport(true)}>
+            <PackagePlus aria-hidden="true" size={15} />
+            {t("content.installed.importJar")}
+          </Button>
+        </div>
       </div>
 
       {showImport ? (
@@ -125,6 +189,22 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
       {enableMutation.error ? (
         <p className="danger-text">{enableMutation.error.message}</p>
       ) : null}
+      {checkUpdatesMutation.error ? (
+        <p className="danger-text">{checkUpdatesMutation.error.message}</p>
+      ) : null}
+      {installUpdateMutation.error ? (
+        <p className="danger-text">{installUpdateMutation.error.message}</p>
+      ) : null}
+      {installAllUpdatesMutation.error ? (
+        <p className="danger-text">{installAllUpdatesMutation.error.message}</p>
+      ) : null}
+      {updateCheck?.warnings.length ? (
+        <div className="list-state list-state-warning">
+          {updateCheck.warnings.map((warning) => (
+            <span key={warning}>{warning}</span>
+          ))}
+        </div>
+      ) : null}
 
       {contentQuery.isLoading ? (
         <LoadingState message={t("content.installed.loading")} />
@@ -148,14 +228,17 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
                 <th scope="col">{t("content.table.name")}</th>
                 <th scope="col">{t("content.table.loader")}</th>
                 <th scope="col">{t("content.table.version")}</th>
+                <th scope="col">{t("content.table.update")}</th>
                 <th scope="col">{t("content.table.installed")}</th>
                 <th scope="col">{t("content.table.warnings")}</th>
                 <th scope="col">{t("content.table.actions")}</th>
               </tr>
             </thead>
             <tbody>
-              {content.map((item) => (
-                <tr key={item.id}>
+              {content.map((item) => {
+                const update = updateByContentId.get(item.id);
+                return (
+                  <tr key={item.id}>
                   <th scope="row">
                     <span className="content-name-cell">
                       <span className="content-name-icon">
@@ -163,7 +246,9 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
                       </span>
                       <span>
                         <span>{item.name}</span>
-                        <small>{item.contentId ?? t("content.installed.unknownId")}</small>
+                        <small>
+                          {item.contentId ?? t("content.installed.unknownId")}
+                        </small>
                       </span>
                     </span>
                   </th>
@@ -171,6 +256,18 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
                     <LoaderPill loaderType={item.loader} />
                   </td>
                   <td>{item.version ?? t("common.unknown")}</td>
+                  <td>
+                    {update ? (
+                      <span className="content-update-cell">
+                        <strong>{update.latestVersion}</strong>
+                        <small>{update.provider}</small>
+                      </span>
+                    ) : updateCheck ? (
+                      t("content.installed.current")
+                    ) : (
+                      t("content.installed.notChecked")
+                    )}
+                  </td>
                   <td>{formatDate(item.installedAt)}</td>
                   <td>
                     {item.warnings.length === 0 ? (
@@ -213,9 +310,23 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
                     >
                       {t("content.installed.uninstall")}
                     </Button>
+                    {update ? (
+                      <Button
+                        aria-label={t("content.installed.updateOneAria", {
+                          content: item.name,
+                        })}
+                        disabled={installUpdateMutation.isPending}
+                        variant="primary"
+                        onClick={() => installUpdateMutation.mutate(item.id)}
+                      >
+                        <Download aria-hidden="true" size={14} />
+                        {t("content.installed.update")}
+                      </Button>
+                    ) : null}
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
