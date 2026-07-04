@@ -15,6 +15,20 @@ MC Server Manager 是一款独立的 Electron 桌面应用，用于管理本地 
 - 当前操作系统所需的 Electron 构建环境
 - 与计划运行的 Minecraft 版本兼容的本地 Java 运行时
 
+## 首个服务器设置
+
+MC Server Manager 会指引设置流程，但不会替用户选择下载来源或接受法律协议。要启动新的服务器配置档：
+
+1. 创建或导入服务器配置档。
+2. 打开 Java 运行时；如果没有检测到所选 Minecraft 版本需要的 Java，请先安装对应版本。
+3. 从 Mojang、Paper、Fabric、Forge、NeoForge 或其他可信加载器项目下载正确的服务端 jar。
+4. 打开服务器的设置标签，再进入服务器更新，把已下载的文件安装为 `server.jar`。
+5. 阅读 Minecraft EULA。如果你接受它，请编辑服务器文件夹里的 `eula.txt`，把 `eula` 设置为 `true`。
+6. 启动服务器，并阅读应用显示的任何控制台错误。
+7. 更换 jar、mod、配置或世界前先创建备份。
+
+市场会安装 mod、插件或整合包等内容。它不会替代 Java、`server.jar` 和 EULA 接受流程。
+
 ## 开发命令
 
 ```powershell

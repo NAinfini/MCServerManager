@@ -11,6 +11,7 @@ const databaseAppDataDirs = new WeakMap();
 const databaseProcessSpawners = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
+const currentSchemaVersion = 1;
 
 const loaderToDb = {
   vanilla: "vanilla",
@@ -250,6 +251,7 @@ function createBackend(app) {
   databaseProcessSpawners.set(db, app.spawn || spawn);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
+  migrateDatabase(db);
   ensureNotificationPreferences(db);
 
   return {
@@ -296,6 +298,8 @@ function handleCommand(db, command, args) {
       return listAppLogs(db, args?.input);
     case "clear_app_logs":
       return clearAppLogs(db);
+    case "get_database_schema_version":
+      return { version: databaseSchemaVersion(db) };
     case "list_server_profiles":
       return listServerProfiles(db);
     case "create_server_profile":
@@ -507,6 +511,22 @@ function handleCommand(db, command, args) {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function databaseSchemaVersion(db) {
+  return Number(db.prepare("PRAGMA user_version").get().user_version || 0);
+}
+
+function migrateDatabase(db) {
+  const version = databaseSchemaVersion(db);
+  if (version > currentSchemaVersion) {
+    throw new Error(
+      `database schema version ${version} is newer than supported version ${currentSchemaVersion}`,
+    );
+  }
+  if (version < currentSchemaVersion) {
+    db.exec(`PRAGMA user_version = ${currentSchemaVersion}`);
+  }
 }
 
 function trimRequired(value, message) {
@@ -2543,10 +2563,28 @@ function restoreWorldBackup(db, input) {
   if (!fs.existsSync(sourceWorld)) {
     throw new Error("backup world folder does not exist");
   }
+  const targetWorldDir = trimRequired(
+    input.targetWorldDir,
+    "target world directory is required",
+  );
+  if (path.isAbsolute(targetWorldDir)) {
+    throw new Error("path escapes server root");
+  }
+  if (
+    targetWorldDir === "." ||
+    targetWorldDir === ".." ||
+    targetWorldDir.includes("/") ||
+    targetWorldDir.includes("\\")
+  ) {
+    throw new Error("restore target must be a world folder name");
+  }
+  if (targetWorldDir.toLowerCase() === "backups") {
+    throw new Error("restore target must not overlap backup storage");
+  }
   const { target } = safeServerPath(
     db,
     backup.server_id,
-    trimRequired(input.targetWorldDir, "target world directory is required"),
+    targetWorldDir,
   );
   fs.rmSync(target, {
     recursive: true,

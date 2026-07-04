@@ -100,6 +100,7 @@ function App() {
 }
 
 function AppRuntime() {
+  const { t } = useAppSettings();
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const processSummaryQuery = useQuery({
@@ -112,7 +113,7 @@ function AppRuntime() {
 
   useEffect(() => {
     installRendererLogger();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     runningServerCountRef.current = runningServerCount;
@@ -154,9 +155,7 @@ function AppRuntime() {
           openCloseDialog();
         } catch (error) {
           console.error("Failed to apply window close behavior.", error);
-          setOperationError(
-            "Failed to apply close behavior. Check the application logs and choose an action.",
-          );
+          setOperationError(t("close.errors.applyBehavior"));
           openCloseDialog();
         }
       })();
@@ -188,9 +187,7 @@ function AppRuntime() {
       setOperationError(null);
     } catch (error) {
       console.error("Failed to minimize MC Server Manager to tray.", error);
-      setOperationError(
-        "Failed to minimize to tray. Check the application logs and try again.",
-      );
+      setOperationError(t("close.errors.minimize"));
     }
   };
 
@@ -199,9 +196,7 @@ function AppRuntime() {
       await invokeDesktopCommand("request_app_quit");
     } catch (error) {
       console.error("Failed to quit MC Server Manager.", error);
-      setOperationError(
-        "Failed to quit the app. Check the application logs and try again.",
-      );
+      setOperationError(t("close.errors.quit"));
     }
   };
 

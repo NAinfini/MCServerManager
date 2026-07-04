@@ -41,6 +41,34 @@ function ActionTooltip({
   );
 }
 
+type StartFailureGuide = {
+  titleKey: string;
+  descriptionKey: string;
+};
+
+function startFailureGuide(error: Error | null): StartFailureGuide | null {
+  const message = error?.message ?? "";
+  if (/server\.jar/i.test(message)) {
+    return {
+      titleKey: "servers.startHelp.missingJar.title",
+      descriptionKey: "servers.startHelp.missingJar.description",
+    };
+  }
+  if (/eula/i.test(message)) {
+    return {
+      titleKey: "servers.startHelp.eula.title",
+      descriptionKey: "servers.startHelp.eula.description",
+    };
+  }
+  if (/java/i.test(message)) {
+    return {
+      titleKey: "servers.startHelp.java.title",
+      descriptionKey: "servers.startHelp.java.description",
+    };
+  }
+  return null;
+}
+
 export function ServerActions({ server, compact = false }: ServerActionsProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
@@ -96,6 +124,7 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
       : pendingDangerAction === "restart"
         ? restartMutation.error
         : null;
+  const startGuide = startFailureGuide(startMutation.error);
 
   return (
     <div className={compact ? "row-actions" : "server-actions"}>
@@ -148,6 +177,16 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
       ) : null}
       {actionError ? (
         <span className="inline-error">{actionError.message}</span>
+      ) : null}
+      {startGuide ? (
+        <div
+          aria-label={t("servers.startHelp.aria")}
+          className="server-action-guidance"
+          role="note"
+        >
+          <strong>{t(startGuide.titleKey)}</strong>
+          <span>{t(startGuide.descriptionKey)}</span>
+        </div>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={

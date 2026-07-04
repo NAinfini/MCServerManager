@@ -32,4 +32,10 @@ describe("Electron CI and release workflows", () => {
       "MC-Server-Manager-Setup-${version}.${ext}",
     );
   });
+
+  it("does not package Electron test files into release artifacts", () => {
+    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+
+    expect(manifest.build.files).toContain("!electron/*.test.mjs");
+  });
 });

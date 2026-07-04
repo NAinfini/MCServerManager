@@ -833,6 +833,40 @@ describe("Electron backend resource lifecycle management", () => {
           },
         }),
       ).toThrow(/path escapes server root/);
+      expect(() =>
+        backend.handle("restore_world_backup", {
+          input: {
+            backupId: backup.id,
+            targetWorldDir: ".",
+            confirm: true,
+          },
+        }),
+      ).toThrow(/restore target must be a world folder/);
+      expect(fs.existsSync(path.join(serverRoot, "world", "level.dat"))).toBe(
+        true,
+      );
+      expect(fs.existsSync(path.join(backup.archivePath, "world"))).toBe(true);
+      expect(() =>
+        backend.handle("restore_world_backup", {
+          input: {
+            backupId: backup.id,
+            targetWorldDir: "backups",
+            confirm: true,
+          },
+        }),
+      ).toThrow(/restore target must not overlap backup storage/);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("initializes the database schema version for future migrations", () => {
+    const backend = createTestBackend();
+
+    try {
+      expect(backend.handle("get_database_schema_version")).toEqual({
+        version: 1,
+      });
     } finally {
       backend.close();
     }

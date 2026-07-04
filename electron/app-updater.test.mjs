@@ -103,6 +103,36 @@ describe("Electron application updater", () => {
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
   });
 
+  it("rechecks running servers after download before installing", async () => {
+    const { createApplicationUpdater } = require("./app-updater.cjs");
+    const autoUpdater = new EventEmitter();
+    const getRunningServerCount = vi
+      .fn()
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
+    autoUpdater.checkForUpdates = vi.fn(async () => {
+      autoUpdater.emit("update-available", { version: "0.1.1" });
+    });
+    autoUpdater.downloadUpdate = vi.fn(async () => ["installer.exe"]);
+    autoUpdater.quitAndInstall = vi.fn();
+    autoUpdater.removeListener = autoUpdater.off.bind(autoUpdater);
+    const updater = createApplicationUpdater({
+      app: {
+        getVersion: () => "0.1.0",
+        isPackaged: true,
+      },
+      autoUpdater,
+      getRunningServerCount,
+    });
+
+    await expect(
+      updater.installApplicationUpdate({ input: { channel: "stable" } }),
+    ).rejects.toThrow("1 running server");
+
+    expect(autoUpdater.downloadUpdate).toHaveBeenCalledTimes(1);
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+  });
+
   it("blocks update checks in unpackaged dev builds unless explicitly enabled", async () => {
     const { createApplicationUpdater } = require("./app-updater.cjs");
     const updater = createApplicationUpdater({

@@ -307,6 +307,36 @@ describe("CreateServerWizard", () => {
     );
   });
 
+  it("explains the remaining setup steps before a new user creates the server", async () => {
+    renderWizard();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /new blank server/i }),
+    );
+    await userEvent.type(screen.getByLabelText("Name"), "First Server");
+    await userEvent.click(screen.getByRole("combobox", { name: "Minecraft version" }));
+    await userEvent.click(await screen.findByRole("option", { name: "1.21.10" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "Loader version" }));
+    await userEvent.click(await screen.findByRole("option", { name: "Build 130" }));
+
+    await userEvent.click(screen.getByRole("button", { name: /next/i }));
+    await userEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(screen.getByText("Before first start")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Install Java that matches this Minecraft version/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Install or import a server.jar in Server updates/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Review and accept the Minecraft EULA/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Create a backup before changing files/i),
+    ).toBeInTheDocument();
+  });
+
   it("keeps the outer create-server header visible while viewing marketplace details", async () => {
     const onHeaderHiddenChange = vi.fn();
     vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {

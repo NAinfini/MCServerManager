@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  BookOpenCheck,
 } from "lucide-react";
 import { createServerProfile, getDefaultServerRoot } from "./api";
 import {
@@ -1063,6 +1064,26 @@ function ReviewSummary({
           </ul>
         </div>
       )}
+
+      <div
+        aria-label={t("wizard.review.setupGuide.aria")}
+        className="wizard-review-setup"
+        role="note"
+      >
+        <strong>
+          <BookOpenCheck aria-hidden="true" size={13} />
+          {t("wizard.review.setupGuide.title")}
+        </strong>
+        <ol>
+          <li>{t("wizard.review.setupGuide.java")}</li>
+          <li>{t("wizard.review.setupGuide.jar")}</li>
+          <li>{t("wizard.review.setupGuide.eula")}</li>
+          <li>{t("wizard.review.setupGuide.backup")}</li>
+        </ol>
+        {marketplaceSelection ? (
+          <p>{t("wizard.review.setupGuide.marketplace")}</p>
+        ) : null}
+      </div>
     </div>
   );
 }

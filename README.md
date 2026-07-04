@@ -15,6 +15,20 @@ This project is an MVP. It focuses on local desktop server management, explicit 
 - Electron build prerequisites for your operating system
 - Java runtimes installed locally for the Minecraft versions you plan to run
 
+## First Server Setup
+
+MC Server Manager guides the setup, but it does not choose downloads or accept legal agreements for the user. To start a new server profile:
+
+1. Create or import a server profile.
+2. Open Java Runtimes and install the Java version required by the selected Minecraft version if it is not detected.
+3. Download the correct server jar from a trusted source such as Mojang, Paper, Fabric, Forge, NeoForge, or another loader project.
+4. Open the server Settings tab, then Server updates, and install that downloaded file as `server.jar`.
+5. Read the Minecraft EULA. If you accept it, edit `eula.txt` in the server folder and set `eula=true`.
+6. Start the server and read any console error shown by the app.
+7. Create a backup before changing jars, mods, configs, or worlds.
+
+Marketplace installs content such as mods, plugins, or modpacks. It does not remove the need for Java, `server.jar`, and EULA acceptance.
+
 ## Development Commands
 
 ```powershell

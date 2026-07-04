@@ -126,5 +126,17 @@ describe("ServerDetail", () => {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     });
   });
+
+  it("shows a setup guide in settings so new users know the required server steps", async () => {
+    renderDetail();
+
+    await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(await screen.findByText("Setup guide")).toBeInTheDocument();
+    expect(screen.getByText(/Install Java first/i)).toBeInTheDocument();
+    expect(screen.getByText(/Put a server.jar in the server folder/i)).toBeInTheDocument();
+    expect(screen.getByText(/Accept the Minecraft EULA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Start the server/i)).toBeInTheDocument();
+  });
 });
 

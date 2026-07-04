@@ -127,6 +127,13 @@ function createApplicationUpdater({
     }
 
     await autoUpdater.downloadUpdate();
+    const runningServerCountAfterDownload =
+      Number(await getRunningServerCount()) || 0;
+    if (runningServerCountAfterDownload > 0) {
+      throw new Error(
+        `app update install is blocked while ${runningServerCountAfterDownload} running server(s) are active`,
+      );
+    }
     setQuitting(true);
     autoUpdater.quitAndInstall(false, true);
     return null;

@@ -28,6 +28,7 @@ Avoid marketing-page visuals, oversized hero sections, decorative gradients, toy
 - Use familiar desktop tool patterns over decorative novelty.
 - Prefer compact, aligned controls for repeated server operations.
 - Make errors explicit and recoverable.
+- Explain beginner setup steps in the UI: Java, `server.jar`, EULA, start, backup.
 - Preserve keyboard and screen-reader access in every control without using browser-default focus outlines.
 - Require explicit confirmation for destructive or interrupting actions.
 
@@ -40,4 +41,6 @@ Target WCAG AA contrast, reduced motion, and color-independent status labels. Ke
 - App updates are checked from GitHub Releases and installed only after user confirmation.
 - App update installation is blocked while managed servers are running.
 - Mods, plugins, modpacks, and server jars are never silently auto-installed.
+- Users choose trusted server jar download sources themselves; the app can install a provided jar as `server.jar`.
+- Users must read and accept the Minecraft EULA themselves before setting `eula=true`.
 - Installed content updates are manual: detect updates, then update all or update individual items.

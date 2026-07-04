@@ -39,11 +39,6 @@ const contentTypeIcons: Record<MarketplaceContentType, typeof Blocks> = {
   modpacks: Package,
 };
 
-function formatCount(value?: number) {
-  if (!value) return "0";
-  return new Intl.NumberFormat("en", { notation: "compact" }).format(value);
-}
-
 function MarketplaceResultIcon({
   fallback,
   iconUrl,
@@ -107,7 +102,7 @@ function MarketplaceResultMeta({
 }
 
 export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
-  const { t } = useAppSettings();
+  const { formatCompactNumber, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [contentType, setContentType] =
     useState<MarketplaceContentType>("mods");
@@ -562,10 +557,10 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                   <span className="marketplace-result-body">
                     <strong>{project.title}</strong>
                     <span>{project.description}</span>
-                    <MarketplaceResultMeta
-                      downloadsLabel={t("marketplace.downloads", {
-                        count: formatCount(project.downloads),
-                      })}
+                      <MarketplaceResultMeta
+                        downloadsLabel={t("marketplace.downloads", {
+                          count: formatCompactNumber(project.downloads),
+                        })}
                       project={project}
                       provider="Modrinth"
                     />
@@ -600,10 +595,10 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                   <span className="marketplace-result-body">
                     <strong>{project.title}</strong>
                     <span>{project.description}</span>
-                    <MarketplaceResultMeta
-                      downloadsLabel={t("marketplace.downloads", {
-                        count: formatCount(project.downloads),
-                      })}
+                      <MarketplaceResultMeta
+                        downloadsLabel={t("marketplace.downloads", {
+                          count: formatCompactNumber(project.downloads),
+                        })}
                       project={project}
                       provider="BBSMC"
                     />

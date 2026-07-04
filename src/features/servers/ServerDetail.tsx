@@ -11,10 +11,14 @@ import { motion } from "motion/react";
 import {
   Activity,
   Archive,
+  Coffee,
   FileCode2,
+  FileCheck2,
   Package,
+  Play,
   Settings,
   Terminal,
+  Upload,
 } from "lucide-react";
 import { createWorldBackup } from "../backups/backupApi";
 import { ProfileImportExport } from "../profiles/ProfileImportExport";
@@ -146,6 +150,45 @@ const detailTabs: Array<{
   { id: "activity", labelKey: "server.tabs.activity", panelId: "server-detail-activity", icon: Activity },
 ];
 
+function ServerSetupGuide() {
+  const { t } = useAppSettings();
+  const steps = [
+    { icon: Coffee, titleKey: "server.setupGuide.java.title", bodyKey: "server.setupGuide.java.body" },
+    { icon: Upload, titleKey: "server.setupGuide.jar.title", bodyKey: "server.setupGuide.jar.body" },
+    { icon: FileCheck2, titleKey: "server.setupGuide.eula.title", bodyKey: "server.setupGuide.eula.body" },
+    { icon: Play, titleKey: "server.setupGuide.start.title", bodyKey: "server.setupGuide.start.body" },
+    { icon: Archive, titleKey: "server.setupGuide.backup.title", bodyKey: "server.setupGuide.backup.body" },
+  ];
+
+  return (
+    <section
+      aria-label={t("server.setupGuide.aria")}
+      className="settings-panel server-setup-guide"
+    >
+      <div className="section-heading">
+        <h2>{t("server.setupGuide.title")}</h2>
+        <span>{t("server.setupGuide.description")}</span>
+      </div>
+      <ol className="server-setup-steps">
+        {steps.map((step) => {
+          const Icon = step.icon;
+          return (
+            <li key={step.titleKey}>
+              <span className="server-setup-step-icon">
+                <Icon aria-hidden="true" size={15} />
+              </span>
+              <div>
+                <strong>{t(step.titleKey)}</strong>
+                <span>{t(step.bodyKey)}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
+  );
+}
+
 function ServerDetailPanel({
   server,
   tab,
@@ -159,6 +202,7 @@ function ServerDetailPanel({
     case "settings":
       return (
         <>
+          <ServerSetupGuide />
           <ServerProfileSettings server={server} />
           <ServerPropertiesEditor server={server} />
           <GamerulesEditor server={server} />

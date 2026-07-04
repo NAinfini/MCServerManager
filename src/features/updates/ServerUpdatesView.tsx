@@ -117,7 +117,10 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
   return (
     <section className="settings-panel" aria-label={t("serverUpdates.aria")}>
       <div className="section-heading">
-        <h2>{t("serverUpdates.title")}</h2>
+        <div>
+          <h2>{t("serverUpdates.title")}</h2>
+          <span>{t("serverUpdates.description")}</span>
+        </div>
         <Button
           disabled={!canCheck}
           variant="secondary"

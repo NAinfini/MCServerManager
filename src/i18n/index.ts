@@ -14,6 +14,7 @@ export type Language = "en" | "zh-CN";
 export type ThemeSetting = "system" | "light" | "dark";
 
 interface AppSettingsContextValue {
+  formatCompactNumber: (value?: number) => string;
   language: Language;
   setLanguage: (language: Language) => void;
   setTheme: (theme: ThemeSetting) => void;
@@ -75,6 +76,14 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppSettingsContextValue>(
     () => ({
+      formatCompactNumber: (value?: number) => {
+        if (!value) {
+          return "0";
+        }
+        return new Intl.NumberFormat(language, { notation: "compact" }).format(
+          value,
+        );
+      },
       language,
       setLanguage: setLanguageState,
       setTheme: setThemeState,

@@ -111,4 +111,34 @@ describe("ServerActions", () => {
     expect(restartServerWithCountdown).toHaveBeenCalledWith("server-1");
     expect(restartServer).not.toHaveBeenCalled();
   });
+
+  it("explains the next step when start fails because server.jar is missing", async () => {
+    vi.mocked(getServerProcessStatus).mockResolvedValue({
+      id: "process-1",
+      serverId: "server-1",
+      command: "java -jar server.jar",
+      status: "stopped",
+      pid: null,
+      startedAt: null,
+      exitCode: null,
+    });
+    vi.mocked(startServer).mockRejectedValue(
+      new Error(
+        "server.jar does not exist: C:/servers/survival/server.jar. Install a server jar from Settings > Server updates before starting this profile.",
+      ),
+    );
+
+    renderActions();
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /^start survival$/i }),
+    );
+
+    expect(
+      await screen.findByText("Install a server jar before starting"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Open Settings, then Server updates/i),
+    ).toBeInTheDocument();
+  });
 });

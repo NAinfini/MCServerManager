@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
@@ -39,6 +40,7 @@ export function AppLoggerView() {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const [level, setLevel] = useState<AppLogLevelFilter>("all");
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const logsQuery = useQuery({
     queryKey: ["appLogs", level],
     queryFn: () => listAppLogs(level),
@@ -47,6 +49,7 @@ export function AppLoggerView() {
   const clearMutation = useMutation({
     mutationFn: clearAppLogs,
     onSuccess: () => {
+      setIsClearConfirmOpen(false);
       queryClient.setQueryData(["appLogs", level], []);
       void queryClient.invalidateQueries({ queryKey: ["appLogs"] });
     },
@@ -72,13 +75,26 @@ export function AppLoggerView() {
           <Button
             disabled={clearMutation.isPending}
             variant="danger"
-            onClick={() => clearMutation.mutate()}
+            onClick={() => {
+              clearMutation.reset();
+              setIsClearConfirmOpen(true);
+            }}
           >
             <Trash2 aria-hidden="true" size={15} />
             {t("logger.clear")}
           </Button>
         </div>
       </div>
+      <ConfirmDangerDialog
+        confirmLabel={t("danger.labels.clearLogs")}
+        description={t("danger.logger.clear.description")}
+        error={clearMutation.error?.message ?? null}
+        isConfirming={clearMutation.isPending}
+        isOpen={isClearConfirmOpen}
+        title={t("danger.logger.clear.title")}
+        onCancel={() => setIsClearConfirmOpen(false)}
+        onConfirm={() => clearMutation.mutate()}
+      />
 
       <div className="logger-toolbar">
         <ToggleGroup.Root

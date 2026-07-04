@@ -49,6 +49,7 @@ export function ConfirmDangerDialog({
         <Dialog.Overlay className="dialog-backdrop" />
         <Dialog.Content
           className="confirm-danger-dialog modal-dialog"
+          role="alertdialog"
           aria-describedby="confirm-danger-description"
         >
           <div className="confirm-danger-header">

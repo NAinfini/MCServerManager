@@ -75,6 +75,7 @@
     "files": [
       "dist/**",
       "electron/**",
+      "!electron/*.test.mjs",
       "public/app-icon.ico",
       "package.json"
     ],

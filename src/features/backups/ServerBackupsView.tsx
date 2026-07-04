@@ -67,6 +67,18 @@ function backupStatusIcon(backup: BackupRecord) {
   );
 }
 
+function isSafeRestoreTarget(value: string) {
+  const trimmed = value.trim();
+  return (
+    trimmed !== "" &&
+    trimmed !== "." &&
+    trimmed !== ".." &&
+    trimmed.toLowerCase() !== "backups" &&
+    !trimmed.includes("/") &&
+    !trimmed.includes("\\")
+  );
+}
+
 export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
@@ -127,6 +139,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   });
 
   const backups = backupsQuery.data ?? [];
+  const canRestoreTarget = isSafeRestoreTarget(targetWorldDir);
 
   return (
     <section className="backups-panel" aria-label={t("backups.aria")}>
@@ -202,6 +215,9 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
               onChange={(event) => setTargetWorldDir(event.target.value)}
             />
           </label>
+          {!canRestoreTarget ? (
+            <p className="danger-text">{t("backups.restore.invalidTarget")}</p>
+          ) : null}
           <div className="dialog-actions">
             <Button
               disabled={restoreMutation.isPending}
@@ -218,7 +234,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
             </Button>
             <Button
               disabled={
-                restoreMutation.isPending || targetWorldDir.trim() === ""
+                restoreMutation.isPending || !canRestoreTarget
               }
               type="submit"
               variant="danger"

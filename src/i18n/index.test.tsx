@@ -4,12 +4,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AppSettingsProvider, useAppSettings } from "./index";
 
 function Probe() {
-  const { language, setLanguage, setTheme, theme, t } = useAppSettings();
+  const { formatCompactNumber, language, setLanguage, setTheme, theme, t } =
+    useAppSettings();
 
   return (
     <div>
       <span>{language}</span>
       <span>{theme}</span>
+      <span data-testid="compact-number">{formatCompactNumber(12000)}</span>
       <strong>{t("settings.language.title")}</strong>
       <em>{t("missing.key")}</em>
       <button type="button" onClick={() => setLanguage("zh-CN")}>
@@ -66,5 +68,19 @@ describe("i18n settings", () => {
     await userEvent.click(screen.getByRole("button", { name: /system/i }));
     expect(screen.getByText("system")).toBeInTheDocument();
     expect(document.documentElement.dataset.theme).toMatch(/^(light|dark)$/);
+  });
+
+  it("formats compact numbers with the active language", async () => {
+    render(
+      <AppSettingsProvider>
+        <Probe />
+      </AppSettingsProvider>,
+    );
+
+    expect(screen.getByTestId("compact-number")).toHaveTextContent("12K");
+
+    await userEvent.click(screen.getByRole("button", { name: /chinese/i }));
+
+    expect(screen.getByTestId("compact-number")).toHaveTextContent("1.2万");
   });
 });

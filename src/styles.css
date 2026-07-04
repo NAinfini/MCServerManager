@@ -1783,6 +1783,26 @@ button {
   line-height: 16px;
 }
 
+.server-action-guidance {
+  display: grid;
+  gap: 2px;
+  flex-basis: 100%;
+  border: 1px solid color-mix(in srgb, var(--warning) 38%, var(--border-subtle));
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-elevated));
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.server-action-guidance strong {
+  color: var(--text-main);
+}
+
+.server-action-guidance span {
+  color: var(--text-muted);
+}
+
 .success-panel {
   display: inline-flex;
   align-items: center;
@@ -3333,6 +3353,41 @@ button {
   padding: 2px 0;
 }
 
+.wizard-review-setup {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+}
+
+.wizard-review-setup strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.wizard-review-setup ol {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.wizard-review-setup li,
+.wizard-review-setup p {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--text-muted);
+}
+
+.wizard-review-setup p {
+  margin: 8px 0 0;
+}
+
 @media (max-width: 480px) {
   .wizard-step-label {
     display: none;
@@ -4555,6 +4610,53 @@ button {
 .settings-panel .section-heading + .settings-grid,
 .settings-panel .section-heading + .update-status-grid {
   padding-top: var(--space-3);
+}
+
+.server-setup-guide {
+  display: grid;
+}
+
+.server-setup-steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4) var(--space-6) var(--space-5);
+  list-style: none;
+}
+
+.server-setup-steps li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.server-setup-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  background: var(--bg-elevated);
+}
+
+.server-setup-steps div {
+  display: grid;
+  gap: 2px;
+}
+
+.server-setup-steps strong {
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.server-setup-steps span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 17px;
 }
 
 .gamerule-grid {

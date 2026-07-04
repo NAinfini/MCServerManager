@@ -98,11 +98,6 @@ function projectModCount(project: MarketplaceProject | null) {
   return typeof project?.modCount === "number" ? project.modCount : null;
 }
 
-function formatCount(value?: number) {
-  if (!value) return "0";
-  return new Intl.NumberFormat("en", { notation: "compact" }).format(value);
-}
-
 function MarketplaceProjectIcon({
   project,
   provider,
@@ -210,7 +205,7 @@ export function CreateServerMarketplaceBrowser({
   onDetailModeChange,
   onSelect,
 }: CreateServerMarketplaceBrowserProps) {
-  const { t } = useAppSettings();
+  const { formatCompactNumber, t } = useAppSettings();
   const [provider, setProvider] = useState<MarketplaceProvider>("Modrinth");
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState(
@@ -463,13 +458,13 @@ export function CreateServerMarketplaceBrowser({
                     <div className="marketplace-pack-card-meta">
                       <small className="meta-badge meta-badge-downloads">
                         {t("marketplace.downloads", {
-                          count: formatCount(project?.downloads),
+                          count: formatCompactNumber(project?.downloads),
                         })}
                       </small>
                       {modCount !== null ? (
                         <small className="meta-badge meta-badge-mods">
                           {t("marketplace.modsCount", {
-                            count: formatCount(modCount),
+                            count: formatCompactNumber(modCount),
                           })}
                         </small>
                       ) : null}
@@ -543,13 +538,13 @@ export function CreateServerMarketplaceBrowser({
                     <div className="marketplace-pack-detail-meta">
                       <span className="meta-badge meta-badge-downloads">
                         {t("marketplace.downloads", {
-                          count: formatCount(selectedDetails?.downloads),
+                          count: formatCompactNumber(selectedDetails?.downloads),
                         })}
                       </span>
                       {projectModCount(selectedDetails) !== null ? (
                         <span className="meta-badge meta-badge-mods">
                           {t("marketplace.modsCount", {
-                            count: formatCount(
+                            count: formatCompactNumber(
                               projectModCount(selectedDetails) ?? 0,
                             ),
                           })}
@@ -557,7 +552,7 @@ export function CreateServerMarketplaceBrowser({
                       ) : null}
                       <span className="meta-badge meta-badge-follows">
                         {t("marketplace.follows", {
-                          count: formatCount(selectedDetails?.follows),
+                          count: formatCompactNumber(selectedDetails?.follows),
                         })}
                       </span>
                       <span className="meta-badge meta-badge-version">

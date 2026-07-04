@@ -58,7 +58,7 @@ describe("AppLoggerView", () => {
     });
   });
 
-  it("clears logs with the toolbar action", async () => {
+  it("confirms before clearing logs with the toolbar action", async () => {
     vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
       if (command === "clear_app_logs") {
         return { cleared: true };
@@ -69,6 +69,13 @@ describe("AppLoggerView", () => {
     renderLogger();
 
     await userEvent.click(await screen.findByRole("button", { name: /clear logs/i }));
+    expect(invokeDesktopCommand).not.toHaveBeenCalledWith(
+      "clear_app_logs",
+      undefined,
+    );
+
+    const dialog = await screen.findByRole("alertdialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: /clear logs/i }));
 
     expect(invokeDesktopCommand).toHaveBeenCalledWith(
       "clear_app_logs",
