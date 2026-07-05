@@ -37,6 +37,14 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
   });
 
+  it("uses a CI test timeout that fits slower Windows runners", () => {
+    const ci = readWorkspaceFile(".github/workflows/ci.yml");
+    const release = readWorkspaceFile(".github/workflows/release.yml");
+
+    expect(ci).toContain("pnpm vitest run --testTimeout 15000");
+    expect(release).toContain("pnpm vitest run --testTimeout 15000");
+  });
+
   it("uses stable platform artifact names that match updater metadata", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
