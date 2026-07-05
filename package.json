@@ -15,13 +15,9 @@
     "node": ">=22.12",
     "pnpm": ">=9"
   },
-  "pnpm": {
-    "overrides": {
-      "dompurify": "3.4.11"
-    }
-  },
   "scripts": {
     "dev": "vite",
+    "tsc": "tsc",
     "build": "tsc && vite build",
     "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:1420 && electron .\"",
     "electron:build": "pnpm build && electron-builder",
@@ -76,7 +72,6 @@
     "directories": {
       "output": "release"
     },
-    "artifactName": "MC-Server-Manager-Setup-${version}.${ext}",
     "files": [
       "dist/**",
       "electron/**",
@@ -85,8 +80,25 @@
       "package.json"
     ],
     "win": {
+      "artifactName": "MC-Server-Manager-Setup-${version}.${ext}",
       "icon": "public/app-icon.ico",
       "target": "nsis"
+    },
+    "linux": {
+      "artifactName": "MC-Server-Manager-${version}-${arch}.${ext}",
+      "category": "Game",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "mac": {
+      "artifactName": "MC-Server-Manager-${version}-${arch}.${ext}",
+      "category": "public.app-category.utilities",
+      "target": [
+        "dmg",
+        "zip"
+      ]
     },
     "publish": [
       {

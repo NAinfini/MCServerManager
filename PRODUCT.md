@@ -28,13 +28,19 @@ Avoid marketing-page visuals, oversized hero sections, decorative gradients, toy
 - Use familiar desktop tool patterns over decorative novelty.
 - Prefer compact, aligned controls for repeated server operations.
 - Make errors explicit and recoverable.
-- Explain beginner setup steps in the UI: Java, `server.jar`, EULA, start, backup.
+- Explain beginner setup steps in the UI through a status checklist: Java, `server.jar`, EULA, start readiness, and backup.
 - Preserve keyboard and screen-reader access in every control without using browser-default focus outlines.
 - Require explicit confirmation for destructive or interrupting actions.
 
 ## Accessibility & Inclusion
 
 Target WCAG AA contrast, reduced motion, and color-independent status labels. Keyboard navigation should remain functional, but default focus outlines are intentionally suppressed to preserve the app's desktop visual style.
+
+## Release Policy
+
+- Tagged releases publish Windows, Linux, and macOS artifacts through GitHub Actions.
+- macOS CI artifacts are unsigned until signing credentials are configured.
+- Release metadata must stay aligned with the updater behavior and published assets.
 
 ## Update & Content Policy
 

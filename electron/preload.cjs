@@ -39,6 +39,7 @@ const allowedAppCommands = new Set([
   "get_performance_history",
   "get_process_summary",
   "get_server_process_status",
+  "get_server_setup_status",
   "get_tunnel_provider",
   "import_app_settings",
   "import_curseforge_manual",

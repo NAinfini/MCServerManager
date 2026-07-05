@@ -1,4 +1,4 @@
-﻿import { cleanup, render, screen } from "../../test/render";
+﻿import { cleanup, render, screen, within } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -11,6 +11,40 @@ vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(async (command: string) => {
     if (command === "get_server_process_status") {
       return null;
+    }
+    if (command === "get_server_setup_status") {
+      return {
+        serverId: "server-1",
+        serverName: "Review Server",
+        checks: [
+          {
+            id: "java",
+            status: "ready",
+            message: "Java 21 satisfies required Java 21.",
+          },
+          {
+            id: "serverJar",
+            status: "actionRequired",
+            exists: false,
+            fileName: "server.jar",
+            message: "Install a trusted server jar as server.jar from Server updates.",
+          },
+          {
+            id: "eula",
+            status: "actionRequired",
+            exists: true,
+            accepted: false,
+            fileName: "eula.txt",
+            message: "Read the Minecraft EULA, then set eula=true yourself if you accept it.",
+          },
+          {
+            id: "backup",
+            status: "warning",
+            count: 0,
+            message: "Create a backup before changing jars, mods, configs, or worlds.",
+          },
+        ],
+      };
     }
     if (command === "list_process_events") {
       return [];
@@ -127,16 +161,24 @@ describe("ServerDetail", () => {
     });
   });
 
-  it("shows a setup guide in settings so new users know the required server steps", async () => {
+  it("shows a setup checklist in settings so new users know the current required actions", async () => {
     renderDetail();
 
     await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
 
-    expect(await screen.findByText("Setup guide")).toBeInTheDocument();
-    expect(screen.getByText(/Install Java first/i)).toBeInTheDocument();
-    expect(screen.getByText(/Put a server.jar in the server folder/i)).toBeInTheDocument();
-    expect(screen.getByText(/Accept the Minecraft EULA/i)).toBeInTheDocument();
-    expect(screen.getByText(/Start the server/i)).toBeInTheDocument();
+    const checklist = await screen.findByLabelText("Server setup checklist");
+
+    expect(within(checklist).getByText("Setup checklist")).toBeInTheDocument();
+    expect(await within(checklist).findByText("Java")).toBeInTheDocument();
+    expect(within(checklist).getByText("server.jar")).toBeInTheDocument();
+    expect(within(checklist).getByText("Minecraft EULA")).toBeInTheDocument();
+    expect(within(checklist).getByText("Backup")).toBeInTheDocument();
+    expect(within(checklist).getByText("Done")).toBeInTheDocument();
+    expect(within(checklist).getAllByText("Action needed")).toHaveLength(2);
+    expect(within(checklist).getByText("Recommended")).toBeInTheDocument();
+    expect(within(checklist).getByText("Install a trusted server jar as server.jar from Server updates.")).toBeInTheDocument();
+    expect(within(checklist).getByText("Read the Minecraft EULA, then set eula=true yourself if you accept it.")).toBeInTheDocument();
+    expect(within(checklist).getByText("Create a backup before changing jars, mods, configs, or worlds.")).toBeInTheDocument();
   });
 });
 

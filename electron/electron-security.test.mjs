@@ -17,5 +17,6 @@ describe("Electron window security", () => {
     expect(preload).toContain("Unsupported renderer command");
     expect(preload).toContain("request_app_quit");
     expect(preload).toContain("restore_world_backup");
+    expect(preload).toContain("get_server_setup_status");
   });
 });

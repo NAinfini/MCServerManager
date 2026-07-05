@@ -17,15 +17,16 @@ This project is an MVP. It focuses on local desktop server management, explicit 
 
 ## First Server Setup
 
-MC Server Manager guides the setup, but it does not choose downloads or accept legal agreements for the user. To start a new server profile:
+MC Server Manager guides the setup, but it does not choose downloads or accept legal agreements for the user. Each server Settings tab includes a setup checklist that detects Java compatibility, `server.jar`, Minecraft EULA acceptance, and whether a backup exists. To start a new server profile:
 
 1. Create or import a server profile.
 2. Open Java Runtimes and install the Java version required by the selected Minecraft version if it is not detected.
 3. Download the correct server jar from a trusted source such as Mojang, Paper, Fabric, Forge, NeoForge, or another loader project.
 4. Open the server Settings tab, then Server updates, and install that downloaded file as `server.jar`.
 5. Read the Minecraft EULA. If you accept it, edit `eula.txt` in the server folder and set `eula=true`.
-6. Start the server and read any console error shown by the app.
-7. Create a backup before changing jars, mods, configs, or worlds.
+6. Return to the setup checklist and refresh it until Java, `server.jar`, and EULA are marked ready.
+7. Start the server and read any console error shown by the app.
+8. Create a backup before changing jars, mods, configs, or worlds.
 
 Marketplace installs content such as mods, plugins, or modpacks. It does not remove the need for Java, `server.jar`, and EULA acceptance.
 
@@ -46,6 +47,14 @@ If Windows blocks Electron packaging inside a OneDrive-synced workspace with an 
 $out = Join-Path $env:TEMP 'mcsm-release'
 pnpm exec electron-builder --win --publish never --config.directories.output=$out
 ```
+
+## Release Builds
+
+GitHub Actions publishes platform-specific Electron artifacts from tagged releases:
+
+- Windows: NSIS installer, plus `latest.yml` update metadata.
+- Linux: AppImage and `.deb` packages.
+- macOS: `.dmg` and `.zip` packages. Current CI builds are unsigned unless signing credentials are added.
 
 ## Privacy
 

@@ -304,6 +304,8 @@ function handleCommand(db, command, args) {
       return listServerProfiles(db);
     case "create_server_profile":
       return createServerProfile(db, args?.input);
+    case "get_server_setup_status":
+      return getServerSetupStatus(db, args?.serverId);
     case "get_default_server_root":
       return { path: managedServerRoot(db, args?.input?.name || "server", false) };
     case "detect_server_version":
@@ -1938,6 +1940,81 @@ function listJavaRuntimes(db) {
     compatibility: profiles.map((profile) =>
       createJavaCompatibility(profile, runtimes),
     ),
+  };
+}
+
+function setupStatusFromJavaCompatibility(compatibility) {
+  if (compatibility.status === "compatible") {
+    return "ready";
+  }
+  return "actionRequired";
+}
+
+function readEulaAccepted(eulaPath) {
+  if (!fs.existsSync(eulaPath)) {
+    return false;
+  }
+  const content = fs.readFileSync(eulaPath, "utf8");
+  return /^\s*eula\s*=\s*true\s*$/gim.test(content);
+}
+
+function getServerSetupStatus(db, serverId) {
+  const profile = getServerProfile(db, requireServerId(serverId));
+  const javaCompatibility = listJavaRuntimes(db).compatibility.find(
+    (item) => item.serverId === profile.id,
+  ) ?? createJavaCompatibility(profile, []);
+  const serverJarPath = path.join(profile.rootDir, "server.jar");
+  const eulaPath = path.join(profile.rootDir, "eula.txt");
+  const hasServerJar = fs.existsSync(serverJarPath);
+  const hasEula = fs.existsSync(eulaPath);
+  const eulaAccepted = readEulaAccepted(eulaPath);
+  const backupCount = listServerBackups(db, profile.id).length;
+  const java = {
+    id: "java",
+    status: setupStatusFromJavaCompatibility(javaCompatibility),
+    message: javaCompatibility.message,
+    requiredMajorVersion: javaCompatibility.requiredMajorVersion,
+    configuredJavaPath: javaCompatibility.configuredJavaPath,
+  };
+  const serverJar = {
+    id: "serverJar",
+    status: hasServerJar ? "ready" : "actionRequired",
+    exists: hasServerJar,
+    fileName: "server.jar",
+    path: serverJarPath,
+    message: hasServerJar
+      ? "server.jar is installed."
+      : "Install a server.jar before starting this profile.",
+  };
+  const eula = {
+    id: "eula",
+    status: eulaAccepted ? "ready" : "actionRequired",
+    exists: hasEula,
+    accepted: eulaAccepted,
+    fileName: "eula.txt",
+    path: eulaPath,
+    message: eulaAccepted
+      ? "Minecraft EULA has been accepted."
+      : "Read and accept the Minecraft EULA before setting eula=true.",
+  };
+  const backup = {
+    id: "backup",
+    status: backupCount > 0 ? "ready" : "warning",
+    count: backupCount,
+    message:
+      backupCount > 0
+        ? "At least one backup exists."
+        : "Create a backup before changing jars, mods, configs, or worlds.",
+  };
+
+  return {
+    serverId: profile.id,
+    serverName: profile.name,
+    checks: [java, serverJar, eula, backup],
+    java,
+    serverJar,
+    eula,
+    backup,
   };
 }
 

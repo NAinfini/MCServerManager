@@ -22,14 +22,33 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("permissions:");
     expect(release).toContain("contents: write");
     expect(release).toMatch(/electron-builder\s+--win\s+--publish\s+always/);
+    expect(release).toMatch(/electron-builder\s+--linux\s+--publish\s+always/);
+    expect(release).toMatch(/electron-builder\s+--mac\s+--publish\s+always/);
     expect(release).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
   });
 
-  it("uses a stable installer artifact name that matches updater metadata", () => {
+  it("builds release artifacts on Windows, Linux, and macOS runners", () => {
+    const release = readWorkspaceFile(".github/workflows/release.yml");
+
+    expect(release).toContain("windows-latest");
+    expect(release).toContain("ubuntu-latest");
+    expect(release).toContain("macos-latest");
+    expect(release).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
+  });
+
+  it("uses stable platform artifact names that match updater metadata", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
-    expect(manifest.build.artifactName).toBe(
+    expect(manifest.build.win.artifactName).toBe(
       "MC-Server-Manager-Setup-${version}.${ext}",
+    );
+    expect(manifest.build.linux.target).toEqual(["AppImage", "deb"]);
+    expect(manifest.build.linux.artifactName).toBe(
+      "MC-Server-Manager-${version}-${arch}.${ext}",
+    );
+    expect(manifest.build.mac.target).toEqual(["dmg", "zip"]);
+    expect(manifest.build.mac.artifactName).toBe(
+      "MC-Server-Manager-${version}-${arch}.${ext}",
     );
   });
 

@@ -133,6 +133,35 @@ describe("Electron application updater", () => {
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
   });
 
+  it("restores normal quit protection if quitAndInstall fails", async () => {
+    const { createApplicationUpdater } = require("./app-updater.cjs");
+    const autoUpdater = new EventEmitter();
+    const setQuitting = vi.fn();
+    autoUpdater.checkForUpdates = vi.fn(async () => {
+      autoUpdater.emit("update-available", { version: "0.1.1" });
+    });
+    autoUpdater.downloadUpdate = vi.fn(async () => ["installer.exe"]);
+    autoUpdater.quitAndInstall = vi.fn(() => {
+      throw new Error("installer launch failed");
+    });
+    autoUpdater.removeListener = autoUpdater.off.bind(autoUpdater);
+    const updater = createApplicationUpdater({
+      app: {
+        getVersion: () => "0.1.0",
+        isPackaged: true,
+      },
+      autoUpdater,
+      setQuitting,
+    });
+
+    await expect(
+      updater.installApplicationUpdate({ input: { channel: "stable" } }),
+    ).rejects.toThrow("installer launch failed");
+
+    expect(setQuitting).toHaveBeenNthCalledWith(1, true);
+    expect(setQuitting).toHaveBeenNthCalledWith(2, false);
+  });
+
   it("blocks update checks in unpackaged dev builds unless explicitly enabled", async () => {
     const { createApplicationUpdater } = require("./app-updater.cjs");
     const updater = createApplicationUpdater({

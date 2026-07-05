@@ -135,7 +135,12 @@ function createApplicationUpdater({
       );
     }
     setQuitting(true);
-    autoUpdater.quitAndInstall(false, true);
+    try {
+      autoUpdater.quitAndInstall(false, true);
+    } catch (error) {
+      setQuitting(false);
+      throw error;
+    }
     return null;
   }
 

@@ -790,6 +790,80 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("reports first-run setup status without mutating server files", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const status = backend.handle("get_server_setup_status", {
+        serverId: server.id,
+      });
+
+      expect(status.serverId).toBe(server.id);
+      expect(status.checks.map((check) => check.id)).toEqual([
+        "java",
+        "serverJar",
+        "eula",
+        "backup",
+      ]);
+      expect(status.serverJar).toMatchObject({
+        status: "actionRequired",
+        exists: false,
+        fileName: "server.jar",
+      });
+      expect(status.eula).toMatchObject({
+        status: "actionRequired",
+        exists: false,
+        accepted: false,
+        fileName: "eula.txt",
+      });
+      expect(status.backup).toMatchObject({
+        status: "warning",
+        count: 0,
+      });
+      expect(fs.existsSync(path.join(serverRoot, "server.jar"))).toBe(false);
+      expect(fs.existsSync(path.join(serverRoot, "eula.txt"))).toBe(false);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("marks jar, EULA, and backup setup checks ready when the user completed them", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+    fs.writeFileSync(path.join(serverRoot, "eula.txt"), "eula=true\n");
+    fs.mkdirSync(path.join(serverRoot, "world"), { recursive: true });
+    fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "world");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      backend.handle("create_world_backup", { input: { serverId: server.id } });
+      const status = backend.handle("get_server_setup_status", {
+        serverId: server.id,
+      });
+
+      expect(status.serverJar).toMatchObject({
+        status: "ready",
+        exists: true,
+      });
+      expect(status.eula).toMatchObject({
+        status: "ready",
+        exists: true,
+        accepted: true,
+      });
+      expect(status.backup).toMatchObject({
+        status: "ready",
+        count: 1,
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
   it("exports backup folders and keeps restore targets inside the server root", () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
