@@ -33,6 +33,7 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("windows-latest");
     expect(release).toContain("ubuntu-latest");
     expect(release).toContain("macos-latest");
+    expect(release).toContain("version: 9.15.9");
     expect(release).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
   });
 
