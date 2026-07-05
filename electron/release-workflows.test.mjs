@@ -53,6 +53,12 @@ describe("Electron CI and release workflows", () => {
     );
   });
 
+  it("keeps pnpm overrides where release CI reads them", () => {
+    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+
+    expect(manifest.pnpm?.overrides?.dompurify).toBe("3.4.11");
+  });
+
   it("does not package Electron test files into release artifacts", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
