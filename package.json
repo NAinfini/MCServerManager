@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "description": "Desktop Minecraft server manager.",
   "license": "MIT",
-  "author": "NAinfini",
+  "author": {
+    "name": "NAinfini",
+    "email": "na.infini@gmail.com"
+  },
   "type": "module",
   "main": "electron/main.cjs",
   "repository": {
