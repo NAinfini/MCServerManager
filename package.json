@@ -2,6 +2,7 @@
   "name": "mc-server-manager",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
   "description": "Desktop Minecraft server manager.",
   "license": "MIT",
   "author": {

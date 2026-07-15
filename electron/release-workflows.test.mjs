@@ -9,6 +9,19 @@ function readWorkspaceFile(relativePath) {
 }
 
 describe("Electron CI and release workflows", () => {
+  it("pins one pnpm version without a repository-local copied store", () => {
+    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+    const npmrc = readWorkspaceFile(".npmrc");
+    const ci = readWorkspaceFile(".github/workflows/ci.yml");
+    const release = readWorkspaceFile(".github/workflows/release.yml");
+
+    expect(manifest.packageManager).toBe("pnpm@9.15.9");
+    expect(ci).toContain("version: 9.15.9");
+    expect(release).toContain("version: 9.15.9");
+    expect(npmrc).toContain("node-linker=hoisted");
+    expect(npmrc).not.toMatch(/store-dir|package-import-method/);
+  });
+
   it("does not run removed Tauri or Cargo release steps", () => {
     const ci = readWorkspaceFile(".github/workflows/ci.yml");
     const release = readWorkspaceFile(".github/workflows/release.yml");
