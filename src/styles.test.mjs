@@ -2,6 +2,22 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+function extractCssBlock(css, marker) {
+  const markerIndex = css.indexOf(marker);
+  if (markerIndex === -1) return "";
+  const openingBrace = css.indexOf("{", markerIndex + marker.length);
+  if (openingBrace === -1) return "";
+
+  let depth = 0;
+  for (let index = openingBrace; index < css.length; index += 1) {
+    if (css[index] === "{") depth += 1;
+    if (css[index] !== "}") continue;
+    depth -= 1;
+    if (depth === 0) return css.slice(openingBrace + 1, index);
+  }
+  return "";
+}
+
 describe("global focus styles", () => {
   it("draws focus only for keyboard-style focus-visible matches", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
@@ -71,10 +87,16 @@ describe("create server modal layout", () => {
       css.match(
         /\.create-server-wizard-header\s+\.wizard-step-connector\s*\{([^}]*)\}/s,
       )?.[1] ?? "";
-    const narrowWizardStyles =
+    const headerTitleCopy =
       css.match(
-        /@media\s*\(max-width:\s*480px\)\s*\{([\s\S]*?)\r?\n\}\r?\n\r?\n\.create-marketplace/,
+        /\.create-server-wizard-header\s+\.create-server-dialog-title-row\s*>\s*div\s*\{([^}]*)\}/s,
       )?.[1] ?? "";
+    const headerDescription =
+      css.match(/\.create-server-wizard-header\s+p\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const narrowWizardStyles = extractCssBlock(
+      css,
+      "@media (max-width: 480px)",
+    );
 
     expect(wizardHeader).toMatch(/display:\s*grid/);
     expect(wizardHeader).toMatch(
@@ -84,6 +106,10 @@ describe("create server modal layout", () => {
     expect(headerSteps).toMatch(/padding:\s*0/);
     expect(headerSteps).toMatch(/border:\s*0/);
     expect(headerConnector).toMatch(/width:\s*clamp\(18px,\s*3vw,\s*36px\)/);
+    expect(headerTitleCopy).toMatch(/min-width:\s*0/);
+    expect(headerDescription).toMatch(/white-space:\s*nowrap/);
+    expect(headerDescription).toMatch(/overflow:\s*hidden/);
+    expect(headerDescription).toMatch(/text-overflow:\s*ellipsis/);
     expect(narrowWizardStyles).toMatch(
       /\.create-server-wizard-header\s+\.wizard-step-label\s*\{[^}]*display:\s*block/s,
     );

@@ -122,8 +122,8 @@ async function run() {
   process.stdout.write("Electron UI smoke: loading production renderer.\n");
 
   const window = new BrowserWindow({
-    width: 1280,
-    height: 900,
+    width: 960,
+    height: 720,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -185,6 +185,60 @@ async function run() {
   );
   if (stepCount !== 6) {
     throw new Error(`Expected six provisioning steps, found ${stepCount}.`);
+  }
+
+  const wizardHeaderGeometry = await window.webContents
+    .executeJavaScript(`(() => {
+    const header = document.querySelector(".create-server-wizard-header");
+    const title = header?.querySelector(".create-server-dialog-title-row");
+    const closeButton = header?.querySelector(":scope > .icon-button");
+    const wrappers = [...(header?.querySelectorAll(".wizard-step-item-wrapper") ?? [])];
+    if (!header || !title || !closeButton || wrappers.length !== 6) return null;
+
+    const titleRect = title.getBoundingClientRect();
+    const closeRect = closeButton.getBoundingClientRect();
+    const firstRect = wrappers[0].getBoundingClientRect();
+    const lastRect = wrappers[wrappers.length - 1].getBoundingClientRect();
+    const connectorCenterOffsets = [...header.querySelectorAll(".wizard-step-connector")].map(
+      (connector) => {
+        const circle = connector.parentElement?.querySelector(".wizard-step-circle");
+        if (!circle) return Number.POSITIVE_INFINITY;
+        const connectorRect = connector.getBoundingClientRect();
+        const circleRect = circle.getBoundingClientRect();
+        return Math.abs(
+          connectorRect.top + connectorRect.height / 2 -
+            (circleRect.top + circleRect.height / 2),
+        );
+      },
+    );
+
+    return {
+      titleRight: titleRect.right,
+      firstLeft: firstRect.left,
+      lastRight: lastRect.right,
+      closeLeft: closeRect.left,
+      maxConnectorCenterOffset: Math.max(...connectorCenterOffsets),
+    };
+  })()`);
+  if (!wizardHeaderGeometry) {
+    throw new Error("Could not measure the wizard header geometry.");
+  }
+  const geometryFailures = [];
+  if (wizardHeaderGeometry.firstLeft < wizardHeaderGeometry.titleRight - 0.5) {
+    geometryFailures.push("the first step overlaps the title column");
+  }
+  if (wizardHeaderGeometry.lastRight > wizardHeaderGeometry.closeLeft + 0.5) {
+    geometryFailures.push("the last step overlaps the close button column");
+  }
+  if (wizardHeaderGeometry.maxConnectorCenterOffset > 1) {
+    geometryFailures.push(
+      "a connector is not vertically centered on its step circle",
+    );
+  }
+  if (geometryFailures.length > 0) {
+    throw new Error(
+      `Wizard header geometry failed: ${geometryFailures.join("; ")}. ${JSON.stringify(wizardHeaderGeometry)}`,
+    );
   }
 
   const fileButton = await buttonCenter(window.webContents, "Open modpack file");

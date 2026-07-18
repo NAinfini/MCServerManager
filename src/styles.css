@@ -3063,6 +3063,16 @@ button {
   gap: var(--space-3);
 }
 
+.create-server-wizard-header .create-server-dialog-title-row > div {
+  min-width: 0;
+}
+
+.create-server-wizard-header p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .create-server-header-back {
   flex: 0 0 auto;
 }
@@ -3302,7 +3312,18 @@ button {
 .create-server-wizard-header .wizard-step-connector {
   width: clamp(18px, 3vw, 36px);
   margin-inline: 4px;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
+}
+
+@media (max-width: 1000px) {
+  .create-server-wizard-header .wizard-step-item {
+    padding-inline: 2px;
+  }
+
+  .create-server-wizard-header .wizard-step-connector {
+    width: clamp(14px, 2vw, 22px);
+    margin-inline: 2px;
+  }
 }
 
 .wizard-step-connector-active {
