@@ -546,6 +546,65 @@ describe("Electron backend provisioning plan contract", () => {
   });
 });
 
+describe("Electron backend provisioning job commands", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("persists, lists, runs, and reloads a provisioning job", async () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-job-target-"));
+    tempDirs.push(parent);
+    const targetDir = path.join(parent, "server");
+
+    try {
+      const job = backend.handle("create_provisioning_job", {
+        input: { plan: { targetDir, eulaAccepted: true } },
+      });
+      expect(job).toMatchObject({ stage: "planned", targetDir });
+      expect(backend.handle("list_provisioning_jobs")).toEqual([
+        expect.objectContaining({ id: job.id }),
+      ]);
+
+      const ready = await backend.handle("run_provisioning_job", {
+        input: { jobId: job.id },
+      });
+      expect(ready.stage).toBe("ready");
+      expect(fs.existsSync(targetDir)).toBe(true);
+      expect(
+        backend.handle("get_provisioning_job", {
+          input: { jobId: job.id },
+        }),
+      ).toMatchObject({ id: job.id, stage: "ready" });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("cancels a planned provisioning job through the command bridge", () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-job-cancel-"));
+    tempDirs.push(parent);
+
+    try {
+      const job = backend.handle("create_provisioning_job", {
+        input: { plan: { targetDir: path.join(parent, "server") } },
+      });
+      const cancelled = backend.handle("cancel_provisioning_job", {
+        input: { jobId: job.id },
+      });
+      expect(cancelled).toMatchObject({
+        stage: "failed",
+        error: { code: "JOB_CANCELLED" },
+      });
+    } finally {
+      backend.close();
+    }
+  });
+});
+
 describe("Electron backend server properties contract", () => {
   afterEach(() => {
     while (tempDirs.length > 0) {

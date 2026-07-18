@@ -11,6 +11,7 @@ const {
   createRuntimeManager,
   requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
 } = require("./provisioning/runtimes.cjs");
+const { createJobExecutor } = require("./provisioning/jobs.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -508,6 +509,20 @@ function handleCommand(db, command, args) {
       return previewModpackImport(args?.input);
     case "plan_server_provisioning":
       return planServerProvisioning(args?.input);
+    case "create_provisioning_job":
+      return provisioningExecutorFor(db).createJob(args?.input?.plan || args?.input);
+    case "get_provisioning_job":
+      return provisioningExecutorFor(db).getJob(args?.input?.jobId || args?.jobId);
+    case "list_provisioning_jobs":
+      return provisioningExecutorFor(db).listJobs();
+    case "list_recoverable_provisioning_jobs":
+      return provisioningExecutorFor(db).listRecoverableJobs();
+    case "run_provisioning_job":
+      return provisioningExecutorFor(db).executeJob(args?.input?.jobId || args?.jobId);
+    case "retry_provisioning_job":
+      return provisioningExecutorFor(db).retryJob(args?.input?.jobId || args?.jobId);
+    case "cancel_provisioning_job":
+      return provisioningExecutorFor(db).cancelJob(args?.input?.jobId || args?.jobId);
     case "import_modpack":
       return importModpack(db, args?.input);
     case "list_loader_minecraft_versions":
@@ -4051,6 +4066,91 @@ async function planServerProvisioning(input) {
     return planMarketplacePack(source);
   }
   throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
+}
+
+function mapProvisioningJobRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    serverId: row.server_id || null,
+    stage: row.stage,
+    plan: JSON.parse(row.plan_json || "{}"),
+    progress: JSON.parse(row.progress_json || "{}"),
+    stagingDir: row.staging_dir || null,
+    targetDir: row.target_dir,
+    error: row.error_json ? JSON.parse(row.error_json) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function provisioningJobStore(db) {
+  const select = `SELECT id, server_id, stage, plan_json, progress_json,
+                          staging_dir, target_dir, error_json, created_at, updated_at
+                   FROM provisioning_jobs`;
+  return {
+    insert(job) {
+      db.prepare(
+        `INSERT INTO provisioning_jobs
+          (id, server_id, stage, plan_json, progress_json, staging_dir,
+           target_dir, error_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        job.id,
+        job.serverId,
+        job.stage,
+        JSON.stringify(job.plan),
+        JSON.stringify(job.progress),
+        job.stagingDir,
+        job.targetDir,
+        job.error ? JSON.stringify(job.error) : null,
+        job.createdAt,
+        job.updatedAt,
+      );
+      return this.get(job.id);
+    },
+    get(id) {
+      return mapProvisioningJobRow(
+        db.prepare(`${select} WHERE id = ?`).get(String(id || "")),
+      );
+    },
+    update(id, patch) {
+      const current = this.get(id);
+      if (!current) return null;
+      const job = { ...current, ...patch };
+      db.prepare(
+        `UPDATE provisioning_jobs SET
+          server_id = ?, stage = ?, plan_json = ?, progress_json = ?,
+          staging_dir = ?, target_dir = ?, error_json = ?, updated_at = ?
+         WHERE id = ?`,
+      ).run(
+        job.serverId,
+        job.stage,
+        JSON.stringify(job.plan),
+        JSON.stringify(job.progress),
+        job.stagingDir,
+        job.targetDir,
+        job.error ? JSON.stringify(job.error) : null,
+        job.updatedAt,
+        job.id,
+      );
+      return this.get(job.id);
+    },
+    list() {
+      return db
+        .prepare(`${select} ORDER BY created_at DESC`)
+        .all()
+        .map(mapProvisioningJobRow);
+    },
+  };
+}
+
+function provisioningExecutorFor(db) {
+  return createJobExecutor({
+    store: provisioningJobStore(db),
+    idGenerator: randomUUID,
+    clock: nowIso,
+  });
 }
 
 async function previewModpackImport(input) {
