@@ -401,6 +401,45 @@ function createFakeChild(pid) {
   return child;
 }
 
+describe("Electron backend server properties contract", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("preserves comments and unknown properties when saving explicit updates", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-properties-"));
+    tempDirs.push(serverRoot);
+    const server = createServer(backend, serverRoot);
+    fs.writeFileSync(
+      path.join(serverRoot, "server.properties"),
+      "# Pack settings\nmotd=Pack server\nunknown-pack-key=keep\n",
+    );
+
+    try {
+      const saved = backend.handle("save_server_properties", {
+        input: {
+          serverId: server.id,
+          updates: [{ key: "motd", value: "Managed server", known: true }],
+        },
+      });
+
+      expect(saved.serverId).toBe(server.id);
+      expect(saved.raw).toBe(
+        "# Pack settings\nmotd=Managed server\nunknown-pack-key=keep\n",
+      );
+      expect(saved.entries).toEqual([
+        { key: "motd", value: "Managed server" },
+        { key: "unknown-pack-key", value: "keep" },
+      ]);
+    } finally {
+      backend.close();
+    }
+  });
+});
+
 describe("Electron backend resource lifecycle management", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

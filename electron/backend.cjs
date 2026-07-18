@@ -4,6 +4,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
+const { mergeProperties } = require("./provisioning/properties.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -2350,29 +2351,24 @@ function propertiesPath(db, serverId) {
 function readServerProperties(db, serverId) {
   const filePath = propertiesPath(db, serverId);
   if (!fs.existsSync(filePath)) {
-    return { path: filePath, entries: [], raw: "" };
+    return { serverId, path: filePath, entries: [], raw: "", warnings: [] };
   }
   const raw = fs.readFileSync(filePath, "utf8");
-  const entries = raw
-    .split(/\r?\n/)
-    .filter(
-      (line) => line && !line.trim().startsWith("#") && line.includes("="),
-    )
-    .map((line) => {
-      const index = line.indexOf("=");
-      return {
-        key: line.slice(0, index),
-        value: line.slice(index + 1),
-      };
-    });
-  return { path: filePath, entries, raw };
+  const { entries, warnings } = mergeProperties(raw, []);
+  return { serverId, path: filePath, entries, raw, warnings };
 }
 
 function saveServerProperties(db, serverId, entries) {
   const filePath = propertiesPath(db, serverId);
-  const lines = (entries || []).map((entry) => `${entry.key}=${entry.value}`);
-  fs.writeFileSync(filePath, `${lines.join("\n")}\n`, "utf8");
-  return readServerProperties(db, serverId);
+  const currentRaw = fs.existsSync(filePath)
+    ? fs.readFileSync(filePath, "utf8")
+    : "";
+  const merged = mergeProperties(currentRaw, entries || []);
+  fs.writeFileSync(filePath, merged.raw, "utf8");
+  return {
+    ...readServerProperties(db, serverId),
+    warnings: merged.warnings,
+  };
 }
 
 function mapBackup(row) {
