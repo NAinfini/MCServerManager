@@ -21,6 +21,7 @@ function createTestBackend(options = {}) {
   tempDirs.push(appDataDir);
   return createBackend({
     getPath: () => appDataDir,
+    checkPortAvailable: async () => true,
     ...options,
   });
 }
@@ -32,6 +33,7 @@ function createTestBackendWithAppData() {
     appDataDir,
     backend: createBackend({
       getPath: () => appDataDir,
+      checkPortAvailable: async () => true,
     }),
   };
 }
@@ -583,7 +585,9 @@ describe("Electron backend provisioning plan contract", () => {
 
   it("prepares an explicitly selected runtime for an unverified existing folder", async () => {
     const backend = createTestBackend();
-    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-existing-unverified-"));
+    const rootDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-existing-unverified-"),
+    );
     tempDirs.push(rootDir);
     const serverJar = Buffer.from("paper-server");
     const serverJarHash = createHash("sha256").update(serverJar).digest("hex");
@@ -657,7 +661,9 @@ describe("Electron backend provisioning plan contract", () => {
       });
 
       expect(ready.stage).toBe("ready");
-      expect(fs.readFileSync(path.join(rootDir, "server.jar"))).toEqual(serverJar);
+      expect(fs.readFileSync(path.join(rootDir, "server.jar"))).toEqual(
+        serverJar,
+      );
     } finally {
       backend.close();
     }
@@ -700,7 +706,9 @@ describe("Electron backend provisioning plan contract", () => {
   it("plans and installs managed Temurin only after explicit consent", async () => {
     const archive = Buffer.from("managed-java");
     const checksum = createHash("sha256").update(archive).digest("hex");
-    const download = vi.fn(async (_url, target) => fs.writeFileSync(target, archive));
+    const download = vi.fn(async (_url, target) =>
+      fs.writeFileSync(target, archive),
+    );
     const backend = createTestBackend({
       runtimeDependencies: {
         platform: "win32",
@@ -809,7 +817,9 @@ describe("Electron backend provisioning job commands", () => {
 
   it("blocks pack-controlled provisioning downloads to private network addresses", async () => {
     const backend = createTestBackend();
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-private-download-"));
+    const parent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-private-download-"),
+    );
     tempDirs.push(parent);
     const fetchAttempt = vi.fn(async () => binaryResponse("private data"));
     globalThis.fetch = fetchAttempt;
@@ -818,7 +828,10 @@ describe("Electron backend provisioning job commands", () => {
       const job = backend.handle("create_provisioning_job", {
         input: {
           plan: validProvisioningPlan(path.join(parent, "server"), {
-            source: { kind: "localModpackFile", path: path.join(parent, "pack.mrpack") },
+            source: {
+              kind: "localModpackFile",
+              path: path.join(parent, "pack.mrpack"),
+            },
             artifacts: [
               {
                 provider: "modrinth",
@@ -843,7 +856,9 @@ describe("Electron backend provisioning job commands", () => {
 
   it("blocks an approved provisioning URL that redirects to a private address", async () => {
     const backend = createTestBackend();
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-private-redirect-"));
+    const parent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-private-redirect-"),
+    );
     tempDirs.push(parent);
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
@@ -856,7 +871,10 @@ describe("Electron backend provisioning job commands", () => {
       const job = backend.handle("create_provisioning_job", {
         input: {
           plan: validProvisioningPlan(path.join(parent, "server"), {
-            source: { kind: "localModpackFile", path: path.join(parent, "pack.mrpack") },
+            source: {
+              kind: "localModpackFile",
+              path: path.join(parent, "pack.mrpack"),
+            },
             artifacts: [
               {
                 provider: "modrinth",
@@ -884,7 +902,9 @@ describe("Electron backend provisioning job commands", () => {
       throw new Error("tampered installer arguments were executed");
     });
     const backend = createTestBackend({ spawn: spawnImpl });
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-trusted-loader-plan-"));
+    const parent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-trusted-loader-plan-"),
+    );
     tempDirs.push(parent);
     const serverJar = Buffer.from("trusted paper server");
     const sha256 = createHash("sha256").update(serverJar).digest("hex");
@@ -893,7 +913,10 @@ describe("Electron backend provisioning job commands", () => {
       if (href === "https://fill-data.papermc.io/server.jar") {
         return binaryResponse(serverJar);
       }
-      if (href === "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds") {
+      if (
+        href ===
+        "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds"
+      ) {
         return jsonResponse([
           {
             id: 130,
@@ -946,7 +969,9 @@ describe("Electron backend provisioning job commands", () => {
       });
       expect(ready.stage).toBe("ready");
       expect(spawnImpl).not.toHaveBeenCalled();
-      expect(fs.readFileSync(path.join(targetDir, "server.jar"))).toEqual(serverJar);
+      expect(fs.readFileSync(path.join(targetDir, "server.jar"))).toEqual(
+        serverJar,
+      );
       expect(ready.plan.launchSpec.jvmArgs).toEqual(["-jar", "server.jar"]);
     } finally {
       globalThis.fetch = originalFetch;
@@ -977,7 +1002,9 @@ describe("Electron backend provisioning job commands", () => {
 
   it("creates the profile, source, and EULA record only after file commit", async () => {
     const backend = createTestBackend();
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-atomic-profile-"));
+    const parent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-atomic-profile-"),
+    );
     tempDirs.push(parent);
     const targetDir = path.join(parent, "quilt-server");
     const plan = validProvisioningPlan(targetDir, {
@@ -1054,7 +1081,9 @@ describe("Electron backend server properties contract", () => {
 
   it("preserves comments and unknown properties when saving explicit updates", () => {
     const backend = createTestBackend();
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-properties-"));
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-properties-"),
+    );
     tempDirs.push(serverRoot);
     const server = createServer(backend, serverRoot);
     fs.writeFileSync(
@@ -1235,9 +1264,11 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
 
-      expect(backend.handle("export_app_settings", {
-        input: { path: exportPath },
-      })).toEqual({ path: exportPath });
+      expect(
+        backend.handle("export_app_settings", {
+          input: { path: exportPath },
+        }),
+      ).toEqual({ path: exportPath });
 
       const exported = JSON.parse(fs.readFileSync(exportPath, "utf8"));
       expect(exported.defaultServerDir).toBe("D:/Servers");
@@ -1298,10 +1329,14 @@ describe("Electron backend resource lifecycle management", () => {
         message: "Renderer warning",
         details: "stack trace",
       });
-      expect(fs.existsSync(path.join(appDataDir, "logs", "app.log"))).toBe(true);
+      expect(fs.existsSync(path.join(appDataDir, "logs", "app.log"))).toBe(
+        true,
+      );
 
       expect(backend.handle("clear_app_logs")).toEqual({ cleared: true });
-      expect(backend.handle("list_app_logs", { input: { limit: 10 } })).toEqual([]);
+      expect(backend.handle("list_app_logs", { input: { limit: 10 } })).toEqual(
+        [],
+      );
     } finally {
       backend.close();
     }
@@ -1322,8 +1357,9 @@ describe("Electron backend resource lifecycle management", () => {
       });
 
       expect(skipped.skipped).toBe(true);
-      expect(backend.handle("list_app_logs", { input: { level: "all" } }))
-        .toHaveLength(1);
+      expect(
+        backend.handle("list_app_logs", { input: { level: "all" } }),
+      ).toHaveLength(1);
 
       const diagnosticsPath = path.join(appDataDir, "diagnostics.json");
       backend.handle("export_diagnostic_package", {
@@ -1553,7 +1589,9 @@ describe("Electron backend resource lifecycle management", () => {
 
   it("marks a validated argument-file server runtime ready without server.jar", async () => {
     const backend = createTestBackend();
-    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-runtime-ready-"));
+    const parent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-runtime-ready-"),
+    );
     tempDirs.push(parent);
     const targetDir = path.join(parent, "server");
 
@@ -1564,9 +1602,14 @@ describe("Electron backend resource lifecycle management", () => {
         serverArgs: ["nogui"],
         workingDirectory: ".",
       });
-      fs.mkdirSync(path.join(targetDir, "libraries/forge"), { recursive: true });
+      fs.mkdirSync(path.join(targetDir, "libraries/forge"), {
+        recursive: true,
+      });
       fs.writeFileSync(path.join(targetDir, "user_jvm_args.txt"), "");
-      fs.writeFileSync(path.join(targetDir, "libraries/forge/win_args.txt"), "");
+      fs.writeFileSync(
+        path.join(targetDir, "libraries/forge/win_args.txt"),
+        "",
+      );
 
       const status = backend.handle("get_server_setup_status", {
         serverId: server.id,
@@ -1614,8 +1657,9 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
 
-      expect(fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"))
-        .toBe("world");
+      expect(
+        fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"),
+      ).toBe("world");
       expect(fs.existsSync(path.join(serverRoot, "world", "stale.dat"))).toBe(
         false,
       );
@@ -1658,10 +1702,15 @@ describe("Electron backend resource lifecycle management", () => {
   it("rejects world restore while the server is running", async () => {
     const child = createFakeChild(7124);
     const backend = createTestBackend({ spawn: vi.fn(() => child) });
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-live-restore-"));
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-live-restore-"),
+    );
     tempDirs.push(serverRoot);
     fs.mkdirSync(path.join(serverRoot, "world"), { recursive: true });
-    fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "backup-state");
+    fs.writeFileSync(
+      path.join(serverRoot, "world", "level.dat"),
+      "backup-state",
+    );
     fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
 
     try {
@@ -1669,7 +1718,10 @@ describe("Electron backend resource lifecycle management", () => {
       const backup = backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
-      fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "live-state");
+      fs.writeFileSync(
+        path.join(serverRoot, "world", "level.dat"),
+        "live-state",
+      );
       await backend.handle("start_server", { serverId: server.id });
 
       expect(() =>
@@ -1681,8 +1733,9 @@ describe("Electron backend resource lifecycle management", () => {
           },
         }),
       ).toThrow(expect.objectContaining({ code: "SERVER_MUST_BE_STOPPED" }));
-      expect(fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"))
-        .toBe("live-state");
+      expect(
+        fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"),
+      ).toBe("live-state");
     } finally {
       backend.close();
     }
@@ -1701,7 +1754,9 @@ describe("Electron backend resource lifecycle management", () => {
   });
 
   it("migrates schema version 1 profiles and accepts Quilt profiles", () => {
-    const appDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-schema-v1-"));
+    const appDataDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-schema-v1-"),
+    );
     tempDirs.push(appDataDir);
     const databasePath = path.join(appDataDir, "mc-server-manager.sqlite");
     const legacyDb = new DatabaseSync(databasePath);
@@ -1774,7 +1829,10 @@ describe("Electron backend resource lifecycle management", () => {
     try {
       const columns = migratedDb.prepare("PRAGMA table_info(servers)").all();
       expect(columns.map((column) => column.name)).toEqual(
-        expect.arrayContaining(["launch_spec_json", "compatibility_warning_json"]),
+        expect.arrayContaining([
+          "launch_spec_json",
+          "compatibility_warning_json",
+        ]),
       );
       const legacyRow = migratedDb
         .prepare("SELECT launch_spec_json FROM servers WHERE id = ?")
@@ -1850,7 +1908,9 @@ describe("Electron backend resource lifecycle management", () => {
 
   it("updates only requested server properties and preserves pack-owned content", () => {
     const backend = createTestBackend();
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-guided-properties-"));
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-guided-properties-"),
+    );
     tempDirs.push(serverRoot);
     fs.writeFileSync(
       path.join(serverRoot, "server.properties"),
@@ -1878,7 +1938,9 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
       expect(
-        backend.handle("list_server_profiles").find((item) => item.id === server.id),
+        backend
+          .handle("list_server_profiles")
+          .find((item) => item.id === server.id),
       ).toMatchObject({ serverPort: 25570 });
     } finally {
       backend.close();
@@ -1887,7 +1949,9 @@ describe("Electron backend resource lifecycle management", () => {
 
   it("keeps profile port changes synchronized with server.properties", () => {
     const backend = createTestBackend();
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-profile-port-"));
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-profile-port-"),
+    );
     tempDirs.push(serverRoot);
     fs.writeFileSync(
       path.join(serverRoot, "server.properties"),
@@ -1900,9 +1964,9 @@ describe("Electron backend resource lifecycle management", () => {
         input: { id: server.id, serverPort: 25571 },
       });
 
-      expect(fs.readFileSync(path.join(serverRoot, "server.properties"), "utf8")).toBe(
-        "server-port=25571\ncustom-pack-setting=keep\n",
-      );
+      expect(
+        fs.readFileSync(path.join(serverRoot, "server.properties"), "utf8"),
+      ).toBe("server-port=25571\ncustom-pack-setting=keep\n");
     } finally {
       backend.close();
     }
@@ -1919,16 +1983,21 @@ describe("Electron backend resource lifecycle management", () => {
       cpuPercent: 12.5,
       memoryMb: 768,
     }));
-    const backend = createTestBackend({ spawn: spawnImpl, collectProcessMetrics });
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-honest-metrics-"));
+    const backend = createTestBackend({
+      spawn: spawnImpl,
+      collectProcessMetrics,
+    });
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-honest-metrics-"),
+    );
     tempDirs.push(serverRoot);
     fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
 
     try {
       const server = createServer(backend, serverRoot);
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
       children[0].emit("exit", 0);
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
       children[1].stdout.emit(
         "data",
         "[Server thread/INFO]: Alex joined the game\n",
@@ -1950,7 +2019,8 @@ describe("Electron backend resource lifecycle management", () => {
         unavailableReasons: { tps: "TPS_PROVIDER_UNAVAILABLE" },
       });
       expect(
-        backend.handle("get_performance_history", { serverId: server.id }).samples[0],
+        backend.handle("get_performance_history", { serverId: server.id })
+          .samples[0],
       ).toMatchObject({
         cpuPercent: 12.5,
         memoryMb: 768,
@@ -1964,6 +2034,92 @@ describe("Electron backend resource lifecycle management", () => {
   });
 
   describe("launch specification process contract", () => {
+    it("persists managed processes as stopped when the backend closes", async () => {
+      const appDataDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-close-process-"),
+      );
+      const serverRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-close-server-"),
+      );
+      tempDirs.push(appDataDir, serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+      const app = {
+        getPath: () => appDataDir,
+        spawn: vi.fn(() => createFakeChild(18989)),
+        checkPortAvailable: async () => true,
+      };
+      const backend = createBackend(app);
+      const server = createServer(backend, serverRoot);
+      await backend.handle("start_server", { serverId: server.id });
+
+      backend.close();
+
+      const reopened = createBackend(app);
+      try {
+        expect(
+          reopened.handle("get_server_process_status", { serverId: server.id }),
+        ).toMatchObject({ status: "stopped" });
+      } finally {
+        reopened.close();
+      }
+    });
+
+    it("rejects start when the operating-system port probe reports a conflict", async () => {
+      const spawnImpl = vi.fn(() => createFakeChild(18990));
+      const checkPortAvailable = vi.fn(async () => false);
+      const backend = createTestBackend({
+        spawn: spawnImpl,
+        checkPortAvailable,
+      });
+      const serverRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-port-busy-"),
+      );
+      tempDirs.push(serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+      try {
+        const server = createServer(backend, serverRoot);
+
+        await expect(
+          backend.handle("start_server", { serverId: server.id }),
+        ).rejects.toMatchObject({ code: "SERVER_PORT_IN_USE" });
+        expect(checkPortAvailable).toHaveBeenCalledWith(25565);
+        expect(spawnImpl).not.toHaveBeenCalled();
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("rejects two active managed servers configured on the same port", async () => {
+      const spawnImpl = vi.fn(() => createFakeChild(18991));
+      const backend = createTestBackend({
+        spawn: spawnImpl,
+        checkPortAvailable: vi.fn(async () => true),
+      });
+      const firstRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-port-first-"),
+      );
+      const secondRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-port-second-"),
+      );
+      tempDirs.push(firstRoot, secondRoot);
+      fs.writeFileSync(path.join(firstRoot, "server.jar"), "jar");
+      fs.writeFileSync(path.join(secondRoot, "server.jar"), "jar");
+
+      try {
+        const first = createServer(backend, firstRoot);
+        const second = createServer(backend, secondRoot);
+        await backend.handle("start_server", { serverId: first.id });
+
+        await expect(
+          backend.handle("start_server", { serverId: second.id }),
+        ).rejects.toMatchObject({ code: "SERVER_PORT_IN_USE" });
+        expect(spawnImpl).toHaveBeenCalledTimes(1);
+      } finally {
+        backend.close();
+      }
+    });
+
     it("starts a structured jar launch specification with exact safe spawn options", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19001));
       const backend = createTestBackend({ spawn: spawnImpl });
@@ -1980,7 +2136,7 @@ describe("Electron backend resource lifecycle management", () => {
         });
         fs.writeFileSync(path.join(targetDir, "server.jar"), "jar");
 
-        backend.handle("start_server", { serverId: server.id });
+        await backend.handle("start_server", { serverId: server.id });
 
         expect(spawnImpl).toHaveBeenCalledWith(
           server.javaPath,
@@ -2001,7 +2157,9 @@ describe("Electron backend resource lifecycle management", () => {
     it("starts an argument-file launch specification with memory flags first", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19002));
       const backend = createTestBackend({ spawn: spawnImpl });
-      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-args-"));
+      const parent = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-launch-args-"),
+      );
       tempDirs.push(parent);
       const targetDir = path.join(parent, "server");
 
@@ -2028,7 +2186,7 @@ describe("Electron backend resource lifecycle management", () => {
           "",
         );
 
-        backend.handle("start_server", { serverId: server.id });
+        await backend.handle("start_server", { serverId: server.id });
 
         expect(spawnImpl).toHaveBeenCalledWith(
           server.javaPath,
@@ -2052,31 +2210,36 @@ describe("Electron backend resource lifecycle management", () => {
       [["-Dvalue=bad\nnext"], "line breaks"],
       [["-jar"], "missing jar file"],
       [["@"], "empty argument-file reference"],
-    ])("rejects malformed launch specification arguments: %s", async (jvmArgs) => {
-      const spawnImpl = vi.fn(() => createFakeChild(19003));
-      const backend = createTestBackend({ spawn: spawnImpl });
-      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-bad-"));
-      tempDirs.push(parent);
-      const targetDir = path.join(parent, "server");
+    ])(
+      "rejects malformed launch specification arguments: %s",
+      async (jvmArgs) => {
+        const spawnImpl = vi.fn(() => createFakeChild(19003));
+        const backend = createTestBackend({ spawn: spawnImpl });
+        const parent = fs.mkdtempSync(
+          path.join(os.tmpdir(), "mcsm-launch-bad-"),
+        );
+        tempDirs.push(parent);
+        const targetDir = path.join(parent, "server");
 
-      try {
-        const server = await createProvisionedServer(backend, targetDir, {
-          executable: { kind: "java" },
-          jvmArgs,
-          serverArgs: ["nogui"],
-          workingDirectory: ".",
-        });
+        try {
+          const server = await createProvisionedServer(backend, targetDir, {
+            executable: { kind: "java" },
+            jvmArgs,
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+          });
 
-        expect(() =>
-          backend.handle("start_server", { serverId: server.id }),
-        ).toThrow(/launch specification/i);
-        expect(spawnImpl).not.toHaveBeenCalled();
-      } finally {
-        backend.close();
-      }
-    });
+          await expect(
+            backend.handle("start_server", { serverId: server.id }),
+          ).rejects.toThrow(/launch specification/i);
+          expect(spawnImpl).not.toHaveBeenCalled();
+        } finally {
+          backend.close();
+        }
+      },
+    );
 
-    it("keeps legacy server.jar profiles startable without a launch specification", () => {
+    it("keeps legacy server.jar profiles startable without a launch specification", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19004));
       const backend = createTestBackend({ spawn: spawnImpl });
       const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-legacy-"));
@@ -2085,7 +2248,7 @@ describe("Electron backend resource lifecycle management", () => {
 
       try {
         const server = createServer(backend, serverRoot);
-        backend.handle("start_server", { serverId: server.id });
+        await backend.handle("start_server", { serverId: server.id });
 
         expect(spawnImpl).toHaveBeenCalledWith(
           "java",
@@ -2106,7 +2269,9 @@ describe("Electron backend resource lifecycle management", () => {
     it("rejects a configured Java path that is not an installed executable", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19005));
       const backend = createTestBackend({ spawn: spawnImpl });
-      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-java-"));
+      const parent = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-launch-java-"),
+      );
       tempDirs.push(parent);
       const targetDir = path.join(parent, "server");
 
@@ -2125,9 +2290,9 @@ describe("Electron backend resource lifecycle management", () => {
           },
         });
 
-        expect(() =>
+        await expect(
           backend.handle("start_server", { serverId: server.id }),
-        ).toThrow(/Java executable/i);
+        ).rejects.toThrow(/Java executable/i);
         expect(spawnImpl).not.toHaveBeenCalled();
       } finally {
         backend.close();
@@ -2161,18 +2326,20 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
 
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
       expect(spawnImpl).toHaveBeenCalledTimes(1);
 
       children[0].emit("exit", 1);
-      expect(backend.handle("get_server_process_status", { serverId: server.id }))
-        .toMatchObject({ status: "crashed" });
+      expect(
+        backend.handle("get_server_process_status", { serverId: server.id }),
+      ).toMatchObject({ status: "crashed" });
 
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(spawnImpl).toHaveBeenCalledTimes(2);
-      expect(backend.handle("get_server_process_status", { serverId: server.id }))
-        .toMatchObject({ status: "running", pid: 18001 });
+      expect(
+        backend.handle("get_server_process_status", { serverId: server.id }),
+      ).toMatchObject({ status: "running", pid: 18001 });
       expect(
         backend
           .handle("list_process_events", { serverId: server.id })
@@ -2210,7 +2377,7 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
 
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
       expect(spawnImpl).toHaveBeenCalledTimes(1);
 
       children[0].stdout.emit(
@@ -2222,8 +2389,9 @@ describe("Electron backend resource lifecycle management", () => {
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(spawnImpl).toHaveBeenCalledTimes(2);
-      expect(backend.handle("get_server_process_status", { serverId: server.id }))
-        .toMatchObject({ status: "running", pid: 19001 });
+      expect(
+        backend.handle("get_server_process_status", { serverId: server.id }),
+      ).toMatchObject({ status: "running", pid: 19001 });
       expect(
         backend
           .handle("list_process_events", { serverId: server.id })
@@ -2249,7 +2417,7 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
       expect(spawnImpl).toHaveBeenCalledTimes(1);
 
       const restartPromise = backend.handle("restart_server", {
@@ -2263,8 +2431,9 @@ describe("Electron backend resource lifecycle management", () => {
       await restartPromise;
 
       expect(spawnImpl).toHaveBeenCalledTimes(2);
-      expect(backend.handle("get_server_process_status", { serverId: server.id }))
-        .toMatchObject({ status: "running", pid: 20001 });
+      expect(
+        backend.handle("get_server_process_status", { serverId: server.id }),
+      ).toMatchObject({ status: "running", pid: 20001 });
     } finally {
       backend.close();
     }
@@ -2285,9 +2454,9 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      backend.handle("start_server", { serverId: server.id });
+      await backend.handle("start_server", { serverId: server.id });
 
-      const scheduled = backend.handle("restart_server_with_countdown", {
+      const scheduled = await backend.handle("restart_server_with_countdown", {
         input: {
           serverId: server.id,
           stepsSeconds: [2, 1],
@@ -2299,7 +2468,9 @@ describe("Electron backend resource lifecycle management", () => {
         serverId: server.id,
         stepsSeconds: [2, 1],
       });
-      expect(children[0].stdin.writes).toEqual(["say Restarting in 2 seconds\n"]);
+      expect(children[0].stdin.writes).toEqual([
+        "say Restarting in 2 seconds\n",
+      ]);
 
       await vi.advanceTimersByTimeAsync(1000);
       expect(children[0].stdin.writes).toContain(
@@ -3130,7 +3301,9 @@ describe("Electron backend server pack metadata", () => {
         });
       }
       if (href.endsWith("/v1/mods/123/files/21/download-url")) {
-        return jsonResponse({ data: "https://edge.forgecdn.net/pack-server.zip" });
+        return jsonResponse({
+          data: "https://edge.forgecdn.net/pack-server.zip",
+        });
       }
       throw new Error(`unexpected fetch ${href}`);
     });

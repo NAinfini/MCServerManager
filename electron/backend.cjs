@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
-const { isIP } = require("node:net");
+const { createServer: createNetServer, isIP } = require("node:net");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
 const { mergeProperties } = require("./provisioning/properties.cjs");
@@ -26,6 +26,7 @@ const databaseProcessSpawners = new WeakMap();
 const databaseMetricCollectors = new WeakMap();
 const databaseMetricBaselines = new WeakMap();
 const databaseRuntimeDependencies = new WeakMap();
+const databasePortCheckers = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
 const currentSchemaVersion = 2;
@@ -299,9 +300,13 @@ function createBackend(app) {
   );
   databaseAppDataDirs.set(db, appDataDir);
   databaseProcessSpawners.set(db, app.spawn || spawn);
-  databaseMetricCollectors.set(db, app.collectProcessMetrics || collectProcessMetrics);
+  databaseMetricCollectors.set(
+    db,
+    app.collectProcessMetrics || collectProcessMetrics,
+  );
   databaseMetricBaselines.set(db, new Map());
   databaseRuntimeDependencies.set(db, app.runtimeDependencies || {});
+  databasePortCheckers.set(db, app.checkPortAvailable || checkPortAvailable);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
   migrateDatabase(db);
@@ -320,6 +325,11 @@ function createBackend(app) {
           managedChildren.delete(serverId);
         }
       }
+      db.prepare(
+        `UPDATE managed_processes
+         SET status = 'stopped', exited_at = COALESCE(exited_at, ?)
+         WHERE status IN ('running', 'external_running')`,
+      ).run(nowIso());
       db.close();
     },
     handle: (command, args) => handleCommand(db, command, args),
@@ -357,7 +367,10 @@ function handleCommand(db, command, args) {
     case "list_server_profiles":
       return listServerProfiles(db);
     case "get_server_eula_acceptance":
-      return getServerEulaAcceptance(db, args?.input?.serverId || args?.serverId);
+      return getServerEulaAcceptance(
+        db,
+        args?.input?.serverId || args?.serverId,
+      );
     case "get_server_source":
       return getServerSource(db, args?.input?.serverId || args?.serverId);
     case "create_server_profile":
@@ -365,7 +378,9 @@ function handleCommand(db, command, args) {
     case "get_server_setup_status":
       return getServerSetupStatus(db, args?.serverId);
     case "get_default_server_root":
-      return { path: managedServerRoot(db, args?.input?.name || "server", false) };
+      return {
+        path: managedServerRoot(db, args?.input?.name || "server", false),
+      };
     case "detect_server_version":
       return detectServerVersion(args?.rootDir || args?.input?.rootDir);
     case "update_server_profile":
@@ -525,19 +540,29 @@ function handleCommand(db, command, args) {
     case "plan_server_provisioning":
       return planServerProvisioning(args?.input);
     case "create_provisioning_job":
-      return provisioningExecutorFor(db).createJob(args?.input?.plan || args?.input);
+      return provisioningExecutorFor(db).createJob(
+        args?.input?.plan || args?.input,
+      );
     case "get_provisioning_job":
-      return provisioningExecutorFor(db).getJob(args?.input?.jobId || args?.jobId);
+      return provisioningExecutorFor(db).getJob(
+        args?.input?.jobId || args?.jobId,
+      );
     case "list_provisioning_jobs":
       return provisioningExecutorFor(db).listJobs();
     case "list_recoverable_provisioning_jobs":
       return provisioningExecutorFor(db).listRecoverableJobs();
     case "run_provisioning_job":
-      return provisioningExecutorFor(db).executeJob(args?.input?.jobId || args?.jobId);
+      return provisioningExecutorFor(db).executeJob(
+        args?.input?.jobId || args?.jobId,
+      );
     case "retry_provisioning_job":
-      return provisioningExecutorFor(db).retryJob(args?.input?.jobId || args?.jobId);
+      return provisioningExecutorFor(db).retryJob(
+        args?.input?.jobId || args?.jobId,
+      );
     case "cancel_provisioning_job":
-      return provisioningExecutorFor(db).cancelJob(args?.input?.jobId || args?.jobId);
+      return provisioningExecutorFor(db).cancelJob(
+        args?.input?.jobId || args?.jobId,
+      );
     case "import_modpack":
       return importModpack(db, args?.input);
     case "list_loader_minecraft_versions":
@@ -1012,7 +1037,11 @@ function resetAppPreferences(db) {
   const preferences = defaultAppPreferences(db);
   const filePath = appPreferencesPath(db);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(preferences, null, 2)}\n`, "utf8");
+  fs.writeFileSync(
+    filePath,
+    `${JSON.stringify(preferences, null, 2)}\n`,
+    "utf8",
+  );
   return preferences;
 }
 
@@ -1099,7 +1128,10 @@ function enforceAppLogPolicy(db) {
   const cutoffTime =
     Date.now() - preferences.retentionDays * 24 * 60 * 60 * 1000;
   const maxBytes = preferences.maxSizeMb * 1024 * 1024;
-  const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/).filter(Boolean);
+  const lines = fs
+    .readFileSync(filePath, "utf8")
+    .split(/\r?\n/)
+    .filter(Boolean);
   const retained = lines.filter((line) => {
     try {
       const entry = JSON.parse(line);
@@ -1119,7 +1151,11 @@ function enforceAppLogPolicy(db) {
     totalBytes += lineBytes;
     sized.unshift(line);
   }
-  fs.writeFileSync(filePath, sized.length > 0 ? `${sized.join("\n")}\n` : "", "utf8");
+  fs.writeFileSync(
+    filePath,
+    sized.length > 0 ? `${sized.join("\n")}\n` : "",
+    "utf8",
+  );
 }
 
 function getAppLogsFolder(db) {
@@ -1221,7 +1257,10 @@ function readPropertiesFile(filePath) {
         if (separator === -1) {
           return [line, ""];
         }
-        return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+        return [
+          line.slice(0, separator).trim(),
+          line.slice(separator + 1).trim(),
+        ];
       }),
   );
 }
@@ -1243,8 +1282,9 @@ function parseServerJarName(fileName) {
   } else if (lower.includes("forge")) {
     loaderType = "forge";
     loaderVersion =
-      fileName.match(/forge[-+_ ]*(?:\d+\.\d+(?:\.\d+)?[-+_ ])?([0-9][\w.+-]*)/i)
-        ?.[1] ?? null;
+      fileName.match(
+        /forge[-+_ ]*(?:\d+\.\d+(?:\.\d+)?[-+_ ])?([0-9][\w.+-]*)/i,
+      )?.[1] ?? null;
   } else if (lower.includes("fabric")) {
     loaderType = "fabric";
     loaderVersion =
@@ -1267,12 +1307,15 @@ function detectServerVersion(rootDir) {
   const properties = readPropertiesFile(propertiesPath);
   const jars = fs
     .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".jar"))
+    .filter(
+      (entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".jar"),
+    )
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b));
   const parsedJar =
-    jars.map(parseServerJarName).find((jar) => jar.loaderType || jar.minecraftVersion) ??
-    {};
+    jars
+      .map(parseServerJarName)
+      .find((jar) => jar.loaderType || jar.minecraftVersion) ?? {};
   const port = Number.parseInt(properties["server-port"] || "", 10);
 
   return {
@@ -1405,7 +1448,10 @@ async function measuredProcessMetrics(db, pid) {
           (now - baseline.sampledAt),
       );
     }
-    baselines.set(pid, { cpuSeconds: Number(measured.cpuSeconds), sampledAt: now });
+    baselines.set(pid, {
+      cpuSeconds: Number(measured.cpuSeconds),
+      sampledAt: now,
+    });
   }
   return {
     cpuPercent: cpuPercent === null ? null : Math.round(cpuPercent * 10) / 10,
@@ -1488,16 +1534,16 @@ function scheduleCrashRestart(db, profile, reason) {
     if (closedDatabases.has(db) || managedChildren.has(profile.id)) {
       return;
     }
-    try {
-      startServer(db, profile.id, { autoRestart: true });
-    } catch (error) {
-      addProcessEvent(
-        db,
-        profile.id,
-        "error",
-        `Auto restart failed: ${error.message}`,
-      );
-    }
+    Promise.resolve(startServer(db, profile.id, { autoRestart: true })).catch(
+      (error) => {
+        addProcessEvent(
+          db,
+          profile.id,
+          "error",
+          `Auto restart failed: ${error.message}`,
+        );
+      },
+    );
   }, delayMs);
   state.timer.unref?.();
 }
@@ -1515,9 +1561,7 @@ function mapProfile(row) {
     minMemoryMb: row.min_memory_mb,
     maxMemoryMb: row.max_memory_mb,
     autoStart: row.auto_start !== 0,
-    launchSpec: row.launch_spec_json
-      ? JSON.parse(row.launch_spec_json)
-      : null,
+    launchSpec: row.launch_spec_json ? JSON.parse(row.launch_spec_json) : null,
     compatibilityWarnings: JSON.parse(row.compatibility_warning_json || "[]"),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1659,7 +1703,8 @@ function updateServerProfile(db, input) {
     ? fs.readFileSync(synchronizedPropertiesPath, "utf8")
     : "";
   const synchronizedProperties = synchronizePort
-    ? mergeProperties(originalProperties, { "server-port": String(serverPort) }).raw
+    ? mergeProperties(originalProperties, { "server-port": String(serverPort) })
+        .raw
     : null;
   let propertiesWritten = false;
 
@@ -1720,7 +1765,11 @@ function updateServerProfile(db, input) {
       );
     }
     if (synchronizePort) {
-      fs.writeFileSync(synchronizedPropertiesPath, synchronizedProperties, "utf8");
+      fs.writeFileSync(
+        synchronizedPropertiesPath,
+        synchronizedProperties,
+        "utf8",
+      );
       propertiesWritten = true;
     }
     db.exec("COMMIT");
@@ -1728,7 +1777,11 @@ function updateServerProfile(db, input) {
     db.exec("ROLLBACK");
     if (propertiesWritten) {
       if (propertiesExisted) {
-        fs.writeFileSync(synchronizedPropertiesPath, originalProperties, "utf8");
+        fs.writeFileSync(
+          synchronizedPropertiesPath,
+          originalProperties,
+          "utf8",
+        );
       } else {
         fs.rmSync(synchronizedPropertiesPath, { force: true });
       }
@@ -2156,7 +2209,10 @@ function managedJavaCandidates(db) {
       const target = path.join(current, entry.name);
       if (entry.isDirectory()) pending.push(target);
       else if (entry.isFile() && entry.name.toLowerCase() === executableName) {
-        candidates.push({ path: target, source: "Managed by MC Server Manager" });
+        candidates.push({
+          path: target,
+          source: "Managed by MC Server Manager",
+        });
       }
     }
   }
@@ -2179,8 +2235,8 @@ function listJavaRuntimes(db) {
         typeof candidate !== "string"
           ? candidate.source
           : process.env.JAVA_HOME && candidate.startsWith(process.env.JAVA_HOME)
-          ? "JAVA_HOME"
-          : "Server profile",
+            ? "JAVA_HOME"
+            : "Server profile",
     }));
   const uniqueCandidates = Array.from(
     new Map(
@@ -2312,9 +2368,10 @@ function setupServerRuntime(profile) {
 
 function getServerSetupStatus(db, serverId) {
   const profile = getServerProfile(db, requireServerId(serverId));
-  const javaCompatibility = listJavaRuntimes(db).compatibility.find(
-    (item) => item.serverId === profile.id,
-  ) ?? createJavaCompatibility(profile, []);
+  const javaCompatibility =
+    listJavaRuntimes(db).compatibility.find(
+      (item) => item.serverId === profile.id,
+    ) ?? createJavaCompatibility(profile, []);
   const eulaPath = path.join(profile.rootDir, "eula.txt");
   const hasEula = fs.existsSync(eulaPath);
   const eulaAccepted = readEulaAccepted(eulaPath);
@@ -2395,7 +2452,11 @@ function resolveLaunchPath(rootDir, relativePath, description) {
   }
   const resolved = path.resolve(rootDir, relativePath);
   const relative = path.relative(rootDir, resolved);
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+  if (
+    relative === ".." ||
+    relative.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relative)
+  ) {
     invalidLaunchSpec(`${description} escapes the server directory`);
   }
   return resolved;
@@ -2451,7 +2512,8 @@ function structuredServerLaunch(profile) {
     }
     let referencedFile = null;
     if (argument.startsWith("@")) referencedFile = argument.slice(1);
-    if (index > 0 && spec.jvmArgs[index - 1] === "-jar") referencedFile = argument;
+    if (index > 0 && spec.jvmArgs[index - 1] === "-jar")
+      referencedFile = argument;
     if (!referencedFile) continue;
     const filePath = resolveLaunchPath(cwd, referencedFile, "launch file");
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
@@ -2491,7 +2553,52 @@ function legacyServerLaunch(profile) {
   };
 }
 
-function startServer(db, serverId, options = {}) {
+function checkPortAvailable(port) {
+  return new Promise((resolve, reject) => {
+    const probe = createNetServer();
+    probe.unref();
+    probe.once("error", (error) => {
+      if (error?.code === "EADDRINUSE" || error?.code === "EACCES") {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    });
+    probe.listen({ host: "0.0.0.0", port, exclusive: true }, () => {
+      probe.close(() => resolve(true));
+    });
+  });
+}
+
+async function assertServerPortAvailable(db, profile) {
+  const port = Number(profile.serverPort || 25565);
+  const conflictingProfile = db
+    .prepare(
+      `SELECT s.name
+       FROM servers s
+       JOIN managed_processes p ON p.server_id = s.id
+       WHERE s.id <> ? AND s.server_port = ?
+         AND p.status IN ('running', 'external_running')
+       ORDER BY p.started_at DESC
+       LIMIT 1`,
+    )
+    .get(profile.id, port);
+  if (conflictingProfile) {
+    throw provisioningError(
+      "SERVER_PORT_IN_USE",
+      `Port ${port} is already used by the running server ${conflictingProfile.name}.`,
+    );
+  }
+  const available = await databasePortCheckers.get(db)(port);
+  if (!available) {
+    throw provisioningError(
+      "SERVER_PORT_IN_USE",
+      `Port ${port} is already in use. Stop the other service or choose a different server port.`,
+    );
+  }
+}
+
+async function startServer(db, serverId, options = {}) {
   const profile = getServerProfile(db, requireServerId(serverId));
   if (!options.autoRestart) {
     clearRestartState(profile.id);
@@ -2499,6 +2606,7 @@ function startServer(db, serverId, options = {}) {
   const launch = profile.launchSpec
     ? structuredServerLaunch(profile)
     : legacyServerLaunch(profile);
+  await assertServerPortAvailable(db, profile);
   const child = processSpawnerFor(db)(launch.executable, launch.args, {
     cwd: launch.cwd,
     env: process.env,
@@ -2569,7 +2677,8 @@ function startServer(db, serverId, options = {}) {
     if (closedDatabases.has(db)) {
       return;
     }
-    const crashed = !managed.stopRequested && (managed.crashDetected || code !== 0);
+    const crashed =
+      !managed.stopRequested && (managed.crashDetected || code !== 0);
     db.prepare(
       "UPDATE managed_processes SET status = ?, exited_at = ?, exit_code = ? WHERE id = ?",
     ).run(crashed ? "crashed" : "stopped", nowIso(), code, id);
@@ -2583,7 +2692,9 @@ function startServer(db, serverId, options = {}) {
       scheduleCrashRestart(
         db,
         profile,
-        managed.crashDetected ? "crash signature" : `exit code ${code ?? "unknown"}`,
+        managed.crashDetected
+          ? "crash signature"
+          : `exit code ${code ?? "unknown"}`,
       );
     } else {
       clearRestartState(profile.id);
@@ -2687,7 +2798,8 @@ function clearRestartCountdown(serverId) {
 }
 
 function normalizeCountdownSteps(steps) {
-  const values = Array.isArray(steps) && steps.length > 0 ? steps : [300, 60, 10];
+  const values =
+    Array.isArray(steps) && steps.length > 0 ? steps : [300, 60, 10];
   return Array.from(
     new Set(
       values
@@ -2848,8 +2960,9 @@ function saveServerProperties(db, serverId, entries) {
   fs.writeFileSync(filePath, merged.raw, "utf8");
   try {
     if (portEntry) {
-      db.prepare("UPDATE servers SET server_port = ?, updated_at = ? WHERE id = ?")
-        .run(nextPort, nowIso(), serverId);
+      db.prepare(
+        "UPDATE servers SET server_port = ?, updated_at = ? WHERE id = ?",
+      ).run(nextPort, nowIso(), serverId);
     }
   } catch (error) {
     if (fileExisted) fs.writeFileSync(filePath, currentRaw, "utf8");
@@ -3160,11 +3273,7 @@ function restoreWorldBackup(db, input) {
   if (targetWorldDir.toLowerCase() === "backups") {
     throw new Error("restore target must not overlap backup storage");
   }
-  const { target } = safeServerPath(
-    db,
-    backup.server_id,
-    targetWorldDir,
-  );
+  const { target } = safeServerPath(db, backup.server_id, targetWorldDir);
   fs.rmSync(target, {
     recursive: true,
     force: true,
@@ -3638,7 +3747,8 @@ function versionMatchesServer(version, profile) {
   const gameVersions = version.gameVersions || [];
   return (
     (loaders.length === 0 || loaders.includes(profile.loaderType)) &&
-    (gameVersions.length === 0 || gameVersions.includes(profile.minecraftVersion))
+    (gameVersions.length === 0 ||
+      gameVersions.includes(profile.minecraftVersion))
   );
 }
 
@@ -3695,9 +3805,9 @@ async function resolveContentUpdate(db, profile, content) {
   }
 
   if (parsed.provider === "hangar") {
-    const latest = (await listHangarVersions({ projectId: parsed.projectId })).find(
-      (version) => version.name !== parsed.versionId,
-    );
+    const latest = (
+      await listHangarVersions({ projectId: parsed.projectId })
+    ).find((version) => version.name !== parsed.versionId);
     if (!latest) return null;
     const projectName =
       parsed.projectId.split("/").filter(Boolean).pop() || parsed.projectId;
@@ -3813,7 +3923,11 @@ async function installResolvedContentUpdate(db, content, update) {
   const targetDir = path.dirname(content.installed_path);
   fs.mkdirSync(targetDir, { recursive: true });
   const targetPath = uniqueTargetPath(targetDir, update.fileName);
-  await downloadRemoteFile(update.downloadUrl, targetPath, update.headers || {});
+  await downloadRemoteFile(
+    update.downloadUrl,
+    targetPath,
+    update.headers || {},
+  );
   let backupPath = null;
   if (fs.existsSync(content.installed_path)) {
     backupPath = uniqueBackupPath(content.installed_path);
@@ -3842,7 +3956,9 @@ async function installResolvedContentUpdate(db, content, update) {
   );
   return {
     content: mapInstalledContent(
-      db.prepare("SELECT * FROM installed_content WHERE id = ?").get(content.id),
+      db
+        .prepare("SELECT * FROM installed_content WHERE id = ?")
+        .get(content.id),
     ),
     backupPath,
   };
@@ -4270,7 +4386,9 @@ async function runScheduledTaskAction(db, task) {
 function diskFreeMb(rootDir) {
   try {
     const stats = fs.statfsSync(rootDir);
-    return Math.round((Number(stats.bavail) * Number(stats.bsize)) / (1024 * 1024));
+    return Math.round(
+      (Number(stats.bavail) * Number(stats.bsize)) / (1024 * 1024),
+    );
   } catch {
     return null;
   }
@@ -4295,17 +4413,23 @@ async function sampleServerMetrics(db, serverId) {
   const id = randomUUID();
   const profile = getServerProfile(db, requireServerId(serverId));
   const processStatus = getServerProcessStatus(db, profile.id);
-  const running = ["running", "externalRunning"].includes(processStatus?.status);
+  const running = ["running", "externalRunning"].includes(
+    processStatus?.status,
+  );
   const managed = managedChildren.get(profile.id);
   const managedForDatabase = managed?.db === db ? managed : null;
-  const processMetrics = running && processStatus?.pid
-    ? await measuredProcessMetrics(db, processStatus.pid)
-    : { cpuPercent: null, memoryMb: null, tps: null };
+  const processMetrics =
+    running && processStatus?.pid
+      ? await measuredProcessMetrics(db, processStatus.pid)
+      : { cpuPercent: null, memoryMb: null, tps: null };
   const freeDisk = diskFreeMb(profile.rootDir);
   const restartCount = Math.max(
     0,
     Number(
-      db.prepare("SELECT COUNT(*) AS count FROM managed_processes WHERE server_id = ?")
+      db
+        .prepare(
+          "SELECT COUNT(*) AS count FROM managed_processes WHERE server_id = ?",
+        )
         .get(profile.id).count,
     ) - 1,
   );
@@ -4338,11 +4462,20 @@ async function sampleServerMetrics(db, serverId) {
     cpuPercent: processMetrics.cpuPercent,
     memoryMb: processMetrics.memoryMb,
     diskFreeMb: freeDisk,
-    uptimeSeconds: running && processStatus?.startedAt
-      ? Math.max(0, Math.floor((Date.now() - new Date(processStatus.startedAt).getTime()) / 1000))
-      : null,
+    uptimeSeconds:
+      running && processStatus?.startedAt
+        ? Math.max(
+            0,
+            Math.floor(
+              (Date.now() - new Date(processStatus.startedAt).getTime()) / 1000,
+            ),
+          )
+        : null,
     restartCount,
-    playerCount: running && managedForDatabase ? managedForDatabase.onlinePlayers.size : null,
+    playerCount:
+      running && managedForDatabase
+        ? managedForDatabase.onlinePlayers.size
+        : null,
     tps: processMetrics.tps,
     unavailableReasons,
     unavailableReason: null,
@@ -4496,7 +4629,11 @@ async function planServerProvisioning(input) {
   } else if (source?.kind === "blank") {
     sourcePlan = {
       source,
-      pack: { format: "blank", name: input?.name || "Minecraft Server", versionId: null },
+      pack: {
+        format: "blank",
+        name: input?.name || "Minecraft Server",
+        versionId: null,
+      },
       minecraftVersion: input?.minecraftVersion || null,
       loaderType: input?.loaderType || null,
       loaderVersion: input?.loaderVersion || null,
@@ -4510,12 +4647,19 @@ async function planServerProvisioning(input) {
       estimatedBytes: 0,
     };
   } else if (source?.kind === "existingFolder") {
-    const rootDir = trimRequired(input?.rootDir, "existing server folder is required");
+    const rootDir = trimRequired(
+      input?.rootDir,
+      "existing server folder is required",
+    );
     const detected = detectServerVersion(rootDir);
     const hasLegacyJar = fs.existsSync(path.join(rootDir, "server.jar"));
     sourcePlan = {
       source: { ...source, rootDir },
-      pack: { format: "existing", name: path.basename(rootDir), versionId: null },
+      pack: {
+        format: "existing",
+        name: path.basename(rootDir),
+        versionId: null,
+      },
       minecraftVersion: input?.minecraftVersion || detected.minecraftVersion,
       loaderType: input?.loaderType || detected.loaderType || "vanilla",
       loaderVersion: input?.loaderVersion || null,
@@ -4531,7 +4675,8 @@ async function planServerProvisioning(input) {
         : [
             {
               code: "EXISTING_RUNTIME_UNVERIFIED",
-              message: "The existing folder has no legacy server.jar; verify its runtime files before continuing.",
+              message:
+                "The existing folder has no legacy server.jar; verify its runtime files before continuing.",
               requiresAcknowledgement: true,
             },
           ],
@@ -4548,22 +4693,28 @@ async function planServerProvisioning(input) {
       useExistingTarget: true,
     };
   } else {
-    throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
+    throw new Error(
+      `unsupported provisioning source: ${source?.kind || "unknown"}`,
+    );
   }
 
   if (input?.prepareInstall !== true) return sourcePlan;
   const loaderType = input?.loaderType || sourcePlan.loaderType;
-  const minecraftVersion = input?.minecraftVersion || sourcePlan.minecraftVersion;
+  const minecraftVersion =
+    input?.minecraftVersion || sourcePlan.minecraftVersion;
   if (!loaderType || !minecraftVersion) {
     return sourcePlan;
   }
   const adapter = loaderRegistry().get(loaderType);
   let loaderVersion = input?.loaderVersion || sourcePlan.loaderVersion;
   if (!loaderVersion) {
-    loaderVersion = (await adapter.listLoaderVersions(minecraftVersion))[0]?.value || null;
+    loaderVersion =
+      (await adapter.listLoaderVersions(minecraftVersion))[0]?.value || null;
   }
   if (!loaderVersion) {
-    throw new Error(`No ${loaderType} server loader is available for Minecraft ${minecraftVersion}.`);
+    throw new Error(
+      `No ${loaderType} server loader is available for Minecraft ${minecraftVersion}.`,
+    );
   }
   const loaderInstallPlan = await adapter.buildInstallPlan({
     minecraftVersion,
@@ -4680,7 +4831,9 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
   validateRestartPolicy(profile.restartPolicy);
   const restartPolicy = profile.restartPolicy || defaultRestartPolicy();
   const source = plan.source || { kind: "blank" };
-  const isLocalPack = ["localModpack", "localModpackFile"].includes(source.kind);
+  const isLocalPack = ["localModpack", "localModpackFile"].includes(
+    source.kind,
+  );
   const provider =
     source.provider?.trim().toLowerCase() ||
     (isLocalPack ? "local" : source.kind || "blank");
@@ -4752,12 +4905,20 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
 
 function provisioningTargetPath(rootDir, relativePath) {
   const relative = String(relativePath || "").replace(/\\/g, "/");
-  if (!relative || path.posix.isAbsolute(relative) || /^[a-zA-Z]:/.test(relative)) {
+  if (
+    !relative ||
+    path.posix.isAbsolute(relative) ||
+    /^[a-zA-Z]:/.test(relative)
+  ) {
     throw new Error("provisioning artifact path must be target-relative");
   }
   const target = path.resolve(rootDir, ...relative.split("/"));
   const fromRoot = path.relative(rootDir, target);
-  if (fromRoot === ".." || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot)) {
+  if (
+    fromRoot === ".." ||
+    fromRoot.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(fromRoot)
+  ) {
     throw new Error("provisioning artifact path escapes the staging directory");
   }
   return target;
@@ -4767,7 +4928,9 @@ function verifyProvisioningHashes(filePath, hashes = {}) {
   for (const [algorithm, expected] of Object.entries(hashes)) {
     const normalized = String(algorithm).toLowerCase().replace("-", "");
     if (!["md5", "sha1", "sha256", "sha512"].includes(normalized)) continue;
-    const actual = createHash(normalized).update(fs.readFileSync(filePath)).digest("hex");
+    const actual = createHash(normalized)
+      .update(fs.readFileSync(filePath))
+      .digest("hex");
     if (actual.toLowerCase() !== String(expected).toLowerCase()) {
       throw Object.assign(new Error(`${algorithm} checksum mismatch`), {
         code: "ARTIFACT_CHECKSUM_MISMATCH",
@@ -4786,14 +4949,18 @@ const PROVISIONING_PROVIDER_HOSTS = Object.freeze({
 });
 
 function blockedProvisioningUrl(message) {
-  return Object.assign(new Error(message), { code: "PROVISIONING_URL_BLOCKED" });
+  return Object.assign(new Error(message), {
+    code: "PROVISIONING_URL_BLOCKED",
+  });
 }
 
 function isPrivateProvisioningIp(hostname) {
   const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
   const family = isIP(host);
   if (family === 6) {
-    return host === "::" || host === "::1" || /^(?:fc|fd|fe8|fe9|fea|feb)/.test(host);
+    return (
+      host === "::" || host === "::1" || /^(?:fc|fd|fe8|fe9|fea|feb)/.test(host)
+    );
   }
   if (family !== 4) return false;
   const [first, second] = host.split(".").map(Number);
@@ -4824,7 +4991,9 @@ function validateProvisioningUrl(value, provider) {
     hostname.endsWith(".localhost") ||
     isPrivateProvisioningIp(hostname)
   ) {
-    throw blockedProvisioningUrl("Provisioning downloads require a public HTTPS URL.");
+    throw blockedProvisioningUrl(
+      "Provisioning downloads require a public HTTPS URL.",
+    );
   }
   const normalizedProvider = String(provider || "").toLowerCase();
   const allowedHosts = PROVISIONING_PROVIDER_HOSTS[normalizedProvider];
@@ -4836,23 +5005,27 @@ function validateProvisioningUrl(value, provider) {
   return parsed.toString();
 }
 
-async function downloadProvisioningArtifact(artifact, stagingDir, fallbackName) {
+async function downloadProvisioningArtifact(
+  artifact,
+  stagingDir,
+  fallbackName,
+) {
   let url = artifact.url || artifact.urls?.[0] || null;
   let filename = artifact.filename || artifact.path || fallbackName;
   if (!url && artifact.provider === "curseforge") {
     const file = await getCurseForgeFile(artifact.projectId, artifact.fileId);
     url = await curseForgeDownloadUrl(artifact.projectId, artifact.fileId);
-    filename = artifact.path || path.join("mods", file.files[0]?.filename || fallbackName);
+    filename =
+      artifact.path ||
+      path.join("mods", file.files[0]?.filename || fallbackName);
   }
-  if (!url) throw new Error(`No download URL is available for ${fallbackName}.`);
+  if (!url)
+    throw new Error(`No download URL is available for ${fallbackName}.`);
   url = validateProvisioningUrl(url, artifact.provider);
   const target = provisioningTargetPath(stagingDir, filename);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  await downloadRemoteFile(
-    url,
-    target,
-    {},
-    (finalUrl) => validateProvisioningUrl(finalUrl, artifact.provider),
+  await downloadRemoteFile(url, target, {}, (finalUrl) =>
+    validateProvisioningUrl(finalUrl, artifact.provider),
   );
   verifyProvisioningHashes(target, artifact.hashes || {});
   return target;
@@ -4883,7 +5056,9 @@ function provisioningLoaderRegistry(db) {
       await downloadRemoteFile(url, target, {}, (finalUrl) => {
         const validated = validateProvisioningUrl(finalUrl, null);
         if (new URL(validated).hostname.toLowerCase() !== expectedHost) {
-          throw blockedProvisioningUrl("Loader download redirected to an unapproved host.");
+          throw blockedProvisioningUrl(
+            "Loader download redirected to an unapproved host.",
+          );
         }
       });
       verifyProvisioningHashes(target, hashes);
@@ -4909,9 +5084,12 @@ function trustedLoaderVersion(value, label) {
     normalized.length > 128 ||
     !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(normalized)
   ) {
-    throw Object.assign(new Error(`${label} is invalid for loader installation.`), {
-      code: "LOADER_VERSION_INVALID",
-    });
+    throw Object.assign(
+      new Error(`${label} is invalid for loader installation.`),
+      {
+        code: "LOADER_VERSION_INVALID",
+      },
+    );
   }
   return normalized;
 }
@@ -4927,7 +5105,10 @@ async function downloadProvisioningFiles(job) {
   ) {
     const packArtifact = plan.artifacts?.[0];
     resolvedPackPath = await downloadProvisioningArtifact(
-      { ...packArtifact, filename: path.join(".mcsm-source", packArtifact.filename) },
+      {
+        ...packArtifact,
+        filename: path.join(".mcsm-source", packArtifact.filename),
+      },
       job.stagingDir,
       "server-pack.zip",
     );
@@ -4997,7 +5178,9 @@ function provisioningExecutorFor(db) {
         const validation = await adapter.validate(installPlan);
         if (!validation.valid) {
           throw Object.assign(
-            new Error(`Loader installation is incomplete: ${validation.missing.join(", ")}`),
+            new Error(
+              `Loader installation is incomplete: ${validation.missing.join(", ")}`,
+            ),
             { code: "LOADER_INSTALL_INCOMPLETE" },
           );
         }
@@ -5009,17 +5192,28 @@ function provisioningExecutorFor(db) {
         return {
           plan: {
             ...plan,
-            loaderInstallPlan: { ...installPlan, workingDirectory: ".", launchSpec },
+            loaderInstallPlan: {
+              ...installPlan,
+              workingDirectory: ".",
+              launchSpec,
+            },
             launchSpec,
           },
         };
       },
       committing: ({ job, plan }) => {
-        const serverId = createProvisionedProfile(db, job.id, plan, job.targetDir);
+        const serverId = createProvisionedProfile(
+          db,
+          job.id,
+          plan,
+          job.targetDir,
+        );
         return serverId ? { serverId } : null;
       },
       starting: ({ job, plan }) => {
-        if (plan.profile?.autoStart && job.serverId) startServer(db, job.serverId);
+        if (plan.profile?.autoStart && job.serverId) {
+          return startServer(db, job.serverId);
+        }
       },
     },
   });
@@ -5539,7 +5733,8 @@ function mapCurseForgeFile(item) {
     versionNumber: item.fileName || String(item.id),
     loaders,
     gameVersions: minecraftVersionLabels(item.gameVersions),
-    releaseType: releaseTypes[item.releaseType] || String(item.releaseType || "unknown"),
+    releaseType:
+      releaseTypes[item.releaseType] || String(item.releaseType || "unknown"),
     isServerPack: Boolean(item.isServerPack),
     serverPackFileId: item.serverPackFileId
       ? String(item.serverPackFileId)
@@ -5582,12 +5777,16 @@ async function planModrinthMarketplacePack(source) {
     trimRequired(source.versionId, "Modrinth version id is required"),
   );
   const file =
-    version.files.find((candidate) => candidate.isServerPack && candidate.primary) ||
+    version.files.find(
+      (candidate) => candidate.isServerPack && candidate.primary,
+    ) ||
     version.files.find((candidate) => candidate.isServerPack) ||
     version.files.find((candidate) => candidate.primary) ||
     version.files[0];
   if (!file?.url) {
-    throw new Error(`Modrinth version ${version.id} has no downloadable pack file`);
+    throw new Error(
+      `Modrinth version ${version.id} has no downloadable pack file`,
+    );
   }
   const minecraftVersion = version.gameVersions[0] || null;
   const warnings = file.isServerPack
@@ -5645,8 +5844,14 @@ async function getCurseForgeFile(modId, fileId) {
 }
 
 async function planCurseForgeMarketplacePack(source) {
-  const projectId = trimRequired(source.projectId, "CurseForge project id is required");
-  const selectedId = trimRequired(source.versionId, "CurseForge file id is required");
+  const projectId = trimRequired(
+    source.projectId,
+    "CurseForge project id is required",
+  );
+  const selectedId = trimRequired(
+    source.versionId,
+    "CurseForge file id is required",
+  );
   const versions = await listCurseForgeFiles({ projectId });
   const selected = versions.find((version) => version.id === selectedId);
   if (!selected) throw new Error("CurseForge file not found");
@@ -5707,7 +5912,9 @@ async function planMarketplacePack(source) {
   const provider = String(source.provider || "").toLowerCase();
   if (provider === "modrinth") return planModrinthMarketplacePack(source);
   if (provider === "curseforge") return planCurseForgeMarketplacePack(source);
-  throw new Error(`unsupported marketplace provider: ${source.provider || "unknown"}`);
+  throw new Error(
+    `unsupported marketplace provider: ${source.provider || "unknown"}`,
+  );
 }
 
 async function listCurseForgeFiles(input) {
