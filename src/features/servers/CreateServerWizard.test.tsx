@@ -6,7 +6,10 @@ import { AppSettingsProvider } from "../../i18n";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
 import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
 import * as provisioningApi from "./provisioningApi";
-import { CreateServerWizard } from "./CreateServerWizard";
+import {
+  CreateServerWizard,
+  type CreateServerWizardProgress,
+} from "./CreateServerWizard";
 
 vi.mock("../../lib/desktop-runtime", () => ({ invokeDesktopCommand: vi.fn() }));
 vi.mock("./api", () => ({
@@ -131,7 +134,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
     const { unmount } = renderWizard({ onProgressChange });
 
     await waitFor(() => expect(onProgressChange).toHaveBeenCalled());
-    const progress = onProgressChange.mock.calls.find(([value]) => value !== null)?.[0];
+    const progress = onProgressChange.mock.calls.find(
+      ([value]) => value !== null,
+    )?.[0] as CreateServerWizardProgress;
     expect(progress).toEqual(
       expect.objectContaining({
         currentStep: 0,
@@ -139,6 +144,15 @@ describe("CreateServerWizard unified provisioning flow", () => {
       }),
     );
     expect(progress.steps).toHaveLength(6);
+    expect(progress.steps.every(({ label }) => label.trim().length > 0)).toBe(true);
+    expect(progress.steps.map(({ label }) => label)).toEqual([
+      "Source",
+      "Compatibility",
+      "Java",
+      "Server configuration",
+      "Review and EULA",
+      "Install and start",
+    ]);
 
     unmount();
     expect(onProgressChange).toHaveBeenLastCalledWith(null);
