@@ -67,10 +67,19 @@ describe("ServerPropertiesEditor", () => {
   it("renders common server properties", async () => {
     vi.mocked(invoke).mockResolvedValue({
       serverId: server.id,
-      raw: "motd=Hello",
+      raw: "motd=Hello\ngamemode=survival\ndifficulty=hard\nmax-players=20\nonline-mode=true\npvp=true\nwhite-list=false\nview-distance=12\nsimulation-distance=8\ncustom-pack-setting=keep\n",
       entries: [
         { key: "motd", value: "Hello", known: true },
         { key: "server-port", value: "25565", known: true },
+        { key: "gamemode", value: "survival", known: true },
+        { key: "difficulty", value: "hard", known: true },
+        { key: "max-players", value: "20", known: true },
+        { key: "online-mode", value: "true", known: true },
+        { key: "pvp", value: "true", known: true },
+        { key: "white-list", value: "false", known: true },
+        { key: "view-distance", value: "12", known: true },
+        { key: "simulation-distance", value: "8", known: true },
+        { key: "custom-pack-setting", value: "keep", known: false },
       ],
     });
 
@@ -78,6 +87,11 @@ describe("ServerPropertiesEditor", () => {
 
     expect(await screen.findByDisplayValue("Hello")).toBeInTheDocument();
     expect(screen.getByDisplayValue("25565")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("survival")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("hard")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("20")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("12")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("8")).toBeInTheDocument();
   });
 
   it("saves edited properties for the selected server", async () => {
@@ -92,7 +106,16 @@ describe("ServerPropertiesEditor", () => {
           ],
         };
       }
-      return {};
+      return {
+        serverId: server.id,
+        raw: "motd=Updated\nserver-port=25565\ncustom-pack-setting=keep\n",
+        entries: [
+          { key: "motd", value: "Updated", known: true },
+          { key: "server-port", value: "25565", known: true },
+          { key: "custom-pack-setting", value: "keep", known: false },
+        ],
+        restartRequired: true,
+      };
     });
 
     renderEditor();
@@ -103,14 +126,13 @@ describe("ServerPropertiesEditor", () => {
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_server_properties", {
-        input: expect.objectContaining({
+        input: {
           serverId: server.id,
-          updates: expect.arrayContaining([
-            expect.objectContaining({ key: "motd", value: "Updated" }),
-          ]),
-        }),
+          updates: [{ key: "motd", value: "Updated", known: true }],
+        },
       });
     });
+    expect(await screen.findByText(/restart.*required/i)).toBeInTheDocument();
   });
 
   it("keeps local edits when server properties refetch", async () => {

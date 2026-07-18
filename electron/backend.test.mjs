@@ -1655,6 +1655,121 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("updates only requested server properties and preserves pack-owned content", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-guided-properties-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(
+      path.join(serverRoot, "server.properties"),
+      "# pack configuration\nmotd=Original\ncustom-pack-setting=keep\nview-distance=10\n",
+    );
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const saved = backend.handle("save_server_properties", {
+        input: {
+          serverId: server.id,
+          updates: [{ key: "motd", value: "Updated", known: true }],
+        },
+      });
+
+      expect(saved.restartRequired).toBe(true);
+      expect(saved.raw).toBe(
+        "# pack configuration\nmotd=Updated\ncustom-pack-setting=keep\nview-distance=10\n",
+      );
+
+      backend.handle("save_server_properties", {
+        input: {
+          serverId: server.id,
+          updates: [{ key: "server-port", value: "25570", known: true }],
+        },
+      });
+      expect(
+        backend.handle("list_server_profiles").find((item) => item.id === server.id),
+      ).toMatchObject({ serverPort: 25570 });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("keeps profile port changes synchronized with server.properties", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-profile-port-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(
+      path.join(serverRoot, "server.properties"),
+      "server-port=25565\ncustom-pack-setting=keep\n",
+    );
+
+    try {
+      const server = createServer(backend, serverRoot);
+      backend.handle("update_server_profile", {
+        input: { id: server.id, serverPort: 25571 },
+      });
+
+      expect(fs.readFileSync(path.join(serverRoot, "server.properties"), "utf8")).toBe(
+        "server-port=25571\ncustom-pack-setting=keep\n",
+      );
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("samples measured process, player, restart, uptime, and disk metrics without inventing TPS", async () => {
+    const children = [];
+    const spawnImpl = vi.fn(() => {
+      const child = createFakeChild(23000 + children.length);
+      children.push(child);
+      return child;
+    });
+    const collectProcessMetrics = vi.fn(() => ({
+      cpuPercent: 12.5,
+      memoryMb: 768,
+    }));
+    const backend = createTestBackend({ spawn: spawnImpl, collectProcessMetrics });
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-honest-metrics-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      backend.handle("start_server", { serverId: server.id });
+      children[0].emit("exit", 0);
+      backend.handle("start_server", { serverId: server.id });
+      children[1].stdout.emit(
+        "data",
+        "[Server thread/INFO]: Alex joined the game\n",
+      );
+
+      const sample = await backend.handle("sample_server_metrics", {
+        serverId: server.id,
+      });
+
+      expect(collectProcessMetrics).toHaveBeenCalledWith(23001);
+      expect(sample).toMatchObject({
+        cpuPercent: 12.5,
+        memoryMb: 768,
+        diskFreeMb: expect.any(Number),
+        uptimeSeconds: expect.any(Number),
+        restartCount: 1,
+        playerCount: 1,
+        tps: null,
+        unavailableReasons: { tps: "TPS_PROVIDER_UNAVAILABLE" },
+      });
+      expect(
+        backend.handle("get_performance_history", { serverId: server.id }).samples[0],
+      ).toMatchObject({
+        cpuPercent: 12.5,
+        memoryMb: 768,
+        playerCount: 1,
+        tps: null,
+        unavailableReasons: { tps: "TPS_PROVIDER_UNAVAILABLE" },
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
   describe("launch specification process contract", () => {
     it("starts a structured jar launch specification with exact safe spawn options", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19001));

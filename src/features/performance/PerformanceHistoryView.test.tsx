@@ -72,7 +72,14 @@ describe("PerformanceHistoryView", () => {
           uptimeSeconds: null,
           restartCount: 0,
           playerCount: 2,
-          unavailableReason: "unavailable: cpu, disk",
+          tps: null,
+          unavailableReasons: {
+            cpuPercent: "PROCESS_METRICS_UNAVAILABLE",
+            diskFreeMb: "DISK_METRICS_UNAVAILABLE",
+            uptimeSeconds: "PROCESS_NOT_RUNNING",
+            tps: "TPS_PROVIDER_UNAVAILABLE",
+          },
+          unavailableReason: null,
           sampledAt: "2026-07-01T00:00:00Z",
         },
       ],
@@ -87,10 +94,44 @@ describe("PerformanceHistoryView", () => {
 
     renderPerformance();
 
-    expect(await screen.findAllByText("Unavailable")).toHaveLength(3);
-    expect(screen.getByText("unavailable: cpu, disk")).toBeInTheDocument();
+    expect(await screen.findAllByText("Unavailable")).toHaveLength(4);
+    expect(screen.getByText("Process metrics are unavailable.")).toBeInTheDocument();
+    expect(screen.getByText("No real TPS provider is configured.")).toBeInTheDocument();
     expect(screen.getByText("process crashed")).toBeInTheDocument();
     expect(screen.getByText("Restarts")).toBeInTheDocument();
+    expect(screen.getByText("TPS")).toBeInTheDocument();
+  });
+
+  it("shows every measured runtime value without synthesizing TPS", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      serverId: server.id,
+      samples: [
+        {
+          id: "sample-measured",
+          cpuPercent: 12.5,
+          memoryMb: 768,
+          diskFreeMb: 20480,
+          uptimeSeconds: 90,
+          restartCount: 1,
+          playerCount: 3,
+          tps: null,
+          unavailableReasons: { tps: "TPS_PROVIDER_UNAVAILABLE" },
+          unavailableReason: null,
+          sampledAt: "2026-07-01T00:00:00Z",
+        },
+      ],
+      events: [],
+    });
+
+    renderPerformance();
+
+    expect(await screen.findByText("12.5%")).toBeInTheDocument();
+    expect(screen.getByText("768 MB")).toBeInTheDocument();
+    expect(screen.getByText("20480 MB")).toBeInTheDocument();
+    expect(screen.getByText("90 s")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("No real TPS provider is configured.")).toBeInTheDocument();
   });
 
   it("requests a new local sample", async () => {

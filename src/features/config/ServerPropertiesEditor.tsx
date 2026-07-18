@@ -18,6 +18,7 @@ interface ServerPropertiesDocument {
   serverId: string;
   entries: ServerPropertyEntry[];
   raw: string;
+  restartRequired?: boolean;
 }
 
 interface ServerPropertiesEditorProps {
@@ -28,12 +29,16 @@ const editableKeys = [
   "motd",
   "level-name",
   "server-port",
+  "gamemode",
+  "difficulty",
   "max-players",
   "online-mode",
   "white-list",
   "enable-command-block",
   "allow-flight",
   "pvp",
+  "view-distance",
+  "simulation-distance",
 ];
 const booleanOptions = [
   { value: "true", label: "true" },
@@ -70,6 +75,7 @@ export function ServerPropertiesEditor({
       }),
   });
   const [values, setValues] = useState<Record<string, string>>({});
+  const [restartRequired, setRestartRequired] = useState(false);
   const baselineRef = useRef<{
     serverId: string;
     values: Record<string, string>;
@@ -86,6 +92,7 @@ export function ServerPropertiesEditor({
       const nextValues = editableValues(saved.entries);
       baselineRef.current = { serverId: saved.serverId, values: nextValues };
       setValues(nextValues);
+      setRestartRequired(saved.restartRequired === true);
       await queryClient.invalidateQueries({
         queryKey: ["serverProperties", server.id],
       });
@@ -118,12 +125,15 @@ export function ServerPropertiesEditor({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const baseline = baselineRef.current?.values || {};
     saveMutation.mutate(
-      editableKeys.map((key) => ({
-        key,
-        value: values[key] ?? "",
-        known: true,
-      })),
+      editableKeys
+        .filter((key) => (values[key] ?? "") !== (baseline[key] ?? ""))
+        .map((key) => ({
+          key,
+          value: values[key] ?? "",
+          known: true,
+        })),
     );
   }
 
@@ -174,6 +184,11 @@ export function ServerPropertiesEditor({
           })}
           {saveMutation.error ? (
             <p className="danger-text">{saveMutation.error.message}</p>
+          ) : null}
+          {restartRequired ? (
+            <p className="settings-notice" role="status">
+              {t("properties.restartRequired")}
+            </p>
           ) : null}
           <Button
             disabled={saveMutation.isPending}

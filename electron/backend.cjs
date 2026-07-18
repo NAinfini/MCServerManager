@@ -21,6 +21,8 @@ const managedChildren = new Map();
 const closedDatabases = new WeakSet();
 const databaseAppDataDirs = new WeakMap();
 const databaseProcessSpawners = new WeakMap();
+const databaseMetricCollectors = new WeakMap();
+const databaseMetricBaselines = new WeakMap();
 const databaseRuntimeDependencies = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
@@ -295,6 +297,8 @@ function createBackend(app) {
   );
   databaseAppDataDirs.set(db, appDataDir);
   databaseProcessSpawners.set(db, app.spawn || spawn);
+  databaseMetricCollectors.set(db, app.collectProcessMetrics || collectProcessMetrics);
+  databaseMetricBaselines.set(db, new Map());
   databaseRuntimeDependencies.set(db, app.runtimeDependencies || {});
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
@@ -304,6 +308,7 @@ function createBackend(app) {
   return {
     close: () => {
       closedDatabases.add(db);
+      databaseMetricBaselines.get(db)?.clear();
       for (const [serverId, managed] of managedChildren.entries()) {
         if (managed.db === db) {
           clearRestartState(serverId);
@@ -1351,6 +1356,66 @@ function processSpawnerFor(db) {
   return databaseProcessSpawners.get(db) || spawn;
 }
 
+function collectProcessMetrics(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return null;
+  if (process.platform === "win32") {
+    const command = `$p = Get-Process -Id ${pid} -ErrorAction Stop; [pscustomobject]@{ cpuSeconds = $p.CPU; memoryBytes = $p.WorkingSet64 } | ConvertTo-Json -Compress`;
+    const result = spawnSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", command],
+      { encoding: "utf8", timeout: 2000, windowsHide: true },
+    );
+    if (result.status !== 0 || !result.stdout) return null;
+    try {
+      const parsed = JSON.parse(result.stdout);
+      return {
+        cpuSeconds: Number(parsed.cpuSeconds),
+        memoryMb: Number(parsed.memoryBytes) / (1024 * 1024),
+      };
+    } catch {
+      return null;
+    }
+  }
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "%cpu=,rss="], {
+    encoding: "utf8",
+    timeout: 2000,
+  });
+  if (result.status !== 0 || !result.stdout.trim()) return null;
+  const [cpuPercent, rssKb] = result.stdout.trim().split(/\s+/).map(Number);
+  return { cpuPercent, memoryMb: rssKb / 1024 };
+}
+
+async function measuredProcessMetrics(db, pid) {
+  const collector = databaseMetricCollectors.get(db) || collectProcessMetrics;
+  const measured = await Promise.resolve(collector(pid));
+  if (!measured) return { cpuPercent: null, memoryMb: null, tps: null };
+  let cpuPercent = Number.isFinite(measured.cpuPercent)
+    ? Number(measured.cpuPercent)
+    : null;
+  if (cpuPercent === null && Number.isFinite(measured.cpuSeconds)) {
+    const now = Date.now();
+    const baselines = databaseMetricBaselines.get(db);
+    const baseline = baselines.get(pid);
+    if (baseline && now > baseline.sampledAt) {
+      cpuPercent = Math.max(
+        0,
+        ((Number(measured.cpuSeconds) - baseline.cpuSeconds) * 100000) /
+          (now - baseline.sampledAt),
+      );
+    }
+    baselines.set(pid, { cpuSeconds: Number(measured.cpuSeconds), sampledAt: now });
+  }
+  return {
+    cpuPercent: cpuPercent === null ? null : Math.round(cpuPercent * 10) / 10,
+    memoryMb: Number.isFinite(measured.memoryMb)
+      ? Math.round(Number(measured.memoryMb) * 10) / 10
+      : null,
+    tps: Number.isFinite(measured.tps)
+      ? Math.round(Number(measured.tps) * 10) / 10
+      : null,
+  };
+}
+
 function clearRestartState(serverId) {
   const state = restartRuntimeState.get(serverId);
   if (state?.timer) {
@@ -1575,12 +1640,26 @@ function updateServerProfile(db, input) {
     input.loaderType === undefined ? existing.loaderType : input.loaderType;
   const serverPort =
     input.serverPort === undefined ? existing.serverPort : input.serverPort;
+  if (input.serverPort === null) {
+    throw new Error("server port must be between 1 and 65535");
+  }
   const minMemoryMb =
     input.minMemoryMb === undefined ? existing.minMemoryMb : input.minMemoryMb;
   const maxMemoryMb =
     input.maxMemoryMb === undefined ? existing.maxMemoryMb : input.maxMemoryMb;
   validateRuntimeSettings(serverPort, minMemoryMb, maxMemoryMb);
   validateRestartPolicy(input.restartPolicy);
+  const synchronizePort =
+    input.serverPort !== undefined && serverPort !== existing.serverPort;
+  const synchronizedPropertiesPath = path.join(rootDir, "server.properties");
+  const propertiesExisted = fs.existsSync(synchronizedPropertiesPath);
+  const originalProperties = propertiesExisted
+    ? fs.readFileSync(synchronizedPropertiesPath, "utf8")
+    : "";
+  const synchronizedProperties = synchronizePort
+    ? mergeProperties(originalProperties, { "server-port": String(serverPort) }).raw
+    : null;
+  let propertiesWritten = false;
 
   db.exec("BEGIN IMMEDIATE");
   try {
@@ -1638,9 +1717,20 @@ function updateServerProfile(db, input) {
         input.restartPolicy.cooldownSeconds,
       );
     }
+    if (synchronizePort) {
+      fs.writeFileSync(synchronizedPropertiesPath, synchronizedProperties, "utf8");
+      propertiesWritten = true;
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
+    if (propertiesWritten) {
+      if (propertiesExisted) {
+        fs.writeFileSync(synchronizedPropertiesPath, originalProperties, "utf8");
+      } else {
+        fs.rmSync(synchronizedPropertiesPath, { force: true });
+      }
+    }
     throw error;
   }
   return getServerProfile(db, input.id);
@@ -2424,10 +2514,15 @@ function startServer(db, serverId, options = {}) {
     db,
     crashDetected: false,
     stopRequested: false,
+    onlinePlayers: new Set(),
   };
   managedChildren.set(profile.id, managed);
   addProcessEvent(db, profile.id, "info", "Server process started.");
   const handleOutputLine = (level, line) => {
+    const joined = line.match(/\b([A-Za-z0-9_]{1,16}) joined the game\b/);
+    const left = line.match(/\b([A-Za-z0-9_]{1,16}) left the game\b/);
+    if (joined) managed.onlinePlayers.add(joined[1]);
+    if (left) managed.onlinePlayers.delete(left[1]);
     addProcessEvent(db, profile.id, level, line);
     if (
       !managed.stopRequested &&
@@ -2458,6 +2553,7 @@ function startServer(db, serverId, options = {}) {
     }
   });
   child.on("exit", (code) => {
+    databaseMetricBaselines.get(db)?.delete(child.pid);
     managedChildren.delete(profile.id);
     if (closedDatabases.has(db)) {
       return;
@@ -2722,14 +2818,37 @@ function readServerProperties(db, serverId) {
 
 function saveServerProperties(db, serverId, entries) {
   const filePath = propertiesPath(db, serverId);
+  const requestedEntries = entries || [];
+  const portEntry = [...requestedEntries]
+    .reverse()
+    .find((entry) => entry?.key === "server-port");
+  const nextPort = portEntry ? Number(portEntry.value) : null;
+  if (
+    portEntry &&
+    (!Number.isInteger(nextPort) || nextPort < 1 || nextPort > 65535)
+  ) {
+    throw new Error("server port must be between 1 and 65535");
+  }
+  const fileExisted = fs.existsSync(filePath);
   const currentRaw = fs.existsSync(filePath)
     ? fs.readFileSync(filePath, "utf8")
     : "";
-  const merged = mergeProperties(currentRaw, entries || []);
+  const merged = mergeProperties(currentRaw, requestedEntries);
   fs.writeFileSync(filePath, merged.raw, "utf8");
+  try {
+    if (portEntry) {
+      db.prepare("UPDATE servers SET server_port = ?, updated_at = ? WHERE id = ?")
+        .run(nextPort, nowIso(), serverId);
+    }
+  } catch (error) {
+    if (fileExisted) fs.writeFileSync(filePath, currentRaw, "utf8");
+    else fs.rmSync(filePath, { force: true });
+    throw error;
+  }
   return {
     ...readServerProperties(db, serverId),
     warnings: merged.warnings,
+    restartRequired: requestedEntries.length > 0,
   };
 }
 
@@ -4115,22 +4234,85 @@ async function runScheduledTaskAction(db, task) {
   }
 }
 
-function sampleServerMetrics(db, serverId) {
+function diskFreeMb(rootDir) {
+  try {
+    const stats = fs.statfsSync(rootDir);
+    return Math.round((Number(stats.bavail) * Number(stats.bsize)) / (1024 * 1024));
+  } catch {
+    return null;
+  }
+}
+
+function parseMetricAvailability(value) {
+  if (!value) return { reasons: {}, tps: null };
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object") {
+      return { reasons: {}, tps: null };
+    }
+    return parsed.reasons
+      ? { reasons: parsed.reasons, tps: parsed.tps ?? null }
+      : { reasons: parsed, tps: null };
+  } catch {
+    return { reasons: { general: String(value) }, tps: null };
+  }
+}
+
+async function sampleServerMetrics(db, serverId) {
   const id = randomUUID();
   const profile = getServerProfile(db, requireServerId(serverId));
-  const process = getServerProcessStatus(db, profile.id);
+  const processStatus = getServerProcessStatus(db, profile.id);
+  const running = ["running", "externalRunning"].includes(processStatus?.status);
+  const managed = managedChildren.get(profile.id);
+  const managedForDatabase = managed?.db === db ? managed : null;
+  const processMetrics = running && processStatus?.pid
+    ? await measuredProcessMetrics(db, processStatus.pid)
+    : { cpuPercent: null, memoryMb: null, tps: null };
+  const freeDisk = diskFreeMb(profile.rootDir);
+  const restartCount = Math.max(
+    0,
+    Number(
+      db.prepare("SELECT COUNT(*) AS count FROM managed_processes WHERE server_id = ?")
+        .get(profile.id).count,
+    ) - 1,
+  );
+  const unavailableReasons = {};
+  if (processMetrics.tps === null) {
+    unavailableReasons.tps = "TPS_PROVIDER_UNAVAILABLE";
+  }
+  if (!running) {
+    unavailableReasons.cpuPercent = "PROCESS_NOT_RUNNING";
+    unavailableReasons.memoryMb = "PROCESS_NOT_RUNNING";
+    unavailableReasons.uptimeSeconds = "PROCESS_NOT_RUNNING";
+    unavailableReasons.playerCount = "PROCESS_NOT_RUNNING";
+  } else {
+    if (processMetrics.cpuPercent === null) {
+      unavailableReasons.cpuPercent = "PROCESS_METRICS_UNAVAILABLE";
+    }
+    if (processMetrics.memoryMb === null) {
+      unavailableReasons.memoryMb = "PROCESS_METRICS_UNAVAILABLE";
+    }
+    if (!managedForDatabase) {
+      unavailableReasons.playerCount = "PLAYER_PROVIDER_UNAVAILABLE";
+    }
+  }
+  if (freeDisk === null) {
+    unavailableReasons.diskFreeMb = "DISK_METRICS_UNAVAILABLE";
+  }
   const sample = {
     id,
     serverId: profile.id,
-    cpuPercent: null,
-    memoryMb: null,
-    diskFreeMb: null,
-    uptimeSeconds: process?.startedAt
-      ? Math.floor((Date.now() - new Date(process.startedAt).getTime()) / 1000)
+    cpuPercent: processMetrics.cpuPercent,
+    memoryMb: processMetrics.memoryMb,
+    diskFreeMb: freeDisk,
+    uptimeSeconds: running && processStatus?.startedAt
+      ? Math.max(0, Math.floor((Date.now() - new Date(processStatus.startedAt).getTime()) / 1000))
       : null,
-    restartCount: 0,
-    playerCount: 0,
-    unavailableReason: process ? null : "Server process is not running.",
+    restartCount,
+    playerCount: running && managedForDatabase ? managedForDatabase.onlinePlayers.size : null,
+    tps: processMetrics.tps,
+    unavailableReasons,
+    unavailableReason: null,
     sampledAt: nowIso(),
   };
   db.prepare(
@@ -4147,31 +4329,51 @@ function sampleServerMetrics(db, serverId) {
     sample.uptimeSeconds,
     sample.restartCount,
     sample.playerCount,
-    sample.unavailableReason,
+    JSON.stringify({ reasons: unavailableReasons, tps: sample.tps }),
     sample.sampledAt,
   );
   return sample;
 }
 
 function getPerformanceHistory(db, serverId) {
+  const id = requireServerId(serverId);
   return {
-    serverId: requireServerId(serverId),
+    serverId: id,
     samples: db
       .prepare(
         "SELECT * FROM server_metric_samples WHERE server_id = ? ORDER BY sampled_at DESC LIMIT 120",
       )
       .all(serverId)
+      .map((row) => {
+        const availability = parseMetricAvailability(row.unavailable_reason);
+        return {
+          id: row.id,
+          serverId: row.server_id,
+          cpuPercent: row.cpu_percent,
+          memoryMb: row.memory_mb,
+          diskFreeMb: row.disk_free_mb,
+          uptimeSeconds: row.uptime_seconds,
+          restartCount: row.restart_count,
+          playerCount: row.player_count,
+          tps: availability.tps,
+          unavailableReasons: availability.reasons,
+          unavailableReason: availability.reasons.general || null,
+          sampledAt: row.sampled_at,
+        };
+      }),
+    events: db
+      .prepare(
+        `SELECT level, message, created_at
+         FROM process_events
+         WHERE server_id = ?
+         ORDER BY created_at DESC
+         LIMIT 50`,
+      )
+      .all(id)
       .map((row) => ({
-        id: row.id,
-        serverId: row.server_id,
-        cpuPercent: row.cpu_percent,
-        memoryMb: row.memory_mb,
-        diskFreeMb: row.disk_free_mb,
-        uptimeSeconds: row.uptime_seconds,
-        restartCount: row.restart_count,
-        playerCount: row.player_count,
-        unavailableReason: row.unavailable_reason,
-        sampledAt: row.sampled_at,
+        level: row.level,
+        message: row.message,
+        createdAt: row.created_at,
       })),
   };
 }

@@ -70,4 +70,24 @@ describe("ServerProfileSettings", () => {
       });
     });
   });
+
+  it("supports Quilt and saves runtime changes without restarting the server", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole("combobox", { name: "Loader" }));
+    await user.click(screen.getByRole("option", { name: "Quilt" }));
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "update_server_profile",
+        expect.objectContaining({
+          input: expect.objectContaining({ loaderType: "quilt" }),
+        }),
+      );
+    });
+    expect(invoke).not.toHaveBeenCalledWith("restart_server", expect.anything());
+    expect(await screen.findByText(/restart.*required/i)).toBeInTheDocument();
+  });
 });

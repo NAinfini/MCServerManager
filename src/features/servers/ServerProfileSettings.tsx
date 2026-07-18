@@ -21,6 +21,7 @@ const loaderOptions = [
   { value: "fabric", label: "Fabric" },
   { value: "forge", label: "Forge" },
   { value: "neoForge", label: "NeoForge" },
+  { value: "quilt", label: "Quilt" },
 ] as const;
 
 function numberOrNull(value: string) {
@@ -64,6 +65,7 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
     null,
   );
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [restartRequired, setRestartRequired] = useState(false);
 
   const pickServerFolder = async () => {
     setFolderPickerError(null);
@@ -106,6 +108,16 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
       }),
     onSuccess: async () => {
       setIsDeleteConfirmOpen(false);
+      setRestartRequired(
+        rootDir !== server.rootDir ||
+          loaderType !== server.loaderType ||
+          minecraftVersion !== (server.minecraftVersion ?? "") ||
+          loaderVersion !== (server.loaderVersion ?? "") ||
+          javaPath !== (server.javaPath ?? "") ||
+          serverPort !== String(server.serverPort ?? "") ||
+          minMemoryMb !== String(server.minMemoryMb ?? "") ||
+          maxMemoryMb !== String(server.maxMemoryMb ?? ""),
+      );
       await queryClient.invalidateQueries({ queryKey: ["servers"] });
     },
   });
@@ -130,6 +142,11 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
       ) : null}
       {deleteMutation.error ? (
         <p className="danger-text">{deleteMutation.error.message}</p>
+      ) : null}
+      {restartRequired ? (
+        <p className="settings-notice" role="status">
+          {t("profileSettings.restartRequired")}
+        </p>
       ) : null}
       <div className="settings-grid">
         <label>
@@ -247,7 +264,10 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
           disabled={
             updateMutation.isPending ||
             name.trim() === "" ||
-            rootDir.trim() === ""
+            rootDir.trim() === "" ||
+            !Number.isInteger(Number(serverPort)) ||
+            Number(serverPort) < 1 ||
+            Number(serverPort) > 65535
           }
           variant="primary"
           onClick={() => updateMutation.mutate()}
