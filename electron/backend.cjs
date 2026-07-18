@@ -5210,9 +5210,9 @@ function provisioningExecutorFor(db) {
         );
         return serverId ? { serverId } : null;
       },
-      starting: ({ job, plan }) => {
+      starting: async ({ job, plan }) => {
         if (plan.profile?.autoStart && job.serverId) {
-          return startServer(db, job.serverId);
+          await startServer(db, job.serverId);
         }
       },
     },
