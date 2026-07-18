@@ -125,21 +125,37 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
   afterEach(cleanup);
 
+  it("publishes the initial wizard progress to its host", async () => {
+    const onProgressChange = vi.fn();
+
+    const { unmount } = renderWizard({ onProgressChange });
+
+    await waitFor(() => expect(onProgressChange).toHaveBeenCalled());
+    const progress = onProgressChange.mock.calls.find(([value]) => value !== null)?.[0];
+    expect(progress).toEqual(
+      expect.objectContaining({
+        currentStep: 0,
+        steps: expect.any(Array),
+      }),
+    );
+    expect(progress.steps).toHaveLength(6);
+
+    unmount();
+    expect(onProgressChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("does not render the step indicator inside the wizard body", () => {
+    const { container } = renderWizard({ onProgressChange: vi.fn() });
+
+    expect(container.querySelector(".create-server-panel .wizard-steps")).not.toBeInTheDocument();
+  });
+
   it("plans a selected local pack, enforces approvals, and creates a persisted job", async () => {
     const onCreated = vi.fn();
     vi.mocked(invokeDesktopCommand).mockResolvedValue({
       path: "C:/Packs/server.mrpack",
     });
     renderWizard({ onCreated });
-
-    [
-      "Source",
-      "Compatibility",
-      "Java",
-      "Server configuration",
-      "Review and EULA",
-      "Install and start",
-    ].forEach((label) => expect(screen.getByText(label)).toBeInTheDocument());
 
     await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({

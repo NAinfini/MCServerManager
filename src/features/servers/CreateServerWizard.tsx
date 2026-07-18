@@ -27,15 +27,20 @@ import {
   type SourceProvisioningPlan,
 } from "./provisioningApi";
 import type { GuidedServerConfiguration, LoaderType, ValidatedJavaRuntime } from "./types";
-import { WizardStepIndicator } from "./WizardStepIndicator";
 
 type WizardStep = 0 | 1 | 2 | 3 | 4 | 5;
 type SourceView = "choices" | "blank" | "marketplace";
+
+export interface CreateServerWizardProgress {
+  steps: Array<{ label: string; description?: string }>;
+  currentStep: number;
+}
 
 interface CreateServerWizardProps {
   onCreated?: () => void;
   onHeaderBackChange?: (handler: (() => void) | null) => void;
   onHeaderHiddenChange?: (hidden: boolean) => void;
+  onProgressChange?: (progress: CreateServerWizardProgress | null) => void;
   showHeading?: boolean;
   initialSourcePath?: string | null;
 }
@@ -90,6 +95,7 @@ export function CreateServerWizard({
   onCreated,
   onHeaderBackChange,
   onHeaderHiddenChange,
+  onProgressChange,
   showHeading = true,
   initialSourcePath = null,
 }: CreateServerWizardProps) {
@@ -129,6 +135,17 @@ export function CreateServerWizard({
       { label: t("provisioning.wizard.step.install") },
     ],
     [t],
+  );
+
+  useEffect(() => {
+    onProgressChange?.({ steps, currentStep: step });
+  }, [onProgressChange, step, steps]);
+
+  useEffect(
+    () => () => {
+      onProgressChange?.(null);
+    },
+    [onProgressChange],
   );
 
   useEffect(() => {
@@ -436,7 +453,6 @@ export function CreateServerWizard({
   return (
     <section aria-label={t("createServer.title")} className="create-server-panel">
       {showHeading ? <h2>{t("createServer.title")}</h2> : null}
-      <WizardStepIndicator steps={steps} currentStep={step} />
 
       <div className="wizard-step-content unified-provisioning-wizard">
         {step === 0 && sourceView === "choices" ? (
