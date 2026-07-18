@@ -7,6 +7,18 @@ export interface JavaRuntime {
   majorVersion: number;
   vendor?: string | null;
   architecture?: string | null;
+  managed?: boolean;
+}
+
+export interface ManagedJavaPlan {
+  action: "reuse" | "install";
+  majorVersion: number;
+  runtime?: JavaRuntime;
+  vendor?: string;
+  version?: string;
+  licenseUrl?: string;
+  managed?: boolean;
+  [key: string]: unknown;
 }
 
 export interface JavaScanFailure {
@@ -33,4 +45,18 @@ export interface JavaScanResult {
 
 export async function listJavaRuntimes() {
   return invokeDesktopCommandWithErrorHandling<JavaScanResult>("list_java_runtimes");
+}
+
+export function planJavaRuntime(majorVersion: number) {
+  return invokeDesktopCommandWithErrorHandling<ManagedJavaPlan>(
+    "plan_java_runtime",
+    { input: { majorVersion } },
+  );
+}
+
+export function installJavaRuntime(plan: ManagedJavaPlan, consent: boolean) {
+  return invokeDesktopCommandWithErrorHandling<JavaRuntime>(
+    "install_java_runtime",
+    { input: { plan, consent } },
+  );
 }

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -6,10 +7,16 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
-import { listJavaRuntimes } from "./javaApi";
+import {
+  installJavaRuntime,
+  listJavaRuntimes,
+  planJavaRuntime,
+  type ManagedJavaPlan,
+} from "./javaApi";
 
 function compatibilityClass(status: string) {
   if (status === "compatible") {
@@ -35,9 +42,32 @@ interface JavaRuntimesViewProps {
 
 export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
   const { t } = useAppSettings();
+  const [managedPlan, setManagedPlan] = useState<ManagedJavaPlan | null>(null);
+  const [managedConsent, setManagedConsent] = useState(false);
   const javaQuery = useQuery({
     queryKey: ["javaRuntimes"],
     queryFn: listJavaRuntimes,
+  });
+  const managedMajorVersion = Math.max(
+    21,
+    ...(javaQuery.data?.compatibility
+      .map((item) => item.requiredMajorVersion)
+      .filter((value): value is number => typeof value === "number") ?? []),
+  );
+  const planMutation = useMutation({
+    mutationFn: () => planJavaRuntime(managedMajorVersion),
+    onSuccess: (plan) => {
+      setManagedPlan(plan);
+      setManagedConsent(false);
+    },
+  });
+  const installMutation = useMutation({
+    mutationFn: () => installJavaRuntime(managedPlan!, managedConsent),
+    onSuccess: async () => {
+      setManagedPlan(null);
+      setManagedConsent(false);
+      await javaQuery.refetch();
+    },
   });
 
   return (
@@ -82,6 +112,65 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
 
       {javaQuery.data ? (
         <div className="java-layout">
+          <section className="java-panel">
+            <div className="section-heading">
+              <h2>{t("java.managed.title")}</h2>
+              <span>{t("java.managed.subtitle")}</span>
+            </div>
+            <p>{t("java.managed.description")}</p>
+            <div className="page-header-actions">
+              <a href="https://www.java.com/download/" rel="noreferrer noopener" target="_blank">
+                {t("java.managed.oracleLink")}
+              </a>
+              <a href={`https://adoptium.net/temurin/releases/?version=${managedMajorVersion}`} rel="noreferrer noopener" target="_blank">
+                {t("java.managed.temurinLink")}
+              </a>
+              <Button
+                disabled={planMutation.isPending || installMutation.isPending}
+                type="button"
+                variant="secondary"
+                onClick={() => planMutation.mutate()}
+              >
+                {t("java.managed.prepare", { version: managedMajorVersion })}
+              </Button>
+            </div>
+            {planMutation.error ? (
+              <p className="danger-text" role="alert">{planMutation.error.message}</p>
+            ) : null}
+            {managedPlan?.action === "reuse" ? (
+              <p>{t("java.managed.reuse")}</p>
+            ) : null}
+            {managedPlan?.action === "install" ? (
+              <div className="compatibility-list">
+                <p>
+                  {managedPlan.vendor} {managedPlan.version}
+                  {" · "}
+                  <a href={managedPlan.licenseUrl} rel="noreferrer noopener" target="_blank">
+                    {t("java.managed.license")}
+                  </a>
+                </p>
+                <label className="checkbox-field">
+                  <Checkbox
+                    aria-label={t("java.managed.consent")}
+                    checked={managedConsent}
+                    onCheckedChange={(checked) => setManagedConsent(checked === true)}
+                  />
+                  <span>{t("java.managed.consent")}</span>
+                </label>
+                <Button
+                  disabled={!managedConsent || installMutation.isPending}
+                  type="button"
+                  variant="primary"
+                  onClick={() => installMutation.mutate()}
+                >
+                  {t("java.managed.install")}
+                </Button>
+                {installMutation.error ? (
+                  <p className="danger-text" role="alert">{installMutation.error.message}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </section>
           <section className="java-panel">
             <div className="section-heading">
               <h2>{t("java.installed.title")}</h2>

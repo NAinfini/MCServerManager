@@ -7,11 +7,16 @@ const zlib = require("node:zlib");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
 const { createLoaderRegistry } = require("./provisioning/loaders.cjs");
+const {
+  createRuntimeManager,
+  requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
+} = require("./provisioning/runtimes.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
 const databaseAppDataDirs = new WeakMap();
 const databaseProcessSpawners = new WeakMap();
+const databaseRuntimeDependencies = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
 const currentSchemaVersion = 2;
@@ -285,6 +290,7 @@ function createBackend(app) {
   );
   databaseAppDataDirs.set(db, appDataDir);
   databaseProcessSpawners.set(db, app.spawn || spawn);
+  databaseRuntimeDependencies.set(db, app.runtimeDependencies || {});
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
   migrateDatabase(db);
@@ -368,6 +374,10 @@ function handleCommand(db, command, args) {
       return saveNotificationPreferences(db, args?.input);
     case "list_java_runtimes":
       return listJavaRuntimes(db);
+    case "plan_java_runtime":
+      return planJavaRuntime(db, args?.input);
+    case "install_java_runtime":
+      return installJavaRuntime(db, args?.input);
     case "start_server":
       return startServer(db, args?.serverId);
     case "stop_server":
@@ -1908,25 +1918,7 @@ function inspectJavaRuntime(candidate) {
 }
 
 function requiredJavaMajorForMinecraft(minecraftVersion) {
-  const match = String(minecraftVersion || "").match(
-    /^(\d+)\.(\d+)(?:\.(\d+))?/,
-  );
-  if (!match) {
-    return null;
-  }
-  const major = Number.parseInt(match[1], 10);
-  const minor = Number.parseInt(match[2], 10);
-  const patch = Number.parseInt(match[3] || "0", 10);
-  if (major > 1 || (minor === 20 && patch >= 5) || minor >= 21) {
-    return 21;
-  }
-  if (minor >= 18) {
-    return 17;
-  }
-  if (minor >= 17) {
-    return 16;
-  }
-  return 8;
+  return runtimeRequiredJavaMajor(minecraftVersion);
 }
 
 function normalizeJavaPath(javaPath) {
@@ -2002,6 +1994,27 @@ function createJavaCompatibility(profile, runtimes) {
   };
 }
 
+function managedJavaCandidates(db) {
+  const root = path.join(databaseAppDataDirs.get(db), "runtimes", "temurin");
+  if (!fs.existsSync(root)) return [];
+  const executableName = process.platform === "win32" ? "java.exe" : "java";
+  const pending = [root];
+  const candidates = [];
+  let visited = 0;
+  while (pending.length > 0 && visited < 10_000) {
+    const current = pending.shift();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      visited += 1;
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) pending.push(target);
+      else if (entry.isFile() && entry.name.toLowerCase() === executableName) {
+        candidates.push({ path: target, source: "Managed by MC Server Manager" });
+      }
+    }
+  }
+  return candidates;
+}
+
 function listJavaRuntimes(db) {
   const profiles = listServerProfiles(db);
   const candidates = [
@@ -2009,12 +2022,15 @@ function listJavaRuntimes(db) {
       path.join(process.env.JAVA_HOME, "bin", "java.exe"),
     process.env.JAVA_HOME && path.join(process.env.JAVA_HOME, "bin", "java"),
     ...profiles.map((profile) => profile.javaPath).filter(Boolean),
+    ...managedJavaCandidates(db),
   ]
     .filter(Boolean)
-    .map((javaPath) => ({
-      path: javaPath,
+    .map((candidate) => ({
+      path: typeof candidate === "string" ? candidate : candidate.path,
       source:
-        process.env.JAVA_HOME && javaPath.startsWith(process.env.JAVA_HOME)
+        typeof candidate !== "string"
+          ? candidate.source
+          : process.env.JAVA_HOME && candidate.startsWith(process.env.JAVA_HOME)
           ? "JAVA_HOME"
           : "Server profile",
     }));
@@ -2048,6 +2064,37 @@ function listJavaRuntimes(db) {
       createJavaCompatibility(profile, runtimes),
     ),
   };
+}
+
+function runtimeManagerFor(db) {
+  const configured = databaseRuntimeDependencies.get(db) || {};
+  return createRuntimeManager({
+    userDataDir: databaseAppDataDirs.get(db),
+    platform: configured.platform,
+    arch: configured.arch,
+    fetchJson:
+      configured.fetchJson ||
+      ((url) => fetchJson(url, {}, "Temurin runtime lookup failed")),
+    download: configured.download,
+    extractArchive: configured.extractArchive,
+    inspectJava: configured.inspectJava,
+  });
+}
+
+async function planJavaRuntime(db, input) {
+  const majorVersion = Number(input?.majorVersion);
+  const scan = listJavaRuntimes(db);
+  return runtimeManagerFor(db).plan({
+    majorVersion,
+    installedRuntimes: scan.runtimes,
+  });
+}
+
+async function installJavaRuntime(db, input) {
+  const runtime = await runtimeManagerFor(db).install(input?.plan, {
+    consent: input?.consent === true,
+  });
+  return runtime;
 }
 
 function setupStatusFromJavaCompatibility(compatibility) {

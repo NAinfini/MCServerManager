@@ -11,6 +11,7 @@ function requiredJavaMajorForMinecraft(minecraftVersion) {
   const major = Number.parseInt(match[1], 10);
   const minor = Number.parseInt(match[2], 10);
   const patch = Number.parseInt(match[3] || "0", 10);
+  if (major >= 26) return 25;
   if (major > 1 || (minor === 20 && patch >= 5) || minor >= 21) return 21;
   if (minor >= 18) return 17;
   if (minor >= 17) return 16;

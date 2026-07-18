@@ -485,6 +485,65 @@ describe("Electron backend provisioning plan contract", () => {
       backend.close();
     }
   });
+
+  it("plans and installs managed Temurin only after explicit consent", async () => {
+    const archive = Buffer.from("managed-java");
+    const checksum = createHash("sha256").update(archive).digest("hex");
+    const download = vi.fn(async (_url, target) => fs.writeFileSync(target, archive));
+    const backend = createTestBackend({
+      runtimeDependencies: {
+        platform: "win32",
+        arch: "x64",
+        fetchJson: vi.fn(async () => [
+          {
+            version: { semver: "21.0.8+9" },
+            binary: {
+              package: {
+                link: "https://github.com/adoptium/runtime.zip",
+                name: "runtime.zip",
+                checksum,
+                size: archive.length,
+              },
+            },
+          },
+        ]),
+        download,
+        extractArchive: vi.fn(async (_archivePath, target) => {
+          const executable = path.join(target, "jdk-21", "bin", "java.exe");
+          fs.mkdirSync(path.dirname(executable), { recursive: true });
+          fs.writeFileSync(executable, "java");
+        }),
+        inspectJava: vi.fn((javaPath) => ({
+          path: javaPath,
+          version: "21.0.8",
+          majorVersion: 21,
+          vendor: "Eclipse Temurin",
+          architecture: "x64",
+        })),
+      },
+    });
+
+    try {
+      const plan = await backend.handle("plan_java_runtime", {
+        input: { majorVersion: 21 },
+      });
+      expect(plan).toMatchObject({ action: "install", majorVersion: 21 });
+
+      await expect(
+        backend.handle("install_java_runtime", {
+          input: { plan, consent: false },
+        }),
+      ).rejects.toMatchObject({ code: "JAVA_CONSENT_REQUIRED" });
+      expect(download).not.toHaveBeenCalled();
+
+      const runtime = await backend.handle("install_java_runtime", {
+        input: { plan, consent: true },
+      });
+      expect(runtime).toMatchObject({ managed: true, majorVersion: 21 });
+    } finally {
+      backend.close();
+    }
+  });
 });
 
 describe("Electron backend server properties contract", () => {

@@ -199,14 +199,14 @@ function destinationPath(root, relativePath) {
 }
 
 async function extractLayer(archivePath, destination, layer, limits) {
-  const prefix = normalizeEntryPath(layer.prefix);
+  const prefix = layer.all ? null : normalizeEntryPath(layer.prefix);
   const zip = await openZip(archivePath);
   const state = { entryCount: 0, uncompressedBytes: 0 };
   try {
     for await (const entry of zip.eachEntry()) {
       const { entryPath } = validateEntry(entry, state, limits);
-      if (!entryPath.startsWith(prefix)) continue;
-      const relativePath = layer.stripPrefix
+      if (prefix && !entryPath.startsWith(prefix)) continue;
+      const relativePath = prefix && layer.stripPrefix
         ? entryPath.slice(prefix.length)
         : entryPath;
       if (!relativePath) continue;
@@ -232,6 +232,17 @@ async function extractLayer(archivePath, destination, layer, limits) {
   }
 }
 
+async function extractZipArchive(
+  archivePath,
+  destination,
+  requestedLimits = {},
+) {
+  const limits = limitsWithDefaults(requestedLimits);
+  fs.mkdirSync(destination, { recursive: true });
+  await extractLayer(archivePath, destination, { all: true }, limits);
+  return { destination };
+}
+
 async function extractZipLayers(
   archivePath,
   destination,
@@ -248,6 +259,7 @@ async function extractZipLayers(
 
 module.exports = {
   DEFAULT_ARCHIVE_LIMITS,
+  extractZipArchive,
   extractZipLayers,
   inspectZip,
   readJsonEntry,
