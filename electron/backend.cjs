@@ -3996,10 +3996,13 @@ function importProfile(db, input) {
 
 async function planServerProvisioning(input) {
   const source = input?.source || input;
-  if (source?.kind !== "localModpackFile") {
-    throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
+  if (source?.kind === "localModpackFile") {
+    return planLocalPack(source.path);
   }
-  return planLocalPack(source.path);
+  if (source?.kind === "marketplaceModpack") {
+    return planMarketplacePack(source);
+  }
+  throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
 }
 
 async function previewModpackImport(input) {
@@ -4394,6 +4397,7 @@ function mapModrinthVersion(item) {
     projectId: item.project_id,
     name: item.name,
     versionNumber: item.version_number,
+    releaseType: item.version_type || null,
     loaders: item.loaders || [],
     gameVersions: minecraftVersionLabels(item.game_versions),
     files: (item.files || []).map((file) => ({
@@ -4402,9 +4406,18 @@ function mapModrinthVersion(item) {
       primary: Boolean(file.primary),
       url: file.url,
       hashes: file.hashes || {},
+      isServerPack: /\.mrpack$/i.test(file.filename || ""),
     })),
     dependencies: item.dependencies || [],
     warnings: [],
+    isServerPack: (item.files || []).some((file) =>
+      /\.mrpack$/i.test(file.filename || ""),
+    ),
+    serverCompatibility: (item.files || []).some((file) =>
+      /\.mrpack$/i.test(file.filename || ""),
+    )
+      ? "serverPack"
+      : "unverified",
   };
 }
 
@@ -4652,23 +4665,203 @@ async function getCurseForgeProject(input) {
 }
 
 function mapCurseForgeFile(item) {
+  const releaseTypes = { 1: "release", 2: "beta", 3: "alpha" };
+  const loaderNames = new Map([
+    ["forge", "forge"],
+    ["fabric", "fabric"],
+    ["quilt", "quilt"],
+    ["neoforge", "neoForge"],
+    ["neo-forge", "neoForge"],
+  ]);
+  const loaders = Array.from(
+    new Set(
+      (item.gameVersions || [])
+        .map((value) => loaderNames.get(String(value).toLowerCase()))
+        .filter(Boolean),
+    ),
+  );
+  const hashes = Object.fromEntries(
+    (item.hashes || []).flatMap((hash) => {
+      const key = hash?.algo === 1 ? "sha1" : hash?.algo === 2 ? "md5" : null;
+      return key && hash?.value ? [[key, String(hash.value)]] : [];
+    }),
+  );
   return {
     id: String(item.id),
     projectId: String(item.modId),
     name: item.displayName || item.fileName,
     versionNumber: item.fileName || String(item.id),
-    loaders: [],
+    loaders,
     gameVersions: minecraftVersionLabels(item.gameVersions),
+    releaseType: releaseTypes[item.releaseType] || String(item.releaseType || "unknown"),
+    isServerPack: Boolean(item.isServerPack),
+    serverPackFileId: item.serverPackFileId
+      ? String(item.serverPackFileId)
+      : null,
+    serverCompatibility: item.isServerPack ? "serverPack" : "unverified",
     files: [
       {
         filename: item.fileName,
         size: item.fileLength || 0,
         primary: true,
+        hashes,
       },
     ],
     dependencies: item.dependencies || [],
     warnings: [],
   };
+}
+
+function normalizeMarketplaceLoaderType(loaders) {
+  for (const value of loaders || []) {
+    const loader = String(value).toLowerCase();
+    if (loader === "neoforge" || loader === "neo-forge") return "neoForge";
+    if (["vanilla", "paper", "forge", "fabric", "quilt"].includes(loader)) {
+      return loader;
+    }
+  }
+  return null;
+}
+
+function unverifiedMarketplaceWarning(message) {
+  return {
+    code: "PACK_UNVERIFIED",
+    message,
+    requiresAcknowledgement: true,
+  };
+}
+
+async function planModrinthMarketplacePack(source) {
+  const version = await getModrinthVersion(
+    trimRequired(source.versionId, "Modrinth version id is required"),
+  );
+  const file =
+    version.files.find((candidate) => candidate.isServerPack && candidate.primary) ||
+    version.files.find((candidate) => candidate.isServerPack) ||
+    version.files.find((candidate) => candidate.primary) ||
+    version.files[0];
+  if (!file?.url) {
+    throw new Error(`Modrinth version ${version.id} has no downloadable pack file`);
+  }
+  const minecraftVersion = version.gameVersions[0] || null;
+  const warnings = file.isServerPack
+    ? []
+    : [
+        unverifiedMarketplaceWarning(
+          "This Modrinth version does not provide a .mrpack server pack.",
+        ),
+      ];
+  return {
+    source,
+    pack: {
+      format: "modrinth",
+      name: version.name,
+      versionId: version.id,
+      releaseType: version.releaseType,
+    },
+    minecraftVersion,
+    loaderType: normalizeMarketplaceLoaderType(version.loaders),
+    loaderVersion: null,
+    requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    artifacts: [
+      {
+        provider: "modrinth",
+        projectId: version.projectId,
+        versionId: version.id,
+        filename: file.filename,
+        size: file.size,
+        url: file.url,
+        hashes: file.hashes || {},
+        environment: "server",
+      },
+    ],
+    optionalFiles: [],
+    archiveLayers: [],
+    properties: {},
+    warnings,
+    integrity: {
+      status:
+        file.isServerPack && Object.keys(file.hashes || {}).length > 0
+          ? "verified"
+          : "unverified",
+    },
+    estimatedBytes: file.size || 0,
+  };
+}
+
+async function getCurseForgeFile(modId, fileId) {
+  const data = await fetchJson(
+    `https://api.curseforge.com/v1/mods/${encodeURIComponent(modId)}/files/${encodeURIComponent(fileId)}`,
+    { headers: curseForgeHeaders() },
+    "CurseForge file lookup failed",
+  );
+  return mapCurseForgeFile(data.data || {});
+}
+
+async function planCurseForgeMarketplacePack(source) {
+  const projectId = trimRequired(source.projectId, "CurseForge project id is required");
+  const selectedId = trimRequired(source.versionId, "CurseForge file id is required");
+  const versions = await listCurseForgeFiles({ projectId });
+  const selected = versions.find((version) => version.id === selectedId);
+  if (!selected) throw new Error("CurseForge file not found");
+  const targetId = selected.serverPackFileId || selected.id;
+  const target =
+    versions.find((version) => version.id === targetId) ||
+    (await getCurseForgeFile(projectId, targetId));
+  const url = await curseForgeDownloadUrl(projectId, target.id);
+  if (!url) throw new Error("CurseForge did not provide a download URL");
+  const file = target.files[0];
+  const minecraftVersion = target.gameVersions[0] || null;
+  const warnings = target.isServerPack
+    ? []
+    : [
+        unverifiedMarketplaceWarning(
+          "CurseForge does not identify this archive as a dedicated server pack.",
+        ),
+      ];
+  return {
+    source: { ...source, versionId: target.id },
+    pack: {
+      format: "curseforge",
+      name: target.name,
+      versionId: target.id,
+      releaseType: target.releaseType,
+    },
+    minecraftVersion,
+    loaderType: normalizeMarketplaceLoaderType(target.loaders),
+    loaderVersion: null,
+    requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    artifacts: [
+      {
+        provider: "curseforge",
+        projectId,
+        fileId: target.id,
+        filename: file.filename,
+        size: file.size,
+        url,
+        hashes: file.hashes || {},
+        environment: "server",
+      },
+    ],
+    optionalFiles: [],
+    archiveLayers: [],
+    properties: {},
+    warnings,
+    integrity: {
+      status:
+        target.isServerPack && Object.keys(file.hashes || {}).length > 0
+          ? "verified"
+          : "unverified",
+    },
+    estimatedBytes: file.size || 0,
+  };
+}
+
+async function planMarketplacePack(source) {
+  const provider = String(source.provider || "").toLowerCase();
+  if (provider === "modrinth") return planModrinthMarketplacePack(source);
+  if (provider === "curseforge") return planCurseForgeMarketplacePack(source);
+  throw new Error(`unsupported marketplace provider: ${source.provider || "unknown"}`);
 }
 
 async function listCurseForgeFiles(input) {

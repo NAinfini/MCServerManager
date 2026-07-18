@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, Download, ExternalLink, Search } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -8,16 +9,12 @@ import { Select, type SelectOption } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import {
-  getBbsmcProject,
   getCurseForgeProject,
   getModrinthProject,
   listCurseForgeFiles,
-  listBbsmcVersions,
   listModrinthVersions,
-  searchBbsmcProjects,
   searchCurseForgeProjects,
   searchModrinthProjects,
-  type BbsmcProjectSummary,
   type MarketplaceLoaderFilter,
   type MarketplaceSortOrder,
   type ProjectDetails,
@@ -28,8 +25,8 @@ import { MarketplaceMarkdown } from "../marketplace/MarketplaceMarkdown";
 import { getMarketplaceProviderBranding } from "../marketplace/providerBranding";
 import type { LoaderType } from "./types";
 
-type MarketplaceProvider = "Modrinth" | "CurseForge" | "BBSMC";
-type MarketplaceProject = ProjectSummary | BbsmcProjectSummary | ProjectDetails;
+type MarketplaceProvider = "Modrinth" | "CurseForge";
+type MarketplaceProject = ProjectSummary | ProjectDetails;
 
 export interface MarketplaceCreateSelection {
   provider: MarketplaceProvider;
@@ -47,11 +44,10 @@ interface CreateServerMarketplaceBrowserProps {
   onDetailModeChange?: (isDetailMode: boolean) => void;
 }
 
-const providers: MarketplaceProvider[] = ["Modrinth", "CurseForge", "BBSMC"];
+const providers: MarketplaceProvider[] = ["Modrinth", "CurseForge"];
 const discoveryQueries: Record<MarketplaceProvider, string> = {
   Modrinth: "server",
   CurseForge: "server",
-  BBSMC: "\u6574\u5408",
 };
 
 function projectTitle(project: MarketplaceProject | null) {
@@ -190,15 +186,15 @@ function marketplaceSelectionMetadata(
   return { loaderType, minecraftVersion, loaderVersion };
 }
 
-function versionIsDirectlyInstallable(
-  provider: MarketplaceProvider,
-  version: ProjectVersion,
-) {
-  if (provider !== "BBSMC") {
-    return true;
-  }
-  return version.files.some((file) =>
-    /^https:\/\/cdn\.bbsmc\.net\//i.test(file.url || ""),
+function versionIsDirectlyInstallable(provider: MarketplaceProvider) {
+  return provider === "Modrinth" || provider === "CurseForge";
+}
+
+function versionHasServerPack(version: ProjectVersion) {
+  return Boolean(
+    version.isServerPack ||
+      version.serverPackFileId ||
+      version.serverCompatibility === "serverPack",
   );
 }
 
@@ -218,6 +214,8 @@ export function CreateServerMarketplaceBrowser({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   );
+  const [pendingUnverifiedSelection, setPendingUnverifiedSelection] =
+    useState<MarketplaceCreateSelection | null>(null);
 
   const resultsQuery = useQuery({
     queryKey: [
@@ -243,11 +241,7 @@ export function CreateServerMarketplaceBrowser({
           sort: sortOrder,
         });
       }
-      return searchBbsmcProjects(submittedQuery, {
-        projectType: "modpack",
-        loader: loaderFilter,
-        sort: sortOrder,
-      });
+      return [];
     },
   });
 
@@ -276,7 +270,7 @@ export function CreateServerMarketplaceBrowser({
       if (provider === "CurseForge") {
         return getCurseForgeProject(selectedProject.id);
       }
-      return getBbsmcProject(selectedProject.id);
+      return null;
     },
   });
 
@@ -293,14 +287,19 @@ export function CreateServerMarketplaceBrowser({
       if (provider === "CurseForge") {
         return listCurseForgeFiles(selectedProject.id);
       }
-      if (provider === "BBSMC") {
-        return listBbsmcVersions(selectedProject.id);
-      }
       return [];
     },
   });
 
-  const versions = versionsQuery.data ?? [];
+  const versions = useMemo(
+    () =>
+      [...(versionsQuery.data ?? [])].sort(
+        (left, right) =>
+          Number(versionHasServerPack(right)) -
+          Number(versionHasServerPack(left)),
+      ),
+    [versionsQuery.data],
+  );
   const selectedDetails = selectedDetailsQuery.data ?? selectedProject;
   const isDiscoverySearch =
     query.trim() === "" && submittedQuery === discoveryQueries[provider];
@@ -339,6 +338,25 @@ export function CreateServerMarketplaceBrowser({
     setProvider(item);
     setSubmittedQuery(query.trim() || discoveryQueries[item]);
     setSelectedProjectId(null);
+  };
+
+  const selectVersion = (
+    project: MarketplaceProject,
+    version: ProjectVersion,
+  ) => {
+    const selection: MarketplaceCreateSelection = {
+      provider,
+      projectId: project.id,
+      versionId: version.id,
+      title: projectTitle(project),
+      versionName: versionLabel(version),
+      ...marketplaceSelectionMetadata(project, version),
+    };
+    if (!versionHasServerPack(version)) {
+      setPendingUnverifiedSelection(selection);
+      return;
+    }
+    onSelect(selection);
   };
 
   return (
@@ -596,7 +614,7 @@ export function CreateServerMarketplaceBrowser({
                     <div className="marketplace-version-list-compact">
                       {versions.map((version) => {
                         const directlyInstallable =
-                          versionIsDirectlyInstallable(provider, version);
+                          versionIsDirectlyInstallable(provider);
                         const minecraftLabels =
                           versionMinecraftLabels(version);
                         return (
@@ -611,17 +629,7 @@ export function CreateServerMarketplaceBrowser({
                             }
                             type="button"
                             onClick={() =>
-                              onSelect({
-                                provider,
-                                projectId: selectedProject.id,
-                                versionId: version.id,
-                                title: projectTitle(selectedProject),
-                                versionName: versionLabel(version),
-                                ...marketplaceSelectionMetadata(
-                                  selectedProject,
-                                  version,
-                                ),
-                              })
+                              selectVersion(selectedProject, version)
                             }
                           >
                             <span>
@@ -634,6 +642,11 @@ export function CreateServerMarketplaceBrowser({
                                   })}
                                 </small>
                               ) : null}
+                              <small className="meta-badge meta-badge-provider">
+                                {versionHasServerPack(version)
+                                  ? t("marketplace.serverPackBadge")
+                                  : t("marketplace.unverifiedArchiveBadge")}
+                              </small>
                               {!directlyInstallable ? (
                                 <small>
                                   {t("marketplace.externalDownloadRequired")}
@@ -652,6 +665,41 @@ export function CreateServerMarketplaceBrowser({
           </article>
         </div>
       )}
+      <Dialog.Root
+        open={pendingUnverifiedSelection !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingUnverifiedSelection(null);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="dialog-backdrop" />
+          <Dialog.Content className="modal-dialog confirm-danger-dialog">
+            <Dialog.Title>{t("marketplace.unverifiedDialog.title")}</Dialog.Title>
+            <Dialog.Description>
+              {t("marketplace.unverifiedDialog.description")}
+            </Dialog.Description>
+            <div className="dialog-actions">
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost">
+                  {t("common.cancel")}
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  if (pendingUnverifiedSelection) {
+                    onSelect(pendingUnverifiedSelection);
+                  }
+                  setPendingUnverifiedSelection(null);
+                }}
+              >
+                {t("marketplace.unverifiedDialog.confirm")}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </section>
   );
 }

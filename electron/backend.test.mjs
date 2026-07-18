@@ -2076,3 +2076,212 @@ describe("Electron backend marketplace installation", () => {
     }
   });
 });
+
+describe("Electron backend server pack metadata", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.CURSEFORGE_API_KEY = "test-key";
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    if (originalCurseForgeApiKey === undefined) {
+      delete process.env.CURSEFORGE_API_KEY;
+    } else {
+      process.env.CURSEFORGE_API_KEY = originalCurseForgeApiKey;
+    }
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("preserves Modrinth server pack metadata and plans the mrpack artifact", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url) => {
+      expect(String(url)).toContain("/v2/version/version-1");
+      return jsonResponse({
+        id: "version-1",
+        project_id: "project-1",
+        name: "Dedicated Pack",
+        version_number: "1.2.0",
+        version_type: "release",
+        loaders: ["quilt"],
+        game_versions: ["1.21.4"],
+        files: [
+          {
+            filename: "dedicated-pack.mrpack",
+            size: 4096,
+            primary: true,
+            url: "https://cdn.modrinth.test/dedicated-pack.mrpack",
+            hashes: { sha512: "abc", sha1: "def" },
+          },
+        ],
+        dependencies: [],
+      });
+    });
+
+    try {
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: {
+            kind: "marketplaceModpack",
+            provider: "Modrinth",
+            projectId: "project-1",
+            versionId: "version-1",
+          },
+        },
+      });
+
+      expect(plan).toMatchObject({
+        pack: { format: "modrinth", releaseType: "release" },
+        minecraftVersion: "1.21.4",
+        loaderType: "quilt",
+        artifacts: [
+          {
+            filename: "dedicated-pack.mrpack",
+            size: 4096,
+            url: "https://cdn.modrinth.test/dedicated-pack.mrpack",
+            hashes: { sha512: "abc", sha1: "def" },
+          },
+        ],
+        integrity: { status: "verified" },
+        warnings: [],
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("preserves CurseForge metadata and resolves a client file to its server pack", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url, options = {}) => {
+      expect(options.headers?.["x-api-key"]).toBe("test-key");
+      const href = String(url);
+      if (href.includes("/v1/mods/123/files?pageSize=20")) {
+        return jsonResponse({
+          data: [
+            {
+              id: 20,
+              modId: 123,
+              displayName: "Pack client",
+              fileName: "pack-client.zip",
+              fileLength: 9000,
+              releaseType: 1,
+              gameVersions: ["1.20.1", "Forge"],
+              isServerPack: false,
+              serverPackFileId: 21,
+              hashes: [{ algo: 1, value: "sha1-client" }],
+            },
+            {
+              id: 21,
+              modId: 123,
+              displayName: "Pack server",
+              fileName: "pack-server.zip",
+              fileLength: 5000,
+              releaseType: 1,
+              gameVersions: ["1.20.1", "Forge"],
+              isServerPack: true,
+              hashes: [{ algo: 1, value: "sha1-server" }],
+            },
+          ],
+        });
+      }
+      if (href.endsWith("/v1/mods/123/files/21/download-url")) {
+        return jsonResponse({ data: "https://edge.forgecdn.test/pack-server.zip" });
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    try {
+      const versions = await backend.handle("list_curseforge_files", {
+        input: { projectId: "123" },
+      });
+      expect(versions[0]).toMatchObject({
+        id: "20",
+        isServerPack: false,
+        serverPackFileId: "21",
+        loaders: ["forge"],
+        releaseType: "release",
+        files: [{ size: 9000, hashes: { sha1: "sha1-client" } }],
+      });
+      expect(versions[1]).toMatchObject({ isServerPack: true });
+
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: {
+            kind: "marketplaceModpack",
+            provider: "CurseForge",
+            projectId: "123",
+            versionId: "20",
+          },
+        },
+      });
+      expect(plan).toMatchObject({
+        pack: { format: "curseforge", versionId: "21" },
+        loaderType: "forge",
+        artifacts: [
+          {
+            fileId: "21",
+            filename: "pack-server.zip",
+            url: "https://edge.forgecdn.test/pack-server.zip",
+            hashes: { sha1: "sha1-server" },
+          },
+        ],
+        warnings: [],
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("keeps a CurseForge client archive selectable only as unverified", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url) => {
+      const href = String(url);
+      if (href.includes("/v1/mods/456/files?pageSize=20")) {
+        return jsonResponse({
+          data: [
+            {
+              id: 30,
+              modId: 456,
+              displayName: "Client archive",
+              fileName: "client.zip",
+              fileLength: 1200,
+              releaseType: 2,
+              gameVersions: ["1.20.1", "Fabric"],
+              isServerPack: false,
+              serverPackFileId: null,
+              hashes: [],
+            },
+          ],
+        });
+      }
+      if (href.endsWith("/v1/mods/456/files/30/download-url")) {
+        return jsonResponse({ data: "https://edge.forgecdn.test/client.zip" });
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    try {
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: {
+            kind: "marketplaceModpack",
+            provider: "CurseForge",
+            projectId: "456",
+            versionId: "30",
+          },
+        },
+      });
+      expect(plan.integrity.status).toBe("unverified");
+      expect(plan.warnings).toContainEqual(
+        expect.objectContaining({
+          code: "PACK_UNVERIFIED",
+          requiresAcknowledgement: true,
+        }),
+      );
+    } finally {
+      backend.close();
+    }
+  });
+});

@@ -10,7 +10,7 @@ vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
 }));
 
-function renderBrowser() {
+function renderBrowser(onSelect = vi.fn()) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -20,7 +20,7 @@ function renderBrowser() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AppSettingsProvider>
-        <CreateServerMarketplaceBrowser onSelect={() => {}} />
+        <CreateServerMarketplaceBrowser onSelect={onSelect} />
       </AppSettingsProvider>
     </QueryClientProvider>,
   );
@@ -35,12 +35,9 @@ describe("CreateServerMarketplaceBrowser", () => {
   beforeEach(() => {
     vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
       if (command === "search_modrinth_projects") {
-        return [];
-      }
-      if (command === "search_bbsmc_projects") {
         return [
           {
-            id: "bbsmc-pack-1",
+            id: "modrinth-pack-1",
             slug: "lazy-survival",
             title: "Lazy Survival",
             description: "Automation-focused pack",
@@ -51,9 +48,9 @@ describe("CreateServerMarketplaceBrowser", () => {
           },
         ];
       }
-      if (command === "get_bbsmc_project") {
+      if (command === "get_modrinth_project") {
         return {
-          id: "bbsmc-pack-1",
+          id: "modrinth-pack-1",
           slug: "lazy-survival",
           title: "Lazy Survival",
           description: "Automation-focused pack",
@@ -64,14 +61,14 @@ describe("CreateServerMarketplaceBrowser", () => {
           downloads: 6900,
           follows: 47,
           modCount: 2,
-          websiteUrl: "https://bbsmc.net/modpack/lazy-survival",
+          websiteUrl: "https://modrinth.com/modpack/lazy-survival",
         };
       }
-      if (command === "list_bbsmc_versions") {
+      if (command === "list_modrinth_versions") {
         return [
           {
             id: "version-1",
-            projectId: "bbsmc-pack-1",
+            projectId: "modrinth-pack-1",
             name: "Lazy Survival 1.21.8",
             versionNumber: "1.0.0",
             loaders: ["fabric"],
@@ -79,6 +76,8 @@ describe("CreateServerMarketplaceBrowser", () => {
             files: [],
             dependencies: [],
             warnings: [],
+            isServerPack: true,
+            serverCompatibility: "serverPack",
           },
         ];
       }
@@ -90,10 +89,10 @@ describe("CreateServerMarketplaceBrowser", () => {
     cleanup();
   });
 
-  it("shows a BBSMC mod count after project details load", async () => {
+  it("shows a Modrinth mod count after project details load", async () => {
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     await userEvent.click(
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
@@ -104,7 +103,7 @@ describe("CreateServerMarketplaceBrowser", () => {
   it("uses distinct semantic badge colors for marketplace metadata", async () => {
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     await userEvent.click(
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
@@ -117,14 +116,14 @@ describe("CreateServerMarketplaceBrowser", () => {
     expect(screen.getByText("1.21.8")).toHaveClass("meta-badge-version");
     expect(screen.queryByText(/6WawJDbL/)).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: /open on bbsmc/i }),
-    ).toHaveAttribute("href", "https://bbsmc.net/modpack/lazy-survival");
+      screen.getByRole("link", { name: /open on modrinth/i }),
+    ).toHaveAttribute("href", "https://modrinth.com/modpack/lazy-survival");
   });
 
   it("shows minecraft versions on installable version rows", async () => {
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     await userEvent.click(
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
@@ -137,7 +136,7 @@ describe("CreateServerMarketplaceBrowser", () => {
   it("uses a two-column detail layout with provider link beside the pack name", async () => {
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     await userEvent.click(
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
@@ -155,7 +154,7 @@ describe("CreateServerMarketplaceBrowser", () => {
       "marketplace-pack-version-sidebar",
     );
     expect(titleRow).toContainElement(
-      screen.getByRole("link", { name: /open on bbsmc/i }),
+      screen.getByRole("link", { name: /open on modrinth/i }),
     );
   });
 
@@ -185,7 +184,7 @@ describe("CreateServerMarketplaceBrowser", () => {
   it("opens a selected pack as a full-width detail view with sanitized rich text", async () => {
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     expect(
       screen.getByRole("search", { name: /marketplace filters/i }),
     ).toBeInTheDocument();
@@ -213,12 +212,9 @@ describe("CreateServerMarketplaceBrowser", () => {
   it("renders project body markdown with preserved line breaks", async () => {
     vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
       if (command === "search_modrinth_projects") {
-        return [];
-      }
-      if (command === "search_bbsmc_projects") {
         return [
           {
-            id: "bbsmc-pack-1",
+            id: "modrinth-pack-1",
             slug: "lazy-survival",
             title: "Lazy Survival",
             description: "Automation-focused pack",
@@ -229,9 +225,9 @@ describe("CreateServerMarketplaceBrowser", () => {
           },
         ];
       }
-      if (command === "get_bbsmc_project") {
+      if (command === "get_modrinth_project") {
         return {
-          id: "bbsmc-pack-1",
+          id: "modrinth-pack-1",
           slug: "lazy-survival",
           title: "Lazy Survival",
           description: "Automation-focused pack",
@@ -253,7 +249,7 @@ describe("CreateServerMarketplaceBrowser", () => {
           modCount: 2,
         };
       }
-      if (command === "list_bbsmc_versions") {
+      if (command === "list_modrinth_versions") {
         return [];
       }
       return [];
@@ -261,7 +257,7 @@ describe("CreateServerMarketplaceBrowser", () => {
 
     renderBrowser();
 
-    await selectProvider(/bbsmc/i);
+    await selectProvider(/modrinth/i);
     await userEvent.click(
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
@@ -278,6 +274,152 @@ describe("CreateServerMarketplaceBrowser", () => {
       body?.querySelector('a[href="https://example.com/pack"]'),
     ).toHaveTextContent("Project page");
     expect(details).not.toHaveTextContent("# Setup notes");
+  });
+
+  it("offers only Modrinth and CurseForge for server creation", async () => {
+    renderBrowser();
+
+    await userEvent.click(screen.getByRole("combobox", { name: /providers/i }));
+
+    expect(screen.getByRole("option", { name: /modrinth/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /curseforge/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /bbsmc/i })).not.toBeInTheDocument();
+  });
+
+  it("labels and sorts dedicated server packs before unverified archives", async () => {
+    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
+      if (command === "search_modrinth_projects") {
+        return [
+          {
+            id: "pack-1",
+            slug: "pack-1",
+            title: "Pack One",
+            description: "Test pack",
+            projectType: "modpack",
+            loaders: ["quilt"],
+            gameVersions: ["1.21.4"],
+          },
+        ];
+      }
+      if (command === "get_modrinth_project") {
+        return {
+          id: "pack-1",
+          slug: "pack-1",
+          title: "Pack One",
+          description: "Test pack",
+          projectType: "modpack",
+          loaders: ["quilt"],
+          gameVersions: ["1.21.4"],
+        };
+      }
+      if (command === "list_modrinth_versions") {
+        return [
+          {
+            id: "client-version",
+            projectId: "pack-1",
+            name: "Client archive",
+            versionNumber: "2.0.0",
+            loaders: ["quilt"],
+            gameVersions: ["1.21.4"],
+            files: [{ filename: "client.zip", size: 10, primary: true }],
+            dependencies: [],
+            warnings: [],
+            isServerPack: false,
+            serverCompatibility: "unverified",
+          },
+          {
+            id: "server-version",
+            projectId: "pack-1",
+            name: "Dedicated server pack",
+            versionNumber: "1.0.0",
+            loaders: ["quilt"],
+            gameVersions: ["1.21.4"],
+            files: [{ filename: "server.mrpack", size: 10, primary: true }],
+            dependencies: [],
+            warnings: [],
+            isServerPack: true,
+            serverCompatibility: "serverPack",
+          },
+        ];
+      }
+      return [];
+    });
+
+    renderBrowser();
+    await userEvent.click(screen.getByRole("combobox", { name: /loader/i }));
+    expect(screen.getByRole("option", { name: /quilt/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("option", { name: /any loader/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /pack one/i }));
+
+    const versionButtons = await screen.findAllByRole("button", {
+      name: /archive|dedicated server pack/i,
+    });
+    expect(versionButtons[0]).toHaveTextContent("Dedicated server pack");
+    expect(versionButtons[0]).toHaveTextContent("Server pack");
+    expect(versionButtons[1]).toHaveTextContent("Unverified archive");
+  });
+
+  it("requires explicit acknowledgement before selecting an unverified archive", async () => {
+    const onSelect = vi.fn();
+    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
+      if (command === "search_modrinth_projects") {
+        return [
+          {
+            id: "pack-2",
+            slug: "pack-2",
+            title: "Unverified Pack",
+            description: "No dedicated archive",
+            projectType: "modpack",
+            loaders: ["fabric"],
+            gameVersions: ["1.20.1"],
+          },
+        ];
+      }
+      if (command === "get_modrinth_project") {
+        return {
+          id: "pack-2",
+          slug: "pack-2",
+          title: "Unverified Pack",
+          description: "No dedicated archive",
+          projectType: "modpack",
+          loaders: ["fabric"],
+          gameVersions: ["1.20.1"],
+        };
+      }
+      if (command === "list_modrinth_versions") {
+        return [
+          {
+            id: "client-only",
+            projectId: "pack-2",
+            name: "Client only",
+            versionNumber: "1.0.0",
+            loaders: ["fabric"],
+            gameVersions: ["1.20.1"],
+            files: [{ filename: "client.zip", size: 10, primary: true }],
+            dependencies: [],
+            warnings: [],
+            isServerPack: false,
+            serverCompatibility: "unverified",
+          },
+        ];
+      }
+      return [];
+    });
+
+    renderBrowser(onSelect);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /unverified pack/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /client only/i }),
+    );
+
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: /unverified server archive/i })).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /use unverified archive/i }),
+    );
+    expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });
 

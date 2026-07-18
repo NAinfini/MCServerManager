@@ -58,6 +58,10 @@ export interface ProjectVersion {
   diskUrls?: Array<{ platform: string; url: string }>;
   diskOnly?: boolean;
   warnings: string[];
+  releaseType?: "release" | "beta" | "alpha" | string | null;
+  isServerPack?: boolean;
+  serverPackFileId?: string | null;
+  serverCompatibility?: "serverPack" | "unverified";
 }
 
 export interface HangarProjectSummary {
