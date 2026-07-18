@@ -29,4 +29,3 @@ Only package scripts and the English and Chinese development-command documentati
 - Update scripts and documentation, then rerun the focused test.
 - Run the production build.
 - Start `pnpm dev` and verify that Vite becomes ready and Electron reaches its main process without a script recursion failure.
-
