@@ -199,7 +199,11 @@ async function run() {
     const closeRect = closeButton.getBoundingClientRect();
     const firstRect = wrappers[0].getBoundingClientRect();
     const lastRect = wrappers[wrappers.length - 1].getBoundingClientRect();
-    const connectorCenterOffsets = [...header.querySelectorAll(".wizard-step-connector")].map(
+    const connectors = [...header.querySelectorAll(".wizard-step-connector")];
+    if (connectors.length !== 5) {
+      throw new Error("Expected five wizard step connectors, found " + connectors.length + ".");
+    }
+    const connectorCenterOffsets = connectors.map(
       (connector) => {
         const circle = connector.parentElement?.querySelector(".wizard-step-circle");
         if (!circle) return Number.POSITIVE_INFINITY;
