@@ -113,4 +113,3 @@ Expected: Vite reports `http://localhost:1420`, Electron starts after readiness,
 **Step 4: Perform the mandatory review**
 
 Confirm requirement completeness, correctness, side effects, performance, security, and maintainability. Inspect `git diff --check` and verify that unrelated working-tree changes remain untouched.
-

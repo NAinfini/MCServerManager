@@ -20,7 +20,7 @@ Make `pnpm dev` start the complete local Electron application: the Vite renderer
 - Keep `wait-on` so Electron does not load the renderer URL before Vite is ready.
 - Keep `concurrently -k` so both processes share one development lifecycle.
 
-Only package scripts and the English and Chinese development-command documentation change. Application runtime code and backend behavior remain unchanged.
+Application runtime code and backend behavior remain unchanged. Functional changes are limited to package scripts, their contract tests, and the English and Chinese README development-command documentation. These plan documents record the design and implementation.
 
 ## Verification
 
