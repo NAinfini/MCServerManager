@@ -32,6 +32,7 @@
     "electron:dev": "pnpm dev",
     "electron:build": "pnpm build && electron-builder",
     "test:electron-smoke": "vitest run electron/provisioning-smoke.test.mjs",
+    "test:electron-ui-smoke": "electron electron/ui-smoke.cjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -89,6 +90,7 @@
       "dist/**",
       "electron/**",
       "!electron/*.test.mjs",
+      "!electron/ui-smoke.cjs",
       "public/app-icon.ico",
       "package.json"
     ],

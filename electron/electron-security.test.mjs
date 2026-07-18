@@ -19,4 +19,23 @@ describe("Electron window security", () => {
     expect(preload).toContain("restore_world_backup");
     expect(preload).toContain("get_server_setup_status");
   });
+
+  it("allows every command required by the provisioning wizard", () => {
+    const preload = fs.readFileSync("electron/preload.cjs", "utf8");
+    const provisioningCommands = [
+      "plan_server_provisioning",
+      "plan_java_runtime",
+      "install_java_runtime",
+      "create_provisioning_job",
+      "get_provisioning_job",
+      "list_recoverable_provisioning_jobs",
+      "run_provisioning_job",
+      "retry_provisioning_job",
+      "cancel_provisioning_job",
+    ];
+
+    for (const command of provisioningCommands) {
+      expect(preload).toContain(`"${command}"`);
+    }
+  });
 });

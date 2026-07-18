@@ -19,4 +19,10 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Run Electron UI smoke on Windows
+        if: runner.os == 'Windows'
+        run: pnpm test:electron-ui-smoke
+      - name: Run Electron UI smoke on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm test:electron-ui-smoke
       - run: pnpm vitest run --testTimeout 15000

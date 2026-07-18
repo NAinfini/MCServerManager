@@ -59,6 +59,14 @@ jobs:
 
       - run: pnpm vitest run --testTimeout 15000
 
+      - name: Run Electron UI smoke
+        if: matrix.platform != 'linux'
+        run: pnpm test:electron-ui-smoke
+
+      - name: Run Electron UI smoke on Linux
+        if: matrix.platform == 'linux'
+        run: xvfb-run --auto-servernum pnpm test:electron-ui-smoke
+
       - name: Publish Windows Electron release
         if: matrix.platform == 'win'
         run: pnpm exec electron-builder --win --publish always

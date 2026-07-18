@@ -58,6 +58,28 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("pnpm vitest run --testTimeout 15000");
   });
 
+  it("runs the production Electron UI smoke on desktop CI runners", () => {
+    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+    const ci = readWorkspaceFile(".github/workflows/ci.yml");
+    const release = readWorkspaceFile(".github/workflows/release.yml");
+
+    expect(manifest.scripts["test:electron-ui-smoke"]).toBe(
+      "electron electron/ui-smoke.cjs",
+    );
+    expect(ci).toContain("pnpm test:electron-ui-smoke");
+    expect(ci).toContain("xvfb-run --auto-servernum pnpm test:electron-ui-smoke");
+    expect(release).toContain("pnpm test:electron-ui-smoke");
+    expect(release).toContain(
+      "xvfb-run --auto-servernum pnpm test:electron-ui-smoke",
+    );
+  });
+
+  it("builds renderer assets with file-compatible relative URLs", () => {
+    const viteConfig = readWorkspaceFile("vite.config.ts");
+
+    expect(viteConfig).toMatch(/base:\s*["']\.\/["']/);
+  });
+
   it("uses stable platform artifact names that match updater metadata", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
@@ -93,5 +115,6 @@ describe("Electron CI and release workflows", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
     expect(manifest.build.files).toContain("!electron/*.test.mjs");
+    expect(manifest.build.files).toContain("!electron/ui-smoke.cjs");
   });
 });

@@ -6,6 +6,7 @@ const host = process.env.ELECTRON_RENDERER_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  base: "./",
   plugins: [react()],
 
   // Keep the renderer dev server predictable for the Electron shell.
