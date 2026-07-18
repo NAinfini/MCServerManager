@@ -12,7 +12,7 @@ const databaseAppDataDirs = new WeakMap();
 const databaseProcessSpawners = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
-const currentSchemaVersion = 1;
+const currentSchemaVersion = 2;
 
 const loaderToDb = {
   vanilla: "vanilla",
@@ -20,6 +20,7 @@ const loaderToDb = {
   forge: "forge",
   neoForge: "neoforge",
   fabric: "fabric",
+  quilt: "quilt",
 };
 
 const loaderFromDb = {
@@ -28,6 +29,7 @@ const loaderFromDb = {
   forge: "forge",
   neoforge: "neoForge",
   fabric: "fabric",
+  quilt: "quilt",
 };
 
 const coreSchema = `
@@ -36,13 +38,15 @@ CREATE TABLE IF NOT EXISTS servers (
   name TEXT NOT NULL,
   root_dir TEXT NOT NULL,
   minecraft_version TEXT,
-  loader_type TEXT NOT NULL CHECK (loader_type IN ('vanilla', 'paper', 'forge', 'neoforge', 'fabric')),
+  loader_type TEXT NOT NULL CHECK (loader_type IN ('vanilla', 'paper', 'forge', 'neoforge', 'fabric', 'quilt')),
   loader_version TEXT,
   java_path TEXT,
   server_port INTEGER CHECK (server_port IS NULL OR (server_port >= 1 AND server_port <= 65535)),
   min_memory_mb INTEGER CHECK (min_memory_mb IS NULL OR min_memory_mb > 0),
   max_memory_mb INTEGER CHECK (max_memory_mb IS NULL OR max_memory_mb > 0),
   auto_start INTEGER NOT NULL DEFAULT 0 CHECK (auto_start IN (0, 1)),
+  launch_spec_json TEXT,
+  compatibility_warning_json TEXT NOT NULL DEFAULT '[]',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   CHECK (min_memory_mb IS NULL OR max_memory_mb IS NULL OR min_memory_mb <= max_memory_mb)
@@ -234,12 +238,41 @@ CREATE TABLE IF NOT EXISTS diagnostic_runs (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS provisioning_jobs (
+  id TEXT PRIMARY KEY,
+  server_id TEXT REFERENCES servers(id) ON DELETE SET NULL,
+  stage TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  progress_json TEXT NOT NULL DEFAULT '{}',
+  staging_dir TEXT,
+  target_dir TEXT NOT NULL,
+  error_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS server_sources (
+  server_id TEXT PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  project_id TEXT,
+  version_id TEXT,
+  source_path TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS server_eula_acceptances (
+  server_id TEXT PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+  terms_url TEXT NOT NULL,
+  accepted_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_managed_processes_server_started_at ON managed_processes(server_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_process_events_server_created_at ON process_events(server_id, created_at ASC);
 CREATE INDEX IF NOT EXISTS idx_notification_events_created_at ON notification_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_backups_server_created_at ON backups(server_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_installed_content_server ON installed_content(server_id, installed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_server ON scheduled_tasks(server_id, enabled);
+CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_stage ON provisioning_jobs(stage, updated_at DESC);
 `;
 
 function createBackend(app) {
@@ -520,12 +553,76 @@ function databaseSchemaVersion(db) {
   return Number(db.prepare("PRAGMA user_version").get().user_version || 0);
 }
 
+function tableHasColumn(db, tableName, columnName) {
+  return db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all()
+    .some((column) => column.name === columnName);
+}
+
+function migrateVersionOneToTwo(db) {
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    db.exec(`
+      BEGIN IMMEDIATE;
+      CREATE TABLE servers_v2 (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        root_dir TEXT NOT NULL,
+        minecraft_version TEXT,
+        loader_type TEXT NOT NULL CHECK (loader_type IN ('vanilla', 'paper', 'forge', 'neoforge', 'fabric', 'quilt')),
+        loader_version TEXT,
+        java_path TEXT,
+        server_port INTEGER CHECK (server_port IS NULL OR (server_port >= 1 AND server_port <= 65535)),
+        min_memory_mb INTEGER CHECK (min_memory_mb IS NULL OR min_memory_mb > 0),
+        max_memory_mb INTEGER CHECK (max_memory_mb IS NULL OR max_memory_mb > 0),
+        auto_start INTEGER NOT NULL DEFAULT 0 CHECK (auto_start IN (0, 1)),
+        launch_spec_json TEXT,
+        compatibility_warning_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        CHECK (min_memory_mb IS NULL OR max_memory_mb IS NULL OR min_memory_mb <= max_memory_mb)
+      );
+      INSERT INTO servers_v2 (
+        id, name, root_dir, minecraft_version, loader_type, loader_version,
+        java_path, server_port, min_memory_mb, max_memory_mb, auto_start,
+        launch_spec_json, compatibility_warning_json, created_at, updated_at
+      )
+      SELECT
+        id, name, root_dir, minecraft_version, loader_type, loader_version,
+        java_path, server_port, min_memory_mb, max_memory_mb, auto_start,
+        NULL, '[]', created_at, updated_at
+      FROM servers;
+      DROP TABLE servers;
+      ALTER TABLE servers_v2 RENAME TO servers;
+    `);
+    const violations = db.prepare("PRAGMA foreign_key_check").all();
+    if (violations.length > 0) {
+      throw new Error("database migration would violate foreign keys");
+    }
+    db.exec("PRAGMA user_version = 2; COMMIT");
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch {
+      // The transaction may already be closed by SQLite after a fatal error.
+    }
+    throw error;
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 function migrateDatabase(db) {
   const version = databaseSchemaVersion(db);
   if (version > currentSchemaVersion) {
     throw new Error(
       `database schema version ${version} is newer than supported version ${currentSchemaVersion}`,
     );
+  }
+  if (version === 1 && !tableHasColumn(db, "servers", "launch_spec_json")) {
+    migrateVersionOneToTwo(db);
+    return;
   }
   if (version < currentSchemaVersion) {
     db.exec(`PRAGMA user_version = ${currentSchemaVersion}`);
@@ -1314,6 +1411,10 @@ function mapProfile(row) {
     minMemoryMb: row.min_memory_mb,
     maxMemoryMb: row.max_memory_mb,
     autoStart: row.auto_start !== 0,
+    launchSpec: row.launch_spec_json
+      ? JSON.parse(row.launch_spec_json)
+      : null,
+    compatibilityWarnings: JSON.parse(row.compatibility_warning_json || "[]"),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     restartPolicy: {
@@ -1329,7 +1430,8 @@ function profileSelectSql(whereClause = "") {
     SELECT
       s.id, s.name, s.root_dir, s.minecraft_version, s.loader_type,
       s.loader_version, s.java_path, s.server_port, s.min_memory_mb,
-      s.max_memory_mb, s.auto_start, s.created_at, s.updated_at,
+      s.max_memory_mb, s.auto_start, s.launch_spec_json,
+      s.compatibility_warning_json, s.created_at, s.updated_at,
       p.enabled AS restart_enabled,
       p.max_attempts AS restart_max_attempts,
       p.cooldown_seconds AS restart_cooldown_seconds

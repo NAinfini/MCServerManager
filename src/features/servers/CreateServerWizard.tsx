@@ -44,6 +44,7 @@ const loaderTypes = [
   "forge",
   "neoForge",
   "fabric",
+  "quilt",
 ] as const;
 const sourceKinds = [
   "blank",

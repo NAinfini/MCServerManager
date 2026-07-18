@@ -978,10 +978,106 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       expect(backend.handle("get_database_schema_version")).toEqual({
-        version: 1,
+        version: 2,
       });
     } finally {
       backend.close();
+    }
+  });
+
+  it("migrates schema version 1 profiles and accepts Quilt profiles", () => {
+    const appDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-schema-v1-"));
+    tempDirs.push(appDataDir);
+    const databasePath = path.join(appDataDir, "mc-server-manager.sqlite");
+    const legacyDb = new DatabaseSync(databasePath);
+    legacyDb.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE servers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        root_dir TEXT NOT NULL,
+        minecraft_version TEXT,
+        loader_type TEXT NOT NULL CHECK (loader_type IN ('vanilla', 'paper', 'forge', 'neoforge', 'fabric')),
+        loader_version TEXT,
+        java_path TEXT,
+        server_port INTEGER,
+        min_memory_mb INTEGER,
+        max_memory_mb INTEGER,
+        auto_start INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE server_restart_policies (
+        server_id TEXT PRIMARY KEY REFERENCES servers(id) ON DELETE CASCADE,
+        enabled INTEGER NOT NULL,
+        max_attempts INTEGER NOT NULL,
+        cooldown_seconds INTEGER NOT NULL
+      );
+      INSERT INTO servers (
+        id, name, root_dir, minecraft_version, loader_type, loader_version,
+        java_path, server_port, min_memory_mb, max_memory_mb, auto_start,
+        created_at, updated_at
+      ) VALUES (
+        'legacy-paper', 'Legacy Paper', 'C:/Servers/Legacy', '1.21.4',
+        'paper', '120', NULL, 25565, 1024, 4096, 0,
+        '2026-07-01T00:00:00.000Z', '2026-07-01T00:00:00.000Z'
+      );
+      INSERT INTO server_restart_policies
+        (server_id, enabled, max_attempts, cooldown_seconds)
+      VALUES ('legacy-paper', 1, 3, 30);
+      PRAGMA user_version = 1;
+    `);
+    legacyDb.close();
+
+    const backend = createBackend({ getPath: () => appDataDir });
+    const quiltRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-quilt-"));
+    tempDirs.push(quiltRoot);
+
+    try {
+      expect(backend.handle("get_database_schema_version")).toEqual({
+        version: 2,
+      });
+      expect(backend.handle("list_server_profiles")).toContainEqual(
+        expect.objectContaining({
+          id: "legacy-paper",
+          name: "Legacy Paper",
+          loaderType: "paper",
+          loaderVersion: "120",
+          serverPort: 25565,
+          minMemoryMb: 1024,
+          maxMemoryMb: 4096,
+        }),
+      );
+      expect(createServer(backend, quiltRoot, "quilt")).toMatchObject({
+        loaderType: "quilt",
+      });
+    } finally {
+      backend.close();
+    }
+
+    const migratedDb = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const columns = migratedDb.prepare("PRAGMA table_info(servers)").all();
+      expect(columns.map((column) => column.name)).toEqual(
+        expect.arrayContaining(["launch_spec_json", "compatibility_warning_json"]),
+      );
+      const legacyRow = migratedDb
+        .prepare("SELECT launch_spec_json FROM servers WHERE id = ?")
+        .get("legacy-paper");
+      expect(legacyRow.launch_spec_json).toBeNull();
+      const tables = migratedDb
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map((row) => row.name);
+      expect(tables).toEqual(
+        expect.arrayContaining([
+          "provisioning_jobs",
+          "server_sources",
+          "server_eula_acceptances",
+        ]),
+      );
+    } finally {
+      migratedDb.close();
     }
   });
 

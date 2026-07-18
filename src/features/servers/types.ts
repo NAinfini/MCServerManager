@@ -1,4 +1,23 @@
-export type LoaderType = "vanilla" | "paper" | "forge" | "neoForge" | "fabric";
+export type LoaderType =
+  | "vanilla"
+  | "paper"
+  | "forge"
+  | "neoForge"
+  | "fabric"
+  | "quilt";
+
+export interface ServerLaunchSpec {
+  executable: { kind: "java" };
+  workingDirectory: string;
+  jvmArgs: string[];
+  serverArgs: string[];
+}
+
+export interface CompatibilityWarning {
+  code: string;
+  message: string;
+  acknowledged?: boolean;
+}
 
 export type ServerCreationSourceKind =
   "blank" | "existingFolder" | "marketplaceModpack" | "localModpackFile";
@@ -32,6 +51,8 @@ export interface ServerProfile {
   minMemoryMb?: number | null;
   maxMemoryMb?: number | null;
   autoStart: boolean;
+  launchSpec?: ServerLaunchSpec | null;
+  compatibilityWarnings?: CompatibilityWarning[];
   createdAt: string;
   updatedAt: string;
   restartPolicy: RestartPolicy;

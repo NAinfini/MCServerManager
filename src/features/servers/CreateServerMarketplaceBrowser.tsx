@@ -164,7 +164,8 @@ function normalizeMarketplaceLoader(loaders: string[]): LoaderType | null {
       normalized === "vanilla" ||
       normalized === "paper" ||
       normalized === "forge" ||
-      normalized === "fabric"
+      normalized === "fabric" ||
+      normalized === "quilt"
     ) {
       return normalized;
     }
