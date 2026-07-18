@@ -26,6 +26,7 @@ describe("LoaderSelect", () => {
     expect(screen.getByRole("option", { name: "Forge" })).toBeEnabled();
     expect(screen.getByRole("option", { name: "NeoForge" })).toBeEnabled();
     expect(screen.getByRole("option", { name: "Fabric" })).toBeEnabled();
+    expect(screen.getByRole("option", { name: "Quilt" })).toBeEnabled();
   });
 });
 

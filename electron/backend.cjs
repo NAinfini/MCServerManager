@@ -6,6 +6,7 @@ const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
+const { createLoaderRegistry } = require("./provisioning/loaders.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -4047,139 +4048,16 @@ async function importModpack(db, input) {
   };
 }
 
-const PAPER_FILL_BASE = "https://fill.papermc.io/v3";
-const FABRIC_META_BASE = "https://meta.fabricmc.net/v2";
-const MOJANG_VERSION_MANIFEST =
-  "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-const FORGE_MAVEN_METADATA =
-  "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml";
-const NEOFORGE_MAVEN_METADATA =
-  "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml";
-
-function versionOption(value, label = value, stable = true) {
-  return {
-    value: String(value),
-    label: String(label),
-    stable: Boolean(stable),
-  };
-}
-
-function compareVersionsDesc(left, right) {
-  const leftParts = String(left).match(/\d+|[a-z]+/gi) || [];
-  const rightParts = String(right).match(/\d+|[a-z]+/gi) || [];
-  const length = Math.max(leftParts.length, rightParts.length);
-  for (let index = 0; index < length; index += 1) {
-    const leftPart = leftParts[index] ?? "";
-    const rightPart = rightParts[index] ?? "";
-    const leftNumber = Number(leftPart);
-    const rightNumber = Number(rightPart);
-    if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) {
-      if (leftNumber !== rightNumber) return rightNumber - leftNumber;
-    } else if (leftPart !== rightPart) {
-      return rightPart.localeCompare(leftPart);
-    }
-  }
-  return 0;
-}
-
-function uniqueVersionOptions(options) {
-  const seen = new Set();
-  return options.filter((option) => {
-    if (!option.value || seen.has(option.value)) {
-      return false;
-    }
-    seen.add(option.value);
-    return true;
+function loaderRegistry() {
+  return createLoaderRegistry({
+    fetchJson: (url) => fetchJson(url, {}, "Loader metadata lookup failed"),
+    fetchText: (url) => fetchText(url, {}, "Loader metadata lookup failed"),
   });
-}
-
-function parseMavenVersions(xml) {
-  return [...String(xml).matchAll(/<version>([^<]+)<\/version>/g)].map(
-    (match) => match[1],
-  );
-}
-
-function neoForgeMinecraftVersion(artifactVersion) {
-  const release = String(artifactVersion).split("-")[0];
-  const parts = release.split(".");
-  const major = Number(parts[0]);
-  if (major <= 21) {
-    return `1.${parts[0]}.${parts[1]}`;
-  }
-  return parts.slice(0, 3).join(".");
-}
-
-function neoForgeMatchesMinecraftVersion(artifactVersion, minecraftVersion) {
-  const normalized = String(minecraftVersion || "").startsWith("1.")
-    ? String(minecraftVersion).slice(2)
-    : String(minecraftVersion || "");
-  return (
-    String(artifactVersion).startsWith(`${normalized}.`) ||
-    String(artifactVersion).startsWith(`${normalized}-`)
-  );
 }
 
 async function listLoaderMinecraftVersions(input) {
   const loaderType = input?.loaderType || "paper";
-  if (loaderType === "paper") {
-    const data = await fetchJson(
-      `${PAPER_FILL_BASE}/projects/paper`,
-      {},
-      "Paper version lookup failed",
-    );
-    return uniqueVersionOptions(
-      Object.values(data.versions || {})
-        .flat()
-        .map((version) => versionOption(version)),
-    );
-  }
-  if (loaderType === "fabric") {
-    const versions = await fetchJson(
-      `${FABRIC_META_BASE}/versions/game`,
-      {},
-      "Fabric game version lookup failed",
-    );
-    return versions
-      .filter((item) => item.stable)
-      .map((item) => versionOption(item.version, item.version, item.stable));
-  }
-  if (loaderType === "vanilla") {
-    const data = await fetchJson(
-      MOJANG_VERSION_MANIFEST,
-      {},
-      "Minecraft version lookup failed",
-    );
-    return (data.versions || [])
-      .filter((item) => item.type === "release")
-      .map((item) => versionOption(item.id));
-  }
-  if (loaderType === "forge") {
-    const xml = await fetchText(
-      FORGE_MAVEN_METADATA,
-      {},
-      "Forge version lookup failed",
-    );
-    return uniqueVersionOptions(
-      parseMavenVersions(xml)
-        .map((version) => version.split("-")[0])
-        .sort(compareVersionsDesc)
-        .map((version) => versionOption(version)),
-    );
-  }
-  if (loaderType === "neoForge") {
-    const xml = await fetchText(
-      NEOFORGE_MAVEN_METADATA,
-      {},
-      "NeoForge version lookup failed",
-    );
-    return uniqueVersionOptions(
-      parseMavenVersions(xml)
-        .map(neoForgeMinecraftVersion)
-        .sort(compareVersionsDesc)
-        .map((version) => versionOption(version)),
-    );
-  }
-  throw new Error(`unsupported loader type: ${loaderType}`);
+  return loaderRegistry().get(loaderType).listMinecraftVersions();
 }
 
 async function listLoaderVersions(input) {
@@ -4188,58 +4066,7 @@ async function listLoaderVersions(input) {
     input?.minecraftVersion,
     "Minecraft version is required",
   );
-  if (loaderType === "vanilla") {
-    return [versionOption(minecraftVersion, "Vanilla server")];
-  }
-  if (loaderType === "paper") {
-    const builds = await fetchJson(
-      `${PAPER_FILL_BASE}/projects/paper/versions/${encodeURIComponent(minecraftVersion)}/builds`,
-      {},
-      "Paper build lookup failed",
-    );
-    return (Array.isArray(builds) ? builds : [])
-      .filter((build) => build.channel === "STABLE")
-      .map((build) => versionOption(build.id, `Build ${build.id}`));
-  }
-  if (loaderType === "fabric") {
-    const versions = await fetchJson(
-      `${FABRIC_META_BASE}/versions/loader/${encodeURIComponent(minecraftVersion)}`,
-      {},
-      "Fabric loader lookup failed",
-    );
-    return (Array.isArray(versions) ? versions : [])
-      .map((item) => item.loader)
-      .filter((loader) => loader?.stable)
-      .map((loader) =>
-        versionOption(loader.version, loader.version, loader.stable),
-      );
-  }
-  if (loaderType === "forge") {
-    const xml = await fetchText(
-      FORGE_MAVEN_METADATA,
-      {},
-      "Forge version lookup failed",
-    );
-    return parseMavenVersions(xml)
-      .filter((version) => version.startsWith(`${minecraftVersion}-`))
-      .map((version) => version.slice(`${minecraftVersion}-`.length))
-      .sort(compareVersionsDesc)
-      .map((version) => versionOption(version));
-  }
-  if (loaderType === "neoForge") {
-    const xml = await fetchText(
-      NEOFORGE_MAVEN_METADATA,
-      {},
-      "NeoForge version lookup failed",
-    );
-    return parseMavenVersions(xml)
-      .filter((version) =>
-        neoForgeMatchesMinecraftVersion(version, minecraftVersion),
-      )
-      .sort(compareVersionsDesc)
-      .map((version) => versionOption(version));
-  }
-  throw new Error(`unsupported loader type: ${loaderType}`);
+  return loaderRegistry().get(loaderType).listLoaderVersions(minecraftVersion);
 }
 
 const marketplaceLoaderFacets = {

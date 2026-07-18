@@ -7,6 +7,7 @@ export const loaderOptions = [
   "forge",
   "neoForge",
   "fabric",
+  "quilt",
 ].map((value) => {
   const branding = getLoaderBranding(value);
 

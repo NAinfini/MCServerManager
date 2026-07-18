@@ -36,6 +36,12 @@ const loaderBrandingByType: Record<string, LoaderBranding> = {
     label: "Fabric",
     shortLabel: "FB",
   },
+  quilt: {
+    iconAlt: "Quilt loader",
+    iconSrc: "/brand/quilt-logo.svg",
+    label: "Quilt",
+    shortLabel: "Q",
+  },
 };
 
 export function getLoaderBranding(loaderType?: string | null): LoaderBranding {

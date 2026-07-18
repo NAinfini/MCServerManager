@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Quilt">
+  <rect width="64" height="64" rx="14" fill="#9b6cff"/>
+  <path fill="#fff" d="M16 14h14v14H16zm18 0h14v14H34zM16 32h14v14H16zm18 0h14v14H34z"/>
+  <path fill="#402468" d="m23 21 18 18-5 5-18-18zm18 0L23 39l5 5 18-18z" opacity=".55"/>
+</svg>

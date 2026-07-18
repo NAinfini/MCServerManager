@@ -164,6 +164,33 @@ describe("Electron backend loader version catalogs", () => {
     }
   });
 
+  it("lists Quilt loader versions compatible with a Minecraft version", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url, options = {}) => {
+      expect(String(url)).toBe(
+        "https://meta.quiltmc.org/v3/versions/loader/1.21.4",
+      );
+      expect(options.headers?.["User-Agent"]).toMatch(/MCServerManager/);
+      return jsonResponse([
+        { loader: { version: "0.29.3" } },
+        { loader: { version: "0.29.2" } },
+      ]);
+    });
+
+    try {
+      const versions = await backend.handle("list_loader_versions", {
+        input: { loaderType: "quilt", minecraftVersion: "1.21.4" },
+      });
+
+      expect(versions.map((option) => option.value)).toEqual([
+        "0.29.3",
+        "0.29.2",
+      ]);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("filters Forge Maven versions by Minecraft version", async () => {
     const backend = createTestBackend();
     globalThis.fetch = vi.fn(async (url) => {
