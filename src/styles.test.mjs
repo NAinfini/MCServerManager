@@ -71,6 +71,10 @@ describe("create server modal layout", () => {
       css.match(
         /\.create-server-wizard-header\s+\.wizard-step-connector\s*\{([^}]*)\}/s,
       )?.[1] ?? "";
+    const narrowWizardStyles =
+      css.match(
+        /@media\s*\(max-width:\s*480px\)\s*\{([\s\S]*?)\r?\n\}\r?\n\r?\n\.create-marketplace/,
+      )?.[1] ?? "";
 
     expect(wizardHeader).toMatch(/display:\s*grid/);
     expect(wizardHeader).toMatch(
@@ -80,5 +84,8 @@ describe("create server modal layout", () => {
     expect(headerSteps).toMatch(/padding:\s*0/);
     expect(headerSteps).toMatch(/border:\s*0/);
     expect(headerConnector).toMatch(/width:\s*clamp\(18px,\s*3vw,\s*36px\)/);
+    expect(narrowWizardStyles).toMatch(
+      /\.create-server-wizard-header\s+\.wizard-step-label\s*\{[^}]*display:\s*block/s,
+    );
   });
 });

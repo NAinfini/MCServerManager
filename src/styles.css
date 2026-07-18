@@ -3512,6 +3512,10 @@ button {
     display: none;
   }
 
+  .create-server-wizard-header .wizard-step-label {
+    display: block;
+  }
+
   .wizard-step-connector {
     margin-bottom: 0;
   }
