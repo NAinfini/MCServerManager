@@ -58,6 +58,30 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("pnpm vitest run --testTimeout 15000");
   });
 
+  it("requires signing and notarization credentials for stable desktop releases", () => {
+    const release = readWorkspaceFile(".github/workflows/release.yml");
+    const requiredSecrets = [
+      "WINDOWS_CSC_LINK",
+      "WINDOWS_CSC_KEY_PASSWORD",
+      "MACOS_CSC_LINK",
+      "MACOS_CSC_KEY_PASSWORD",
+      "APPLE_ID",
+      "APPLE_APP_SPECIFIC_PASSWORD",
+      "APPLE_TEAM_ID",
+    ];
+
+    for (const secret of requiredSecrets) {
+      expect(release).toContain(`secrets.${secret}`);
+      expect(release).toContain(`$env:${secret}`);
+    }
+    expect(release).toContain("CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}");
+    expect(release).toContain("CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}");
+    expect(release).not.toMatch(
+      /(?:Write-Host|Write-Output|echo).*\$env:(?:WINDOWS_CSC|MACOS_CSC|APPLE_)/i,
+    );
+    expect(release).not.toContain("toJson(secrets)");
+  });
+
   it("runs the production Electron UI smoke on desktop CI runners", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
     const ci = readWorkspaceFile(".github/workflows/ci.yml");

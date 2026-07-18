@@ -52,9 +52,11 @@ pnpm exec electron-builder --win --publish never --config.directories.output=$ou
 
 GitHub Actions publishes platform-specific Electron artifacts from tagged releases:
 
-- Windows: NSIS installer, plus `latest.yml` update metadata.
+- Windows: signed NSIS installer, plus `latest.yml` update metadata.
 - Linux: AppImage and `.deb` packages.
-- macOS: `.dmg` and `.zip` packages. Current CI builds are unsigned unless signing credentials are added.
+- macOS: signed and notarized `.dmg` and `.zip` packages.
+
+Stable release publishing fails closed unless the repository provides `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` for Windows, plus `MACOS_CSC_LINK`, `MACOS_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` for macOS. Local `pnpm electron:build` remains available without these GitHub secrets for development builds.
 
 ## Privacy
 

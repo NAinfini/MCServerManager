@@ -67,19 +67,58 @@ jobs:
         if: matrix.platform == 'linux'
         run: xvfb-run --auto-servernum pnpm test:electron-ui-smoke
 
+      - name: Verify Windows signing credentials
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          WINDOWS_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          WINDOWS_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_LINK)) { $missing += "WINDOWS_CSC_LINK" }
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CSC_KEY_PASSWORD)) { $missing += "WINDOWS_CSC_KEY_PASSWORD" }
+          if ($missing.Count -gt 0) {
+            throw "Missing required stable-release secrets: $($missing -join ', ')"
+          }
+
+      - name: Verify macOS signing and notarization credentials
+        if: matrix.platform == 'mac'
+        shell: pwsh
+        env:
+          MACOS_CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          MACOS_CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          $missing = @()
+          if ([string]::IsNullOrWhiteSpace($env:MACOS_CSC_LINK)) { $missing += "MACOS_CSC_LINK" }
+          if ([string]::IsNullOrWhiteSpace($env:MACOS_CSC_KEY_PASSWORD)) { $missing += "MACOS_CSC_KEY_PASSWORD" }
+          if ([string]::IsNullOrWhiteSpace($env:APPLE_ID)) { $missing += "APPLE_ID" }
+          if ([string]::IsNullOrWhiteSpace($env:APPLE_APP_SPECIFIC_PASSWORD)) { $missing += "APPLE_APP_SPECIFIC_PASSWORD" }
+          if ([string]::IsNullOrWhiteSpace($env:APPLE_TEAM_ID)) { $missing += "APPLE_TEAM_ID" }
+          if ($missing.Count -gt 0) {
+            throw "Missing required stable-release secrets: $($missing -join ', ')"
+          }
+
       - name: Publish Windows Electron release
         if: matrix.platform == 'win'
         run: pnpm exec electron-builder --win --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
 
       - name: Publish Linux Electron release
         if: matrix.platform == 'linux'
         run: pnpm exec electron-builder --linux --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_IDENTITY_AUTO_DISCOVERY: false
+          CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Publish macOS Electron release
         if: matrix.platform == 'mac'
