@@ -1767,14 +1767,16 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("migrates schema version 1 profiles and accepts Quilt profiles", () => {
-    const appDataDir = fs.mkdtempSync(
-      path.join(os.tmpdir(), "mcsm-schema-v1-"),
-    );
-    tempDirs.push(appDataDir);
-    const databasePath = path.join(appDataDir, "mc-server-manager.sqlite");
-    const legacyDb = new DatabaseSync(databasePath);
-    legacyDb.exec(`
+  it.each([0, 1, 2])(
+    "migrates legacy profiles marked as schema version %i and accepts Quilt profiles",
+    (legacyVersion) => {
+      const appDataDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-schema-v1-"),
+      );
+      tempDirs.push(appDataDir);
+      const databasePath = path.join(appDataDir, "mc-server-manager.sqlite");
+      const legacyDb = new DatabaseSync(databasePath);
+      legacyDb.exec(`
       PRAGMA foreign_keys = ON;
       CREATE TABLE servers (
         id TEXT PRIMARY KEY,
@@ -1809,64 +1811,65 @@ describe("Electron backend resource lifecycle management", () => {
       INSERT INTO server_restart_policies
         (server_id, enabled, max_attempts, cooldown_seconds)
       VALUES ('legacy-paper', 1, 3, 30);
-      PRAGMA user_version = 1;
+      PRAGMA user_version = ${legacyVersion};
     `);
-    legacyDb.close();
+      legacyDb.close();
 
-    const backend = createBackend({ getPath: () => appDataDir });
-    const quiltRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-quilt-"));
-    tempDirs.push(quiltRoot);
+      const backend = createBackend({ getPath: () => appDataDir });
+      const quiltRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-quilt-"));
+      tempDirs.push(quiltRoot);
 
-    try {
-      expect(backend.handle("get_database_schema_version")).toEqual({
-        version: 2,
-      });
-      expect(backend.handle("list_server_profiles")).toContainEqual(
-        expect.objectContaining({
-          id: "legacy-paper",
-          name: "Legacy Paper",
-          loaderType: "paper",
-          loaderVersion: "120",
-          serverPort: 25565,
-          minMemoryMb: 1024,
-          maxMemoryMb: 4096,
-        }),
-      );
-      expect(createServer(backend, quiltRoot, "quilt")).toMatchObject({
-        loaderType: "quilt",
-      });
-    } finally {
-      backend.close();
-    }
+      try {
+        expect(backend.handle("get_database_schema_version")).toEqual({
+          version: 2,
+        });
+        expect(backend.handle("list_server_profiles")).toContainEqual(
+          expect.objectContaining({
+            id: "legacy-paper",
+            name: "Legacy Paper",
+            loaderType: "paper",
+            loaderVersion: "120",
+            serverPort: 25565,
+            minMemoryMb: 1024,
+            maxMemoryMb: 4096,
+          }),
+        );
+        expect(createServer(backend, quiltRoot, "quilt")).toMatchObject({
+          loaderType: "quilt",
+        });
+      } finally {
+        backend.close();
+      }
 
-    const migratedDb = new DatabaseSync(databasePath, { readOnly: true });
-    try {
-      const columns = migratedDb.prepare("PRAGMA table_info(servers)").all();
-      expect(columns.map((column) => column.name)).toEqual(
-        expect.arrayContaining([
-          "launch_spec_json",
-          "compatibility_warning_json",
-        ]),
-      );
-      const legacyRow = migratedDb
-        .prepare("SELECT launch_spec_json FROM servers WHERE id = ?")
-        .get("legacy-paper");
-      expect(legacyRow.launch_spec_json).toBeNull();
-      const tables = migratedDb
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
-        .all()
-        .map((row) => row.name);
-      expect(tables).toEqual(
-        expect.arrayContaining([
-          "provisioning_jobs",
-          "server_sources",
-          "server_eula_acceptances",
-        ]),
-      );
-    } finally {
-      migratedDb.close();
-    }
-  });
+      const migratedDb = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const columns = migratedDb.prepare("PRAGMA table_info(servers)").all();
+        expect(columns.map((column) => column.name)).toEqual(
+          expect.arrayContaining([
+            "launch_spec_json",
+            "compatibility_warning_json",
+          ]),
+        );
+        const legacyRow = migratedDb
+          .prepare("SELECT launch_spec_json FROM servers WHERE id = ?")
+          .get("legacy-paper");
+        expect(legacyRow.launch_spec_json).toBeNull();
+        const tables = migratedDb
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+          .all()
+          .map((row) => row.name);
+        expect(tables).toEqual(
+          expect.arrayContaining([
+            "provisioning_jobs",
+            "server_sources",
+            "server_eula_acceptances",
+          ]),
+        );
+      } finally {
+        migratedDb.close();
+      }
+    },
+  );
 
   it("maps whitelist player actions to fixed server commands", () => {
     const backend = createTestBackend();

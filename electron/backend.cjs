@@ -632,7 +632,17 @@ function tableHasColumn(db, tableName, columnName) {
     .some((column) => column.name === columnName);
 }
 
-function migrateVersionOneToTwo(db) {
+function migrateLegacyServersTable(db) {
+  const launchSpecValue = tableHasColumn(db, "servers", "launch_spec_json")
+    ? "launch_spec_json"
+    : "NULL";
+  const compatibilityWarningsValue = tableHasColumn(
+    db,
+    "servers",
+    "compatibility_warning_json",
+  )
+    ? "COALESCE(compatibility_warning_json, '[]')"
+    : "'[]'";
   db.exec("PRAGMA foreign_keys = OFF");
   try {
     db.exec(`
@@ -663,7 +673,7 @@ function migrateVersionOneToTwo(db) {
       SELECT
         id, name, root_dir, minecraft_version, loader_type, loader_version,
         java_path, server_port, min_memory_mb, max_memory_mb, auto_start,
-        NULL, '[]', created_at, updated_at
+        ${launchSpecValue}, ${compatibilityWarningsValue}, created_at, updated_at
       FROM servers;
       DROP TABLE servers;
       ALTER TABLE servers_v2 RENAME TO servers;
@@ -692,8 +702,11 @@ function migrateDatabase(db) {
       `database schema version ${version} is newer than supported version ${currentSchemaVersion}`,
     );
   }
-  if (version === 1 && !tableHasColumn(db, "servers", "launch_spec_json")) {
-    migrateVersionOneToTwo(db);
+  if (
+    !tableHasColumn(db, "servers", "launch_spec_json") ||
+    !tableHasColumn(db, "servers", "compatibility_warning_json")
+  ) {
+    migrateLegacyServersTable(db);
     return;
   }
   if (version < currentSchemaVersion) {
