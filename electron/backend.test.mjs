@@ -1655,6 +1655,39 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("rejects world restore while the server is running", async () => {
+    const child = createFakeChild(7124);
+    const backend = createTestBackend({ spawn: vi.fn(() => child) });
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-live-restore-"));
+    tempDirs.push(serverRoot);
+    fs.mkdirSync(path.join(serverRoot, "world"), { recursive: true });
+    fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "backup-state");
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const backup = backend.handle("create_world_backup", {
+        input: { serverId: server.id },
+      });
+      fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "live-state");
+      await backend.handle("start_server", { serverId: server.id });
+
+      expect(() =>
+        backend.handle("restore_world_backup", {
+          input: {
+            backupId: backup.id,
+            targetWorldDir: "world",
+            confirm: true,
+          },
+        }),
+      ).toThrow(expect.objectContaining({ code: "SERVER_MUST_BE_STOPPED" }));
+      expect(fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"))
+        .toBe("live-state");
+    } finally {
+      backend.close();
+    }
+  });
+
   it("initializes the database schema version for future migrations", () => {
     const backend = createTestBackend();
 

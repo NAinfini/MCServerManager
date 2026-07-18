@@ -16,6 +16,7 @@ import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import type { ServerProfile } from "../servers/types";
+import { getServerProcessStatus } from "../process/api";
 import {
   createWorldBackup,
   deleteServerBackup,
@@ -90,6 +91,10 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
     queryKey: ["backups", server.id],
     queryFn: () => listServerBackups(server.id),
   });
+  const processQuery = useQuery({
+    queryKey: ["processStatus", server.id],
+    queryFn: () => getServerProcessStatus(server.id),
+  });
   const createMutation = useMutation({
     mutationFn: () => createWorldBackup({ serverId: server.id }),
     onSuccess: async () => {
@@ -140,6 +145,10 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
 
   const backups = backupsQuery.data ?? [];
   const canRestoreTarget = isSafeRestoreTarget(targetWorldDir);
+  const restoreBlocked =
+    processQuery.isError ||
+    processQuery.data?.status === "running" ||
+    processQuery.data?.status === "externalRunning";
 
   return (
     <section className="backups-panel" aria-label={t("backups.aria")}>
@@ -297,10 +306,13 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
                     <Button
                       disabled={
                         backup.status !== "completed" ||
+                        restoreBlocked ||
                         restoreMutation.isPending
                       }
                       title={
-                        backup.status === "completed"
+                        restoreBlocked
+                          ? t("backups.restore.runningTitle")
+                          : backup.status === "completed"
                           ? t("backups.restore.titleAttr")
                           : t("backups.restore.unavailableTitle")
                       }

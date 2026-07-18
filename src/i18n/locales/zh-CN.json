@@ -309,6 +309,7 @@
   "backups.failed": "失败",
   "backups.restore.titleAttr": "恢复备份",
   "backups.restore.unavailableTitle": "失败的备份无法恢复",
+  "backups.restore.runningTitle": "请先停止服务器再恢复备份",
   "backups.export.titleAttr": "导出备份",
   "backups.delete.titleAttr": "删除备份",
   "backups.profiles.title": "备份配置",

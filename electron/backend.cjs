@@ -3124,6 +3124,20 @@ function restoreWorldBackup(db, input) {
   if (!backup) {
     throw new Error("backup not found");
   }
+  const managed = managedChildren.get(backup.server_id);
+  const persistedActiveProcess = db
+    .prepare(
+      `SELECT 1 FROM managed_processes
+       WHERE server_id = ? AND status IN ('running', 'external_running')
+       LIMIT 1`,
+    )
+    .get(backup.server_id);
+  if (managed?.db === db || persistedActiveProcess) {
+    throw provisioningError(
+      "SERVER_MUST_BE_STOPPED",
+      "Stop the server before restoring a world backup.",
+    );
+  }
   const sourceWorld = path.join(backup.archive_path, "world");
   if (!fs.existsSync(sourceWorld)) {
     throw new Error("backup world folder does not exist");

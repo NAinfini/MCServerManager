@@ -117,4 +117,21 @@ describe("ServerBackupsView", () => {
       });
     });
   });
+
+  it("disables restore while the server is running", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [backup];
+      if (command === "list_backup_profiles") return [];
+      if (command === "get_server_process_status") {
+        return { id: "process-1", serverId: server.id, status: "running" };
+      }
+      return {};
+    });
+
+    renderBackups();
+
+    expect(
+      await screen.findByTitle("Stop the server before restoring a backup"),
+    ).toBeDisabled();
+  });
 });

@@ -391,6 +391,7 @@
   "backups.failed": "Failed",
   "backups.restore.titleAttr": "Restore backup",
   "backups.restore.unavailableTitle": "Failed backups cannot be restored",
+  "backups.restore.runningTitle": "Stop the server before restoring a backup",
   "backups.export.titleAttr": "Export backup",
   "backups.delete.titleAttr": "Delete backup",
   "backups.profiles.title": "Backup profiles",
