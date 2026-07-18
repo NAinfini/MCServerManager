@@ -185,4 +185,34 @@ describe("managed Temurin runtimes", () => {
       : [];
     expect(leftovers).toEqual([]);
   });
+
+  it("blocks a renderer-supplied managed Java download outside trusted hosts", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const root = tempRoot();
+    const download = vi.fn();
+    const manager = createRuntimeManager({
+      userDataDir: root,
+      platform: "win32",
+      arch: "x64",
+      fetchJson: vi.fn(),
+      download,
+      extractArchive: vi.fn(),
+      inspectJava: vi.fn(),
+    });
+
+    await expect(
+      manager.install(
+        {
+          action: "install",
+          majorVersion: 21,
+          url: "http://127.0.0.1/runtime.zip",
+          filename: "runtime.zip",
+          checksum: "0".repeat(64),
+          targetDir: path.join(root, "runtimes", "temurin", "21", "windows-x64"),
+        },
+        { consent: true },
+      ),
+    ).rejects.toMatchObject({ code: "JAVA_DOWNLOAD_URL_BLOCKED" });
+    expect(download).not.toHaveBeenCalled();
+  });
 });

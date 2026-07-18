@@ -36,7 +36,23 @@ function normalizeEntryPath(fileName) {
   ) {
     throw unsafePathError(normalized);
   }
-  return normalized.replace(/^\.\//, "");
+  const relativePath = normalized.replace(/^\.\//, "");
+  const segments = relativePath.split("/");
+  const hasUnsafeWindowsSegment = segments.some((segment, index) => {
+    if (!segment) {
+      return index !== segments.length - 1;
+    }
+    return (
+      segment === "." ||
+      segment.includes(":") ||
+      /[. ]$/.test(segment) ||
+      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i.test(segment)
+    );
+  });
+  if (!relativePath || hasUnsafeWindowsSegment) {
+    throw unsafePathError(normalized);
+  }
+  return relativePath;
 }
 
 function isSymbolicLink(entry) {

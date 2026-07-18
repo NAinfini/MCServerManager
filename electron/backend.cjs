@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
+const { isIP } = require("node:net");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
 const { mergeProperties } = require("./provisioning/properties.cjs");
@@ -12,6 +13,7 @@ const {
   requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
 } = require("./provisioning/runtimes.cjs");
 const { createJobExecutor } = require("./provisioning/jobs.cjs");
+const { provisioningError } = require("./provisioning/contracts.cjs");
 const {
   extractZipArchive,
   extractZipLayers,
@@ -2237,8 +2239,17 @@ async function planJavaRuntime(db, input) {
 }
 
 async function installJavaRuntime(db, input) {
-  const runtime = await runtimeManagerFor(db).install(input?.plan, {
-    consent: input?.consent === true,
+  if (input?.consent !== true) {
+    throw provisioningError(
+      "JAVA_CONSENT_REQUIRED",
+      "You must confirm the Temurin license and managed download before installation.",
+    );
+  }
+  const canonicalPlan = await planJavaRuntime(db, {
+    majorVersion: input?.plan?.majorVersion,
+  });
+  const runtime = await runtimeManagerFor(db).install(canonicalPlan, {
+    consent: true,
   });
   return runtime;
 }
@@ -3361,13 +3372,21 @@ async function fetchText(
   return response.text();
 }
 
-async function downloadRemoteFile(url, targetPath, headers = {}) {
+async function downloadRemoteFile(
+  url,
+  targetPath,
+  headers = {},
+  validateFinalUrl = null,
+) {
   const response = await fetch(url, {
     headers: requestHeaders(headers),
     redirect: "follow",
   });
   if (!response.ok) {
     throw new Error(`file download failed: ${response.status}`);
+  }
+  if (typeof validateFinalUrl === "function") {
+    validateFinalUrl(response.url || url);
   }
   const body = Buffer.from(await response.arrayBuffer());
   fs.writeFileSync(targetPath, body);
@@ -4743,6 +4762,66 @@ function verifyProvisioningHashes(filePath, hashes = {}) {
   }
 }
 
+const PROVISIONING_PROVIDER_HOSTS = Object.freeze({
+  modrinth: new Set(["cdn.modrinth.com"]),
+  curseforge: new Set([
+    "edge.forgecdn.net",
+    "media.forgecdn.net",
+    "mediafilez.forgecdn.net",
+  ]),
+});
+
+function blockedProvisioningUrl(message) {
+  return Object.assign(new Error(message), { code: "PROVISIONING_URL_BLOCKED" });
+}
+
+function isPrivateProvisioningIp(hostname) {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  const family = isIP(host);
+  if (family === 6) {
+    return host === "::" || host === "::1" || /^(?:fc|fd|fe8|fe9|fea|feb)/.test(host);
+  }
+  if (family !== 4) return false;
+  const [first, second] = host.split(".").map(Number);
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
+}
+
+function validateProvisioningUrl(value, provider) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw blockedProvisioningUrl("Provisioning download URL is invalid.");
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    hostname === "localhost" ||
+    hostname.endsWith(".localhost") ||
+    isPrivateProvisioningIp(hostname)
+  ) {
+    throw blockedProvisioningUrl("Provisioning downloads require a public HTTPS URL.");
+  }
+  const normalizedProvider = String(provider || "").toLowerCase();
+  const allowedHosts = PROVISIONING_PROVIDER_HOSTS[normalizedProvider];
+  if (normalizedProvider && (!allowedHosts || !allowedHosts.has(hostname))) {
+    throw blockedProvisioningUrl(
+      `Provisioning download host is not approved for ${normalizedProvider}.`,
+    );
+  }
+  return parsed.toString();
+}
+
 async function downloadProvisioningArtifact(artifact, stagingDir, fallbackName) {
   let url = artifact.url || artifact.urls?.[0] || null;
   let filename = artifact.filename || artifact.path || fallbackName;
@@ -4752,9 +4831,15 @@ async function downloadProvisioningArtifact(artifact, stagingDir, fallbackName) 
     filename = artifact.path || path.join("mods", file.files[0]?.filename || fallbackName);
   }
   if (!url) throw new Error(`No download URL is available for ${fallbackName}.`);
+  url = validateProvisioningUrl(url, artifact.provider);
   const target = provisioningTargetPath(stagingDir, filename);
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  await downloadRemoteFile(url, target);
+  await downloadRemoteFile(
+    url,
+    target,
+    {},
+    (finalUrl) => validateProvisioningUrl(finalUrl, artifact.provider),
+  );
   verifyProvisioningHashes(target, artifact.hashes || {});
   return target;
 }
@@ -4780,7 +4865,13 @@ function provisioningLoaderRegistry(db) {
     fileExists: fs.existsSync,
     download: async (url, target, hashes) => {
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      await downloadRemoteFile(url, target);
+      const expectedHost = new URL(url).hostname.toLowerCase();
+      await downloadRemoteFile(url, target, {}, (finalUrl) => {
+        const validated = validateProvisioningUrl(finalUrl, null);
+        if (new URL(validated).hostname.toLowerCase() !== expectedHost) {
+          throw blockedProvisioningUrl("Loader download redirected to an unapproved host.");
+        }
+      });
       verifyProvisioningHashes(target, hashes);
     },
     runProcess: (executable, args, options) =>
@@ -4795,6 +4886,20 @@ function provisioningLoaderRegistry(db) {
         child.once("exit", (code) => resolve({ code }));
       }),
   });
+}
+
+function trustedLoaderVersion(value, label) {
+  const normalized = String(value || "");
+  if (
+    !normalized ||
+    normalized.length > 128 ||
+    !/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(normalized)
+  ) {
+    throw Object.assign(new Error(`${label} is invalid for loader installation.`), {
+      code: "LOADER_VERSION_INVALID",
+    });
+  }
+  return normalized;
 }
 
 async function downloadProvisioningFiles(job) {
@@ -4861,10 +4966,19 @@ function provisioningExecutorFor(db) {
         if (!plan.loaderInstallPlan) return;
         const registry = provisioningLoaderRegistry(db);
         const adapter = registry.get(plan.loaderType);
-        const installPlan = {
-          ...plan.loaderInstallPlan,
+        const minecraftVersion = trustedLoaderVersion(
+          plan.minecraftVersion,
+          "Minecraft version",
+        );
+        const loaderVersion = trustedLoaderVersion(
+          plan.loaderVersion,
+          "Loader version",
+        );
+        const installPlan = await adapter.buildInstallPlan({
+          minecraftVersion,
+          loaderVersion,
           workingDirectory: job.stagingDir,
-        };
+        });
         await adapter.install(installPlan, { javaPath: plan.javaRuntime.path });
         const validation = await adapter.validate(installPlan);
         if (!validation.valid) {
@@ -4873,6 +4987,18 @@ function provisioningExecutorFor(db) {
             { code: "LOADER_INSTALL_INCOMPLETE" },
           );
         }
+        const launchSpec = {
+          ...installPlan.launchSpec,
+          workingDirectory: ".",
+          validated: true,
+        };
+        return {
+          plan: {
+            ...plan,
+            loaderInstallPlan: { ...installPlan, workingDirectory: ".", launchSpec },
+            launchSpec,
+          },
+        };
       },
       committing: ({ job, plan }) => {
         const serverId = createProvisionedProfile(db, job.id, plan, job.targetDir);

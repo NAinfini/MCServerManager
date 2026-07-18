@@ -80,6 +80,8 @@ describe("provisioning ZIP archive safety", () => {
     ["aa/escape.txt", "../escape.txt"],
     ["safe.txt", "/abs.txt"],
     ["aa/x.txt", "C:/x.txt"],
+    ["config/a.txt", "config/a:txt"],
+    ["abc.txt", "CON.txt"],
   ])("rejects unsafe entry path %s", async (safeName, unsafeName) => {
     const archive = replaceEntryName(
       await zipFixture([{ name: safeName, content: "bad" }]),

@@ -176,7 +176,7 @@ describe("deterministic desktop provisioning smoke", () => {
       });
       expect(recovered.stage).toBe("ready");
       expect(fs.existsSync(path.join(recoveryTarget, "server.jar"))).toBe(true);
-      expect(globalThis.fetch).toHaveBeenCalledTimes(3);
+      expect(globalThis.fetch).toHaveBeenCalledTimes(5);
     } finally {
       backend?.close();
     }

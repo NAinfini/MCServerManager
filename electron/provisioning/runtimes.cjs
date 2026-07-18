@@ -6,6 +6,36 @@ const { extractZipArchive } = require("./archive.cjs");
 const { provisioningError } = require("./contracts.cjs");
 
 const TEMURIN_LICENSE_URL = "https://openjdk.org/legal/gplv2+ce.html";
+const TEMURIN_DOWNLOAD_HOSTS = new Set([
+  "api.adoptium.net",
+  "github.com",
+  "objects.githubusercontent.com",
+  "release-assets.githubusercontent.com",
+]);
+
+function validateTemurinDownloadUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw provisioningError(
+      "JAVA_DOWNLOAD_URL_BLOCKED",
+      "Managed Java download URL is invalid.",
+    );
+  }
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    !TEMURIN_DOWNLOAD_HOSTS.has(parsed.hostname.toLowerCase())
+  ) {
+    throw provisioningError(
+      "JAVA_DOWNLOAD_URL_BLOCKED",
+      "Managed Java download URL is outside the trusted Temurin hosts.",
+    );
+  }
+  return parsed.toString();
+}
 
 function requiredJavaMajorForMinecraft(minecraftVersion) {
   const match = String(minecraftVersion || "").match(
@@ -74,13 +104,15 @@ function findExecutable(root, executableName, maxEntries = 10_000) {
 }
 
 async function defaultDownload(url, target) {
-  const response = await fetch(url, { redirect: "follow" });
+  const validatedUrl = validateTemurinDownloadUrl(url);
+  const response = await fetch(validatedUrl, { redirect: "follow" });
   if (!response.ok) {
     throw provisioningError(
       "JAVA_DOWNLOAD_FAILED",
       `Managed Java download failed: ${response.status}`,
     );
   }
+  validateTemurinDownloadUrl(response.url || validatedUrl);
   fs.writeFileSync(target, Buffer.from(await response.arrayBuffer()));
 }
 
@@ -157,6 +189,7 @@ function createRuntimeManager(dependencies = {}) {
           `No Eclipse Temurin Java ${majorVersion} runtime is available for ${osName}-${architecture}.`,
         );
       }
+      const downloadUrl = validateTemurinDownloadUrl(pkg.link);
       return {
         action: "install",
         vendor: "Eclipse Temurin",
@@ -164,7 +197,7 @@ function createRuntimeManager(dependencies = {}) {
         majorVersion,
         platform: osName,
         architecture,
-        url: pkg.link,
+        url: downloadUrl,
         filename: pkg.name || `temurin-${majorVersion}.zip`,
         checksum: String(pkg.checksum).toLowerCase(),
         size: Number(pkg.size || 0),
@@ -191,6 +224,7 @@ function createRuntimeManager(dependencies = {}) {
           "You must confirm the Temurin license and managed download before installation.",
         );
       }
+      const downloadUrl = validateTemurinDownloadUrl(plan.url);
       const targetDir = path.resolve(plan.targetDir);
       const allowedRoot = path.join(userDataDir, "runtimes", "temurin");
       const relativeTarget = path.relative(allowedRoot, targetDir);
@@ -207,7 +241,7 @@ function createRuntimeManager(dependencies = {}) {
       const archivePath = path.join(staging, path.basename(plan.filename));
       fs.mkdirSync(staging, { recursive: true });
       try {
-        await download(plan.url, archivePath);
+        await download(downloadUrl, archivePath);
         if (sha256File(archivePath) !== plan.checksum) {
           throw provisioningError(
             "JAVA_CHECKSUM_MISMATCH",

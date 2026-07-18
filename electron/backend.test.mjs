@@ -747,10 +747,23 @@ describe("Electron backend provisioning plan contract", () => {
       ).rejects.toMatchObject({ code: "JAVA_CONSENT_REQUIRED" });
       expect(download).not.toHaveBeenCalled();
 
+      const rendererTamperedPlan = {
+        ...plan,
+        url: "https://github.com/attacker/fake-java.zip",
+        checksum: "0".repeat(64),
+      };
       const runtime = await backend.handle("install_java_runtime", {
-        input: { plan, consent: true },
+        input: { plan: rendererTamperedPlan, consent: true },
       });
       expect(runtime).toMatchObject({ managed: true, majorVersion: 21 });
+      expect(download).toHaveBeenCalledWith(
+        "https://github.com/adoptium/runtime.zip",
+        expect.any(String),
+      );
+      expect(download).not.toHaveBeenCalledWith(
+        "https://github.com/attacker/fake-java.zip",
+        expect.any(String),
+      );
     } finally {
       backend.close();
     }
@@ -790,6 +803,153 @@ describe("Electron backend provisioning job commands", () => {
         }),
       ).toMatchObject({ id: job.id, stage: "ready" });
     } finally {
+      backend.close();
+    }
+  });
+
+  it("blocks pack-controlled provisioning downloads to private network addresses", async () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-private-download-"));
+    tempDirs.push(parent);
+    const fetchAttempt = vi.fn(async () => binaryResponse("private data"));
+    globalThis.fetch = fetchAttempt;
+
+    try {
+      const job = backend.handle("create_provisioning_job", {
+        input: {
+          plan: validProvisioningPlan(path.join(parent, "server"), {
+            source: { kind: "localModpackFile", path: path.join(parent, "pack.mrpack") },
+            artifacts: [
+              {
+                provider: "modrinth",
+                path: "mods/private.jar",
+                url: "http://127.0.0.1/internal.jar",
+                hashes: { sha1: "deadbeef" },
+              },
+            ],
+          }),
+        },
+      });
+
+      await expect(
+        backend.handle("run_provisioning_job", { input: { jobId: job.id } }),
+      ).rejects.toMatchObject({ code: "PROVISIONING_URL_BLOCKED" });
+      expect(fetchAttempt).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+      backend.close();
+    }
+  });
+
+  it("blocks an approved provisioning URL that redirects to a private address", async () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-private-redirect-"));
+    tempDirs.push(parent);
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      url: "http://127.0.0.1/redirected.jar",
+      arrayBuffer: async () => Buffer.from("private data"),
+    }));
+
+    try {
+      const job = backend.handle("create_provisioning_job", {
+        input: {
+          plan: validProvisioningPlan(path.join(parent, "server"), {
+            source: { kind: "localModpackFile", path: path.join(parent, "pack.mrpack") },
+            artifacts: [
+              {
+                provider: "modrinth",
+                path: "mods/redirected.jar",
+                url: "https://cdn.modrinth.com/redirected.jar",
+                hashes: {},
+              },
+            ],
+          }),
+        },
+      });
+
+      await expect(
+        backend.handle("run_provisioning_job", { input: { jobId: job.id } }),
+      ).rejects.toMatchObject({ code: "PROVISIONING_URL_BLOCKED" });
+      expect(fs.existsSync(path.join(parent, ".server"))).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      backend.close();
+    }
+  });
+
+  it("rebuilds loader installation plans instead of executing renderer-supplied installer arguments", async () => {
+    const spawnImpl = vi.fn(() => {
+      throw new Error("tampered installer arguments were executed");
+    });
+    const backend = createTestBackend({ spawn: spawnImpl });
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-trusted-loader-plan-"));
+    tempDirs.push(parent);
+    const serverJar = Buffer.from("trusted paper server");
+    const sha256 = createHash("sha256").update(serverJar).digest("hex");
+    globalThis.fetch = vi.fn(async (url) => {
+      const href = String(url);
+      if (href === "https://fill-data.papermc.io/server.jar") {
+        return binaryResponse(serverJar);
+      }
+      if (href === "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds") {
+        return jsonResponse([
+          {
+            id: 130,
+            channel: "STABLE",
+            downloads: {
+              "server:default": {
+                url: "https://fill-data.papermc.io/server.jar",
+                checksums: { sha256 },
+                size: serverJar.length,
+              },
+            },
+          },
+        ]);
+      }
+      throw new Error(`unexpected fetch ${href}`);
+    });
+
+    try {
+      const targetDir = path.join(parent, "server");
+      const job = backend.handle("create_provisioning_job", {
+        input: {
+          plan: validProvisioningPlan(targetDir, {
+            loaderType: "paper",
+            minecraftVersion: "1.21.10",
+            loaderVersion: "130",
+            loaderInstallPlan: {
+              loaderType: "paper",
+              minecraftVersion: "1.21.10",
+              loaderVersion: "130",
+              workingDirectory: ".",
+              artifacts: [],
+              installer: {
+                artifactDestination: "renderer-controlled.jar",
+                args: ["-jar", "{installer}", "--renderer-controlled"],
+              },
+              expectedOutputs: [],
+              launchSpec: {
+                executable: { kind: "java" },
+                jvmArgs: ["-jar", "renderer-controlled.jar"],
+                serverArgs: ["nogui"],
+                workingDirectory: ".",
+              },
+            },
+          }),
+        },
+      });
+
+      const ready = await backend.handle("run_provisioning_job", {
+        input: { jobId: job.id },
+      });
+      expect(ready.stage).toBe("ready");
+      expect(spawnImpl).not.toHaveBeenCalled();
+      expect(fs.readFileSync(path.join(targetDir, "server.jar"))).toEqual(serverJar);
+      expect(ready.plan.launchSpec.jvmArgs).toEqual(["-jar", "server.jar"]);
+    } finally {
+      globalThis.fetch = originalFetch;
       backend.close();
     }
   });
@@ -2220,7 +2380,7 @@ describe("Electron backend resource lifecycle management", () => {
                 filename: "main-2.jar",
                 size: 6,
                 primary: true,
-                url: "https://cdn.modrinth.test/main-2.jar",
+                url: "https://cdn.modrinth.com/main-2.jar",
               },
             ],
             dependencies: [],
@@ -2237,17 +2397,17 @@ describe("Electron backend resource lifecycle management", () => {
                 filename: "main-1.jar",
                 size: 6,
                 primary: true,
-                url: "https://cdn.modrinth.test/main-1.jar",
+                url: "https://cdn.modrinth.com/main-1.jar",
               },
             ],
             dependencies: [],
           },
         ]);
       }
-      if (href === "https://cdn.modrinth.test/main-1.jar") {
+      if (href === "https://cdn.modrinth.com/main-1.jar") {
         return binaryResponse("old");
       }
-      if (href === "https://cdn.modrinth.test/main-2.jar") {
+      if (href === "https://cdn.modrinth.com/main-2.jar") {
         return binaryResponse("new");
       }
       throw new Error(`unexpected fetch ${href}`);
@@ -2457,7 +2617,7 @@ describe("Electron backend marketplace installation", () => {
                 filename: "main-pack.jar",
                 size: 4,
                 primary: true,
-                url: "https://cdn.modrinth.test/main-pack.jar",
+                url: "https://cdn.modrinth.com/main-pack.jar",
               },
             ],
             dependencies: [
@@ -2483,16 +2643,16 @@ describe("Electron backend marketplace installation", () => {
               filename: "dependency.jar",
               size: 3,
               primary: true,
-              url: "https://cdn.modrinth.test/dependency.jar",
+              url: "https://cdn.modrinth.com/dependency.jar",
             },
           ],
           dependencies: [],
         });
       }
-      if (href === "https://cdn.modrinth.test/main-pack.jar") {
+      if (href === "https://cdn.modrinth.com/main-pack.jar") {
         return binaryResponse("main");
       }
-      if (href === "https://cdn.modrinth.test/dependency.jar") {
+      if (href === "https://cdn.modrinth.com/dependency.jar") {
         return binaryResponse("dep");
       }
       throw new Error(`unexpected fetch ${href}`);
@@ -2588,9 +2748,9 @@ describe("Electron backend marketplace installation", () => {
       const href = String(url);
       expect(options?.headers?.["x-api-key"]).toBe("test-key");
       if (href.endsWith("/v1/mods/123/files/456/download-url")) {
-        return jsonResponse({ data: "https://edge.forgecdn.test/mod.jar" });
+        return jsonResponse({ data: "https://edge.forgecdn.net/mod.jar" });
       }
-      if (href === "https://edge.forgecdn.test/mod.jar") {
+      if (href === "https://edge.forgecdn.net/mod.jar") {
         return binaryResponse("curse");
       }
       throw new Error(`unexpected fetch ${href}`);
@@ -2862,7 +3022,7 @@ describe("Electron backend server pack metadata", () => {
             filename: "dedicated-pack.mrpack",
             size: 4096,
             primary: true,
-            url: "https://cdn.modrinth.test/dedicated-pack.mrpack",
+            url: "https://cdn.modrinth.com/dedicated-pack.mrpack",
             hashes: { sha512: "abc", sha1: "def" },
           },
         ],
@@ -2890,7 +3050,7 @@ describe("Electron backend server pack metadata", () => {
           {
             filename: "dedicated-pack.mrpack",
             size: 4096,
-            url: "https://cdn.modrinth.test/dedicated-pack.mrpack",
+            url: "https://cdn.modrinth.com/dedicated-pack.mrpack",
             hashes: { sha512: "abc", sha1: "def" },
           },
         ],
@@ -2937,7 +3097,7 @@ describe("Electron backend server pack metadata", () => {
         });
       }
       if (href.endsWith("/v1/mods/123/files/21/download-url")) {
-        return jsonResponse({ data: "https://edge.forgecdn.test/pack-server.zip" });
+        return jsonResponse({ data: "https://edge.forgecdn.net/pack-server.zip" });
       }
       throw new Error(`unexpected fetch ${href}`);
     });
@@ -2973,7 +3133,7 @@ describe("Electron backend server pack metadata", () => {
           {
             fileId: "21",
             filename: "pack-server.zip",
-            url: "https://edge.forgecdn.test/pack-server.zip",
+            url: "https://edge.forgecdn.net/pack-server.zip",
             hashes: { sha1: "sha1-server" },
           },
         ],
@@ -3007,7 +3167,7 @@ describe("Electron backend server pack metadata", () => {
         });
       }
       if (href.endsWith("/v1/mods/456/files/30/download-url")) {
-        return jsonResponse({ data: "https://edge.forgecdn.test/client.zip" });
+        return jsonResponse({ data: "https://edge.forgecdn.net/client.zip" });
       }
       throw new Error(`unexpected fetch ${href}`);
     });
