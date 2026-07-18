@@ -3050,6 +3050,12 @@ button {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.create-server-wizard-header {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(0, 1fr) auto;
+  gap: var(--space-4);
+}
+
 .create-server-dialog-title-row {
   display: flex;
   min-width: 0;
@@ -3220,6 +3226,13 @@ button {
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.create-server-wizard-header .wizard-steps {
+  min-width: 0;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+}
+
 .wizard-step-item-wrapper {
   display: flex;
   align-items: center;
@@ -3236,6 +3249,10 @@ button {
   padding: 4px 8px;
   cursor: default;
   font: inherit;
+}
+
+.create-server-wizard-header .wizard-step-item {
+  padding: 2px 4px;
 }
 
 .wizard-step-item:not(:disabled) {
@@ -3279,6 +3296,12 @@ button {
   background: var(--border-strong);
   margin: 0 8px;
   align-self: center;
+  margin-bottom: 22px;
+}
+
+.create-server-wizard-header .wizard-step-connector {
+  width: clamp(18px, 3vw, 36px);
+  margin-inline: 4px;
   margin-bottom: 22px;
 }
 

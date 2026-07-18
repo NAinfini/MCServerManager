@@ -58,4 +58,27 @@ describe("create server modal layout", () => {
     expect(css).toMatch(/\.wizard-marketplace-step\s*\{[^}]*\bheight:\s*100%/s);
     expect(css).toMatch(/\.create-marketplace\s*\{[^}]*\bheight:\s*100%/s);
   });
+
+  it("lays out wizard progress compactly inside the dialog header", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const wizardHeader =
+      css.match(/\.create-server-wizard-header\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const headerSteps =
+      css.match(
+        /\.create-server-wizard-header\s+\.wizard-steps\s*\{([^}]*)\}/s,
+      )?.[1] ?? "";
+    const headerConnector =
+      css.match(
+        /\.create-server-wizard-header\s+\.wizard-step-connector\s*\{([^}]*)\}/s,
+      )?.[1] ?? "";
+
+    expect(wizardHeader).toMatch(/display:\s*grid/);
+    expect(wizardHeader).toMatch(
+      /grid-template-columns:\s*minmax\(170px,\s*220px\)\s+minmax\(0,\s*1fr\)\s+auto/,
+    );
+    expect(headerSteps).toMatch(/min-width:\s*0/);
+    expect(headerSteps).toMatch(/padding:\s*0/);
+    expect(headerSteps).toMatch(/border:\s*0/);
+    expect(headerConnector).toMatch(/width:\s*clamp\(18px,\s*3vw,\s*36px\)/);
+  });
 });
