@@ -27,7 +27,7 @@ export function Select({
   name,
   onValueChange,
   options,
-  placeholder = "Select...",
+  placeholder = "Select…",
   value,
 }: SelectProps) {
   const selectedOption = options.find((option) => option.value === value);

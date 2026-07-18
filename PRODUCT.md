@@ -29,12 +29,12 @@ Avoid marketing-page visuals, oversized hero sections, decorative gradients, toy
 - Prefer compact, aligned controls for repeated server operations.
 - Make errors explicit and recoverable.
 - Explain beginner setup through one resumable flow: source, compatibility, Java, configuration, explicit EULA confirmation, installation, and start readiness.
-- Preserve keyboard and screen-reader access in every control without using browser-default focus outlines.
+- Preserve keyboard and screen-reader access in every control with a consistent visible keyboard focus indicator.
 - Require explicit confirmation for destructive or interrupting actions.
 
 ## Accessibility & Inclusion
 
-Target WCAG AA contrast, reduced motion, and color-independent status labels. Keyboard navigation should remain functional, but default focus outlines are intentionally suppressed to preserve the app's desktop visual style.
+Target WCAG AA contrast, reduced motion, and color-independent status labels. Keyboard navigation must retain a visible `:focus-visible` indicator while pointer clicks remain visually quiet.
 
 ## Release Policy
 

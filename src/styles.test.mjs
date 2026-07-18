@@ -3,17 +3,38 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("global focus styles", () => {
-  it("does not draw browser focus outlines", () => {
+  it("draws focus only for keyboard-style focus-visible matches", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
-    const outlineDeclarations = css
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.startsWith("outline:"));
+    const focusVisibleBlocks = [...css.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^{}]*)\}/g)];
 
-    expect(css).toMatch(/:focus[^{]*\{[^}]*outline:\s*none/s);
-    expect(outlineDeclarations.every((line) => line === "outline: none;")).toBe(
-      true,
+    expect(css).not.toMatch(/(^|,)\s*:focus\s*(,|\{)/m);
+    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid/s);
+    expect(
+      focusVisibleBlocks.some(([, , declarations]) =>
+        /outline:\s*none/.test(declarations),
+      ),
+    ).toBe(false);
+  });
+
+  it("animates explicit properties and uses typographic loading ellipses", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const localePaths = ["src/i18n/locales/en.json", "src/i18n/locales/zh-CN.json"];
+    const localeValues = localePaths.flatMap((path) =>
+      Object.values(JSON.parse(readFileSync(resolve(process.cwd(), path), "utf8"))),
     );
+    const loadingState = readFileSync(
+      resolve(process.cwd(), "src/components/ui/loading-state.tsx"),
+      "utf8",
+    );
+    const select = readFileSync(
+      resolve(process.cwd(), "src/components/ui/select.tsx"),
+      "utf8",
+    );
+
+    expect(css).not.toMatch(/transition:\s*all\b/);
+    expect(localeValues.filter((value) => value.includes("..."))).toEqual([]);
+    expect(loadingState).not.toContain('"Loading..."');
+    expect(select).not.toContain('"Select..."');
   });
 });
 

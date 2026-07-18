@@ -2,7 +2,7 @@ interface LoadingStateProps {
   message?: string;
 }
 
-export function LoadingState({ message = "Loading..." }: LoadingStateProps) {
+export function LoadingState({ message = "Loading…" }: LoadingStateProps) {
   return (
     <div className="list-state" role="status" aria-live="polite">
       <div className="loading-spinner" aria-hidden="true">

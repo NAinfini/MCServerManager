@@ -50,6 +50,7 @@ function applyTheme(theme: ThemeSetting) {
   const resolvedTheme =
     theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme;
   document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.style.colorScheme = resolvedTheme;
 }
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {

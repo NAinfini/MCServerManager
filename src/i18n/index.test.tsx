@@ -35,6 +35,7 @@ describe("i18n settings", () => {
     cleanup();
     localStorage.clear();
     document.documentElement.removeAttribute("data-theme");
+    document.documentElement.style.removeProperty("color-scheme");
   });
 
   it("loads English by default and visibly falls back for missing keys", () => {
@@ -61,9 +62,11 @@ describe("i18n settings", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /dark/i }));
     expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(document.documentElement.style.colorScheme).toBe("dark");
 
     await userEvent.click(screen.getByRole("button", { name: /light/i }));
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(document.documentElement.style.colorScheme).toBe("light");
 
     await userEvent.click(screen.getByRole("button", { name: /system/i }));
     expect(screen.getByText("system")).toBeInTheDocument();
