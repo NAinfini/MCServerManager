@@ -30,4 +30,14 @@ describe("project documentation", () => {
     expect(gitignore).toContain("coverage/");
     expect(gitignore).toContain("*.tsbuildinfo");
   });
+
+  it("starts the complete Electron application through pnpm dev", () => {
+    const { scripts } = JSON.parse(read("package.json"));
+
+    expect(scripts["dev:renderer"]).toBe("vite");
+    expect(scripts.dev).toBe(
+      'concurrently -k "pnpm dev:renderer" "wait-on http://localhost:1420 && electron ."',
+    );
+    expect(scripts["electron:dev"]).toBe("pnpm dev");
+  });
 });

@@ -25,10 +25,11 @@
     }
   },
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"pnpm dev:renderer\" \"wait-on http://localhost:1420 && electron .\"",
+    "dev:renderer": "vite",
     "tsc": "tsc",
     "build": "tsc && vite build",
-    "electron:dev": "concurrently -k \"pnpm dev\" \"wait-on http://localhost:1420 && electron .\"",
+    "electron:dev": "pnpm dev",
     "electron:build": "pnpm build && electron-builder",
     "preview": "vite preview"
   },
