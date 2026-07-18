@@ -19,12 +19,16 @@ import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
 import { listServerProfiles } from "../../features/servers/api";
 import { BatchActions } from "../../features/servers/BatchActions";
-import { CreateServerWizard } from "../../features/servers/CreateServerWizard";
+import {
+  CreateServerWizard,
+  type CreateServerWizardProgress,
+} from "../../features/servers/CreateServerWizard";
 import { DropImportOverlay } from "../../features/servers/DropImportOverlay";
 import { DropImportReviewDialog } from "../../features/servers/DropImportReviewDialog";
 import { ServerCardView } from "../../features/servers/ServerCardView";
 import { ServerList } from "../../features/servers/ServerList";
 import { ServerDetail } from "../../features/servers/ServerDetail";
+import { WizardStepIndicator } from "../../features/servers/WizardStepIndicator";
 import type { ServerProfile } from "../../features/servers/types";
 import {
   getProcessSummary,
@@ -72,6 +76,8 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   >(null);
   const [createServerHeaderHidden, setCreateServerHeaderHidden] =
     useState(false);
+  const [createServerProgress, setCreateServerProgress] =
+    useState<CreateServerWizardProgress | null>(null);
   const [createServerSourcePath, setCreateServerSourcePath] = useState<string | null>(null);
   const [isJavaOpen, setJavaOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
@@ -166,6 +172,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
       setCreateServerSourcePath(null);
       setCreateServerHeaderBack(null);
       setCreateServerHeaderHidden(false);
+      setCreateServerProgress(null);
     }
   }, []);
 
@@ -367,7 +374,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                         </Dialog.Close>
                       </>
                     ) : (
-                      <div className="create-server-dialog-header">
+                      <div className="create-server-dialog-header create-server-wizard-header">
                         <div className="create-server-dialog-title-row">
                           {createServerHeaderBack ? (
                             <Button
@@ -389,6 +396,12 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                             </Dialog.Description>
                           </div>
                         </div>
+                        {createServerProgress ? (
+                          <WizardStepIndicator
+                            currentStep={createServerProgress.currentStep}
+                            steps={createServerProgress.steps}
+                          />
+                        ) : null}
                         <Dialog.Close asChild>
                           <Button
                             aria-label={t("servers.create.close")}
@@ -405,6 +418,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                       showHeading={false}
                       onHeaderHiddenChange={setCreateServerHeaderHidden}
                       onHeaderBackChange={handleCreateServerHeaderBackChange}
+                      onProgressChange={setCreateServerProgress}
                       onCreated={() => handleCreateServerOpenChange(false)}
                     />
                   </Dialog.Content>

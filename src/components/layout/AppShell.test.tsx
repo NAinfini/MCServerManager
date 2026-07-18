@@ -213,6 +213,32 @@ describe("AppShell", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("renders the create wizard progress inside the dialog header", async () => {
+    renderShell();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create server/i }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Create server" });
+    const header = dialog.querySelector(".create-server-wizard-header");
+    const progress = within(dialog).getByRole("navigation", {
+      name: "Wizard progress",
+    });
+
+    expect(header).not.toBeNull();
+    expect(header).toContainElement(progress);
+    expect(
+      within(header!).getByRole("heading", { name: "Create server" }),
+    ).toBeInTheDocument();
+    expect(
+      within(header!).getByRole("button", { name: "Close create server" }),
+    ).toBeInTheDocument();
+    expect(
+      dialog.querySelector(".create-server-panel .wizard-steps"),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps the create server modal open when dismissing a dropdown inside it", async () => {
     renderShell();
 
