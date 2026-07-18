@@ -146,6 +146,25 @@ async function run() {
     'document.readyState === "complete" && typeof window.mcServerManager?.invoke === "function"',
     "the sandboxed preload bridge",
   );
+  const consoleProbe = "__MCSM_SMOKE_CONSOLE_CAPTURE_PROBE__";
+  await window.webContents.executeJavaScript(
+    `console.error(${JSON.stringify(consoleProbe)})`,
+  );
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (rendererErrors.some((message) => message.includes(consoleProbe))) {
+      break;
+    }
+    await delay(25);
+  }
+  const probeIndex = rendererErrors.findIndex((message) =>
+    message.includes(consoleProbe),
+  );
+  if (probeIndex === -1) {
+    throw new Error(
+      "Electron UI smoke could not capture renderer console errors.",
+    );
+  }
+  rendererErrors.splice(probeIndex, 1);
   process.stdout.write("Electron UI smoke: preload bridge ready.\n");
   await waitFor(
     window.webContents,

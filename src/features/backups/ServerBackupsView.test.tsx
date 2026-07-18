@@ -43,11 +43,11 @@ const backup = {
   error: null,
 };
 
-function renderBackups() {
-  const queryClient = new QueryClient({
+function renderBackups(
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
-  });
-
+  }),
+) {
   return render(
     <QueryClientProvider client={queryClient}>
       <ServerBackupsView server={server} />
@@ -133,5 +133,27 @@ describe("ServerBackupsView", () => {
     expect(
       await screen.findByTitle("Stop the server before restoring a backup"),
     ).toBeDisabled();
+  });
+
+  it("shares the live server process status cache with server actions", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Infinity },
+      },
+    });
+    queryClient.setQueryData(["serverProcessStatus", server.id], {
+      id: "process-1",
+      serverId: server.id,
+      status: "running",
+    });
+
+    renderBackups(queryClient);
+
+    expect(
+      await screen.findByTitle("Stop the server before restoring a backup"),
+    ).toBeDisabled();
+    expect(invoke).not.toHaveBeenCalledWith("get_server_process_status", {
+      serverId: server.id,
+    });
   });
 });

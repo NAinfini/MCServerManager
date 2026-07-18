@@ -8,6 +8,15 @@ function readWorkspaceFile(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function workflowStep(workflow, name) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = workflow.match(
+    new RegExp(`- name: ${escapedName}([\\s\\S]*?)(?=\\n\\s+- name:|$)`),
+  );
+  expect(match, `Missing workflow step: ${name}`).not.toBeNull();
+  return match[0];
+}
+
 describe("Electron CI and release workflows", () => {
   it("pins one pnpm version without a repository-local copied store", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
@@ -60,6 +69,15 @@ describe("Electron CI and release workflows", () => {
 
   it("requires signing and notarization credentials for stable desktop releases", () => {
     const release = readWorkspaceFile(".github/workflows/release.yml");
+    const windowsPublish = workflowStep(
+      release,
+      "Publish Windows Electron release",
+    );
+    const linuxPublish = workflowStep(
+      release,
+      "Publish Linux Electron release",
+    );
+    const macPublish = workflowStep(release, "Publish macOS Electron release");
     const requiredSecrets = [
       "WINDOWS_CSC_LINK",
       "WINDOWS_CSC_KEY_PASSWORD",
@@ -74,8 +92,23 @@ describe("Electron CI and release workflows", () => {
       expect(release).toContain(`secrets.${secret}`);
       expect(release).toContain(`$env:${secret}`);
     }
-    expect(release).toContain("CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}");
-    expect(release).toContain("CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}");
+    expect(windowsPublish).toContain(
+      "CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}",
+    );
+    expect(windowsPublish).toContain(
+      "CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}",
+    );
+    expect(linuxPublish).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
+    expect(linuxPublish).not.toMatch(/CSC_LINK|CSC_KEY_PASSWORD|APPLE_/);
+    expect(macPublish).toContain("CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}");
+    expect(macPublish).toContain(
+      "CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}",
+    );
+    expect(macPublish).toContain("APPLE_ID: ${{ secrets.APPLE_ID }}");
+    expect(macPublish).toContain(
+      "APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}",
+    );
+    expect(macPublish).toContain("APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}");
     expect(release).not.toMatch(
       /(?:Write-Host|Write-Output|echo).*\$env:(?:WINDOWS_CSC|MACOS_CSC|APPLE_)/i,
     );

@@ -2134,6 +2134,52 @@ describe("Electron backend resource lifecycle management", () => {
       }
     });
 
+    it("rejects concurrent starts of the same server before the port probe completes", async () => {
+      let releaseFirstProbe;
+      const checkPortAvailable = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              releaseFirstProbe = resolve;
+            }),
+        )
+        .mockResolvedValue(true);
+      const spawnImpl = vi.fn(() => createFakeChild(18992));
+      const backend = createTestBackend({
+        spawn: spawnImpl,
+        checkPortAvailable,
+      });
+      const serverRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-concurrent-start-"),
+      );
+      tempDirs.push(serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+      try {
+        const server = createServer(backend, serverRoot);
+        const firstStart = backend.handle("start_server", {
+          serverId: server.id,
+        });
+        await vi.waitFor(() =>
+          expect(checkPortAvailable).toHaveBeenCalledTimes(1),
+        );
+
+        const secondStart = backend.handle("start_server", {
+          serverId: server.id,
+        });
+        releaseFirstProbe(true);
+
+        await expect(secondStart).rejects.toMatchObject({
+          code: "SERVER_ALREADY_RUNNING",
+        });
+        await firstStart;
+        expect(spawnImpl).toHaveBeenCalledTimes(1);
+      } finally {
+        backend.close();
+      }
+    });
+
     it("starts a structured jar launch specification with exact safe spawn options", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19001));
       const backend = createTestBackend({ spawn: spawnImpl });

@@ -27,6 +27,7 @@ const databaseMetricCollectors = new WeakMap();
 const databaseMetricBaselines = new WeakMap();
 const databaseRuntimeDependencies = new WeakMap();
 const databasePortCheckers = new WeakMap();
+const databaseStartingServers = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
 const currentSchemaVersion = 2;
@@ -307,6 +308,7 @@ function createBackend(app) {
   databaseMetricBaselines.set(db, new Map());
   databaseRuntimeDependencies.set(db, app.runtimeDependencies || {});
   databasePortCheckers.set(db, app.checkPortAvailable || checkPortAvailable);
+  databaseStartingServers.set(db, new Set());
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
   migrateDatabase(db);
@@ -315,6 +317,7 @@ function createBackend(app) {
   return {
     close: () => {
       closedDatabases.add(db);
+      databaseStartingServers.get(db)?.clear();
       databaseMetricBaselines.get(db)?.clear();
       for (const [serverId, managed] of managedChildren.entries()) {
         if (managed.db === db) {
@@ -2599,6 +2602,23 @@ async function assertServerPortAvailable(db, profile) {
 }
 
 async function startServer(db, serverId, options = {}) {
+  const id = requireServerId(serverId);
+  const startingServers = databaseStartingServers.get(db);
+  if (startingServers.has(id) || managedChildren.has(id)) {
+    throw provisioningError(
+      "SERVER_ALREADY_RUNNING",
+      "This server is already starting or running.",
+    );
+  }
+  startingServers.add(id);
+  try {
+    return await startReservedServer(db, id, options);
+  } finally {
+    startingServers.delete(id);
+  }
+}
+
+async function startReservedServer(db, serverId, options = {}) {
   const profile = getServerProfile(db, requireServerId(serverId));
   if (!options.autoRestart) {
     clearRestartState(profile.id);
@@ -2607,6 +2627,12 @@ async function startServer(db, serverId, options = {}) {
     ? structuredServerLaunch(profile)
     : legacyServerLaunch(profile);
   await assertServerPortAvailable(db, profile);
+  if (closedDatabases.has(db)) {
+    throw provisioningError(
+      "SERVER_START_CANCELLED",
+      "The application closed before the server could start.",
+    );
+  }
   const child = processSpawnerFor(db)(launch.executable, launch.args, {
     cwd: launch.cwd,
     env: process.env,

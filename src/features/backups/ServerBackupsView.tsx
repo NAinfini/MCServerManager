@@ -92,8 +92,9 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
     queryFn: () => listServerBackups(server.id),
   });
   const processQuery = useQuery({
-    queryKey: ["processStatus", server.id],
+    queryKey: ["serverProcessStatus", server.id],
     queryFn: () => getServerProcessStatus(server.id),
+    refetchInterval: 1500,
   });
   const createMutation = useMutation({
     mutationFn: () => createWorldBackup({ serverId: server.id }),

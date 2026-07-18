@@ -17,7 +17,7 @@ MC Server Manager 是一款独立的 Electron 桌面应用，用于管理本地 
 
 ## 首个服务器设置
 
-MC Server Manager 为本地文件、拖放、已有文件夹、空白服务器，以及 Modrinth 和 CurseForge 内置发现提供统一的可信配置流程：
+MC Server Manager 为本地文件、拖放、已有文件夹、空白服务器，以及 Modrinth 内置发现提供统一的可信配置流程。CurseForge 暂不需要 API 密钥，仅支持用户下载后手动导入：
 
 1. 选择或拖入一个服务端整合包、从市场选择服务端包、导入文件夹，或创建空白服务器。
 2. 检查自动识别的 Minecraft 与加载器信息。当前支持 Vanilla、Paper、Forge、NeoForge、Fabric 和 Quilt。
