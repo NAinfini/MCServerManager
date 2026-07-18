@@ -54,4 +54,30 @@ describe("project documentation", () => {
       }
     }
   });
+
+  it("documents the trusted automatic first-server workflow in both languages", () => {
+    const englishDocs = `${read("README.md")}\n${read("PRODUCT.md")}`;
+    const chineseDocs = `${read("README.zh-CN.md")}\n${read("PRODUCT.zh-CN.md")}`;
+
+    for (const phrase of [
+      "Modrinth and CurseForge",
+      "Eclipse Temurin",
+      "explicit EULA confirmation",
+      "Vanilla, Paper, Forge, NeoForge, Fabric, and Quilt",
+      "server-pack warning",
+      "pack-provided scripts",
+    ]) {
+      expect(englishDocs).toContain(phrase);
+    }
+    for (const phrase of [
+      "Modrinth 和 CurseForge",
+      "Eclipse Temurin",
+      "明确确认 EULA",
+      "Vanilla、Paper、Forge、NeoForge、Fabric 和 Quilt",
+      "服务端包警告",
+      "整合包自带脚本",
+    ]) {
+      expect(chineseDocs).toContain(phrase);
+    }
+  });
 });

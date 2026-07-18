@@ -1,7 +1,9 @@
 import {
   QueryClient,
   QueryClientProvider,
+  useMutation,
   useQuery,
+  useQueryClient,
 } from "@tanstack/react-query";
 import {
   Component,
@@ -14,6 +16,13 @@ import {
 import { AppShell } from "./components/layout/AppShell";
 import { CloseBehaviorDialog } from "./features/app/CloseBehaviorDialog";
 import { getProcessSummary } from "./features/process/api";
+import {
+  cancelProvisioningJob,
+  listRecoverableProvisioningJobs,
+  retryProvisioningJob,
+  runProvisioningJob,
+  type ProvisioningJob,
+} from "./features/servers/provisioningApi";
 import { AppSettingsProvider, useAppSettings } from "./i18n";
 import {
   invokeDesktopCommand,
@@ -202,6 +211,7 @@ function AppRuntime() {
 
   return (
     <>
+      <ProvisioningRecoveryNotice />
       <AppShell processSummary={processSummaryQuery.data ?? null} />
       <CloseBehaviorDialog
         isOpen={isCloseDialogOpen}
@@ -215,6 +225,76 @@ function AppRuntime() {
         onQuit={handleQuit}
       />
     </>
+  );
+}
+
+function ProvisioningRecoveryNotice() {
+  const { t } = useAppSettings();
+  const queryClient = useQueryClient();
+  const jobsQuery = useQuery({
+    queryKey: ["recoverableProvisioningJobs"],
+    queryFn: listRecoverableProvisioningJobs,
+    refetchInterval: 5000,
+  });
+  const actionMutation = useMutation({
+    mutationFn: async ({ action, job }: { action: "resume" | "cleanup"; job: ProvisioningJob }) => {
+      if (action === "cleanup") return cancelProvisioningJob(job.id);
+      return job.stage === "failed"
+        ? retryProvisioningJob(job.id)
+        : runProvisioningJob(job.id);
+    },
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: ["recoverableProvisioningJobs"] });
+      if (result.stage === "ready") {
+        await queryClient.invalidateQueries({ queryKey: ["serverProfiles"] });
+      }
+    },
+  });
+  if (jobsQuery.error) {
+    return (
+      <aside className="provisioning-recovery-notice" role="alert">
+        <strong>{t("provisioning.recovery.loadError")}</strong>
+        <span className="danger-text">{jobsQuery.error.message}</span>
+      </aside>
+    );
+  }
+  const jobs = jobsQuery.data || [];
+  if (jobs.length === 0) return null;
+
+  return (
+    <aside className="provisioning-recovery-notice" role="status">
+      <div className="provisioning-recovery-list">
+        <strong>{t("provisioning.recovery.title")}</strong>
+        {actionMutation.error ? <span className="danger-text">{actionMutation.error.message}</span> : null}
+        {jobs.map((job) => {
+          const committed = job.progress?.committed === true;
+          return (
+            <div className="provisioning-recovery-job" key={job.id}>
+              <span>{t("provisioning.recovery.description", { target: job.targetDir })}</span>
+              <div className="provisioning-recovery-actions">
+                <button
+                  className="button button-primary"
+                  disabled={actionMutation.isPending}
+                  type="button"
+                  onClick={() => actionMutation.mutate({ action: "resume", job })}
+                >
+                  {t("provisioning.recovery.resume")}
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={actionMutation.isPending || committed}
+                  title={committed ? t("provisioning.recovery.cleanupCommitted") : undefined}
+                  type="button"
+                  onClick={() => actionMutation.mutate({ action: "cleanup", job })}
+                >
+                  {t("provisioning.recovery.cleanup")}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </aside>
   );
 }
 

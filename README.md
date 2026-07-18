@@ -13,22 +13,21 @@ This project is an MVP. It focuses on local desktop server management, explicit 
 - Node.js 22
 - pnpm 9
 - Electron build prerequisites for your operating system
-- Java runtimes installed locally for the Minecraft versions you plan to run
+- Java can be reused from the local machine or installed as a managed Eclipse Temurin runtime by the app after explicit consent.
 
 ## First Server Setup
 
-MC Server Manager guides the setup, but it does not choose downloads or accept legal agreements for the user. Each server Settings tab includes a setup checklist that detects Java compatibility, `server.jar`, Minecraft EULA acceptance, and whether a backup exists. To start a new server profile:
+MC Server Manager provides one trusted provisioning flow for a local file, drag-and-drop, an existing folder, a blank server, or discovery through Modrinth and CurseForge:
 
-1. Create or import a server profile.
-2. Open Java Runtimes and install the Java version required by the selected Minecraft version if it is not detected.
-3. Download the correct server jar from a trusted source such as Mojang, Paper, Fabric, Forge, NeoForge, or another loader project.
-4. Open the server Settings tab, then Server updates, and install that downloaded file as `server.jar`.
-5. Read the Minecraft EULA. If you accept it, edit `eula.txt` in the server folder and set `eula=true`.
-6. Return to the setup checklist and refresh it until Java, `server.jar`, and EULA are marked ready.
-7. Start the server and read any console error shown by the app.
-8. Create a backup before changing jars, mods, configs, or worlds.
+1. Select or drop one server pack, browse a marketplace server pack, import a folder, or choose a blank server.
+2. Review detected Minecraft and loader metadata. The supported runtime adapters are Vanilla, Paper, Forge, NeoForge, Fabric, and Quilt.
+3. Dedicated server packs are preferred. An unverified or client-oriented archive remains selectable only after a visible server-pack warning and explicit acknowledgement; missing versions must be entered by the user.
+4. Reuse a compatible Java runtime, or explicitly allow installation of a managed Eclipse Temurin runtime. The managed install does not change the system `PATH`.
+5. Configure memory, port, gameplay properties, restart policy, and whether the completed server should start automatically.
+6. Read the Minecraft terms and provide explicit EULA confirmation. The EULA checkbox starts unchecked for every new plan and the app never accepts it on the user's behalf.
+7. The app downloads only adapter-approved server artifacts, validates available hashes, removes pack-provided scripts, writes configuration, commits files atomically, creates the profile, and starts it when requested.
 
-Marketplace installs content such as mods, plugins, or modpacks. It does not remove the need for Java, `server.jar`, and EULA acceptance.
+Interrupted installations are persisted. On the next launch, the app offers to resume an unfinished job or clean up its uncommitted staging files.
 
 ## Development Commands
 
@@ -63,9 +62,9 @@ MC Server Manager does not include telemetry. The app stores its local database 
 
 ## Marketplace Limitations
 
-Marketplace integrations are best-effort helpers, not a full package manager. Modrinth and Hangar search use public APIs. CurseForge uses the official API and requires a valid API key for official downloads. BBSMC search and direct-file installs are supported where public metadata exposes stable direct files; versions that only expose cloud-disk links must be downloaded in a browser and imported manually.
+Marketplace integrations are best-effort helpers, not a universal package manager. Modrinth and CurseForge provide in-app modpack discovery; CurseForge official downloads require a valid API key. Hangar and BBSMC remain available for compatible content where their public metadata exposes stable direct files. Versions that expose only cloud-disk links must be downloaded in a browser and imported manually.
 
-The app does not silently auto-install mods, plugins, modpacks, or server jars. Installed content updates are detected on demand; users must click update all or update an individual item before files are downloaded and replaced.
+Starting the provisioning flow is always a user action. Compatibility warnings, managed Java installation, EULA acceptance, and installed-content updates each require their own visible confirmation or action.
 
 ## Application Updates
 

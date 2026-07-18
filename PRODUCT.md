@@ -28,7 +28,7 @@ Avoid marketing-page visuals, oversized hero sections, decorative gradients, toy
 - Use familiar desktop tool patterns over decorative novelty.
 - Prefer compact, aligned controls for repeated server operations.
 - Make errors explicit and recoverable.
-- Explain beginner setup steps in the UI through a status checklist: Java, `server.jar`, EULA, start readiness, and backup.
+- Explain beginner setup through one resumable flow: source, compatibility, Java, configuration, explicit EULA confirmation, installation, and start readiness.
 - Preserve keyboard and screen-reader access in every control without using browser-default focus outlines.
 - Require explicit confirmation for destructive or interrupting actions.
 
@@ -46,7 +46,10 @@ Target WCAG AA contrast, reduced motion, and color-independent status labels. Ke
 
 - App updates are checked from GitHub Releases and installed only after user confirmation.
 - App update installation is blocked while managed servers are running.
-- Mods, plugins, modpacks, and server jars are never silently auto-installed.
-- Users choose trusted server jar download sources themselves; the app can install a provided jar as `server.jar`.
-- Users must read and accept the Minecraft EULA themselves before setting `eula=true`.
+- Server provisioning begins only after a user selects, drops, imports, discovers, or configures a source through Modrinth and CurseForge or a local entry path.
+- Vanilla, Paper, Forge, NeoForge, Fabric, and Quilt use explicit loader adapters with approved artifact hosts and output validation.
+- Dedicated server packs are preferred; unverified archives require a visible server-pack warning and acknowledgement.
+- Managed Eclipse Temurin installation requires separate user consent and does not alter the system `PATH`.
+- Users must read the Minecraft terms and provide explicit EULA confirmation; acceptance is never inferred or preselected.
+- Pack extraction removes pack-provided scripts before any loader installation, and pack scripts are never executed.
 - Installed content updates are manual: detect updates, then update all or update individual items.

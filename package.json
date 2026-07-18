@@ -31,6 +31,7 @@
     "build": "tsc && vite build",
     "electron:dev": "pnpm dev",
     "electron:build": "pnpm build && electron-builder",
+    "test:electron-smoke": "vitest run electron/provisioning-smoke.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

@@ -1822,6 +1822,55 @@ button {
   gap: 12px;
 }
 
+.provisioning-recovery-notice {
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  left: 16px;
+  padding: 10px 18px;
+  position: fixed;
+  right: 16px;
+  top: var(--window-titlebar-height);
+  z-index: 1000;
+}
+
+.provisioning-recovery-list {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.provisioning-recovery-job {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.provisioning-recovery-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .provisioning-recovery-notice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .provisioning-recovery-job {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 .provisioning-progress-heading > div {
   display: grid;
   gap: 4px;
