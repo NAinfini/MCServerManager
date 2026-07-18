@@ -17,7 +17,7 @@ This project is an MVP. It focuses on local desktop server management, explicit 
 
 ## First Server Setup
 
-MC Server Manager provides one trusted provisioning flow for a local file, drag-and-drop, an existing folder, a blank server, or discovery through Modrinth and CurseForge:
+MC Server Manager provides one trusted provisioning flow for a local file, drag-and-drop, an existing folder, a blank server, or discovery through Modrinth:
 
 1. Select or drop one server pack, browse a marketplace server pack, import a folder, or choose a blank server.
 2. Review detected Minecraft and loader metadata. The supported runtime adapters are Vanilla, Paper, Forge, NeoForge, Fabric, and Quilt.
@@ -62,7 +62,7 @@ MC Server Manager does not include telemetry. The app stores its local database 
 
 ## Marketplace Limitations
 
-Marketplace integrations are best-effort helpers, not a universal package manager. Modrinth and CurseForge provide in-app modpack discovery; CurseForge official downloads require a valid API key. Hangar and BBSMC remain available for compatible content where their public metadata exposes stable direct files. Versions that expose only cloud-disk links must be downloaded in a browser and imported manually.
+Marketplace integrations are best-effort helpers, not a universal package manager. Modrinth provides in-app modpack discovery. CurseForge server packs must be downloaded separately and imported manually until official API credentials are intentionally configured. Hangar and BBSMC remain available for compatible content where their public metadata exposes stable direct files. Versions that expose only cloud-disk links must be downloaded in a browser and imported manually.
 
 Starting the provisioning flow is always a user action. Compatibility warnings, managed Java installation, EULA acceptance, and installed-content updates each require their own visible confirmation or action.
 

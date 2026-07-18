@@ -45,7 +45,7 @@ type LogLevel = "debug" | "info" | "warning" | "error";
 type JavaStrategy = "auto" | "latest-lts" | "manual";
 type CompressionFormat = "zip" | "tar.gz";
 type BackupFrequency = "manual" | "daily" | "weekly";
-type MarketplaceProvider = "modrinth" | "curseforge" | "bbsmc" | "hangar";
+type MarketplaceProvider = "modrinth" | "bbsmc" | "hangar";
 type MotionStrength = "full" | "reduced" | "off";
 type FontSize = "small" | "medium" | "large";
 
@@ -625,7 +625,6 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
           value={marketplace.defaultProvider}
           options={[
             { value: "modrinth", label: t("settings.providers.modrinth") },
-            { value: "curseforge", label: t("settings.providers.curseforge") },
             { value: "bbsmc", label: t("settings.providers.bbsmc") },
             { value: "hangar", label: t("settings.providers.hangar") },
           ]}
@@ -747,14 +746,8 @@ function ProvidersSection({ preferences, onUpdate, onError }: SettingsSectionPro
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.providers.curseforge")}</strong>
+          <span>{t("settings.providers.manualImportOnly")}</span>
         </div>
-        <Switch
-          checked={providers.curseforge}
-          aria-label={t("settings.providers.curseforge")}
-          onCheckedChange={(checked) =>
-            void updateProvider("curseforge", checked)
-          }
-        />
       </div>
     </div>
   );

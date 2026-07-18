@@ -126,6 +126,8 @@ describe("SettingsView", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: /providers/i }));
+    expect(await screen.findByText(/manual import only/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/curseforge/i)).not.toBeInTheDocument();
     await userEvent.click(await screen.findByLabelText(/bbsmc/i));
 
     await waitFor(() => {

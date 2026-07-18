@@ -895,6 +895,7 @@
   "settings.providers.hangar": "Hangar",
   "settings.providers.bbsmc": "BBSMC",
   "settings.providers.curseforge": "CurseForge (manual)",
+  "settings.providers.manualImportOnly": "Manual import only until official API credentials are configured",
   "settings.providers.alwaysEnabled": "Always enabled",
   "settings.about.title": "About MC Server Manager",
   "settings.about.version": "Version",

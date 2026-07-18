@@ -1252,6 +1252,20 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("does not persist CurseForge as a discoverable default provider without credentials", () => {
+    const backend = createTestBackend();
+
+    try {
+      const saved = backend.handle("save_app_preferences", {
+        input: { marketplace: { defaultProvider: "curseforge" } },
+      });
+
+      expect(saved.marketplace.defaultProvider).toBe("modrinth");
+    } finally {
+      backend.close();
+    }
+  });
+
   it("exports, imports, and resets app preferences", () => {
     const { appDataDir, backend } = createTestBackendWithAppData();
 

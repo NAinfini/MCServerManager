@@ -9,11 +9,8 @@ import { Select, type SelectOption } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import {
-  getCurseForgeProject,
   getModrinthProject,
-  listCurseForgeFiles,
   listModrinthVersions,
-  searchCurseForgeProjects,
   searchModrinthProjects,
   type MarketplaceLoaderFilter,
   type MarketplaceSortOrder,
@@ -25,7 +22,7 @@ import { MarketplaceMarkdown } from "../marketplace/MarketplaceMarkdown";
 import { getMarketplaceProviderBranding } from "../marketplace/providerBranding";
 import type { LoaderType } from "./types";
 
-type MarketplaceProvider = "Modrinth" | "CurseForge";
+type MarketplaceProvider = "Modrinth";
 type MarketplaceProject = ProjectSummary | ProjectDetails;
 
 export interface MarketplaceCreateSelection {
@@ -44,10 +41,9 @@ interface CreateServerMarketplaceBrowserProps {
   onDetailModeChange?: (isDetailMode: boolean) => void;
 }
 
-const providers: MarketplaceProvider[] = ["Modrinth", "CurseForge"];
+const providers: MarketplaceProvider[] = ["Modrinth"];
 const discoveryQueries: Record<MarketplaceProvider, string> = {
   Modrinth: "server",
-  CurseForge: "server",
 };
 
 function projectTitle(project: MarketplaceProject | null) {
@@ -187,7 +183,7 @@ function marketplaceSelectionMetadata(
 }
 
 function versionIsDirectlyInstallable(provider: MarketplaceProvider) {
-  return provider === "Modrinth" || provider === "CurseForge";
+  return provider === "Modrinth";
 }
 
 function versionHasServerPack(version: ProjectVersion) {
@@ -226,23 +222,12 @@ export function CreateServerMarketplaceBrowser({
       sortOrder,
     ],
     enabled: submittedQuery.trim() !== "",
-    queryFn: async () => {
-      if (provider === "Modrinth") {
-        return searchModrinthProjects("create-server", submittedQuery, {
-          projectType: "modpack",
-          loader: loaderFilter,
-          sort: sortOrder,
-        });
-      }
-      if (provider === "CurseForge") {
-        return searchCurseForgeProjects(submittedQuery, {
-          projectType: "modpack",
-          loader: loaderFilter,
-          sort: sortOrder,
-        });
-      }
-      return [];
-    },
+    queryFn: () =>
+      searchModrinthProjects("create-server", submittedQuery, {
+        projectType: "modpack",
+        loader: loaderFilter,
+        sort: sortOrder,
+      }),
   });
 
   const results = resultsQuery.data ?? [];
@@ -260,34 +245,22 @@ export function CreateServerMarketplaceBrowser({
   const selectedDetailsQuery = useQuery({
     queryKey: ["createMarketplaceProjectDetails", provider, selectedProjectId],
     enabled: selectedProject !== null,
-    queryFn: async () => {
+    queryFn: () => {
       if (!selectedProject) {
         return null;
       }
-      if (provider === "Modrinth") {
-        return getModrinthProject(selectedProject.id);
-      }
-      if (provider === "CurseForge") {
-        return getCurseForgeProject(selectedProject.id);
-      }
-      return null;
+      return getModrinthProject(selectedProject.id);
     },
   });
 
   const versionsQuery = useQuery({
     queryKey: ["createMarketplaceVersions", provider, selectedProjectId],
     enabled: selectedProject !== null,
-    queryFn: async () => {
+    queryFn: () => {
       if (!selectedProject) {
         return [];
       }
-      if (provider === "Modrinth") {
-        return listModrinthVersions("create-server", selectedProject.id);
-      }
-      if (provider === "CurseForge") {
-        return listCurseForgeFiles(selectedProject.id);
-      }
-      return [];
+      return listModrinthVersions("create-server", selectedProject.id);
     },
   });
 

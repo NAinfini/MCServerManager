@@ -813,6 +813,7 @@
   "settings.providers.hangar": "Hangar",
   "settings.providers.bbsmc": "BBSMC",
   "settings.providers.curseforge": "CurseForge (手动)",
+  "settings.providers.manualImportOnly": "配置官方 API 凭据前仅支持手动导入",
   "settings.providers.alwaysEnabled": "始终启用",
   "settings.about.title": "关于 MC Server Manager",
   "settings.about.version": "版本",

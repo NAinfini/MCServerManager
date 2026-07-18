@@ -895,7 +895,7 @@ function normalizeAppPreferences(db, input = {}) {
     marketplace: {
       defaultProvider: enumOrDefault(
         marketplace.defaultProvider,
-        ["modrinth", "curseforge", "bbsmc", "hangar"],
+        ["modrinth", "bbsmc", "hangar"],
         defaults.marketplace.defaultProvider,
       ),
       showIncompatible:

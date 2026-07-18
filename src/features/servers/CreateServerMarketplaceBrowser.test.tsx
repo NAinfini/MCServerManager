@@ -276,13 +276,13 @@ describe("CreateServerMarketplaceBrowser", () => {
     expect(details).not.toHaveTextContent("# Setup notes");
   });
 
-  it("offers only Modrinth and CurseForge for server creation", async () => {
+  it("offers only Modrinth discovery when CurseForge credentials are absent", async () => {
     renderBrowser();
 
     await userEvent.click(screen.getByRole("combobox", { name: /providers/i }));
 
     expect(screen.getByRole("option", { name: /modrinth/i })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /curseforge/i })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /curseforge/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /bbsmc/i })).not.toBeInTheDocument();
   });
 
