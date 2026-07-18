@@ -4,7 +4,9 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { EventEmitter } from "node:events";
+import { finished } from "node:stream/promises";
 import zlib from "node:zlib";
+import yazl from "yazl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const require = createRequire(import.meta.url);
@@ -400,6 +402,63 @@ function createFakeChild(pid) {
   });
   return child;
 }
+
+async function createZipFixture(entries, extension = "zip") {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-backend-pack-"));
+  tempDirs.push(root);
+  const archivePath = path.join(root, `fixture.${extension}`);
+  const zip = new yazl.ZipFile();
+  for (const [name, content] of entries) {
+    zip.addBuffer(Buffer.from(content), name);
+  }
+  zip.end();
+  const output = fs.createWriteStream(archivePath);
+  zip.outputStream.pipe(output);
+  await finished(output);
+  return archivePath;
+}
+
+describe("Electron backend provisioning plan contract", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("returns detected metadata for a local Modrinth server pack", async () => {
+    const backend = createTestBackend();
+    const packPath = await createZipFixture(
+      [
+        [
+          "modrinth.index.json",
+          JSON.stringify({
+            formatVersion: 1,
+            game: "minecraft",
+            name: "Backend Pack",
+            dependencies: { minecraft: "1.21.4", "quilt-loader": "0.26.4" },
+            files: [],
+          }),
+        ],
+      ],
+      "mrpack",
+    );
+
+    try {
+      await expect(
+        backend.handle("plan_server_provisioning", {
+          input: { source: { kind: "localModpackFile", path: packPath } },
+        }),
+      ).resolves.toMatchObject({
+        pack: { format: "modrinth", name: "Backend Pack" },
+        minecraftVersion: "1.21.4",
+        loaderType: "quilt",
+        loaderVersion: "0.26.4",
+      });
+    } finally {
+      backend.close();
+    }
+  });
+});
 
 describe("Electron backend server properties contract", () => {
   afterEach(() => {

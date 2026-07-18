@@ -5,6 +5,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
 const { mergeProperties } = require("./provisioning/properties.cjs");
+const { planLocalPack } = require("./provisioning/sources.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -494,6 +495,8 @@ function handleCommand(db, command, args) {
       return importProfile(db, args?.input);
     case "preview_modpack_import_command":
       return previewModpackImport(args?.input);
+    case "plan_server_provisioning":
+      return planServerProvisioning(args?.input);
     case "import_modpack":
       return importModpack(db, args?.input);
     case "list_loader_minecraft_versions":
@@ -3991,33 +3994,44 @@ function importProfile(db, input) {
   });
 }
 
-function previewModpackImport(input) {
+async function planServerProvisioning(input) {
+  const source = input?.source || input;
+  if (source?.kind !== "localModpackFile") {
+    throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
+  }
+  return planLocalPack(source.path);
+}
+
+async function previewModpackImport(input) {
   const packPath = trimRequired(input?.path, "modpack path is required");
-  if (!fs.existsSync(packPath)) throw new Error("modpack file does not exist");
+  const plan = await planLocalPack(packPath);
+  const warningMessages = plan.warnings.map((warning) => warning.message);
   return {
     manifest: {
-      format: path.extname(packPath).slice(1) || "file",
-      name: path.basename(packPath, path.extname(packPath)),
-      minecraftVersion: null,
-      loader: null,
-      warnings: [],
+      format: plan.pack.format,
+      name: plan.pack.name,
+      minecraftVersion: plan.minecraftVersion,
+      loader: plan.loaderType,
+      warnings: warningMessages,
     },
+    plan,
     createNewProfile: true,
     rollbackRequired: Boolean(
       input?.targetRoot && fs.existsSync(input.targetRoot),
     ),
-    warnings: [],
+    warnings: warningMessages,
   };
 }
 
-function importModpack(db, input) {
-  const preview = previewModpackImport(input);
+async function importModpack(db, input) {
+  const preview = await previewModpackImport(input);
   const profile = createServerProfile(db, {
     source: { kind: "blank" },
     name: input?.name || preview.manifest.name,
     rootDir: input?.targetRoot,
-    loaderType: "paper",
+    loaderType: preview.plan.loaderType || "paper",
     minecraftVersion: preview.manifest.minecraftVersion,
+    loaderVersion: preview.plan.loaderVersion,
     javaPath: input?.javaPath ?? null,
     serverPort: 25565,
     minMemoryMb: 1024,
