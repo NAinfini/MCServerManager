@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { provisioningError } = require("./contracts.cjs");
+const { mergeProperties } = require("./properties.cjs");
 
 const EXECUTION_STAGES = Object.freeze([
   "downloading",
@@ -29,6 +30,99 @@ function errorPayload(error, stage, committed) {
     retryable: error?.retryable !== false,
     cleanupRequired: !committed,
   };
+}
+
+const GUIDED_PROPERTY_MAP = Object.freeze({
+  serverPort: "server-port",
+  gameMode: "gamemode",
+  difficulty: "difficulty",
+  maxPlayers: "max-players",
+  motd: "motd",
+  onlineMode: "online-mode",
+  pvp: "pvp",
+  whiteList: "white-list",
+  viewDistance: "view-distance",
+  simulationDistance: "simulation-distance",
+});
+
+function gateError(code, message) {
+  const error = provisioningError(code, message);
+  error.retryable = false;
+  return error;
+}
+
+function validateCommitGates(plan) {
+  const acknowledged = new Set(plan.acknowledgedWarningCodes || []);
+  const unacknowledged = (plan.compatibilityWarnings || []).find(
+    (warning) =>
+      warning?.requiresAcknowledgement === true &&
+      warning?.acknowledged !== true &&
+      !acknowledged.has(warning.code),
+  );
+  if (unacknowledged) {
+    throw gateError(
+      "COMPATIBILITY_ACK_REQUIRED",
+      `Compatibility warning must be acknowledged: ${unacknowledged.code}`,
+    );
+  }
+  if (
+    plan.eula?.accepted !== true ||
+    !plan.eula?.termsUrl ||
+    !plan.eula?.acceptedAt
+  ) {
+    throw gateError(
+      "EULA_ACCEPTANCE_REQUIRED",
+      "Minecraft EULA acceptance must be explicitly confirmed by the user.",
+    );
+  }
+  const minimum = Number(plan.configuration?.minMemoryMb);
+  const maximum = Number(plan.configuration?.maxMemoryMb);
+  if (
+    !Number.isInteger(minimum) ||
+    !Number.isInteger(maximum) ||
+    minimum < 256 ||
+    maximum < minimum
+  ) {
+    throw gateError(
+      "MEMORY_CONFIGURATION_INVALID",
+      "Minimum memory must be at least 256 MiB and no greater than maximum memory.",
+    );
+  }
+  const port = Number(plan.configuration?.serverPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw gateError("SERVER_PORT_INVALID", "Server port must be between 1 and 65535.");
+  }
+  if (plan.javaRuntime?.validated !== true || !plan.javaRuntime?.path) {
+    throw gateError(
+      "JAVA_RUNTIME_INVALID",
+      "A validated Java runtime is required before server creation.",
+    );
+  }
+  if (
+    plan.launchSpec?.validated !== true ||
+    plan.launchSpec?.executable?.kind !== "java" ||
+    !Array.isArray(plan.launchSpec?.jvmArgs) ||
+    !Array.isArray(plan.launchSpec?.serverArgs)
+  ) {
+    throw gateError(
+      "LAUNCH_SPEC_INVALID",
+      "A validated server launch specification is required before server creation.",
+    );
+  }
+}
+
+function writeGuidedConfiguration(fileSystem, job) {
+  const updates = {};
+  for (const [field, property] of Object.entries(GUIDED_PROPERTY_MAP)) {
+    const value = job.plan.configuration?.[field];
+    if (value !== undefined && value !== null) updates[property] = value;
+  }
+  const propertiesPath = path.join(job.stagingDir, "server.properties");
+  const existing = fileSystem.existsSync(propertiesPath)
+    ? fileSystem.readFileSync(propertiesPath, "utf8")
+    : "";
+  const merged = mergeProperties(existing, updates);
+  fileSystem.writeFileSync(propertiesPath, merged.raw, "utf8");
 }
 
 function createJobExecutor(dependencies) {
@@ -110,11 +204,45 @@ function createJobExecutor(dependencies) {
             );
           }
           fileSystem.renameSync(job.stagingDir, job.targetDir);
-          job = update(id, {
-            progress: { ...job.progress, committed: true, resumeStage: "starting" },
-          });
-        } else if (typeof handlers[stage] === "function") {
-          await handlers[stage]({ job, plan: job.plan, stage });
+          try {
+            const commitPatch =
+              typeof handlers.committing === "function"
+                ? await handlers.committing({ job, plan: job.plan, stage })
+                : null;
+            job = update(id, {
+              ...(commitPatch || {}),
+              progress: {
+                ...job.progress,
+                committed: true,
+                resumeStage: "starting",
+              },
+            });
+          } catch (error) {
+            try {
+              fileSystem.renameSync(job.targetDir, job.stagingDir);
+            } catch (rollbackError) {
+              error.detail = {
+                ...(error.detail || {}),
+                rollbackError: rollbackError.message,
+              };
+            }
+            throw error;
+          }
+        } else {
+          if (stage === "writingConfiguration") {
+            writeGuidedConfiguration(fileSystem, job);
+          }
+          if (stage === "awaitingEula") {
+            validateCommitGates(job.plan);
+            fileSystem.writeFileSync(
+              path.join(job.stagingDir, "eula.txt"),
+              "eula=true\n",
+              "utf8",
+            );
+          }
+          if (typeof handlers[stage] === "function") {
+            await handlers[stage]({ job, plan: job.plan, stage });
+          }
         }
         completed.add(stage);
         job = update(id, {
@@ -206,4 +334,9 @@ function createJobExecutor(dependencies) {
   };
 }
 
-module.exports = { EXECUTION_STAGES, createJobExecutor };
+module.exports = {
+  EXECUTION_STAGES,
+  GUIDED_PROPERTY_MAP,
+  createJobExecutor,
+  validateCommitGates,
+};

@@ -345,6 +345,10 @@ function handleCommand(db, command, args) {
       return { version: databaseSchemaVersion(db) };
     case "list_server_profiles":
       return listServerProfiles(db);
+    case "get_server_eula_acceptance":
+      return getServerEulaAcceptance(db, args?.input?.serverId || args?.serverId);
+    case "get_server_source":
+      return getServerSource(db, args?.input?.serverId || args?.serverId);
     case "create_server_profile":
       return createServerProfile(db, args?.input);
     case "get_server_setup_status":
@@ -1934,6 +1938,39 @@ function inspectJavaRuntime(candidate) {
 
 function requiredJavaMajorForMinecraft(minecraftVersion) {
   return runtimeRequiredJavaMajor(minecraftVersion);
+}
+
+function getServerEulaAcceptance(db, serverId) {
+  const row = db
+    .prepare(
+      `SELECT server_id, terms_url, accepted_at
+       FROM server_eula_acceptances WHERE server_id = ?`,
+    )
+    .get(String(serverId || ""));
+  if (!row) return null;
+  return {
+    serverId: row.server_id,
+    termsUrl: row.terms_url,
+    acceptedAt: row.accepted_at,
+  };
+}
+
+function getServerSource(db, serverId) {
+  const row = db
+    .prepare(
+      `SELECT server_id, provider, project_id, version_id, source_path, metadata_json
+       FROM server_sources WHERE server_id = ?`,
+    )
+    .get(String(serverId || ""));
+  if (!row) return null;
+  return {
+    serverId: row.server_id,
+    provider: row.provider,
+    projectId: row.project_id,
+    versionId: row.version_id,
+    sourcePath: row.source_path,
+    metadata: JSON.parse(row.metadata_json || "{}"),
+  };
 }
 
 function normalizeJavaPath(javaPath) {
@@ -4145,11 +4182,109 @@ function provisioningJobStore(db) {
   };
 }
 
+function createProvisionedProfile(db, jobId, plan, targetDir) {
+  const profile = plan?.profile;
+  if (!profile) return null;
+
+  const existingJob = db
+    .prepare("SELECT server_id FROM provisioning_jobs WHERE id = ?")
+    .get(jobId);
+  if (existingJob?.server_id) {
+    getServerProfile(db, existingJob.server_id);
+    return existingJob.server_id;
+  }
+
+  const name = trimRequired(profile.name, "server name is required");
+  const configuration = plan.configuration || {};
+  validateRuntimeSettings(
+    configuration.serverPort,
+    configuration.minMemoryMb,
+    configuration.maxMemoryMb,
+  );
+  validateRestartPolicy(profile.restartPolicy);
+  const restartPolicy = profile.restartPolicy || defaultRestartPolicy();
+  const source = plan.source || { kind: "blank" };
+  const isLocalPack = ["localModpack", "localModpackFile"].includes(source.kind);
+  const provider =
+    source.provider?.trim().toLowerCase() ||
+    (isLocalPack ? "local" : source.kind || "blank");
+  const id = randomUUID();
+  const createdAt = nowIso();
+
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare(
+      `INSERT INTO servers (
+        id, name, root_dir, minecraft_version, loader_type, loader_version,
+        java_path, server_port, min_memory_mb, max_memory_mb, auto_start,
+        launch_spec_json, compatibility_warning_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      name,
+      targetDir,
+      profile.minecraftVersion ?? null,
+      dbLoader(profile.loaderType),
+      profile.loaderVersion ?? null,
+      plan.javaRuntime.path,
+      configuration.serverPort,
+      configuration.minMemoryMb,
+      configuration.maxMemoryMb,
+      profile.autoStart ? 1 : 0,
+      JSON.stringify(plan.launchSpec),
+      JSON.stringify(plan.compatibilityWarnings || []),
+      createdAt,
+      createdAt,
+    );
+    db.prepare(
+      `INSERT INTO server_restart_policies
+        (server_id, enabled, max_attempts, cooldown_seconds)
+       VALUES (?, ?, ?, ?)`,
+    ).run(
+      id,
+      restartPolicy.enabled ? 1 : 0,
+      restartPolicy.maxAttempts,
+      restartPolicy.cooldownSeconds,
+    );
+    db.prepare(
+      `INSERT INTO server_sources
+        (server_id, provider, project_id, version_id, source_path, metadata_json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id,
+      provider,
+      source.projectId ?? null,
+      source.versionId ?? null,
+      source.path ?? source.sourcePath ?? null,
+      JSON.stringify({ kind: source.kind, ...(source.metadata || {}) }),
+    );
+    db.prepare(
+      `INSERT INTO server_eula_acceptances (server_id, terms_url, accepted_at)
+       VALUES (?, ?, ?)`,
+    ).run(id, plan.eula.termsUrl, plan.eula.acceptedAt);
+    db.prepare("UPDATE provisioning_jobs SET server_id = ? WHERE id = ?").run(
+      id,
+      jobId,
+    );
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  return id;
+}
+
 function provisioningExecutorFor(db) {
   return createJobExecutor({
     store: provisioningJobStore(db),
     idGenerator: randomUUID,
     clock: nowIso,
+    handlers: {
+      committing: ({ job, plan }) => {
+        const serverId = createProvisionedProfile(db, job.id, plan, job.targetDir);
+        return serverId ? { serverId } : null;
+      },
+    },
   });
 }
 

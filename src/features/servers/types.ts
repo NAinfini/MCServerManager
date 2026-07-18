@@ -11,12 +11,41 @@ export interface ServerLaunchSpec {
   workingDirectory: string;
   jvmArgs: string[];
   serverArgs: string[];
+  validated?: boolean;
 }
 
 export interface CompatibilityWarning {
   code: string;
   message: string;
   acknowledged?: boolean;
+  requiresAcknowledgement?: boolean;
+}
+
+export interface GuidedServerConfiguration {
+  serverPort: number;
+  minMemoryMb: number;
+  maxMemoryMb: number;
+  gameMode?: string;
+  difficulty?: string;
+  maxPlayers?: number;
+  motd?: string;
+  onlineMode?: boolean;
+  pvp?: boolean;
+  whiteList?: boolean;
+  viewDistance?: number;
+  simulationDistance?: number;
+}
+
+export interface ExplicitEulaAcceptance {
+  accepted: true;
+  termsUrl: string;
+  acceptedAt: string;
+}
+
+export interface ValidatedJavaRuntime {
+  path: string;
+  majorVersion: number;
+  validated: true;
 }
 
 export type ServerCreationSourceKind =

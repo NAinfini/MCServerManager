@@ -42,6 +42,33 @@ function tempTarget(name = "server") {
   return path.join(parent, name);
 }
 
+function validPlan(targetDir, overrides = {}) {
+  return {
+    targetDir,
+    compatibilityWarnings: [],
+    acknowledgedWarningCodes: [],
+    eula: {
+      accepted: true,
+      termsUrl: "https://aka.ms/MinecraftEULA",
+      acceptedAt: "2026-07-18T12:00:00.000Z",
+    },
+    configuration: {
+      minMemoryMb: 1024,
+      maxMemoryMb: 2048,
+      serverPort: 25565,
+    },
+    javaRuntime: { path: "java", majorVersion: 21, validated: true },
+    launchSpec: {
+      executable: { kind: "java" },
+      jvmArgs: ["-jar", "server.jar"],
+      serverArgs: ["nogui"],
+      workingDirectory: ".",
+      validated: true,
+    },
+    ...overrides,
+  };
+}
+
 function makeExecutor(options = {}) {
   const { createJobExecutor } = require("./jobs.cjs");
   const store = options.store || new MemoryJobStore();
@@ -86,7 +113,7 @@ describe("resumable provisioning jobs", () => {
     );
     handlers.starting = vi.fn(async () => seen.push("starting"));
     const { executor, store } = makeExecutor({ handlers });
-    const job = executor.createJob({ targetDir, eulaAccepted: true });
+    const job = executor.createJob(validPlan(targetDir));
 
     const ready = await executor.executeJob(job.id);
 
@@ -120,7 +147,7 @@ describe("resumable provisioning jobs", () => {
         },
       },
     });
-    const job = executor.createJob({ targetDir, eulaAccepted: true });
+    const job = executor.createJob(validPlan(targetDir));
 
     await expect(executor.executeJob(job.id)).rejects.toMatchObject({ code });
     expect(executor.getJob(job.id)).toMatchObject({
@@ -138,7 +165,7 @@ describe("resumable provisioning jobs", () => {
   it("cancels safely before commit and removes staging data", () => {
     const targetDir = tempTarget();
     const { executor } = makeExecutor();
-    const job = executor.createJob({ targetDir, eulaAccepted: true });
+    const job = executor.createJob(validPlan(targetDir));
     fs.mkdirSync(job.stagingDir, { recursive: true });
     fs.writeFileSync(path.join(job.stagingDir, "partial"), "data");
 
@@ -153,7 +180,7 @@ describe("resumable provisioning jobs", () => {
   it("lists unfinished jobs after an executor is recreated", () => {
     const store = new MemoryJobStore();
     const first = makeExecutor({ store }).executor;
-    const job = first.createJob({ targetDir: tempTarget(), eulaAccepted: true });
+    const job = first.createJob(validPlan(tempTarget()));
     store.update(job.id, { stage: "extracting" });
 
     const restarted = makeExecutor({ store }).executor;
@@ -181,7 +208,7 @@ describe("resumable provisioning jobs", () => {
         },
       },
     });
-    const job = executor.createJob({ targetDir, eulaAccepted: true });
+    const job = executor.createJob(validPlan(targetDir));
     await expect(executor.executeJob(job.id)).rejects.toMatchObject({
       code: "HASH_MISMATCH",
     });
@@ -199,7 +226,7 @@ describe("resumable provisioning jobs", () => {
     const { executor } = makeExecutor();
 
     expect(() =>
-      executor.createJob({ targetDir, eulaAccepted: true }),
+      executor.createJob(validPlan(targetDir)),
     ).toThrowError(expect.objectContaining({ code: "JOB_TARGET_EXISTS" }));
     expect(fs.readdirSync(path.dirname(targetDir))).toEqual([path.basename(targetDir)]);
   });
@@ -219,7 +246,7 @@ describe("resumable provisioning jobs", () => {
         },
       },
     });
-    const job = executor.createJob({ targetDir, eulaAccepted: true });
+    const job = executor.createJob(validPlan(targetDir));
 
     await expect(executor.executeJob(job.id)).rejects.toMatchObject({
       code: "START_FAILED",
@@ -229,5 +256,156 @@ describe("resumable provisioning jobs", () => {
       stage: "starting",
       cleanupRequired: false,
     });
+  });
+
+  it("restores staging when the profile transaction fails after file rename", async () => {
+    const targetDir = tempTarget();
+    const { executor } = makeExecutor({
+      handlers: {
+        extracting: async ({ job }) => {
+          fs.writeFileSync(path.join(job.stagingDir, "server.jar"), "server");
+        },
+        committing: async () => {
+          throw Object.assign(new Error("database commit failed"), {
+            code: "PROFILE_COMMIT_FAILED",
+          });
+        },
+      },
+    });
+    const job = executor.createJob(validPlan(targetDir));
+
+    await expect(executor.executeJob(job.id)).rejects.toMatchObject({
+      code: "PROFILE_COMMIT_FAILED",
+    });
+    const failed = executor.getJob(job.id);
+    expect(fs.existsSync(targetDir)).toBe(false);
+    expect(fs.existsSync(path.join(failed.stagingDir, "server.jar"))).toBe(true);
+    expect(failed.error).toMatchObject({
+      stage: "committing",
+      cleanupRequired: true,
+    });
+  });
+
+  it.each([
+    [
+      "compatibility acknowledgement",
+      (targetDir) =>
+        validPlan(targetDir, {
+          compatibilityWarnings: [
+            {
+              code: "PACK_UNVERIFIED",
+              message: "Unverified pack",
+              requiresAcknowledgement: true,
+            },
+          ],
+        }),
+      "COMPATIBILITY_ACK_REQUIRED",
+    ],
+    [
+      "explicit EULA acceptance",
+      (targetDir) =>
+        validPlan(targetDir, {
+          autoStart: true,
+          eula: {
+            accepted: false,
+            termsUrl: "https://aka.ms/MinecraftEULA",
+          },
+        }),
+      "EULA_ACCEPTANCE_REQUIRED",
+    ],
+    [
+      "ordered memory limits",
+      (targetDir) =>
+        validPlan(targetDir, {
+          configuration: {
+            minMemoryMb: 4096,
+            maxMemoryMb: 2048,
+            serverPort: 25565,
+          },
+        }),
+      "MEMORY_CONFIGURATION_INVALID",
+    ],
+    [
+      "a valid server port",
+      (targetDir) =>
+        validPlan(targetDir, {
+          configuration: {
+            minMemoryMb: 1024,
+            maxMemoryMb: 2048,
+            serverPort: 70000,
+          },
+        }),
+      "SERVER_PORT_INVALID",
+    ],
+    [
+      "a validated Java runtime",
+      (targetDir) =>
+        validPlan(targetDir, { javaRuntime: { path: "java", validated: false } }),
+      "JAVA_RUNTIME_INVALID",
+    ],
+    [
+      "a validated launch specification",
+      (targetDir) =>
+        validPlan(targetDir, {
+          launchSpec: {
+            executable: { kind: "java" },
+            jvmArgs: ["-jar", "server.jar"],
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+            validated: false,
+          },
+        }),
+      "LAUNCH_SPEC_INVALID",
+    ],
+  ])("blocks commit without %s", async (_label, createPlan, code) => {
+    const targetDir = tempTarget();
+    const { executor } = makeExecutor();
+    const job = executor.createJob(createPlan(targetDir));
+
+    await expect(executor.executeJob(job.id)).rejects.toMatchObject({ code });
+    expect(fs.existsSync(targetDir)).toBe(false);
+  });
+
+  it("writes explicit guided properties and EULA while preserving advanced content", async () => {
+    const targetDir = tempTarget();
+    const { executor } = makeExecutor({
+      handlers: {
+        extracting: async ({ job }) => {
+          fs.writeFileSync(
+            path.join(job.stagingDir, "server.properties"),
+            "# keep this\ncustom-plugin-setting=true\n",
+          );
+        },
+      },
+    });
+    const job = executor.createJob(
+      validPlan(targetDir, {
+        configuration: {
+          minMemoryMb: 1024,
+          maxMemoryMb: 2048,
+          serverPort: 25570,
+          gameMode: "survival",
+          maxPlayers: 12,
+          motd: "A dedicated server",
+        },
+      }),
+    );
+
+    await executor.executeJob(job.id);
+
+    const properties = fs.readFileSync(
+      path.join(targetDir, "server.properties"),
+      "utf8",
+    );
+    expect(properties).toContain("# keep this");
+    expect(properties).toContain("custom-plugin-setting=true");
+    expect(properties).toContain("server-port=25570");
+    expect(properties).toContain("gamemode=survival");
+    expect(properties).toContain("max-players=12");
+    expect(properties).toContain("motd=A dedicated server");
+    expect(properties).not.toContain("pvp=");
+    expect(fs.readFileSync(path.join(targetDir, "eula.txt"), "utf8")).toBe(
+      "eula=true\n",
+    );
   });
 });

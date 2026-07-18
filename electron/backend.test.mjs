@@ -445,6 +445,33 @@ async function createZipFixture(entries, extension = "zip") {
   return archivePath;
 }
 
+function validProvisioningPlan(targetDir, overrides = {}) {
+  return {
+    targetDir,
+    compatibilityWarnings: [],
+    acknowledgedWarningCodes: [],
+    eula: {
+      accepted: true,
+      termsUrl: "https://aka.ms/MinecraftEULA",
+      acceptedAt: "2026-07-18T12:00:00.000Z",
+    },
+    configuration: {
+      minMemoryMb: 1024,
+      maxMemoryMb: 2048,
+      serverPort: 25565,
+    },
+    javaRuntime: { path: "java", majorVersion: 21, validated: true },
+    launchSpec: {
+      executable: { kind: "java" },
+      jvmArgs: ["-jar", "server.jar"],
+      serverArgs: ["nogui"],
+      workingDirectory: ".",
+      validated: true,
+    },
+    ...overrides,
+  };
+}
+
 describe("Electron backend provisioning plan contract", () => {
   afterEach(() => {
     while (tempDirs.length > 0) {
@@ -561,7 +588,7 @@ describe("Electron backend provisioning job commands", () => {
 
     try {
       const job = backend.handle("create_provisioning_job", {
-        input: { plan: { targetDir, eulaAccepted: true } },
+        input: { plan: validProvisioningPlan(targetDir) },
       });
       expect(job).toMatchObject({ stage: "planned", targetDir });
       expect(backend.handle("list_provisioning_jobs")).toEqual([
@@ -599,6 +626,75 @@ describe("Electron backend provisioning job commands", () => {
         stage: "failed",
         error: { code: "JOB_CANCELLED" },
       });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("creates the profile, source, and EULA record only after file commit", async () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-atomic-profile-"));
+    tempDirs.push(parent);
+    const targetDir = path.join(parent, "quilt-server");
+    const plan = validProvisioningPlan(targetDir, {
+      profile: {
+        name: "Quilt Server",
+        loaderType: "quilt",
+        minecraftVersion: "1.21.4",
+        loaderVersion: "0.29.3",
+        restartPolicy: { enabled: false, maxAttempts: 0, cooldownSeconds: 0 },
+      },
+      source: {
+        kind: "marketplaceModpack",
+        provider: "Modrinth",
+        projectId: "project-1",
+        versionId: "version-1",
+      },
+    });
+
+    try {
+      const job = backend.handle("create_provisioning_job", {
+        input: { plan },
+      });
+      expect(backend.handle("list_server_profiles")).toEqual([]);
+
+      const ready = await backend.handle("run_provisioning_job", {
+        input: { jobId: job.id },
+      });
+
+      expect(ready.serverId).toEqual(expect.any(String));
+      expect(backend.handle("list_server_profiles")).toEqual([
+        expect.objectContaining({
+          id: ready.serverId,
+          name: "Quilt Server",
+          rootDir: targetDir,
+          loaderType: "quilt",
+          launchSpec: expect.objectContaining({
+            jvmArgs: ["-jar", "server.jar"],
+          }),
+        }),
+      ]);
+      expect(
+        backend.handle("get_server_eula_acceptance", {
+          input: { serverId: ready.serverId },
+        }),
+      ).toMatchObject({
+        termsUrl: "https://aka.ms/MinecraftEULA",
+        acceptedAt: "2026-07-18T12:00:00.000Z",
+      });
+      expect(
+        backend.handle("get_server_source", {
+          input: { serverId: ready.serverId },
+        }),
+      ).toMatchObject({
+        provider: "modrinth",
+        projectId: "project-1",
+        versionId: "version-1",
+        metadata: { kind: "marketplaceModpack" },
+      });
+      expect(fs.readFileSync(path.join(targetDir, "eula.txt"), "utf8")).toBe(
+        "eula=true\n",
+      );
     } finally {
       backend.close();
     }
