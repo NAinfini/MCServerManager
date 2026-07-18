@@ -1,7 +1,12 @@
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 
 export type SetupCheckStatus = "ready" | "actionRequired" | "warning";
-export type SetupCheckId = "java" | "serverJar" | "eula" | "backup";
+export type SetupCheckId =
+  | "java"
+  | "serverRuntime"
+  | "serverJar"
+  | "eula"
+  | "backup";
 
 export interface ServerSetupCheck {
   id: SetupCheckId;

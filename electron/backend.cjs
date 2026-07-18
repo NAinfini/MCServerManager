@@ -2164,14 +2164,53 @@ function readEulaAccepted(eulaPath) {
   return /^\s*eula\s*=\s*true\s*$/gim.test(content);
 }
 
+function setupServerRuntime(profile) {
+  if (profile.launchSpec) {
+    try {
+      const launch = structuredServerLaunch(profile);
+      return {
+        id: "serverRuntime",
+        status: "ready",
+        exists: true,
+        kind: "structured",
+        fileName: null,
+        path: launch.cwd,
+        message: "The provisioned server runtime is installed and validated.",
+      };
+    } catch (error) {
+      return {
+        id: "serverRuntime",
+        status: "actionRequired",
+        exists: false,
+        kind: "structured",
+        fileName: null,
+        path: profile.rootDir,
+        message: error.message,
+      };
+    }
+  }
+
+  const serverJarPath = path.join(profile.rootDir, "server.jar");
+  const hasServerJar = fs.existsSync(serverJarPath);
+  return {
+    id: "serverRuntime",
+    status: hasServerJar ? "ready" : "actionRequired",
+    exists: hasServerJar,
+    kind: "legacyJar",
+    fileName: "server.jar",
+    path: serverJarPath,
+    message: hasServerJar
+      ? "The legacy server.jar runtime is installed."
+      : "Install a provisioned server runtime or a legacy server.jar before starting.",
+  };
+}
+
 function getServerSetupStatus(db, serverId) {
   const profile = getServerProfile(db, requireServerId(serverId));
   const javaCompatibility = listJavaRuntimes(db).compatibility.find(
     (item) => item.serverId === profile.id,
   ) ?? createJavaCompatibility(profile, []);
-  const serverJarPath = path.join(profile.rootDir, "server.jar");
   const eulaPath = path.join(profile.rootDir, "eula.txt");
-  const hasServerJar = fs.existsSync(serverJarPath);
   const hasEula = fs.existsSync(eulaPath);
   const eulaAccepted = readEulaAccepted(eulaPath);
   const backupCount = listServerBackups(db, profile.id).length;
@@ -2182,16 +2221,8 @@ function getServerSetupStatus(db, serverId) {
     requiredMajorVersion: javaCompatibility.requiredMajorVersion,
     configuredJavaPath: javaCompatibility.configuredJavaPath,
   };
-  const serverJar = {
-    id: "serverJar",
-    status: hasServerJar ? "ready" : "actionRequired",
-    exists: hasServerJar,
-    fileName: "server.jar",
-    path: serverJarPath,
-    message: hasServerJar
-      ? "server.jar is installed."
-      : "Install a server.jar before starting this profile.",
-  };
+  const serverRuntime = setupServerRuntime(profile);
+  const serverJar = { ...serverRuntime, id: "serverJar" };
   const eula = {
     id: "eula",
     status: eulaAccepted ? "ready" : "actionRequired",
@@ -2216,11 +2247,142 @@ function getServerSetupStatus(db, serverId) {
   return {
     serverId: profile.id,
     serverName: profile.name,
-    checks: [java, serverJar, eula, backup],
+    checks: [java, serverRuntime, eula, backup],
     java,
+    serverRuntime,
     serverJar,
     eula,
     backup,
+  };
+}
+
+const MAX_LAUNCH_ARGUMENTS = 128;
+const MAX_LAUNCH_ARGUMENT_LENGTH = 4096;
+const SHELL_LIKE_ARGUMENT = /(?:&&|\|\||[;&|<>`]|\$\()/;
+
+function invalidLaunchSpec(message) {
+  throw new Error(`Invalid launch specification: ${message}`);
+}
+
+function validateLaunchArgument(argument) {
+  if (typeof argument !== "string" || argument.length === 0) {
+    invalidLaunchSpec("arguments must be non-empty strings");
+  }
+  if (argument.length > MAX_LAUNCH_ARGUMENT_LENGTH) {
+    invalidLaunchSpec("argument exceeds the configured length limit");
+  }
+  if (/[\0\r\n]/.test(argument) || SHELL_LIKE_ARGUMENT.test(argument)) {
+    invalidLaunchSpec("argument contains forbidden control or shell syntax");
+  }
+  if (/^-Xm[sx]/i.test(argument)) {
+    invalidLaunchSpec("memory arguments must come from the server profile");
+  }
+}
+
+function resolveLaunchPath(rootDir, relativePath, description) {
+  if (
+    typeof relativePath !== "string" ||
+    !relativePath ||
+    path.isAbsolute(relativePath) ||
+    /^[a-zA-Z]:[\\/]/.test(relativePath)
+  ) {
+    invalidLaunchSpec(`${description} must be target-relative`);
+  }
+  const resolved = path.resolve(rootDir, relativePath);
+  const relative = path.relative(rootDir, resolved);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    invalidLaunchSpec(`${description} escapes the server directory`);
+  }
+  return resolved;
+}
+
+function validateJavaExecutable(javaPath) {
+  if (typeof javaPath !== "string" || !javaPath || /[\0\r\n]/.test(javaPath)) {
+    invalidLaunchSpec("Java executable is missing or invalid");
+  }
+  const executableName = path.basename(javaPath).toLowerCase();
+  if (executableName !== "java" && executableName !== "java.exe") {
+    invalidLaunchSpec("executable must be a configured Java runtime");
+  }
+  if (hasPathSeparator(javaPath)) {
+    const resolved = path.resolve(javaPath);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      invalidLaunchSpec("Java executable does not exist");
+    }
+    return resolved;
+  }
+  return javaPath;
+}
+
+function structuredServerLaunch(profile) {
+  const spec = profile.launchSpec;
+  if (!spec || spec.validated !== true || spec.executable?.kind !== "java") {
+    invalidLaunchSpec("a validated Java specification is required");
+  }
+  if (!Array.isArray(spec.jvmArgs) || !Array.isArray(spec.serverArgs)) {
+    invalidLaunchSpec("argument lists are required");
+  }
+  const launchArgs = [...spec.jvmArgs, ...spec.serverArgs];
+  if (launchArgs.length === 0 || launchArgs.length > MAX_LAUNCH_ARGUMENTS) {
+    invalidLaunchSpec("argument count is outside configured limits");
+  }
+  launchArgs.forEach(validateLaunchArgument);
+
+  const cwd = resolveLaunchPath(
+    profile.rootDir,
+    spec.workingDirectory || ".",
+    "working directory",
+  );
+  if (!fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) {
+    invalidLaunchSpec("working directory does not exist");
+  }
+  for (let index = 0; index < spec.jvmArgs.length; index += 1) {
+    const argument = spec.jvmArgs[index];
+    if (argument === "@") {
+      invalidLaunchSpec("argument-file reference is empty");
+    }
+    if (argument === "-jar" && index === spec.jvmArgs.length - 1) {
+      invalidLaunchSpec("-jar requires a target-relative file");
+    }
+    let referencedFile = null;
+    if (argument.startsWith("@")) referencedFile = argument.slice(1);
+    if (index > 0 && spec.jvmArgs[index - 1] === "-jar") referencedFile = argument;
+    if (!referencedFile) continue;
+    const filePath = resolveLaunchPath(cwd, referencedFile, "launch file");
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+      invalidLaunchSpec(`launch file does not exist: ${referencedFile}`);
+    }
+  }
+
+  return {
+    executable: validateJavaExecutable(profile.javaPath),
+    cwd,
+    args: [
+      profile.minMemoryMb ? `-Xms${profile.minMemoryMb}M` : null,
+      profile.maxMemoryMb ? `-Xmx${profile.maxMemoryMb}M` : null,
+      ...spec.jvmArgs,
+      ...spec.serverArgs,
+    ].filter(Boolean),
+  };
+}
+
+function legacyServerLaunch(profile) {
+  const serverJar = path.join(profile.rootDir, "server.jar");
+  if (!fs.existsSync(serverJar)) {
+    throw new Error(
+      `server.jar does not exist: ${serverJar}. Install a server jar from Settings > Server updates before starting this profile.`,
+    );
+  }
+  return {
+    executable: validateJavaExecutable(profile.javaPath || "java"),
+    cwd: profile.rootDir,
+    args: [
+      profile.minMemoryMb ? `-Xms${profile.minMemoryMb}M` : null,
+      profile.maxMemoryMb ? `-Xmx${profile.maxMemoryMb}M` : null,
+      "-jar",
+      serverJar,
+      "nogui",
+    ].filter(Boolean),
   };
 }
 
@@ -2229,22 +2391,13 @@ function startServer(db, serverId, options = {}) {
   if (!options.autoRestart) {
     clearRestartState(profile.id);
   }
-  const javaPath = profile.javaPath || "java";
-  const serverJar = path.join(profile.rootDir, "server.jar");
-  if (!fs.existsSync(serverJar)) {
-    throw new Error(
-      `server.jar does not exist: ${serverJar}. Install a server jar from Settings > Server updates before starting this profile.`,
-    );
-  }
-  const args = [
-    profile.minMemoryMb ? `-Xms${profile.minMemoryMb}M` : null,
-    profile.maxMemoryMb ? `-Xmx${profile.maxMemoryMb}M` : null,
-    "-jar",
-    serverJar,
-    "nogui",
-  ].filter(Boolean);
-  const child = processSpawnerFor(db)(javaPath, args, {
-    cwd: profile.rootDir,
+  const launch = profile.launchSpec
+    ? structuredServerLaunch(profile)
+    : legacyServerLaunch(profile);
+  const child = processSpawnerFor(db)(launch.executable, launch.args, {
+    cwd: launch.cwd,
+    env: process.env,
+    shell: false,
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -2258,7 +2411,7 @@ function startServer(db, serverId, options = {}) {
     id,
     profile.id,
     child.pid || null,
-    [javaPath, ...args].join(" "),
+    [launch.executable, ...launch.args].join(" "),
     startedAt,
   );
   const managed = {

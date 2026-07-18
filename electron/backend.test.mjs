@@ -430,6 +430,48 @@ function createFakeChild(pid) {
   return child;
 }
 
+async function createProvisionedServer(
+  backend,
+  targetDir,
+  launchSpec,
+  profileOverrides = {},
+) {
+  const javaPath = path.join(
+    path.dirname(targetDir),
+    "runtime",
+    "bin",
+    process.platform === "win32" ? "java.exe" : "java",
+  );
+  fs.mkdirSync(path.dirname(javaPath), { recursive: true });
+  fs.writeFileSync(javaPath, "test runtime");
+  const job = backend.handle("create_provisioning_job", {
+    input: {
+      plan: validProvisioningPlan(targetDir, {
+        javaRuntime: {
+          path: javaPath,
+          majorVersion: 21,
+          validated: true,
+        },
+        launchSpec: { ...launchSpec, validated: true },
+        profile: {
+          name: "Structured Server",
+          loaderType: "forge",
+          minecraftVersion: "1.21.4",
+          loaderVersion: "54.0.1",
+          ...profileOverrides,
+        },
+        source: { kind: "blank" },
+      }),
+    },
+  });
+  const ready = await backend.handle("run_provisioning_job", {
+    input: { jobId: job.id },
+  });
+  return backend
+    .handle("list_server_profiles")
+    .find((profile) => profile.id === ready.serverId);
+}
+
 async function createZipFixture(entries, extension = "zip") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-backend-pack-"));
   tempDirs.push(root);
@@ -1143,11 +1185,11 @@ describe("Electron backend resource lifecycle management", () => {
       expect(status.serverId).toBe(server.id);
       expect(status.checks.map((check) => check.id)).toEqual([
         "java",
-        "serverJar",
+        "serverRuntime",
         "eula",
         "backup",
       ]);
-      expect(status.serverJar).toMatchObject({
+      expect(status.serverRuntime).toMatchObject({
         status: "actionRequired",
         exists: false,
         fileName: "server.jar",
@@ -1185,9 +1227,13 @@ describe("Electron backend resource lifecycle management", () => {
         serverId: server.id,
       });
 
-      expect(status.serverJar).toMatchObject({
+      expect(status.serverRuntime).toMatchObject({
         status: "ready",
         exists: true,
+      });
+      expect(status.serverJar).toMatchObject({
+        status: "ready",
+        fileName: "server.jar",
       });
       expect(status.eula).toMatchObject({
         status: "ready",
@@ -1198,6 +1244,40 @@ describe("Electron backend resource lifecycle management", () => {
         status: "ready",
         count: 1,
       });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("marks a validated argument-file server runtime ready without server.jar", async () => {
+    const backend = createTestBackend();
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-runtime-ready-"));
+    tempDirs.push(parent);
+    const targetDir = path.join(parent, "server");
+
+    try {
+      const server = await createProvisionedServer(backend, targetDir, {
+        executable: { kind: "java" },
+        jvmArgs: ["@user_jvm_args.txt", "@libraries/forge/win_args.txt"],
+        serverArgs: ["nogui"],
+        workingDirectory: ".",
+      });
+      fs.mkdirSync(path.join(targetDir, "libraries/forge"), { recursive: true });
+      fs.writeFileSync(path.join(targetDir, "user_jvm_args.txt"), "");
+      fs.writeFileSync(path.join(targetDir, "libraries/forge/win_args.txt"), "");
+
+      const status = backend.handle("get_server_setup_status", {
+        serverId: server.id,
+      });
+
+      expect(status.serverRuntime).toMatchObject({
+        id: "serverRuntime",
+        status: "ready",
+        exists: true,
+        kind: "structured",
+      });
+      expect(status.serverJar).toMatchObject({ status: "ready" });
+      expect(fs.existsSync(path.join(targetDir, "server.jar"))).toBe(false);
     } finally {
       backend.close();
     }
@@ -1431,6 +1511,178 @@ describe("Electron backend resource lifecycle management", () => {
     } finally {
       backend.close();
     }
+  });
+
+  describe("launch specification process contract", () => {
+    it("starts a structured jar launch specification with exact safe spawn options", async () => {
+      const spawnImpl = vi.fn(() => createFakeChild(19001));
+      const backend = createTestBackend({ spawn: spawnImpl });
+      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-jar-"));
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(backend, targetDir, {
+          executable: { kind: "java" },
+          jvmArgs: ["-jar", "server.jar"],
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        });
+        fs.writeFileSync(path.join(targetDir, "server.jar"), "jar");
+
+        backend.handle("start_server", { serverId: server.id });
+
+        expect(spawnImpl).toHaveBeenCalledWith(
+          server.javaPath,
+          ["-Xms1024M", "-Xmx2048M", "-jar", "server.jar", "nogui"],
+          {
+            cwd: targetDir,
+            env: process.env,
+            shell: false,
+            stdio: ["pipe", "pipe", "pipe"],
+            windowsHide: true,
+          },
+        );
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("starts an argument-file launch specification with memory flags first", async () => {
+      const spawnImpl = vi.fn(() => createFakeChild(19002));
+      const backend = createTestBackend({ spawn: spawnImpl });
+      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-args-"));
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(backend, targetDir, {
+          executable: { kind: "java" },
+          jvmArgs: [
+            "@user_jvm_args.txt",
+            "@libraries/net/minecraftforge/forge/1.21.4/win_args.txt",
+          ],
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        });
+        fs.mkdirSync(
+          path.join(targetDir, "libraries/net/minecraftforge/forge/1.21.4"),
+          { recursive: true },
+        );
+        fs.writeFileSync(path.join(targetDir, "user_jvm_args.txt"), "");
+        fs.writeFileSync(
+          path.join(
+            targetDir,
+            "libraries/net/minecraftforge/forge/1.21.4/win_args.txt",
+          ),
+          "",
+        );
+
+        backend.handle("start_server", { serverId: server.id });
+
+        expect(spawnImpl).toHaveBeenCalledWith(
+          server.javaPath,
+          [
+            "-Xms1024M",
+            "-Xmx2048M",
+            "@user_jvm_args.txt",
+            "@libraries/net/minecraftforge/forge/1.21.4/win_args.txt",
+            "nogui",
+          ],
+          expect.objectContaining({ cwd: targetDir, shell: false }),
+        );
+      } finally {
+        backend.close();
+      }
+    });
+
+    it.each([
+      [["-jar", "server.jar && calc.exe"], "shell operators"],
+      [["@../outside.txt"], "target traversal"],
+      [["-Dvalue=bad\nnext"], "line breaks"],
+      [["-jar"], "missing jar file"],
+      [["@"], "empty argument-file reference"],
+    ])("rejects malformed launch specification arguments: %s", async (jvmArgs) => {
+      const spawnImpl = vi.fn(() => createFakeChild(19003));
+      const backend = createTestBackend({ spawn: spawnImpl });
+      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-bad-"));
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(backend, targetDir, {
+          executable: { kind: "java" },
+          jvmArgs,
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        });
+
+        expect(() =>
+          backend.handle("start_server", { serverId: server.id }),
+        ).toThrow(/launch specification/i);
+        expect(spawnImpl).not.toHaveBeenCalled();
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("keeps legacy server.jar profiles startable without a launch specification", () => {
+      const spawnImpl = vi.fn(() => createFakeChild(19004));
+      const backend = createTestBackend({ spawn: spawnImpl });
+      const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-legacy-"));
+      tempDirs.push(serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+      try {
+        const server = createServer(backend, serverRoot);
+        backend.handle("start_server", { serverId: server.id });
+
+        expect(spawnImpl).toHaveBeenCalledWith(
+          "java",
+          [
+            "-Xms1024M",
+            "-Xmx4096M",
+            "-jar",
+            path.join(serverRoot, "server.jar"),
+            "nogui",
+          ],
+          expect.objectContaining({ cwd: serverRoot, shell: false }),
+        );
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("rejects a configured Java path that is not an installed executable", async () => {
+      const spawnImpl = vi.fn(() => createFakeChild(19005));
+      const backend = createTestBackend({ spawn: spawnImpl });
+      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-java-"));
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(backend, targetDir, {
+          executable: { kind: "java" },
+          jvmArgs: ["-jar", "server.jar"],
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        });
+        fs.writeFileSync(path.join(targetDir, "server.jar"), "jar");
+        backend.handle("update_server_profile", {
+          input: {
+            id: server.id,
+            javaPath: path.join(parent, "missing", "java.exe"),
+          },
+        });
+
+        expect(() =>
+          backend.handle("start_server", { serverId: server.id }),
+        ).toThrow(/Java executable/i);
+        expect(spawnImpl).not.toHaveBeenCalled();
+      } finally {
+        backend.close();
+      }
+    });
   });
 
   it("auto restarts a managed server after the Java process exits crashed", async () => {

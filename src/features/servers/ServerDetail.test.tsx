@@ -23,11 +23,11 @@ vi.mock("../../lib/desktop-runtime", () => ({
             message: "Java 21 satisfies required Java 21.",
           },
           {
-            id: "serverJar",
+            id: "serverRuntime",
             status: "actionRequired",
             exists: false,
-            fileName: "server.jar",
-            message: "Install a trusted server jar as server.jar from Server updates.",
+            kind: "structured",
+            message: "The provisioned server runtime is incomplete.",
           },
           {
             id: "eula",
@@ -170,13 +170,13 @@ describe("ServerDetail", () => {
 
     expect(within(checklist).getByText("Setup checklist")).toBeInTheDocument();
     expect(await within(checklist).findByText("Java")).toBeInTheDocument();
-    expect(within(checklist).getByText("server.jar")).toBeInTheDocument();
+    expect(within(checklist).getByText("Server runtime")).toBeInTheDocument();
     expect(within(checklist).getByText("Minecraft EULA")).toBeInTheDocument();
     expect(within(checklist).getByText("Backup")).toBeInTheDocument();
     expect(within(checklist).getByText("Done")).toBeInTheDocument();
     expect(within(checklist).getAllByText("Action needed")).toHaveLength(2);
     expect(within(checklist).getByText("Recommended")).toBeInTheDocument();
-    expect(within(checklist).getByText("Install a trusted server jar as server.jar from Server updates.")).toBeInTheDocument();
+    expect(within(checklist).getByText("Install or repair the validated server runtime before starting.")).toBeInTheDocument();
     expect(within(checklist).getByText("Read the Minecraft EULA, then set eula=true yourself if you accept it.")).toBeInTheDocument();
     expect(within(checklist).getByText("Create a backup before changing jars, mods, configs, or worlds.")).toBeInTheDocument();
   });

@@ -17,11 +17,13 @@ function statusLabelKey(status: ServerSetupCheck["status"]) {
 }
 
 function checkLabelKey(id: ServerSetupCheck["id"]) {
-  return `server.setupChecklist.check.${id}`;
+  const normalizedId = id === "serverJar" ? "serverRuntime" : id;
+  return `server.setupChecklist.check.${normalizedId}`;
 }
 
 function checkMessageKey(check: ServerSetupCheck) {
-  return `server.setupChecklist.message.${check.id}.${check.status}`;
+  const normalizedId = check.id === "serverJar" ? "serverRuntime" : check.id;
+  return `server.setupChecklist.message.${normalizedId}.${check.status}`;
 }
 
 function CheckIcon({ status }: { status: ServerSetupCheck["status"] }) {
