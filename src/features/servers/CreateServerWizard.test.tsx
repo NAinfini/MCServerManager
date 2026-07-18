@@ -164,6 +164,32 @@ describe("CreateServerWizard unified provisioning flow", () => {
     expect(container.querySelector(".create-server-panel .wizard-steps")).not.toBeInTheDocument();
   });
 
+  it("publishes the next step after the user advances from source selection", async () => {
+    const onProgressChange = vi.fn();
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({
+      path: "C:/Packs/server.mrpack",
+    });
+
+    renderWizard({ onProgressChange });
+
+    await waitFor(() => {
+      expect(
+        onProgressChange.mock.calls.some(
+          ([value]) => (value as CreateServerWizardProgress | null)?.currentStep === 0,
+        ),
+      ).toBe(true);
+    });
+    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+
+    await waitFor(() => {
+      const progress = onProgressChange.mock.calls
+        .map(([value]) => value as CreateServerWizardProgress | null)
+        .filter((value): value is CreateServerWizardProgress => value !== null)
+        .at(-1);
+      expect(progress?.currentStep).toBe(1);
+    });
+  });
+
   it("plans a selected local pack, enforces approvals, and creates a persisted job", async () => {
     const onCreated = vi.fn();
     vi.mocked(invokeDesktopCommand).mockResolvedValue({
