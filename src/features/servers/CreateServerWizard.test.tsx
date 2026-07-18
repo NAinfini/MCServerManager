@@ -164,9 +164,17 @@ describe("CreateServerWizard", () => {
             versionNumber: "1.0.0",
             loaders: ["fabric"],
             gameVersions: ["1.21.4"],
-            files: [],
+            files: [
+              {
+                filename: "performance-pack.mrpack",
+                size: 1024,
+                primary: true,
+              },
+            ],
             dependencies: [],
             warnings: [],
+            isServerPack: true,
+            serverCompatibility: "serverPack",
           },
         ];
       }
