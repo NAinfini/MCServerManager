@@ -569,6 +569,7 @@ button {
   display: grid;
   width: 38px;
   height: 38px;
+  flex-shrink: 0;
   place-items: center;
   border-radius: var(--radius-md);
   color: var(--text-inverse);

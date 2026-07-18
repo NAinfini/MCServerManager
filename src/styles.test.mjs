@@ -38,6 +38,17 @@ describe("global focus styles", () => {
   });
 });
 
+describe("sidebar brand geometry", () => {
+  it("keeps the app mark square when the brand copy needs space", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const appMark = css.match(/\.app-mark\s*\{([^}]*)\}/s)?.[1] ?? "";
+
+    expect(appMark).toMatch(/width:\s*38px/);
+    expect(appMark).toMatch(/height:\s*38px/);
+    expect(appMark).toMatch(/flex-shrink:\s*0/);
+  });
+});
+
 describe("create server modal layout", () => {
   it("keeps marketplace pages at a stable modal height", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
