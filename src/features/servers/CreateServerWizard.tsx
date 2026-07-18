@@ -492,7 +492,10 @@ export function CreateServerWizard({
         ) : null}
 
         {step === 0 && sourceView === "marketplace" ? (
-          <CreateServerMarketplaceBrowser onSelect={handleMarketplaceSelect} />
+          <CreateServerMarketplaceBrowser
+            onDetailModeChange={onHeaderHiddenChange}
+            onSelect={handleMarketplaceSelect}
+          />
         ) : null}
 
         {step === 0 && sourceView === "blank" ? (

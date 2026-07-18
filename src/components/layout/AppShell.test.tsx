@@ -48,6 +48,35 @@ vi.mock("../../lib/desktop-runtime", () => ({
         crashedCount: 0,
       };
     }
+    if (command === "search_modrinth_projects") {
+      return [
+        {
+          id: "modrinth-pack-1",
+          slug: "lazy-survival",
+          title: "Lazy Survival",
+          description: "Automation-focused pack",
+          projectType: "modpack",
+          loaders: ["fabric"],
+          gameVersions: ["1.21.8"],
+          downloads: 6900,
+        },
+      ];
+    }
+    if (command === "get_modrinth_project") {
+      return {
+        id: "modrinth-pack-1",
+        slug: "lazy-survival",
+        title: "Lazy Survival",
+        description: "Automation-focused pack",
+        projectType: "modpack",
+        loaders: ["fabric"],
+        gameVersions: ["1.21.8"],
+        downloads: 6900,
+      };
+    }
+    if (command === "list_modrinth_versions") {
+      return [];
+    }
     if (command === "list_java_runtimes") {
       return {
         runtimes: [],
@@ -221,7 +250,9 @@ describe("AppShell", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "Create server" });
-    const header = dialog.querySelector(".create-server-wizard-header");
+    const header = dialog.querySelector<HTMLElement>(
+      ".create-server-wizard-header",
+    );
     const progress = within(dialog).getByRole("navigation", {
       name: "Wizard progress",
     });
@@ -237,6 +268,43 @@ describe("AppShell", () => {
     expect(
       dialog.querySelector(".create-server-panel .wizard-steps"),
     ).not.toBeInTheDocument();
+  });
+
+  it("hides the wizard header in marketplace details and restores it on return", async () => {
+    renderShell();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create server/i }),
+    );
+    const dialog = await screen.findByRole("dialog", { name: "Create server" });
+
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: /browse marketplace/i }),
+    );
+    await userEvent.click(
+      await within(dialog).findByRole("button", { name: /lazy survival/i }),
+    );
+
+    const details = await within(dialog).findByRole("article", {
+      name: /lazy survival/i,
+    });
+    expect(
+      dialog.querySelector(".create-server-wizard-header"),
+    ).not.toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("navigation", { name: "Wizard progress" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(
+      within(details).getByRole("button", { name: "Back" }),
+    );
+
+    expect(
+      dialog.querySelector(".create-server-wizard-header"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole("navigation", { name: "Wizard progress" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps the create server modal open when dismissing a dropdown inside it", async () => {
