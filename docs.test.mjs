@@ -40,4 +40,18 @@ describe("project documentation", () => {
     );
     expect(scripts["electron:dev"]).toBe("pnpm dev");
   });
+
+  it("documents every development entry point in both READMEs", () => {
+    const commands = ["pnpm dev", "pnpm dev:renderer", "pnpm electron:dev"];
+
+    for (const path of ["README.md", "README.zh-CN.md"]) {
+      const contents = read(path);
+
+      for (const command of commands) {
+        expect(contents, `${path} should document ${command}`).toMatch(
+          new RegExp(`^${command}\\s*(?:#.*)?$`, "m"),
+        );
+      }
+    }
+  });
 });

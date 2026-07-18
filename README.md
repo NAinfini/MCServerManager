@@ -34,8 +34,9 @@ Marketplace installs content such as mods, plugins, or modpacks. It does not rem
 
 ```powershell
 pnpm install
-pnpm dev              # renderer dev server only
-pnpm electron:dev     # desktop app
+pnpm dev              # full desktop app (Vite renderer + Electron local backend)
+pnpm dev:renderer     # renderer dev server only
+pnpm electron:dev     # compatibility alias for pnpm dev
 pnpm vitest run
 pnpm build
 pnpm electron:build
