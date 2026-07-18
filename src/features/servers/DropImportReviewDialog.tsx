@@ -87,7 +87,9 @@ export function DropImportReviewDialog({
               </div>
             </div>
             <p className="drop-import-review-note">
-              {t("dropImport.review.note")}
+              {paths.length > 1
+                ? t("provisioning.wizard.dropSingle")
+                : t("dropImport.review.note")}
             </p>
           </div>
           <div className="dialog-actions">
@@ -96,7 +98,7 @@ export function DropImportReviewDialog({
                 {t("common.cancel")}
               </Button>
             </Dialog.Close>
-            <Button type="button" onClick={onContinue}>
+            <Button disabled={paths.length !== 1} type="button" onClick={onContinue}>
               {t("dropImport.review.continue")}
             </Button>
           </div>

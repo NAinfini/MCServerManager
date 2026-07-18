@@ -516,8 +516,150 @@ function validProvisioningPlan(targetDir, overrides = {}) {
 
 describe("Electron backend provisioning plan contract", () => {
   afterEach(() => {
+    globalThis.fetch = originalFetch;
     while (tempDirs.length > 0) {
       fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("prepares a trusted blank Paper server with an executable loader plan", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url) => {
+      expect(String(url)).toBe(
+        "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds",
+      );
+      return jsonResponse([
+        {
+          id: 130,
+          channel: "STABLE",
+          downloads: {
+            "server:default": {
+              url: "https://fill-data.papermc.io/server.jar",
+              checksums: { sha256: "abc" },
+              size: 1024,
+            },
+          },
+        },
+      ]);
+    });
+
+    try {
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: { kind: "blank" },
+          name: "Quilted Paper",
+          prepareInstall: true,
+          loaderType: "paper",
+          minecraftVersion: "1.21.10",
+          loaderVersion: "130",
+        },
+      });
+
+      expect(plan).toMatchObject({
+        pack: { name: "Quilted Paper" },
+        loaderType: "paper",
+        minecraftVersion: "1.21.10",
+        loaderVersion: "130",
+        requiredJavaMajor: 21,
+        launchSpec: {
+          executable: { kind: "java" },
+          jvmArgs: ["-jar", "server.jar"],
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        },
+        loaderInstallPlan: {
+          artifacts: [
+            expect.objectContaining({
+              url: "https://fill-data.papermc.io/server.jar",
+              destination: "server.jar",
+            }),
+          ],
+        },
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("prepares an explicitly selected runtime for an unverified existing folder", async () => {
+    const backend = createTestBackend();
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-existing-unverified-"));
+    tempDirs.push(rootDir);
+    const serverJar = Buffer.from("paper-server");
+    const serverJarHash = createHash("sha256").update(serverJar).digest("hex");
+    globalThis.fetch = vi.fn(async (url) => {
+      if (String(url) === "https://fill-data.papermc.io/server.jar") {
+        return new Response(serverJar, { status: 200 });
+      }
+      return jsonResponse([
+        {
+          id: 130,
+          channel: "STABLE",
+          downloads: {
+            "server:default": {
+              url: "https://fill-data.papermc.io/server.jar",
+              checksums: { sha256: serverJarHash },
+              size: 1024,
+            },
+          },
+        },
+      ]);
+    });
+
+    try {
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: { kind: "existingFolder" },
+          rootDir,
+          prepareInstall: true,
+          loaderType: "paper",
+          minecraftVersion: "1.21.10",
+          loaderVersion: "130",
+        },
+      });
+
+      expect(plan).toMatchObject({
+        source: { kind: "existingFolder", rootDir },
+        useExistingTarget: true,
+        loaderType: "paper",
+        minecraftVersion: "1.21.10",
+        launchSpec: { jvmArgs: ["-jar", "server.jar"] },
+        warnings: [
+          expect.objectContaining({
+            code: "EXISTING_RUNTIME_UNVERIFIED",
+            requiresAcknowledgement: true,
+          }),
+        ],
+      });
+
+      const javaPath = path.join(rootDir, "java.exe");
+      fs.writeFileSync(javaPath, "test-java");
+      const job = backend.handle("create_provisioning_job", {
+        input: {
+          plan: validProvisioningPlan(rootDir, {
+            ...plan,
+            compatibilityWarnings: plan.warnings,
+            acknowledgedWarningCodes: ["EXISTING_RUNTIME_UNVERIFIED"],
+            javaRuntime: { path: javaPath, majorVersion: 21, validated: true },
+            launchSpec: { ...plan.launchSpec, validated: true },
+            profile: {
+              name: "Existing Paper Server",
+              loaderType: "paper",
+              minecraftVersion: "1.21.10",
+              loaderVersion: "130",
+              autoStart: false,
+            },
+          }),
+        },
+      });
+      const ready = await backend.handle("run_provisioning_job", {
+        input: { jobId: job.id },
+      });
+
+      expect(ready.stage).toBe("ready");
+      expect(fs.readFileSync(path.join(rootDir, "server.jar"))).toEqual(serverJar);
+    } finally {
+      backend.close();
     }
   });
 

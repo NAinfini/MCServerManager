@@ -72,6 +72,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   >(null);
   const [createServerHeaderHidden, setCreateServerHeaderHidden] =
     useState(false);
+  const [createServerSourcePath, setCreateServerSourcePath] = useState<string | null>(null);
   const [isJavaOpen, setJavaOpen] = useState(false);
   const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
@@ -162,6 +163,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   const handleCreateServerOpenChange = useCallback((open: boolean) => {
     setCreateServerOpen(open);
     if (!open) {
+      setCreateServerSourcePath(null);
       setCreateServerHeaderBack(null);
       setCreateServerHeaderHidden(false);
     }
@@ -178,6 +180,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           if (!open) setDroppedImportPaths([]);
         }}
         onContinue={() => {
+          setCreateServerSourcePath(droppedImportPaths[0] || null);
           setDroppedImportPaths([]);
           setCreateServerOpen(true);
         }}
@@ -398,10 +401,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                       </div>
                     )}
                     <CreateServerWizard
+                      initialSourcePath={createServerSourcePath}
                       showHeading={false}
                       onHeaderHiddenChange={setCreateServerHeaderHidden}
                       onHeaderBackChange={handleCreateServerHeaderBackChange}
-                      onCreated={() => setCreateServerOpen(false)}
+                      onCreated={() => handleCreateServerOpenChange(false)}
                     />
                   </Dialog.Content>
                 </Dialog.Portal>

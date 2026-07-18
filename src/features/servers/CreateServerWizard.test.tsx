@@ -1,40 +1,99 @@
-import { cleanup, render, screen } from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppSettingsProvider } from "../../i18n";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
-import {
-  createServerProfile,
-  getDefaultServerRoot,
-  listLoaderMinecraftVersions,
-  listLoaderVersions,
-} from "./api";
+import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
+import * as provisioningApi from "./provisioningApi";
 import { CreateServerWizard } from "./CreateServerWizard";
 
-vi.mock("../../lib/desktop-runtime", () => ({
-  invokeDesktopCommand: vi.fn(),
-}));
-
+vi.mock("../../lib/desktop-runtime", () => ({ invokeDesktopCommand: vi.fn() }));
 vi.mock("./api", () => ({
-  createServerProfile: vi.fn(),
   getDefaultServerRoot: vi.fn(),
   listLoaderMinecraftVersions: vi.fn(),
   listLoaderVersions: vi.fn(),
 }));
+vi.mock("./provisioningApi", async () => {
+  const actual = await vi.importActual<typeof import("./provisioningApi")>(
+    "./provisioningApi",
+  );
+  return {
+    ...actual,
+    planServerProvisioning: vi.fn(),
+    planJavaRuntime: vi.fn(),
+    installJavaRuntime: vi.fn(),
+    createProvisioningJob: vi.fn(),
+    runProvisioningJob: vi.fn(),
+    retryProvisioningJob: vi.fn(),
+    cancelProvisioningJob: vi.fn(),
+    listRecoverableProvisioningJobs: vi.fn(),
+  };
+});
+vi.mock("./CreateServerMarketplaceBrowser", () => ({
+  CreateServerMarketplaceBrowser: ({ onSelect }: { onSelect: (value: unknown) => void }) => (
+    <button
+      type="button"
+      onClick={() =>
+        onSelect({
+          provider: "Modrinth",
+          projectId: "project-1",
+          versionId: "version-1",
+          title: "Marketplace Pack",
+          versionName: "1.0.0",
+          loaderType: "fabric",
+          minecraftVersion: "1.21.4",
+        })
+      }
+    >
+      Select marketplace fixture
+    </button>
+  ),
+}));
 
-function renderWizard(
-  props: Partial<React.ComponentProps<typeof CreateServerWizard>> = {},
-) {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: { retry: false },
-      mutations: { retry: false },
+const sourcePlan = {
+  source: { kind: "localModpackFile" as const, path: "C:/Packs/server.mrpack" },
+  pack: { format: "modrinth", name: "Server Pack", versionId: "v1" },
+  minecraftVersion: "1.21.4",
+  loaderType: "fabric" as const,
+  loaderVersion: "0.16.10",
+  requiredJavaMajor: 21,
+  warnings: [
+    {
+      code: "PACK_UNVERIFIED",
+      message: "This pack is not marked as a dedicated server pack.",
+      requiresAcknowledgement: true,
     },
-  });
+  ],
+  launchSpec: {
+    executable: { kind: "java" as const },
+    jvmArgs: ["-jar", "server.jar"],
+    serverArgs: ["nogui"],
+    workingDirectory: ".",
+  },
+};
 
+function job(stage: provisioningApi.ProvisioningStage): provisioningApi.ProvisioningJob {
+  return {
+    id: "job-1",
+    serverId: stage === "ready" ? "server-1" : null,
+    stage,
+    plan: {},
+    progress: { completedStages: [], resumeStage: stage },
+    stagingDir: "C:/Servers/.server-stage",
+    targetDir: "C:/Servers/Server Pack",
+    error: null,
+    createdAt: "2026-07-18T12:00:00.000Z",
+    updatedAt: "2026-07-18T12:00:01.000Z",
+  };
+}
+
+function renderWizard(props: Partial<React.ComponentProps<typeof CreateServerWizard>> = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={client}>
       <AppSettingsProvider>
         <CreateServerWizard showHeading={false} {...props} />
       </AppSettingsProvider>
@@ -42,371 +101,245 @@ function renderWizard(
   );
 }
 
-describe("CreateServerWizard", () => {
+describe("CreateServerWizard unified provisioning flow", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(invokeDesktopCommand).mockReset();
-    vi.mocked(createServerProfile).mockReset();
-    vi.mocked(getDefaultServerRoot).mockReset();
-    vi.mocked(listLoaderMinecraftVersions).mockReset();
-    vi.mocked(listLoaderVersions).mockReset();
-    vi.mocked(getDefaultServerRoot).mockImplementation(async (name) => {
-      const safeName = (name || "server").replace(":", "-");
-      return `C:/Users/Test/AppData/Roaming/MC Server Manager/servers/${safeName}`;
-    });
+    vi.mocked(getDefaultServerRoot).mockResolvedValue("C:/Servers/Server Pack");
     vi.mocked(listLoaderMinecraftVersions).mockResolvedValue([
-      { value: "1.21.10", label: "1.21.10", stable: true },
+      { value: "1.21.4", label: "1.21.4", stable: true },
     ]);
     vi.mocked(listLoaderVersions).mockResolvedValue([
-      { value: "130", label: "Build 130", stable: true },
+      { value: "0.16.10", label: "0.16.10", stable: true },
     ]);
-    vi.mocked(createServerProfile).mockResolvedValue({
-      id: "server-1",
-      name: "Performance Pack",
-      rootDir: "C:/Servers/Performance",
-      loaderType: "paper",
-      autoStart: false,
-      createdAt: "2026-07-02T00:00:00Z",
-      updatedAt: "2026-07-02T00:00:00Z",
-      restartPolicy: {
-        enabled: true,
-        maxAttempts: 3,
-        cooldownSeconds: 30,
-      },
+    vi.mocked(provisioningApi.planServerProvisioning).mockResolvedValue(sourcePlan);
+    vi.mocked(provisioningApi.planJavaRuntime).mockResolvedValue({
+      action: "reuse",
+      majorVersion: 21,
+      runtime: { path: "C:/Java/bin/java.exe", majorVersion: 21 },
     });
+    vi.mocked(provisioningApi.createProvisioningJob).mockResolvedValue(job("planned"));
+    vi.mocked(provisioningApi.runProvisioningJob).mockResolvedValue(job("ready"));
+    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([]);
   });
 
-  afterEach(() => {
-    cleanup();
+  afterEach(cleanup);
+
+  it("plans a selected local pack, enforces approvals, and creates a persisted job", async () => {
+    const onCreated = vi.fn();
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({
+      path: "C:/Packs/server.mrpack",
+    });
+    renderWizard({ onCreated });
+
+    [
+      "Source",
+      "Compatibility",
+      "Java",
+      "Server configuration",
+      "Review and EULA",
+      "Install and start",
+    ].forEach((label) => expect(screen.getByText(label)).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+    expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
+      prepareInstall: true,
+      source: { kind: "localModpackFile", path: "C:/Packs/server.mrpack" },
+    });
+    expect(await screen.findByText("This pack is not marked as a dedicated server pack.")).toBeInTheDocument();
+
+    const compatibilityNext = screen.getByRole("button", { name: "Next" });
+    expect(compatibilityNext).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: /accept this compatibility warning/i }));
+    await userEvent.click(compatibilityNext);
+
+    expect(await screen.findByText(/Java 21/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    await userEvent.clear(screen.getByLabelText("Max memory MB"));
+    await userEvent.type(screen.getByLabelText("Max memory MB"), "6144");
+    await userEvent.clear(screen.getByLabelText("Message of the day"));
+    await userEvent.type(screen.getByLabelText("Message of the day"), "Pack server");
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+
+    const eula = screen.getByRole("checkbox", { name: /I accept the Minecraft EULA/i });
+    expect(eula).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "Install and start" })).toBeDisabled();
+    await userEvent.click(eula);
+    await userEvent.click(screen.getByRole("button", { name: "Install and start" }));
+
+    await waitFor(() => expect(provisioningApi.createProvisioningJob).toHaveBeenCalled());
+    expect(provisioningApi.createProvisioningJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetDir: "C:/Servers/Server Pack",
+        acknowledgedWarningCodes: ["PACK_UNVERIFIED"],
+        eula: expect.objectContaining({ accepted: true }),
+        configuration: expect.objectContaining({ maxMemoryMb: 6144, motd: "Pack server" }),
+      }),
+    );
+    expect(provisioningApi.runProvisioningJob).toHaveBeenCalledWith("job-1");
+    expect(await screen.findByText("Server is ready")).toBeInTheDocument();
+    expect(onCreated).toHaveBeenCalled();
   });
 
-  it("opens a file picker when the drop zone is clicked", async () => {
-    vi.mocked(invokeDesktopCommand).mockResolvedValueOnce({
-      path: "C:/Packs/automation.mrpack",
-    });
+  it("uses the identical planning path for a dropped pack and rejects multiple files", async () => {
     renderWizard();
-
-    await userEvent.click(
-      screen.getAllByRole("button", { name: /open modpack file/i })[0],
+    const dropZone = screen.getByTestId("server-pack-drop-zone");
+    const first = new File(["pack"], "server.mrpack");
+    Object.defineProperty(first, "path", { value: "C:/Packs/server.mrpack" });
+    fireEvent.drop(dropZone, { dataTransfer: { files: [first] } });
+    await waitFor(() =>
+      expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
+        prepareInstall: true,
+        source: { kind: "localModpackFile", path: "C:/Packs/server.mrpack" },
+      }),
     );
 
-    expect(invokeDesktopCommand).toHaveBeenCalledWith("show_open_dialog", {
-      kind: "file",
-      filters: [
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    const second = new File(["pack"], "other.zip");
+    Object.defineProperty(second, "path", { value: "C:/Packs/other.zip" });
+    fireEvent.drop(screen.getByTestId("server-pack-drop-zone"), {
+      dataTransfer: { files: [first, second] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Drop one server pack at a time.",
+    );
+  });
+
+  it("passes the user-entered name through the blank-server planning path", async () => {
+    renderWizard();
+    await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
+    await userEvent.type(screen.getByLabelText("Name"), "Quilt Realm");
+    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
+    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
+    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.16.10");
+    await userEvent.click(screen.getByRole("button", { name: "Analyze source" }));
+
+    expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
+      source: { kind: "blank" },
+      name: "Quilt Realm",
+      loaderType: "paper",
+      minecraftVersion: "1.21.4",
+      loaderVersion: "0.16.10",
+      prepareInstall: true,
+    });
+  });
+
+  it("routes existing folders and marketplace packs through the same planner", async () => {
+    vi.mocked(invokeDesktopCommand).mockResolvedValueOnce({ path: "C:/Servers/Existing" });
+    renderWizard();
+    await userEvent.click(screen.getByRole("button", { name: "Import existing folder" }));
+    expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
+      source: { kind: "existingFolder" },
+      rootDir: "C:/Servers/Existing",
+      prepareInstall: true,
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    await userEvent.click(screen.getByRole("button", { name: "Browse marketplace" }));
+    await userEvent.click(screen.getByRole("button", { name: "Select marketplace fixture" }));
+    expect(provisioningApi.planServerProvisioning).toHaveBeenLastCalledWith({
+      source: {
+        kind: "marketplaceModpack",
+        provider: "Modrinth",
+        projectId: "project-1",
+        versionId: "version-1",
+      },
+      loaderType: "fabric",
+      minecraftVersion: "1.21.4",
+      loaderVersion: undefined,
+      prepareInstall: true,
+    });
+  });
+
+  it("warns for unverified archives but allows an explicit compatible runtime selection", async () => {
+    const unverifiedPlan = {
+      source: { kind: "localModpackFile" as const, path: "C:/Packs/unknown.zip" },
+      pack: { format: "generic-zip", name: "Unknown Pack" },
+      minecraftVersion: null,
+      loaderType: null,
+      loaderVersion: null,
+      requiredJavaMajor: null,
+      warnings: [
         {
-          name: "Modpack or server jar",
-          extensions: ["zip", "mrpack", "jar"],
+          code: "PACK_UNVERIFIED",
+          message: "This archive is not verified as a dedicated server pack.",
+          requiresAcknowledgement: true,
         },
       ],
-    });
-    expect(
-      await screen.findByText("C:/Packs/automation.mrpack"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Local modpack file")).toBeNull();
-    expect(
-      screen.queryByRole("combobox", { name: "Source" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("opens a folder picker and pre-fills the server folder", async () => {
-    vi.mocked(invokeDesktopCommand).mockResolvedValueOnce({
-      path: "C:/Servers/Existing",
-    });
+    };
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({ path: "C:/Packs/unknown.zip" });
+    vi.mocked(provisioningApi.planServerProvisioning)
+      .mockResolvedValueOnce(unverifiedPlan)
+      .mockResolvedValueOnce(sourcePlan);
     renderWizard();
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /import existing folder/i }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+    expect(await screen.findByText(/does not contain enough trusted server metadata/i)).toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "Next" });
+    expect(next).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: /accept this compatibility warning/i }));
+    expect(next).toBeDisabled();
+    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
+    await userEvent.click(screen.getByRole("button", { name: "Prepare server runtime" }));
 
-    expect(invokeDesktopCommand).toHaveBeenCalledWith("show_open_dialog", {
-      kind: "folder",
-    });
-    expect(
-      await screen.findByDisplayValue("C:/Servers/Existing"),
-    ).toBeInTheDocument();
-    expect(screen.queryByText("Import existing folder")).toBeNull();
-    expect(
-      screen.queryByRole("combobox", { name: "Source" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("opens the blank path and browses marketplace packs", async () => {
-    renderWizard();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /new blank server/i }),
-    );
-    expect(screen.queryByText("Blank server")).toBeNull();
-    expect(
-      screen.queryByRole("combobox", { name: "Source" }),
-    ).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("button", { name: /back/i }));
-    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
-      if (command === "search_modrinth_projects") {
-        return [
-          {
-            id: "project-1",
-            slug: "performance-pack",
-            title: "Performance Pack",
-            description: "Server performance mods",
-            projectType: "modpack",
-            loaders: ["fabric"],
-            gameVersions: ["1.21.4"],
-          },
-        ];
-      }
-      if (command === "list_modrinth_versions") {
-        return [
-          {
-            id: "version-1",
-            projectId: "project-1",
-            name: "Performance Pack 1.0",
-            versionNumber: "1.0.0",
-            loaders: ["fabric"],
-            gameVersions: ["1.21.4"],
-            files: [
-              {
-                filename: "performance-pack.mrpack",
-                size: 1024,
-                primary: true,
-              },
-            ],
-            dependencies: [],
-            warnings: [],
-            isServerPack: true,
-            serverCompatibility: "serverPack",
-          },
-        ];
-      }
-      if (command === "install_modrinth_version") {
-        return { id: "content-1" };
-      }
-      if (command === "show_open_dialog") {
-        return { path: "C:/Servers/Performance" };
-      }
-      return null;
-    });
-    await userEvent.click(
-      screen.getByRole("button", { name: /browse marketplace/i }),
-    );
-    expect(
-      await screen.findByRole("combobox", { name: /providers/i }),
-    ).toHaveTextContent("Modrinth");
-    expect(
-      screen.queryByRole("combobox", { name: /hangar/i }),
-    ).not.toBeInTheDocument();
-    await userEvent.type(
-      screen.getByLabelText("Search server packs"),
-      "performance",
-    );
-    await userEvent.click(screen.getByRole("button", { name: /^search$/i }));
-    await userEvent.click(
-      await screen.findByRole("button", { name: /performance pack/i }),
-    );
-    await userEvent.click(
-      await screen.findByRole("button", { name: /1\.0\.0/i }),
-    );
-
-    // After marketplace selection, we land on step 1 (Configure)
-    expect(screen.queryByText("Marketplace modpack")).toBeNull();
-    expect(screen.queryByRole("combobox", { name: "Provider" })).toBeNull();
-    expect(screen.getByDisplayValue("Performance Pack")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
-      "Fabric",
-    );
-    expect(
-      screen.getByRole("combobox", { name: "Minecraft version" }),
-    ).toHaveTextContent("1.21.4");
-    expect(
-      screen.getByRole("combobox", { name: "Minecraft version" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("combobox", { name: "Loader version" }),
-    ).toHaveTextContent("1.0.0");
-    expect(
-      screen.getByRole("combobox", { name: "Loader version" }),
-    ).toBeDisabled();
-
-    // Fill the only remaining required step 1 field.
-    await userEvent.click(screen.getByRole("button", { name: /browse/i }));
-
-    // Navigate to step 2 (Java & Memory)
-    await userEvent.click(
-      screen.getByRole("button", { name: /next/i }),
-    );
-
-    // Navigate to step 3 (Review)
-    await userEvent.click(
-      screen.getByRole("button", { name: /next/i }),
-    );
-
-    // Submit on step 3
-    await userEvent.click(
-      screen.getByRole("button", { name: /create server/i }),
-    );
-
-    expect(createServerProfile).toHaveBeenCalledWith(
+    expect(provisioningApi.planServerProvisioning).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        source: {
-          kind: "marketplaceModpack",
-          provider: "Modrinth",
-          projectId: "project-1",
-          versionId: "version-1",
-        },
-        loaderType: "fabric",
+        source: { kind: "localModpackFile", path: "C:/Packs/unknown.zip" },
+        loaderType: "paper",
         minecraftVersion: "1.21.4",
-        loaderVersion: "1.0.0",
+        prepareInstall: true,
       }),
     );
-    expect(invokeDesktopCommand).toHaveBeenCalledWith(
-      "search_modrinth_projects",
-      {
-        input: {
-          serverId: "create-server",
-          query: "performance",
-          projectType: "modpack",
-          loader: "any",
-          sort: "relevance",
-        },
-      },
-    );
-    expect(invokeDesktopCommand).toHaveBeenCalledWith(
-      "install_modrinth_version",
-      {
-        input: {
-          serverId: "server-1",
-          projectId: "project-1",
-          versionId: "version-1",
-          installAnyway: false,
-        },
-      },
-    );
+    expect(await screen.findByText("This pack is not marked as a dedicated server pack.")).toBeInTheDocument();
   });
 
-  it("pre-fills a managed server folder for new blank servers", async () => {
-    renderWizard();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /new blank server/i }),
-    );
-    await userEvent.type(screen.getByLabelText("Name"), "My First Server");
-
-    expect(
-      await screen.findByDisplayValue(
-        "C:/Users/Test/AppData/Roaming/MC Server Manager/servers/My First Server",
-      ),
-    ).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("combobox", { name: "Minecraft version" }));
-    await userEvent.click(await screen.findByRole("option", { name: "1.21.10" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Loader version" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Build 130" }));
-
-    await userEvent.click(screen.getByRole("button", { name: /next/i }));
-    await userEvent.click(screen.getByRole("button", { name: /next/i }));
-    await userEvent.click(screen.getByRole("button", { name: /create server/i }));
-
-    expect(createServerProfile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: "My First Server",
-        rootDir:
-          "C:/Users/Test/AppData/Roaming/MC Server Manager/servers/My First Server",
-      }),
-    );
-  });
-
-  it("explains the remaining setup steps before a new user creates the server", async () => {
-    renderWizard();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /new blank server/i }),
-    );
-    await userEvent.type(screen.getByLabelText("Name"), "First Server");
-    await userEvent.click(screen.getByRole("combobox", { name: "Minecraft version" }));
-    await userEvent.click(await screen.findByRole("option", { name: "1.21.10" }));
-    await userEvent.click(screen.getByRole("combobox", { name: "Loader version" }));
-    await userEvent.click(await screen.findByRole("option", { name: "Build 130" }));
-
-    await userEvent.click(screen.getByRole("button", { name: /next/i }));
-    await userEvent.click(screen.getByRole("button", { name: /next/i }));
-
-    expect(screen.getByText("Before first start")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Install Java that matches this Minecraft version/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Install or import a server.jar in Server updates/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Review and accept the Minecraft EULA/i),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Create a backup before changing files/i),
-    ).toBeInTheDocument();
-  });
-
-  it("keeps the outer create-server header visible while viewing marketplace details", async () => {
-    const onHeaderHiddenChange = vi.fn();
-    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
-      if (command === "search_modrinth_projects") {
-        return [
-          {
-            id: "project-1",
-            slug: "performance-pack",
-            title: "Performance Pack",
-            description: "Server performance mods",
-            projectType: "modpack",
-            loaders: ["fabric"],
-            gameVersions: ["1.21.4"],
-          },
-        ];
-      }
-      if (command === "get_modrinth_project") {
-        return {
-          id: "project-1",
-          slug: "performance-pack",
-          title: "Performance Pack",
-          description: "Server performance mods",
-          body: "<p>Details</p>",
-          projectType: "modpack",
-          loaders: ["fabric"],
-          gameVersions: ["1.21.4"],
-        };
-      }
-      if (command === "list_modrinth_versions") {
-        return [];
-      }
-      return null;
+  it("requires explicit consent before installing a managed Java runtime", async () => {
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({ path: "C:/Packs/server.mrpack" });
+    vi.mocked(provisioningApi.planJavaRuntime).mockResolvedValue({
+      action: "install",
+      majorVersion: 21,
+      vendor: "Eclipse Temurin",
+      licenseUrl: "https://openjdk.org/legal/gplv2+ce.html",
     });
+    vi.mocked(provisioningApi.installJavaRuntime).mockResolvedValue({
+      path: "C:/ManagedJava/bin/java.exe",
+      majorVersion: 21,
+    });
+    renderWizard();
+    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+    await userEvent.click(await screen.findByRole("checkbox", { name: /accept this compatibility warning/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    renderWizard({ onHeaderHiddenChange });
-
-    await userEvent.click(
-      screen.getByRole("button", { name: /browse marketplace/i }),
+    const install = await screen.findByRole("button", { name: "Install Java 21" });
+    expect(install).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: /allow the app to download/i }));
+    await userEvent.click(install);
+    expect(provisioningApi.installJavaRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "install" }),
+      true,
     );
-    await userEvent.click(
-      await screen.findByRole("button", { name: /performance pack/i }),
-    );
-
-    expect(onHeaderHiddenChange).toHaveBeenLastCalledWith(false);
-
-    await userEvent.click(screen.getByRole("button", { name: /back/i }));
-
-    expect(onHeaderHiddenChange).toHaveBeenLastCalledWith(false);
   });
 
-  it("shows picker errors instead of silently ignoring failures", async () => {
-    vi.mocked(invokeDesktopCommand).mockRejectedValueOnce(
-      new Error("Native file picker failed"),
-    );
+  it("recovers a persisted failed job and retries it without creating another job", async () => {
+    const failed = {
+      ...job("failed"),
+      error: {
+        code: "DOWNLOAD_FAILED",
+        stage: "downloading",
+        message: "Download interrupted",
+        detail: null,
+        retryable: true,
+        cleanupRequired: true,
+      },
+    };
+    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([failed]);
+    vi.mocked(provisioningApi.retryProvisioningJob).mockResolvedValue(job("ready"));
     renderWizard();
 
-    await userEvent.click(
-      screen.getAllByRole("button", { name: /open modpack file/i })[0],
-    );
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Native file picker failed",
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+    await userEvent.click(screen.getByRole("button", { name: "Retry installation" }));
+    expect(provisioningApi.retryProvisioningJob).toHaveBeenCalledWith("job-1");
+    expect(provisioningApi.createProvisioningJob).not.toHaveBeenCalled();
   });
 });

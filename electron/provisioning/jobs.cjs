@@ -144,7 +144,13 @@ function createJobExecutor(dependencies) {
     if (!plan?.targetDir) {
       throw provisioningError("JOB_TARGET_REQUIRED", "Server target directory is required.");
     }
-    if (fileSystem.existsSync(targetDir)) {
+    if (plan?.useExistingTarget === true && !fileSystem.existsSync(targetDir)) {
+      throw provisioningError(
+        "JOB_EXISTING_TARGET_MISSING",
+        "The existing server directory no longer exists.",
+      );
+    }
+    if (fileSystem.existsSync(targetDir) && plan?.useExistingTarget !== true) {
       throw provisioningError(
         "JOB_TARGET_EXISTS",
         "Server target directory already exists.",
@@ -197,11 +203,22 @@ function createJobExecutor(dependencies) {
       });
       try {
         if (stage === "committing") {
-          if (fileSystem.existsSync(job.targetDir)) {
+          const replacingExisting = job.plan.useExistingTarget === true;
+          const backupDir = `${job.targetDir}.mcsm-backup-${job.id}`;
+          if (fileSystem.existsSync(job.targetDir) && !replacingExisting) {
             throw provisioningError(
               "JOB_TARGET_EXISTS",
               "Server target appeared before the atomic commit.",
             );
+          }
+          if (replacingExisting) {
+            if (fileSystem.existsSync(backupDir)) {
+              throw provisioningError(
+                "JOB_BACKUP_EXISTS",
+                "A prior existing-server backup blocks the atomic commit.",
+              );
+            }
+            fileSystem.renameSync(job.targetDir, backupDir);
           }
           fileSystem.renameSync(job.stagingDir, job.targetDir);
           try {
@@ -217,9 +234,15 @@ function createJobExecutor(dependencies) {
                 resumeStage: "starting",
               },
             });
+            if (replacingExisting && fileSystem.existsSync(backupDir)) {
+              fileSystem.rmSync(backupDir, { recursive: true, force: true });
+            }
           } catch (error) {
             try {
               fileSystem.renameSync(job.targetDir, job.stagingDir);
+              if (replacingExisting && fileSystem.existsSync(backupDir)) {
+                fileSystem.renameSync(backupDir, job.targetDir);
+              }
             } catch (rollbackError) {
               error.detail = {
                 ...(error.detail || {}),
@@ -241,7 +264,12 @@ function createJobExecutor(dependencies) {
             );
           }
           if (typeof handlers[stage] === "function") {
-            await handlers[stage]({ job, plan: job.plan, stage });
+            const stagePatch = await handlers[stage]({
+              job,
+              plan: job.plan,
+              stage,
+            });
+            if (stagePatch) job = update(id, stagePatch);
           }
         }
         completed.add(stage);

@@ -286,6 +286,67 @@ describe("resumable provisioning jobs", () => {
     });
   });
 
+  it("persists stage plan enrichment for later resumable stages", async () => {
+    const targetDir = tempTarget();
+    const verifying = vi.fn(({ plan }) => {
+      expect(plan.resolvedArtifact).toBe("server-pack.zip");
+    });
+    const { executor } = makeExecutor({
+      handlers: {
+        downloading: async ({ plan }) => ({
+          plan: { ...plan, resolvedArtifact: "server-pack.zip" },
+        }),
+        verifying,
+      },
+    });
+    const job = executor.createJob(validPlan(targetDir));
+
+    const ready = await executor.executeJob(job.id);
+
+    expect(ready.plan.resolvedArtifact).toBe("server-pack.zip");
+    expect(verifying).toHaveBeenCalledTimes(1);
+  });
+
+  it("atomically replaces and restores an existing server directory", async () => {
+    const targetDir = tempTarget();
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.writeFileSync(path.join(targetDir, "world.dat"), "original");
+    let failCommit = true;
+    const { executor } = makeExecutor({
+      handlers: {
+        extracting: async ({ job }) => {
+          fs.cpSync(job.targetDir, job.stagingDir, { recursive: true });
+          fs.writeFileSync(path.join(job.stagingDir, "updated.txt"), "ready");
+        },
+        committing: async () => {
+          if (failCommit) {
+            failCommit = false;
+            throw Object.assign(new Error("profile commit failed"), {
+              code: "PROFILE_COMMIT_FAILED",
+            });
+          }
+        },
+      },
+    });
+    const job = executor.createJob(
+      validPlan(targetDir, { useExistingTarget: true }),
+    );
+
+    await expect(executor.executeJob(job.id)).rejects.toMatchObject({
+      code: "PROFILE_COMMIT_FAILED",
+    });
+    expect(fs.readFileSync(path.join(targetDir, "world.dat"), "utf8")).toBe(
+      "original",
+    );
+    expect(fs.existsSync(path.join(targetDir, "updated.txt"))).toBe(false);
+
+    const ready = await executor.retryJob(job.id);
+    expect(ready.stage).toBe("ready");
+    expect(fs.readFileSync(path.join(targetDir, "updated.txt"), "utf8")).toBe(
+      "ready",
+    );
+  });
+
   it.each([
     [
       "compatibility acknowledgement",

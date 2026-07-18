@@ -12,6 +12,10 @@ const {
   requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
 } = require("./provisioning/runtimes.cjs");
 const { createJobExecutor } = require("./provisioning/jobs.cjs");
+const {
+  extractZipArchive,
+  extractZipLayers,
+} = require("./provisioning/archive.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -4249,13 +4253,97 @@ function importProfile(db, input) {
 
 async function planServerProvisioning(input) {
   const source = input?.source || input;
+  let sourcePlan;
   if (source?.kind === "localModpackFile") {
-    return planLocalPack(source.path);
+    sourcePlan = await planLocalPack(source.path);
+  } else if (source?.kind === "marketplaceModpack") {
+    sourcePlan = await planMarketplacePack(source);
+  } else if (source?.kind === "blank") {
+    sourcePlan = {
+      source,
+      pack: { format: "blank", name: input?.name || "Minecraft Server", versionId: null },
+      minecraftVersion: input?.minecraftVersion || null,
+      loaderType: input?.loaderType || null,
+      loaderVersion: input?.loaderVersion || null,
+      requiredJavaMajor: requiredJavaMajorForMinecraft(input?.minecraftVersion),
+      artifacts: [],
+      optionalFiles: [],
+      archiveLayers: [],
+      properties: {},
+      warnings: [],
+      integrity: { status: "trusted" },
+      estimatedBytes: 0,
+    };
+  } else if (source?.kind === "existingFolder") {
+    const rootDir = trimRequired(input?.rootDir, "existing server folder is required");
+    const detected = detectServerVersion(rootDir);
+    const hasLegacyJar = fs.existsSync(path.join(rootDir, "server.jar"));
+    sourcePlan = {
+      source: { ...source, rootDir },
+      pack: { format: "existing", name: path.basename(rootDir), versionId: null },
+      minecraftVersion: input?.minecraftVersion || detected.minecraftVersion,
+      loaderType: input?.loaderType || detected.loaderType || "vanilla",
+      loaderVersion: input?.loaderVersion || null,
+      requiredJavaMajor: requiredJavaMajorForMinecraft(
+        input?.minecraftVersion || detected.minecraftVersion,
+      ),
+      artifacts: [],
+      optionalFiles: [],
+      archiveLayers: [],
+      properties: {},
+      warnings: hasLegacyJar
+        ? []
+        : [
+            {
+              code: "EXISTING_RUNTIME_UNVERIFIED",
+              message: "The existing folder has no legacy server.jar; verify its runtime files before continuing.",
+              requiresAcknowledgement: true,
+            },
+          ],
+      integrity: { status: "unverified" },
+      estimatedBytes: 0,
+      launchSpec: hasLegacyJar
+        ? {
+            executable: { kind: "java" },
+            jvmArgs: ["-jar", "server.jar"],
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+          }
+        : null,
+      useExistingTarget: true,
+    };
+  } else {
+    throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
   }
-  if (source?.kind === "marketplaceModpack") {
-    return planMarketplacePack(source);
+
+  if (input?.prepareInstall !== true) return sourcePlan;
+  const loaderType = input?.loaderType || sourcePlan.loaderType;
+  const minecraftVersion = input?.minecraftVersion || sourcePlan.minecraftVersion;
+  if (!loaderType || !minecraftVersion) {
+    return sourcePlan;
   }
-  throw new Error(`unsupported provisioning source: ${source?.kind || "unknown"}`);
+  const adapter = loaderRegistry().get(loaderType);
+  let loaderVersion = input?.loaderVersion || sourcePlan.loaderVersion;
+  if (!loaderVersion) {
+    loaderVersion = (await adapter.listLoaderVersions(minecraftVersion))[0]?.value || null;
+  }
+  if (!loaderVersion) {
+    throw new Error(`No ${loaderType} server loader is available for Minecraft ${minecraftVersion}.`);
+  }
+  const loaderInstallPlan = await adapter.buildInstallPlan({
+    minecraftVersion,
+    loaderVersion,
+    workingDirectory: ".",
+  });
+  return {
+    ...sourcePlan,
+    loaderType,
+    minecraftVersion,
+    loaderVersion,
+    requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    loaderInstallPlan,
+    launchSpec: loaderInstallPlan.launchSpec,
+  };
 }
 
 function mapProvisioningJobRow(row) {
@@ -4427,15 +4515,169 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
   return id;
 }
 
+function provisioningTargetPath(rootDir, relativePath) {
+  const relative = String(relativePath || "").replace(/\\/g, "/");
+  if (!relative || path.posix.isAbsolute(relative) || /^[a-zA-Z]:/.test(relative)) {
+    throw new Error("provisioning artifact path must be target-relative");
+  }
+  const target = path.resolve(rootDir, ...relative.split("/"));
+  const fromRoot = path.relative(rootDir, target);
+  if (fromRoot === ".." || fromRoot.startsWith(`..${path.sep}`) || path.isAbsolute(fromRoot)) {
+    throw new Error("provisioning artifact path escapes the staging directory");
+  }
+  return target;
+}
+
+function verifyProvisioningHashes(filePath, hashes = {}) {
+  for (const [algorithm, expected] of Object.entries(hashes)) {
+    const normalized = String(algorithm).toLowerCase().replace("-", "");
+    if (!["md5", "sha1", "sha256", "sha512"].includes(normalized)) continue;
+    const actual = createHash(normalized).update(fs.readFileSync(filePath)).digest("hex");
+    if (actual.toLowerCase() !== String(expected).toLowerCase()) {
+      throw Object.assign(new Error(`${algorithm} checksum mismatch`), {
+        code: "ARTIFACT_CHECKSUM_MISMATCH",
+      });
+    }
+  }
+}
+
+async function downloadProvisioningArtifact(artifact, stagingDir, fallbackName) {
+  let url = artifact.url || artifact.urls?.[0] || null;
+  let filename = artifact.filename || artifact.path || fallbackName;
+  if (!url && artifact.provider === "curseforge") {
+    const file = await getCurseForgeFile(artifact.projectId, artifact.fileId);
+    url = await curseForgeDownloadUrl(artifact.projectId, artifact.fileId);
+    filename = artifact.path || path.join("mods", file.files[0]?.filename || fallbackName);
+  }
+  if (!url) throw new Error(`No download URL is available for ${fallbackName}.`);
+  const target = provisioningTargetPath(stagingDir, filename);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  await downloadRemoteFile(url, target);
+  verifyProvisioningHashes(target, artifact.hashes || {});
+  return target;
+}
+
+function removeProvisioningScripts(rootDir) {
+  const pending = [rootDir];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const target = path.join(current, entry.name);
+      if (entry.isDirectory()) pending.push(target);
+      else if (entry.isFile() && /\.(?:bat|cmd|ps1|sh)$/i.test(entry.name)) {
+        fs.rmSync(target, { force: true });
+      }
+    }
+  }
+}
+
+function provisioningLoaderRegistry(db) {
+  return createLoaderRegistry({
+    fetchJson: (url) => fetchJson(url, {}, "Loader metadata lookup failed"),
+    fetchText: (url) => fetchText(url, {}, "Loader metadata lookup failed"),
+    fileExists: fs.existsSync,
+    download: async (url, target, hashes) => {
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      await downloadRemoteFile(url, target);
+      verifyProvisioningHashes(target, hashes);
+    },
+    runProcess: (executable, args, options) =>
+      new Promise((resolve, reject) => {
+        const child = processSpawnerFor(db)(executable, args, {
+          ...options,
+          shell: false,
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+        child.once("error", reject);
+        child.once("exit", (code) => resolve({ code }));
+      }),
+  });
+}
+
+async function downloadProvisioningFiles(job) {
+  const plan = job.plan;
+  let sourcePlan = plan.resolvedSourcePlan || plan;
+  let resolvedPackPath = plan.resolvedPackPath || null;
+  if (
+    plan.source?.kind === "marketplaceModpack" &&
+    !resolvedPackPath &&
+    plan.artifacts?.length > 0
+  ) {
+    const packArtifact = plan.artifacts?.[0];
+    resolvedPackPath = await downloadProvisioningArtifact(
+      { ...packArtifact, filename: path.join(".mcsm-source", packArtifact.filename) },
+      job.stagingDir,
+      "server-pack.zip",
+    );
+    sourcePlan = await planLocalPack(resolvedPackPath);
+  }
+  for (const [index, artifact] of (sourcePlan.artifacts || []).entries()) {
+    await downloadProvisioningArtifact(
+      artifact,
+      job.stagingDir,
+      path.join("mods", `artifact-${index + 1}.jar`),
+    );
+  }
+  return {
+    plan: {
+      ...plan,
+      resolvedPackPath,
+      resolvedSourcePlan: sourcePlan,
+    },
+  };
+}
+
+async function extractProvisioningSource(job) {
+  if (job.plan.useExistingTarget) {
+    fs.cpSync(job.targetDir, job.stagingDir, { recursive: true });
+    return;
+  }
+  const packPath = job.plan.resolvedPackPath || job.plan.source?.path;
+  if (!packPath) return;
+  const sourcePlan = job.plan.resolvedSourcePlan || job.plan;
+  if ((sourcePlan.archiveLayers || []).length > 0) {
+    await extractZipLayers(packPath, job.stagingDir, sourcePlan.archiveLayers);
+  } else if (sourcePlan.pack?.format === "generic") {
+    await extractZipArchive(packPath, job.stagingDir);
+  }
+  removeProvisioningScripts(job.stagingDir);
+}
+
 function provisioningExecutorFor(db) {
   return createJobExecutor({
     store: provisioningJobStore(db),
     idGenerator: randomUUID,
     clock: nowIso,
     handlers: {
+      downloading: ({ job }) => downloadProvisioningFiles(job),
+      extracting: ({ job }) => extractProvisioningSource(job),
+      installingRuntime: ({ plan }) => {
+        validateJavaExecutable(plan.javaRuntime?.path);
+      },
+      installingLoader: async ({ job, plan }) => {
+        if (!plan.loaderInstallPlan) return;
+        const registry = provisioningLoaderRegistry(db);
+        const adapter = registry.get(plan.loaderType);
+        const installPlan = {
+          ...plan.loaderInstallPlan,
+          workingDirectory: job.stagingDir,
+        };
+        await adapter.install(installPlan, { javaPath: plan.javaRuntime.path });
+        const validation = await adapter.validate(installPlan);
+        if (!validation.valid) {
+          throw Object.assign(
+            new Error(`Loader installation is incomplete: ${validation.missing.join(", ")}`),
+            { code: "LOADER_INSTALL_INCOMPLETE" },
+          );
+        }
+      },
       committing: ({ job, plan }) => {
         const serverId = createProvisionedProfile(db, job.id, plan, job.targetDir);
         return serverId ? { serverId } : null;
+      },
+      starting: ({ job, plan }) => {
+        if (plan.profile?.autoStart && job.serverId) startServer(db, job.serverId);
       },
     },
   });
