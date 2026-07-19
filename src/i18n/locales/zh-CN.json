@@ -577,6 +577,7 @@
   "marketplace.noInstallableVersions": "未找到可安装版本。",
   "marketplace.externalDiskOnly": "此 BBSMC 版本只提供外部网盘链接。",
   "marketplace.externalDownloadRequired": "需要外部下载",
+  "marketplace.noAutomaticDownload": "没有可自动下载的文件",
   "marketplace.details.aria": "市场项目详情",
   "marketplace.details.loading": "正在加载项目…",
   "marketplace.details.empty.title": "未选择项目",

@@ -33,7 +33,7 @@ async function selectProvider(name: RegExp) {
 
 describe("CreateServerMarketplaceBrowser", () => {
   beforeEach(() => {
-    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
+    vi.mocked(invokeDesktopCommand).mockImplementation(async (command, args) => {
       if (command === "search_modrinth_projects") {
         return [
           {
@@ -80,6 +80,97 @@ describe("CreateServerMarketplaceBrowser", () => {
             serverCompatibility: "serverPack",
           },
         ];
+      }
+      if (command === "search_bbsmc_projects") {
+        return [
+          {
+            id: "bbsmc-pack-1",
+            slug: "public-pack",
+            title: "Public Pack",
+            description: "Public BBSMC server pack",
+            projectType: "modpack",
+            loaders: ["quilt"],
+            gameVersions: ["1.21.4"],
+            downloads: 1200,
+          },
+          {
+            id: "bbsmc-pack-2",
+            slug: "disk-pack",
+            title: "Disk Pack",
+            description: "External disk only pack",
+            projectType: "modpack",
+            loaders: ["fabric"],
+            gameVersions: ["1.20.1"],
+            downloads: 500,
+          },
+        ];
+      }
+      if (command === "get_bbsmc_project") {
+        const projectId = (args as { input?: { projectId?: string } })?.input
+          ?.projectId;
+        return projectId === "bbsmc-pack-2"
+          ? {
+              id: "bbsmc-pack-2",
+              slug: "disk-pack",
+              title: "Disk Pack",
+              description: "External disk only pack",
+              projectType: "modpack",
+              loaders: ["fabric"],
+              gameVersions: ["1.20.1"],
+              websiteUrl: "https://bbsmc.net/modpack/disk-pack",
+            }
+          : {
+              id: "bbsmc-pack-1",
+              slug: "public-pack",
+              title: "Public Pack",
+              description: "Public BBSMC server pack",
+              projectType: "modpack",
+              loaders: ["quilt"],
+              gameVersions: ["1.21.4"],
+              websiteUrl: "https://bbsmc.net/modpack/public-pack",
+            };
+      }
+      if (command === "list_bbsmc_versions") {
+        const projectId = (args as { input?: { projectId?: string } })?.input
+          ?.projectId;
+        return projectId === "bbsmc-pack-2"
+          ? [
+              {
+                id: "bbsmc-version-2",
+                projectId: "bbsmc-pack-2",
+                name: "Disk Pack 1.0.0",
+                versionNumber: "1.0.0",
+                loaders: ["fabric"],
+                gameVersions: ["1.20.1"],
+                files: [],
+                dependencies: [],
+                diskUrls: [
+                  { platform: "baidu", url: "https://pan.baidu.com/s/1" },
+                ],
+                diskOnly: true,
+                warnings: [],
+              },
+            ]
+          : [
+              {
+                id: "bbsmc-version-1",
+                projectId: "bbsmc-pack-1",
+                name: "Public Pack 1.0.0",
+                versionNumber: "1.0.0",
+                loaders: ["quilt"],
+                gameVersions: ["1.21.4"],
+                files: [
+                  {
+                    filename: "public-pack.mrpack",
+                    size: 2048,
+                    primary: true,
+                    url: "https://cdn.bbsmc.net/files/public-pack.mrpack",
+                  },
+                ],
+                dependencies: [],
+                warnings: [],
+              },
+            ];
       }
       return [];
     });
@@ -276,14 +367,77 @@ describe("CreateServerMarketplaceBrowser", () => {
     expect(details).not.toHaveTextContent("# Setup notes");
   });
 
-  it("offers only Modrinth discovery when CurseForge credentials are absent", async () => {
+  it("offers Modrinth and BBSMC discovery without CurseForge credentials", async () => {
     renderBrowser();
 
     await userEvent.click(screen.getByRole("combobox", { name: /providers/i }));
 
     expect(screen.getByRole("option", { name: /modrinth/i })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /bbsmc/i })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /curseforge/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: /bbsmc/i })).not.toBeInTheDocument();
+  });
+
+  it("routes BBSMC search, details, and versions through BBSMC commands", async () => {
+    renderBrowser();
+
+    await selectProvider(/bbsmc/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /public pack/i }),
+    );
+
+    expect(invokeDesktopCommand).toHaveBeenCalledWith(
+      "search_bbsmc_projects",
+      expect.objectContaining({
+        input: expect.objectContaining({ projectType: "modpack" }),
+      }),
+    );
+    expect(invokeDesktopCommand).toHaveBeenCalledWith(
+      "get_bbsmc_project",
+      { input: { projectId: "bbsmc-pack-1" } },
+    );
+    expect(invokeDesktopCommand).toHaveBeenCalledWith(
+      "list_bbsmc_versions",
+      { input: { projectId: "bbsmc-pack-1" } },
+    );
+  });
+
+  it("requires acknowledgement before selecting a public BBSMC file", async () => {
+    const onSelect = vi.fn();
+    renderBrowser(onSelect);
+
+    await selectProvider(/bbsmc/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /public pack/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /public pack 1\.0\.0/i }),
+    );
+
+    expect(onSelect).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("button", { name: /use unverified archive/i }),
+    );
+    expect(onSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "BBSMC",
+        versionId: "bbsmc-version-1",
+      }),
+    );
+  });
+
+  it("disables BBSMC versions that only expose external disk links", async () => {
+    renderBrowser();
+
+    await selectProvider(/bbsmc/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /disk pack/i }),
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: /external download required/i,
+      }),
+    ).toBeDisabled();
   });
 
   it("labels and sorts dedicated server packs before unverified archives", async () => {

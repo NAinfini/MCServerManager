@@ -659,6 +659,7 @@
   "marketplace.noInstallableVersions": "No installable versions found.",
   "marketplace.externalDiskOnly": "This BBSMC version only exposes external disk links.",
   "marketplace.externalDownloadRequired": "External download required",
+  "marketplace.noAutomaticDownload": "No automatic download available",
   "marketplace.details.aria": "Marketplace project details",
   "marketplace.details.loading": "Loading project…",
   "marketplace.details.empty.title": "No project selected",

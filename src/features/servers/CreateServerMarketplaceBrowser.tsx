@@ -9,10 +9,14 @@ import { Select, type SelectOption } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import {
+  getBbsmcProject,
   getModrinthProject,
+  listBbsmcVersions,
   listModrinthVersions,
+  searchBbsmcProjects,
   searchModrinthProjects,
   type MarketplaceLoaderFilter,
+  type MarketplaceSearchOptions,
   type MarketplaceSortOrder,
   type ProjectDetails,
   type ProjectSummary,
@@ -22,7 +26,7 @@ import { MarketplaceMarkdown } from "../marketplace/MarketplaceMarkdown";
 import { getMarketplaceProviderBranding } from "../marketplace/providerBranding";
 import type { LoaderType } from "./types";
 
-type MarketplaceProvider = "Modrinth";
+type MarketplaceProvider = "Modrinth" | "BBSMC";
 type MarketplaceProject = ProjectSummary | ProjectDetails;
 
 export interface MarketplaceCreateSelection {
@@ -41,10 +45,39 @@ interface CreateServerMarketplaceBrowserProps {
   onDetailModeChange?: (isDetailMode: boolean) => void;
 }
 
-const providers: MarketplaceProvider[] = ["Modrinth"];
+const providers: MarketplaceProvider[] = ["Modrinth", "BBSMC"];
 const discoveryQueries: Record<MarketplaceProvider, string> = {
   Modrinth: "server",
+  BBSMC: "server",
 };
+
+function searchProviderProjects(
+  provider: MarketplaceProvider,
+  query: string,
+  options: MarketplaceSearchOptions,
+) {
+  return provider === "BBSMC"
+    ? searchBbsmcProjects(query, options)
+    : searchModrinthProjects("create-server", query, options);
+}
+
+function getProviderProject(
+  provider: MarketplaceProvider,
+  projectId: string,
+) {
+  return provider === "BBSMC"
+    ? getBbsmcProject(projectId)
+    : getModrinthProject(projectId);
+}
+
+function listProviderVersions(
+  provider: MarketplaceProvider,
+  projectId: string,
+) {
+  return provider === "BBSMC"
+    ? listBbsmcVersions(projectId)
+    : listModrinthVersions("create-server", projectId);
+}
 
 function projectTitle(project: MarketplaceProject | null) {
   return project?.title || "";
@@ -182,8 +215,31 @@ function marketplaceSelectionMetadata(
   return { loaderType, minecraftVersion, loaderVersion };
 }
 
-function versionIsDirectlyInstallable(provider: MarketplaceProvider) {
-  return provider === "Modrinth";
+function isBbsmcPublicFile(version: ProjectVersion) {
+  return version.files.some((file) => {
+    try {
+      const url = new URL(file.url || "");
+      return (
+        url.protocol === "https:" &&
+        url.hostname.toLowerCase() === "cdn.bbsmc.net"
+      );
+    } catch {
+      return false;
+    }
+  });
+}
+
+function versionInstallability(
+  provider: MarketplaceProvider,
+  version: ProjectVersion,
+) {
+  if (provider === "Modrinth" || isBbsmcPublicFile(version)) {
+    return { installable: true, reason: null } as const;
+  }
+  if (version.diskOnly || (version.diskUrls?.length ?? 0) > 0) {
+    return { installable: false, reason: "external" } as const;
+  }
+  return { installable: false, reason: "missing" } as const;
 }
 
 function versionHasServerPack(version: ProjectVersion) {
@@ -223,7 +279,7 @@ export function CreateServerMarketplaceBrowser({
     ],
     enabled: submittedQuery.trim() !== "",
     queryFn: () =>
-      searchModrinthProjects("create-server", submittedQuery, {
+      searchProviderProjects(provider, submittedQuery, {
         projectType: "modpack",
         loader: loaderFilter,
         sort: sortOrder,
@@ -249,7 +305,7 @@ export function CreateServerMarketplaceBrowser({
       if (!selectedProject) {
         return null;
       }
-      return getModrinthProject(selectedProject.id);
+      return getProviderProject(provider, selectedProject.id);
     },
   });
 
@@ -260,7 +316,7 @@ export function CreateServerMarketplaceBrowser({
       if (!selectedProject) {
         return [];
       }
-      return listModrinthVersions("create-server", selectedProject.id);
+      return listProviderVersions(provider, selectedProject.id);
     },
   });
 
@@ -586,20 +642,24 @@ export function CreateServerMarketplaceBrowser({
                     ) : null}
                     <div className="marketplace-version-list-compact">
                       {versions.map((version) => {
-                        const directlyInstallable =
-                          versionIsDirectlyInstallable(provider);
+                        const installability = versionInstallability(
+                          provider,
+                          version,
+                        );
+                        const unavailableMessage =
+                          installability.reason === "external"
+                            ? t("marketplace.externalDiskOnly")
+                            : installability.reason === "missing"
+                              ? t("marketplace.noAutomaticDownload")
+                              : undefined;
                         const minecraftLabels =
                           versionMinecraftLabels(version);
                         return (
                           <button
                             className="marketplace-install-version"
-                            disabled={!directlyInstallable}
+                            disabled={!installability.installable}
                             key={version.id}
-                            title={
-                              directlyInstallable
-                                ? undefined
-                                : t("marketplace.externalDiskOnly")
-                            }
+                            title={unavailableMessage}
                             type="button"
                             onClick={() =>
                               selectVersion(selectedProject, version)
@@ -620,9 +680,11 @@ export function CreateServerMarketplaceBrowser({
                                   ? t("marketplace.serverPackBadge")
                                   : t("marketplace.unverifiedArchiveBadge")}
                               </small>
-                              {!directlyInstallable ? (
+                              {installability.reason ? (
                                 <small>
-                                  {t("marketplace.externalDownloadRequired")}
+                                  {installability.reason === "external"
+                                    ? t("marketplace.externalDownloadRequired")
+                                    : t("marketplace.noAutomaticDownload")}
                                 </small>
                               ) : null}
                             </span>
