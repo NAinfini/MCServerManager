@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, within } from "../../test/render";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -170,5 +177,67 @@ describe("Sidebar server organization", () => {
     expect(
       await screen.findByRole("group", { name: /new group/i }),
     ).toBeInTheDocument();
+  });
+
+  it("navigates a server context menu by keyboard and restores trigger focus", async () => {
+    renderSidebar();
+
+    const trigger = screen.getByRole("button", { name: /survival smp/i });
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.contextMenu(trigger);
+
+    const menu = await screen.findByRole("menu", {
+      name: /survival smp actions/i,
+    });
+    const items = within(menu).getAllByRole("menuitem");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+
+    await userEvent.keyboard("{ArrowDown}");
+    expect(items[1]).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    expect(items.at(-1)).toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    expect(items[0]).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(items.at(-1)).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+
+    expect(menu).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("exposes and keyboard-navigates group context menus", async () => {
+    renderSidebar();
+
+    const dataTransfer = createDataTransfer();
+    fireEvent.dragStart(
+      screen.getByRole("button", { name: /modded forge/i }),
+      { dataTransfer },
+    );
+    fireEvent.drop(screen.getByRole("button", { name: /survival smp/i }), {
+      dataTransfer,
+    });
+
+    const group = await screen.findByRole("group", { name: /new group/i });
+    const trigger = group.querySelector<HTMLButtonElement>(
+      ".server-nav-group-header",
+    )!;
+    expect(trigger).toHaveAttribute("aria-haspopup", "menu");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    fireEvent.contextMenu(trigger);
+
+    const menu = await screen.findByRole("menu", { name: /new group actions/i });
+    const items = within(menu).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+    await userEvent.keyboard("{ArrowDown}");
+    expect(items[1]).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(menu).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });

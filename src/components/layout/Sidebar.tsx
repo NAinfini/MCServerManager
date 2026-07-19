@@ -16,8 +16,10 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -153,6 +155,8 @@ export function Sidebar({
   const reduceMotion = useReducedMotion();
   const [draggingServerId, setDraggingServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
+  const contextMenuTriggerRef = useRef<HTMLElement | null>(null);
   const statusQueries = useQueries({
     queries: servers.map((server) => ({
       queryKey: ["serverProcessStatus", server.id],
@@ -201,28 +205,29 @@ export function Sidebar({
     syncServerLayout(serverIds);
   }, [serverIdKey, serverIds, syncServerLayout]);
 
+  const closeContextMenu = useCallback((restoreFocus = false) => {
+    const trigger = contextMenuTriggerRef.current;
+    setContextMenu(null);
+    if (restoreFocus) trigger?.focus();
+  }, []);
+
   useEffect(() => {
     if (!contextMenu) return;
 
-    const closeMenu = () => setContextMenu(null);
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeMenu();
-      }
-    };
+    contextMenuRef.current
+      ?.querySelector<HTMLElement>('[role="menuitem"]')
+      ?.focus();
+    const closeMenu = () => closeContextMenu(false);
 
     document.addEventListener("click", closeMenu);
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("click", closeMenu);
-      document.removeEventListener("keydown", closeOnEscape);
-    };
-  }, [contextMenu]);
+    return () => document.removeEventListener("click", closeMenu);
+  }, [closeContextMenu, contextMenu]);
 
   const openContextMenu = useCallback(
     (event: MouseEvent<HTMLElement>, menu: Omit<ContextMenuState, "x" | "y">) => {
       event.preventDefault();
       event.stopPropagation();
+      contextMenuTriggerRef.current = event.currentTarget;
       setContextMenu({
         ...menu,
         x: event.clientX,
@@ -230,6 +235,44 @@ export function Sidebar({
       });
     },
     [],
+  );
+
+  const handleContextMenuKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      const items = Array.from(
+        event.currentTarget.querySelectorAll<HTMLElement>(
+          '[role="menuitem"]:not(:disabled)',
+        ),
+      );
+      if (items.length === 0) return;
+
+      const activeIndex = items.indexOf(document.activeElement as HTMLElement);
+      let nextIndex: number | null = null;
+      if (event.key === "ArrowDown") {
+        nextIndex = activeIndex < 0 ? 0 : (activeIndex + 1) % items.length;
+      } else if (event.key === "ArrowUp") {
+        nextIndex = activeIndex <= 0 ? items.length - 1 : activeIndex - 1;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = items.length - 1;
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeContextMenu(true);
+        return;
+      } else if (event.key === "Tab") {
+        closeContextMenu(false);
+        return;
+      }
+
+      if (nextIndex !== null) {
+        event.preventDefault();
+        event.stopPropagation();
+        items[nextIndex]?.focus();
+      }
+    },
+    [closeContextMenu],
   );
 
   const beginServerDrag = useCallback(
@@ -308,6 +351,10 @@ export function Sidebar({
           <NavTooltip enabled={collapsed} label={server.name}>
             <button
               aria-current={isActive ? "page" : undefined}
+              aria-expanded={
+                contextMenu?.type === "server" && contextMenu.id === server.id
+              }
+              aria-haspopup="menu"
               className={[
                 "server-nav-item",
                 isActive ? "server-nav-item-active" : "",
@@ -357,6 +404,7 @@ export function Sidebar({
     [
       beginServerDrag,
       collapsed,
+      contextMenu,
       draggingServerId,
       dropOnServer,
       onSelectServer,
@@ -404,6 +452,10 @@ export function Sidebar({
           role="group"
         >
           <button
+            aria-expanded={
+              contextMenu?.type === "group" && contextMenu.id === group.id
+            }
+            aria-haspopup="menu"
             className="server-nav-group-header"
             type="button"
             onClick={() => toggleGroup(group.id)}
@@ -448,6 +500,7 @@ export function Sidebar({
     },
     [
       collapsed,
+      contextMenu,
       dropIntoGroup,
       openContextMenu,
       reduceMotion,
@@ -563,18 +616,20 @@ export function Sidebar({
 
       {contextMenu && menuServer && (
         <div
+          ref={contextMenuRef}
           aria-label={t("nav.serverContext.menu", { server: menuServer.name })}
           className="sidebar-context-menu"
           role="menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
+          onKeyDown={handleContextMenuKeyDown}
         >
           <button
             role="menuitem"
             type="button"
             onClick={() => {
               onSelectServer?.(menuServer.id);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <FolderOpen aria-hidden="true" size={15} />
@@ -585,7 +640,7 @@ export function Sidebar({
             type="button"
             onClick={() => {
               createGroupFromServer(menuServer.id);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <FolderPlus aria-hidden="true" size={15} />
@@ -596,7 +651,7 @@ export function Sidebar({
             type="button"
             onClick={() => {
               moveServerToTop(menuServer.id);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <MoveUp aria-hidden="true" size={15} />
@@ -608,7 +663,7 @@ export function Sidebar({
               type="button"
               onClick={() => {
                 ungroupServer(menuServer.id);
-                setContextMenu(null);
+                closeContextMenu(true);
               }}
             >
               <Ungroup aria-hidden="true" size={15} />
@@ -620,18 +675,20 @@ export function Sidebar({
 
       {contextMenu && menuGroup && (
         <div
+          ref={contextMenuRef}
           aria-label={t("nav.serverGroup.menu", { group: menuGroupName })}
           className="sidebar-context-menu"
           role="menu"
           style={{ left: contextMenu.x, top: contextMenu.y }}
           onClick={(event) => event.stopPropagation()}
+          onKeyDown={handleContextMenuKeyDown}
         >
           <button
             role="menuitem"
             type="button"
             onClick={() => {
               toggleGroup(menuGroup.id);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <ChevronDown aria-hidden="true" size={15} />
@@ -646,7 +703,7 @@ export function Sidebar({
             type="button"
             onClick={() => {
               promptRenameGroup(menuGroup);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <FolderOpen aria-hidden="true" size={15} />
@@ -657,7 +714,7 @@ export function Sidebar({
             type="button"
             onClick={() => {
               disbandGroup(menuGroup.id);
-              setContextMenu(null);
+              closeContextMenu(true);
             }}
           >
             <Ungroup aria-hidden="true" size={15} />
