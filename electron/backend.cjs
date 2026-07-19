@@ -4980,6 +4980,7 @@ function verifyProvisioningHashes(filePath, hashes = {}) {
 
 const PROVISIONING_PROVIDER_HOSTS = Object.freeze({
   modrinth: new Set(["cdn.modrinth.com"]),
+  bbsmc: new Set(["cdn.bbsmc.net"]),
   curseforge: new Set([
     "edge.forgecdn.net",
     "media.forgecdn.net",
@@ -5947,10 +5948,55 @@ async function planCurseForgeMarketplacePack(source) {
   };
 }
 
+async function planBbsmcMarketplacePack(source) {
+  const version = await getBbsmcVersion(
+    trimRequired(source.versionId, "BBSMC version id is required"),
+  );
+  const file = selectInstallableBbsmcFile(version);
+  ensureBbsmcFileIsDirect(file, version);
+  const url = validateProvisioningUrl(file.url, "bbsmc");
+  const minecraftVersion = version.gameVersions[0] || null;
+  return {
+    source,
+    pack: {
+      format: "bbsmc",
+      name: version.name,
+      versionId: version.id,
+    },
+    minecraftVersion,
+    loaderType: normalizeMarketplaceLoaderType(version.loaders),
+    loaderVersion: null,
+    requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    artifacts: [
+      {
+        provider: "bbsmc",
+        projectId: version.projectId,
+        versionId: version.id,
+        filename: file.filename,
+        size: file.size,
+        url,
+        hashes: file.hashes || {},
+        environment: "server",
+      },
+    ],
+    optionalFiles: [],
+    archiveLayers: [],
+    properties: {},
+    warnings: [
+      unverifiedMarketplaceWarning(
+        "BBSMC does not identify this archive as a dedicated server pack.",
+      ),
+    ],
+    integrity: { status: "unverified" },
+    estimatedBytes: file.size || 0,
+  };
+}
+
 async function planMarketplacePack(source) {
   const provider = String(source.provider || "").toLowerCase();
   if (provider === "modrinth") return planModrinthMarketplacePack(source);
   if (provider === "curseforge") return planCurseForgeMarketplacePack(source);
+  if (provider === "bbsmc") return planBbsmcMarketplacePack(source);
   throw new Error(
     `unsupported marketplace provider: ${source.provider || "unknown"}`,
   );

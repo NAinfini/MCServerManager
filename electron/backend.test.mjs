@@ -3329,6 +3329,148 @@ describe("Electron backend server pack metadata", () => {
     }
   });
 
+  it("plans a public BBSMC archive as an unverified marketplace pack", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async (url) => {
+      expect(String(url)).toContain("/v2/version/bbsmc-version-1");
+      return jsonResponse({
+        id: "bbsmc-version-1",
+        project_id: "bbsmc-project-1",
+        name: "BBSMC Public Pack",
+        version_number: "2.0.0",
+        loaders: ["quilt"],
+        game_versions: ["1.21.4"],
+        files: [
+          {
+            filename: "bbsmc-pack.mrpack",
+            size: 8192,
+            primary: true,
+            url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
+            hashes: { sha512: "bbsmc-sha512" },
+          },
+        ],
+        dependencies: [],
+      });
+    });
+
+    try {
+      const plan = await backend.handle("plan_server_provisioning", {
+        input: {
+          source: {
+            kind: "marketplaceModpack",
+            provider: "BBSMC",
+            projectId: "bbsmc-project-1",
+            versionId: "bbsmc-version-1",
+          },
+        },
+      });
+
+      expect(plan).toMatchObject({
+        pack: {
+          format: "bbsmc",
+          name: "BBSMC Public Pack",
+          versionId: "bbsmc-version-1",
+        },
+        minecraftVersion: "1.21.4",
+        loaderType: "quilt",
+        artifacts: [
+          {
+            provider: "bbsmc",
+            projectId: "bbsmc-project-1",
+            versionId: "bbsmc-version-1",
+            filename: "bbsmc-pack.mrpack",
+            size: 8192,
+            url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
+            hashes: { sha512: "bbsmc-sha512" },
+          },
+        ],
+        integrity: { status: "unverified" },
+      });
+      expect(plan.warnings).toContainEqual(
+        expect.objectContaining({
+          code: "PACK_UNVERIFIED",
+          requiresAcknowledgement: true,
+        }),
+      );
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("rejects BBSMC versions that only provide external disk links", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        id: "bbsmc-disk-version",
+        project_id: "bbsmc-project-2",
+        name: "External Disk Pack",
+        version_number: "1.0.0",
+        loaders: ["forge"],
+        game_versions: ["1.20.1"],
+        files: [],
+        disk_only: true,
+        disk_urls: [
+          { platform: "Baidu", url: "https://pan.baidu.com/example" },
+        ],
+      }),
+    );
+
+    try {
+      await expect(
+        backend.handle("plan_server_provisioning", {
+          input: {
+            source: {
+              kind: "marketplaceModpack",
+              provider: "BBSMC",
+              projectId: "bbsmc-project-2",
+              versionId: "bbsmc-disk-version",
+            },
+          },
+        }),
+      ).rejects.toThrow(/external disk download links/i);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("rejects a BBSMC archive hosted outside the public BBSMC CDN", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        id: "bbsmc-untrusted-version",
+        project_id: "bbsmc-project-3",
+        name: "Untrusted Pack",
+        version_number: "1.0.0",
+        loaders: ["fabric"],
+        game_versions: ["1.20.1"],
+        files: [
+          {
+            filename: "pack.zip",
+            primary: true,
+            url: "https://example.com/pack.zip",
+          },
+        ],
+      }),
+    );
+
+    try {
+      await expect(
+        backend.handle("plan_server_provisioning", {
+          input: {
+            source: {
+              kind: "marketplaceModpack",
+              provider: "BBSMC",
+              projectId: "bbsmc-project-3",
+              versionId: "bbsmc-untrusted-version",
+            },
+          },
+        }),
+      ).rejects.toThrow(/does not expose a direct public file download URL/i);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("preserves CurseForge metadata and resolves a client file to its server pack", async () => {
     const backend = createTestBackend();
     globalThis.fetch = vi.fn(async (url, options = {}) => {
