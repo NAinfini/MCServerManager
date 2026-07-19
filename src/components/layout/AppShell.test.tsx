@@ -5,6 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppSettingsProvider } from "../../i18n";
 import { AppShell } from "./AppShell";
 
+const appShellTestState = vi.hoisted(() => ({
+  recoverableProvisioningJobs: [] as unknown[],
+}));
+
 vi.mock("../../lib/desktop-runtime", () => ({
   isDesktopRuntimeAvailable: vi.fn(() => true),
   openExternalUrl: vi.fn(async () => undefined),
@@ -121,6 +125,9 @@ vi.mock("../../lib/desktop-runtime", () => ({
         },
       ];
     }
+    if (command === "list_recoverable_provisioning_jobs") {
+      return appShellTestState.recoverableProvisioningJobs;
+    }
     return null;
   }),
 }));
@@ -147,6 +154,7 @@ describe("AppShell", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    appShellTestState.recoverableProvisioningJobs = [];
   });
 
   it("renders the main navigation regions", async () => {
@@ -231,9 +239,14 @@ describe("AppShell", () => {
       screen.getByRole("button", { name: /create server/i }),
     );
 
+    const main = screen.getByRole("main");
     expect(
-      await screen.findByRole("dialog", { name: "Create server" }),
+      await within(main).findByRole("heading", { name: "Create server" }),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Create server" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: /primary/i })).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /new blank server/i }),
     ).toBeInTheDocument();
@@ -257,18 +270,19 @@ describe("AppShell", () => {
     );
   });
 
-  it("renders the create wizard progress inside the dialog header", async () => {
+  it("renders the create wizard progress inside the main content header", async () => {
     renderShell();
 
     await userEvent.click(
       screen.getByRole("button", { name: /create server/i }),
     );
 
-    const dialog = await screen.findByRole("dialog", { name: "Create server" });
-    const header = dialog.querySelector<HTMLElement>(
+    const main = screen.getByRole("main");
+    await within(main).findByRole("heading", { name: "Create server" });
+    const header = main.querySelector<HTMLElement>(
       ".create-server-wizard-header",
     );
-    const progress = within(dialog).getByRole("navigation", {
+    const progress = within(main).getByRole("navigation", {
       name: "Wizard progress",
     });
 
@@ -281,7 +295,7 @@ describe("AppShell", () => {
       within(header!).getByRole("button", { name: "Close create server" }),
     ).toBeInTheDocument();
     expect(
-      dialog.querySelector(".create-server-panel .wizard-steps"),
+      main.querySelector(".create-server-panel .wizard-steps"),
     ).not.toBeInTheDocument();
   });
 
@@ -291,23 +305,24 @@ describe("AppShell", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /create server/i }),
     );
-    const dialog = await screen.findByRole("dialog", { name: "Create server" });
+    const main = screen.getByRole("main");
+    await within(main).findByRole("heading", { name: "Create server" });
 
     await userEvent.click(
-      within(dialog).getByRole("button", { name: /browse marketplace/i }),
+      within(main).getByRole("button", { name: /browse marketplace/i }),
     );
     await userEvent.click(
-      await within(dialog).findByRole("button", { name: /lazy survival/i }),
+      await within(main).findByRole("button", { name: /lazy survival/i }),
     );
 
-    const details = await within(dialog).findByRole("article", {
+    const details = await within(main).findByRole("article", {
       name: /lazy survival/i,
     });
     expect(
-      dialog.querySelector(".create-server-wizard-header"),
+      main.querySelector(".create-server-wizard-header"),
     ).not.toBeInTheDocument();
     expect(
-      within(dialog).queryByRole("navigation", { name: "Wizard progress" }),
+      within(main).queryByRole("navigation", { name: "Wizard progress" }),
     ).not.toBeInTheDocument();
 
     await userEvent.click(
@@ -315,55 +330,106 @@ describe("AppShell", () => {
     );
 
     expect(
-      dialog.querySelector(".create-server-wizard-header"),
+      main.querySelector(".create-server-wizard-header"),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("navigation", { name: "Wizard progress" }),
+      within(main).getByRole("navigation", { name: "Wizard progress" }),
     ).toBeInTheDocument();
   });
 
-  it("keeps the create server modal open when dismissing a dropdown inside it", async () => {
+  it("keeps the inline create page active when dismissing a dropdown", async () => {
     renderShell();
 
     await userEvent.click(
       screen.getByRole("button", { name: /create server/i }),
     );
-    const dialog = await screen.findByRole("dialog", { name: "Create server" });
+    const main = screen.getByRole("main");
+    await within(main).findByRole("heading", { name: "Create server" });
 
     await userEvent.click(
-      within(dialog).getByRole("button", { name: /browse marketplace/i }),
+      within(main).getByRole("button", { name: /browse marketplace/i }),
     );
-    const providerSelect = await within(dialog).findByRole("combobox", {
+    const providerSelect = await within(main).findByRole("combobox", {
       name: /providers/i,
     });
 
     await userEvent.click(providerSelect);
     expect(screen.getByRole("option", { name: "Modrinth" })).toBeInTheDocument();
-
-    const backdrop = document.querySelector(".dialog-backdrop");
-    expect(backdrop).not.toBeNull();
-    fireEvent.pointerDown(backdrop!);
-    fireEvent.click(backdrop!);
-
+    await userEvent.keyboard("{Escape}");
     expect(
-      screen.getByRole("dialog", { name: "Create server" }),
+      within(main).getByRole("heading", { name: "Create server" }),
     ).toBeInTheDocument();
   });
 
-  it("renders modal content outside the backdrop hit target", async () => {
+  it("confirms before abandoning a server creation draft", async () => {
     renderShell();
 
     await userEvent.click(
       screen.getByRole("button", { name: /create server/i }),
     );
 
-    const dialog = await screen.findByRole("dialog", { name: "Create server" });
-    const backdrop = document.querySelector(".dialog-backdrop");
+    await screen.findByRole("heading", { name: "Create server" });
+    await userEvent.click(
+      screen.getByRole("button", { name: /^logger$/i }),
+    );
 
-    expect(backdrop).not.toBeNull();
-    expect(backdrop).not.toContainElement(dialog);
-    expect(dialog).toHaveClass("modal-dialog");
-    expect(dialog).toHaveClass("create-server-dialog");
+    const confirmation = await screen.findByRole("alertdialog", {
+      name: "Discard server creation?",
+    });
+    await userEvent.click(within(confirmation).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("heading", { name: "Create server" })).toBeInTheDocument();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /^logger$/i }),
+    );
+    await userEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Discard creation",
+      }),
+    );
+    expect(
+      await screen.findByRole("heading", { name: "Application Logger" }),
+    ).toBeInTheDocument();
+  });
+
+  it("allows leaving after a recoverable provisioning job has started", async () => {
+    appShellTestState.recoverableProvisioningJobs = [
+      {
+        id: "job-1",
+        serverId: null,
+        stage: "failed",
+        plan: {},
+        progress: { completedStages: ["downloading"] },
+        stagingDir: "C:/Servers/.staging/job-1",
+        targetDir: "C:/Servers/Test",
+        error: {
+          code: "DOWNLOAD_FAILED",
+          stage: "downloading",
+          message: "Download interrupted",
+          detail: null,
+          retryable: true,
+          cleanupRequired: true,
+        },
+        createdAt: "2026-07-18T00:00:00Z",
+        updatedAt: "2026-07-18T00:01:00Z",
+      },
+    ];
+    renderShell();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /create server/i }),
+    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+    await userEvent.click(
+      screen.getByRole("button", { name: /^logger$/i }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Application Logger" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("alertdialog", { name: "Discard server creation?" }),
+    ).not.toBeInTheDocument();
   });
 
   it("opens settings as a modal with section navigation", async () => {

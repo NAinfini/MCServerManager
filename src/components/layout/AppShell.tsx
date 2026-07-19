@@ -17,10 +17,12 @@ import { Sidebar, type PrimaryPage } from "./Sidebar";
 import { TopRuntimeBar } from "./TopRuntimeBar";
 import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
+import { ConfirmDangerDialog } from "../ui/ConfirmDangerDialog";
 import { listServerProfiles } from "../../features/servers/api";
 import { BatchActions } from "../../features/servers/BatchActions";
 import {
   CreateServerWizard,
+  type CreateServerWizardLifecycle,
   type CreateServerWizardProgress,
 } from "../../features/servers/CreateServerWizard";
 import { DropImportOverlay } from "../../features/servers/DropImportOverlay";
@@ -70,7 +72,12 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   const { t } = useAppSettings();
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const [activePage, setActivePage] = useState<PrimaryPage>("servers");
-  const [isCreateServerOpen, setCreateServerOpen] = useState(false);
+  const [isCreateServerActive, setCreateServerActive] = useState(false);
+  const [createServerLifecycle, setCreateServerLifecycle] =
+    useState<CreateServerWizardLifecycle>("draft");
+  const [pendingCreateServerExit, setPendingCreateServerExit] = useState<
+    (() => void) | null
+  >(null);
   const [createServerHeaderBack, setCreateServerHeaderBack] = useState<
     (() => void) | null
   >(null);
@@ -166,15 +173,47 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     [],
   );
 
-  const handleCreateServerOpenChange = useCallback((open: boolean) => {
-    setCreateServerOpen(open);
-    if (!open) {
-      setCreateServerSourcePath(null);
-      setCreateServerHeaderBack(null);
-      setCreateServerHeaderHidden(false);
-      setCreateServerProgress(null);
-    }
+  const resetCreateServer = useCallback(() => {
+    setCreateServerActive(false);
+    setCreateServerLifecycle("draft");
+    setCreateServerSourcePath(null);
+    setCreateServerHeaderBack(null);
+    setCreateServerHeaderHidden(false);
+    setCreateServerProgress(null);
   }, []);
+
+  const openCreateServer = useCallback((sourcePath: string | null = null) => {
+    setJavaOpen(false);
+    setSettingsOpen(false);
+    setActivePage("servers");
+    setSelectedServerId(null);
+    setCreateServerSourcePath(sourcePath);
+    setCreateServerLifecycle("draft");
+    setCreateServerActive(true);
+  }, []);
+
+  const requestCreateServerExit = useCallback(
+    (destination: () => void) => {
+      if (!isCreateServerActive) {
+        destination();
+        return;
+      }
+      if (createServerLifecycle === "draft") {
+        setPendingCreateServerExit(() => destination);
+        return;
+      }
+      resetCreateServer();
+      destination();
+    },
+    [createServerLifecycle, isCreateServerActive, resetCreateServer],
+  );
+
+  const confirmCreateServerExit = useCallback(() => {
+    const destination = pendingCreateServerExit;
+    setPendingCreateServerExit(null);
+    resetCreateServer();
+    destination?.();
+  }, [pendingCreateServerExit, resetCreateServer]);
 
   return (
     <div className="app-shell">
@@ -187,10 +226,18 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           if (!open) setDroppedImportPaths([]);
         }}
         onContinue={() => {
-          setCreateServerSourcePath(droppedImportPaths[0] || null);
+          const sourcePath = droppedImportPaths[0] || null;
           setDroppedImportPaths([]);
-          setCreateServerOpen(true);
+          requestCreateServerExit(() => openCreateServer(sourcePath));
         }}
+      />
+      <ConfirmDangerDialog
+        isOpen={pendingCreateServerExit !== null}
+        title={t("danger.createServer.discard.title")}
+        description={t("danger.createServer.discard.description")}
+        confirmLabel={t("danger.labels.discardCreation")}
+        onCancel={() => setPendingCreateServerExit(null)}
+        onConfirm={confirmCreateServerExit}
       />
 
       <div className={sidebarCollapsed ? "app-body app-body-sidebar-collapsed" : "app-body"}>
@@ -200,23 +247,27 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           servers={servers}
           onSelectPage={(page) => {
             if (page === "servers") {
-              openServersOverview();
+              requestCreateServerExit(openServersOverview);
               return;
             }
             if (page === "java") {
-              setJavaOpen(true);
+              requestCreateServerExit(() => setJavaOpen(true));
               return;
             }
             if (page === "settings") {
-              setSettingsOpen(true);
+              requestCreateServerExit(() => setSettingsOpen(true));
               return;
             }
-            setSelectedServerId(null);
-            setActivePage(page);
+            requestCreateServerExit(() => {
+              setSelectedServerId(null);
+              setActivePage(page);
+            });
           }}
           onSelectServer={(serverId) => {
-            setActivePage("servers");
-            setSelectedServerId(serverId);
+            requestCreateServerExit(() => {
+              setActivePage("servers");
+              setSelectedServerId(serverId);
+            });
           }}
         />
         <TopRuntimeBar
@@ -224,10 +275,86 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           crashedCount={crashedCount}
         />
         <main
-          className="page"
-          aria-labelledby={activePage === "logger" ? "logger-title" : "servers-title"}
+          className={isCreateServerActive ? "page page-create-server" : "page"}
+          aria-labelledby={
+            isCreateServerActive
+              ? "create-server-page-title"
+              : activePage === "logger"
+                ? "logger-title"
+                : "servers-title"
+          }
         >
-          {activePage === "logger" && !selectedServer ? (
+          {isCreateServerActive ? (
+            <section className="create-server-page">
+              {createServerHeaderHidden ? (
+                <>
+                  <h1 id="create-server-page-title" className="visually-hidden">
+                    {t("servers.create.title")}
+                  </h1>
+                  <p className="visually-hidden">
+                    {t("servers.create.description")}
+                  </p>
+                  <Button
+                    aria-label={t("servers.create.close")}
+                    className="icon-button create-server-detail-close"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => requestCreateServerExit(openServersOverview)}
+                  >
+                    <X aria-hidden="true" size={16} />
+                  </Button>
+                </>
+              ) : (
+                <header className="create-server-page-header create-server-wizard-header">
+                  <div className="create-server-page-title-row">
+                    {createServerHeaderBack ? (
+                      <Button
+                        className="create-server-header-back"
+                        type="button"
+                        variant="ghost"
+                        onClick={createServerHeaderBack}
+                      >
+                        <ChevronLeft aria-hidden="true" size={15} />
+                        {t("wizard.nav.back")}
+                      </Button>
+                    ) : null}
+                    <div>
+                      <h1 id="create-server-page-title">
+                        {t("servers.create.title")}
+                      </h1>
+                      <p>{t("servers.create.description")}</p>
+                    </div>
+                  </div>
+                  {createServerProgress ? (
+                    <WizardStepIndicator
+                      currentStep={createServerProgress.currentStep}
+                      steps={createServerProgress.steps}
+                    />
+                  ) : null}
+                  <Button
+                    aria-label={t("servers.create.close")}
+                    className="icon-button"
+                    variant="ghost"
+                    onClick={() => requestCreateServerExit(openServersOverview)}
+                  >
+                    <X aria-hidden="true" size={16} />
+                  </Button>
+                </header>
+              )}
+              <CreateServerWizard
+                initialSourcePath={createServerSourcePath}
+                showHeading={false}
+                onHeaderHiddenChange={setCreateServerHeaderHidden}
+                onHeaderBackChange={handleCreateServerHeaderBackChange}
+                onProgressChange={setCreateServerProgress}
+                onLifecycleChange={setCreateServerLifecycle}
+                onCreated={() => {
+                  resetCreateServer();
+                  openServersOverview();
+                }}
+              />
+            </section>
+          ) : activePage === "logger" && !selectedServer ? (
             <AppLoggerView />
           ) : (
             <>
@@ -263,7 +390,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                 </div>
               ) : null}
               <Button
-                onClick={() => setCreateServerOpen(true)}
+                onClick={() => openCreateServer()}
                 variant="primary"
               >
                 <Plus aria-hidden="true" size={15} />
@@ -345,87 +472,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
               )}
             </>
           )}
-
-              <Dialog.Root
-                open={isCreateServerOpen}
-                onOpenChange={handleCreateServerOpenChange}
-              >
-                <Dialog.Portal>
-                  <Dialog.Overlay className="dialog-backdrop" />
-                  <Dialog.Content
-                    className="modal-dialog create-server-dialog"
-                    onPointerDownOutside={(event) => event.preventDefault()}
-                  >
-                    {createServerHeaderHidden ? (
-                      <>
-                        <Dialog.Title className="visually-hidden">
-                          {t("servers.create.title")}
-                        </Dialog.Title>
-                        <Dialog.Description className="visually-hidden">
-                          {t("servers.create.description")}
-                        </Dialog.Description>
-                        <Dialog.Close asChild>
-                          <Button
-                            aria-label={t("servers.create.close")}
-                            className="icon-button create-server-detail-close"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <X aria-hidden="true" size={16} />
-                          </Button>
-                        </Dialog.Close>
-                      </>
-                    ) : (
-                      <div className="create-server-dialog-header create-server-wizard-header">
-                        <div className="create-server-dialog-title-row">
-                          {createServerHeaderBack ? (
-                            <Button
-                              className="create-server-header-back"
-                              type="button"
-                              variant="ghost"
-                              onClick={createServerHeaderBack}
-                            >
-                              <ChevronLeft aria-hidden="true" size={15} />
-                              {t("wizard.nav.back")}
-                            </Button>
-                          ) : null}
-                          <div>
-                            <Dialog.Title asChild>
-                              <h2>{t("servers.create.title")}</h2>
-                            </Dialog.Title>
-                            <Dialog.Description asChild>
-                              <p>{t("servers.create.description")}</p>
-                            </Dialog.Description>
-                          </div>
-                        </div>
-                        {createServerProgress ? (
-                          <WizardStepIndicator
-                            currentStep={createServerProgress.currentStep}
-                            steps={createServerProgress.steps}
-                          />
-                        ) : null}
-                        <Dialog.Close asChild>
-                          <Button
-                            aria-label={t("servers.create.close")}
-                            className="icon-button"
-                            variant="ghost"
-                          >
-                            <X aria-hidden="true" size={16} />
-                          </Button>
-                        </Dialog.Close>
-                      </div>
-                    )}
-                    <CreateServerWizard
-                      initialSourcePath={createServerSourcePath}
-                      showHeading={false}
-                      onHeaderHiddenChange={setCreateServerHeaderHidden}
-                      onHeaderBackChange={handleCreateServerHeaderBackChange}
-                      onProgressChange={setCreateServerProgress}
-                      onCreated={() => handleCreateServerOpenChange(false)}
-                    />
-                  </Dialog.Content>
-                </Dialog.Portal>
-              </Dialog.Root>
 
               <Dialog.Root open={isJavaOpen} onOpenChange={setJavaOpen}>
                 <Dialog.Portal>
