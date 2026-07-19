@@ -21,7 +21,9 @@ function extractCssBlock(css, marker) {
 describe("global focus styles", () => {
   it("draws focus only for keyboard-style focus-visible matches", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
-    const focusVisibleBlocks = [...css.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^{}]*)\}/g)];
+    const focusVisibleBlocks = [
+      ...css.matchAll(/([^{}]*:focus-visible[^{}]*)\{([^{}]*)\}/g),
+    ];
 
     expect(css).not.toMatch(/(^|,)\s*:focus\s*(,|\{)/m);
     expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid/s);
@@ -34,9 +36,14 @@ describe("global focus styles", () => {
 
   it("animates explicit properties and uses typographic loading ellipses", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
-    const localePaths = ["src/i18n/locales/en.json", "src/i18n/locales/zh-CN.json"];
+    const localePaths = [
+      "src/i18n/locales/en.json",
+      "src/i18n/locales/zh-CN.json",
+    ];
     const localeValues = localePaths.flatMap((path) =>
-      Object.values(JSON.parse(readFileSync(resolve(process.cwd(), path), "utf8"))),
+      Object.values(
+        JSON.parse(readFileSync(resolve(process.cwd(), path), "utf8")),
+      ),
     );
     const loadingState = readFileSync(
       resolve(process.cwd(), "src/components/ui/loading-state.tsx"),
@@ -113,5 +120,22 @@ describe("create server modal layout", () => {
     expect(narrowWizardStyles).toMatch(
       /\.create-server-wizard-header\s+\.wizard-step-label\s*\{[^}]*display:\s*block/s,
     );
+  });
+});
+
+describe("java runtime panel layout", () => {
+  it("keeps managed runtime content padded and able to wrap", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const panelBody = css.match(/\.java-panel-body\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const bodyActions =
+      css.match(
+        /\.java-panel-body\s*>\s*\.page-header-actions\s*\{([^}]*)\}/s,
+      )?.[1] ?? "";
+
+    expect(panelBody).toMatch(/display:\s*grid/);
+    expect(panelBody).toMatch(/gap:\s*var\(--space-3\)/);
+    expect(panelBody).toMatch(/min-width:\s*0/);
+    expect(panelBody).toMatch(/padding:\s*var\(--space-4\)\s+var\(--space-5\)/);
+    expect(bodyActions).toMatch(/flex-wrap:\s*wrap/);
   });
 });

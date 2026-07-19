@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "../../test/render";
+import { render, screen, within } from "../../test/render";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -140,8 +140,39 @@ describe("JavaRuntimesView", () => {
     await userEvent.click(install);
     expect(vi.mocked(invoke)).toHaveBeenCalledWith(
       "install_java_runtime",
-      expect.objectContaining({ input: expect.objectContaining({ consent: true }) }),
+      expect.objectContaining({
+        input: expect.objectContaining({ consent: true }),
+      }),
     );
   });
-});
 
+  it("groups managed runtime controls inside a padded panel body", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      runtimes: [],
+      failures: [],
+      compatibility: [],
+    });
+
+    renderJavaView();
+
+    const headings = await screen.findAllByRole("heading", {
+      name: "Managed Eclipse Temurin",
+    });
+    const heading = headings.at(-1)!;
+    const panel = heading.closest("section");
+    const body = panel?.querySelector(".java-panel-body");
+
+    expect(body).not.toBeNull();
+    if (!body) throw new Error("Expected managed runtime panel body");
+    expect(
+      within(body as HTMLElement).getByText(
+        /install Temurin inside its own data folder/i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(body as HTMLElement).getByRole("button", {
+        name: "Prepare Java 21",
+      }),
+    ).toBeInTheDocument();
+  });
+});

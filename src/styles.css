@@ -3558,7 +3558,8 @@ button {
   max-height: none;
 }
 
-.wizard-marketplace-step .create-marketplace:has(.create-marketplace-layout-detail) {
+.wizard-marketplace-step
+  .create-marketplace:has(.create-marketplace-layout-detail) {
   max-height: none;
 }
 
@@ -4213,6 +4214,27 @@ button {
   background: var(--bg-panel);
   box-shadow: var(--shadow-panel);
   overflow: hidden;
+}
+
+.java-panel-body {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4) var(--space-5);
+}
+
+.java-panel-body > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.java-panel-body > .page-header-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.java-panel-body > .compatibility-list {
+  padding: 0;
 }
 
 .java-download-form {

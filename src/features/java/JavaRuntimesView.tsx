@@ -1,11 +1,6 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Coffee,
-  RefreshCw,
-} from "lucide-react";
+import { AlertTriangle, CheckCircle2, Coffee, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -117,64 +112,86 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
               <h2>{t("java.managed.title")}</h2>
               <span>{t("java.managed.subtitle")}</span>
             </div>
-            <p>{t("java.managed.description")}</p>
-            <div className="page-header-actions">
-              <a href="https://www.java.com/download/" rel="noreferrer noopener" target="_blank">
-                {t("java.managed.oracleLink")}
-              </a>
-              <a href={`https://adoptium.net/temurin/releases/?version=${managedMajorVersion}`} rel="noreferrer noopener" target="_blank">
-                {t("java.managed.temurinLink")}
-              </a>
-              <Button
-                disabled={planMutation.isPending || installMutation.isPending}
-                type="button"
-                variant="secondary"
-                onClick={() => planMutation.mutate()}
-              >
-                {t("java.managed.prepare", { version: managedMajorVersion })}
-              </Button>
-            </div>
-            {planMutation.error ? (
-              <p className="danger-text" role="alert">{planMutation.error.message}</p>
-            ) : null}
-            {managedPlan?.action === "reuse" ? (
-              <p>{t("java.managed.reuse")}</p>
-            ) : null}
-            {managedPlan?.action === "install" ? (
-              <div className="compatibility-list">
-                <p>
-                  {managedPlan.vendor} {managedPlan.version}
-                  {" · "}
-                  <a href={managedPlan.licenseUrl} rel="noreferrer noopener" target="_blank">
-                    {t("java.managed.license")}
-                  </a>
-                </p>
-                <label className="checkbox-field">
-                  <Checkbox
-                    aria-label={t("java.managed.consent")}
-                    checked={managedConsent}
-                    onCheckedChange={(checked) => setManagedConsent(checked === true)}
-                  />
-                  <span>{t("java.managed.consent")}</span>
-                </label>
-                <Button
-                  disabled={!managedConsent || installMutation.isPending}
-                  type="button"
-                  variant="primary"
-                  onClick={() => installMutation.mutate()}
+            <div className="java-panel-body">
+              <p>{t("java.managed.description")}</p>
+              <div className="page-header-actions">
+                <a
+                  href="https://www.java.com/download/"
+                  rel="noreferrer noopener"
+                  target="_blank"
                 >
-                  {t("java.managed.install")}
+                  {t("java.managed.oracleLink")}
+                </a>
+                <a
+                  href={`https://adoptium.net/temurin/releases/?version=${managedMajorVersion}`}
+                  rel="noreferrer noopener"
+                  target="_blank"
+                >
+                  {t("java.managed.temurinLink")}
+                </a>
+                <Button
+                  disabled={planMutation.isPending || installMutation.isPending}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => planMutation.mutate()}
+                >
+                  {t("java.managed.prepare", { version: managedMajorVersion })}
                 </Button>
-                {installMutation.error ? (
-                  <p className="danger-text" role="alert">{installMutation.error.message}</p>
-                ) : null}
               </div>
-            ) : null}
+              {planMutation.error ? (
+                <p className="danger-text" role="alert">
+                  {planMutation.error.message}
+                </p>
+              ) : null}
+              {managedPlan?.action === "reuse" ? (
+                <p>{t("java.managed.reuse")}</p>
+              ) : null}
+              {managedPlan?.action === "install" ? (
+                <div className="compatibility-list">
+                  <p>
+                    {managedPlan.vendor} {managedPlan.version}
+                    {" · "}
+                    <a
+                      href={managedPlan.licenseUrl}
+                      rel="noreferrer noopener"
+                      target="_blank"
+                    >
+                      {t("java.managed.license")}
+                    </a>
+                  </p>
+                  <label className="checkbox-field">
+                    <Checkbox
+                      aria-label={t("java.managed.consent")}
+                      checked={managedConsent}
+                      onCheckedChange={(checked) =>
+                        setManagedConsent(checked === true)
+                      }
+                    />
+                    <span>{t("java.managed.consent")}</span>
+                  </label>
+                  <Button
+                    disabled={!managedConsent || installMutation.isPending}
+                    type="button"
+                    variant="primary"
+                    onClick={() => installMutation.mutate()}
+                  >
+                    {t("java.managed.install")}
+                  </Button>
+                  {installMutation.error ? (
+                    <p className="danger-text" role="alert">
+                      {installMutation.error.message}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </section>
           <section className="java-panel">
             <div className="section-heading">
               <h2>{t("java.installed.title")}</h2>
-              <span>{t("java.detected", { count: javaQuery.data.runtimes.length })}</span>
+              <span>
+                {t("java.detected", { count: javaQuery.data.runtimes.length })}
+              </span>
             </div>
             {javaQuery.data.runtimes.length === 0 ? (
               <EmptyState
@@ -217,7 +234,9 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
                         <td>{runtime.vendor ?? t("common.unknown")}</td>
                         <td>{runtime.architecture ?? t("common.unknown")}</td>
                         <td>
-                          <span className="java-source-chip">{runtime.source}</span>
+                          <span className="java-source-chip">
+                            {runtime.source}
+                          </span>
                         </td>
                         <td className="path-cell">{runtime.path}</td>
                       </tr>
@@ -280,7 +299,11 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
             <section className="java-panel">
               <div className="section-heading">
                 <h2>{t("java.failures.title")}</h2>
-                <span>{t("java.failures.count", { count: javaQuery.data.failures.length })}</span>
+                <span>
+                  {t("java.failures.count", {
+                    count: javaQuery.data.failures.length,
+                  })}
+                </span>
               </div>
               <div className="failure-list">
                 {javaQuery.data.failures.map((failure) => (
