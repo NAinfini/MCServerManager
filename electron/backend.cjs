@@ -6172,9 +6172,15 @@ async function getBbsmcVersion(versionId) {
   return mapBbsmcVersion(item);
 }
 
+function isDirectBbsmcFile(file) {
+  return Boolean(file?.url && /^https:\/\/cdn\.bbsmc\.net\//i.test(file.url));
+}
+
 function selectInstallableBbsmcFile(version) {
   const files = version.files || [];
   return (
+    files.find((file) => file.primary && isDirectBbsmcFile(file)) ||
+    files.find(isDirectBbsmcFile) ||
     files.find((file) => file.primary && file.url) ||
     files.find((file) => file.url) ||
     null
@@ -6182,7 +6188,7 @@ function selectInstallableBbsmcFile(version) {
 }
 
 function ensureBbsmcFileIsDirect(file, version) {
-  if (file?.url && /^https:\/\/cdn\.bbsmc\.net\//i.test(file.url)) {
+  if (isDirectBbsmcFile(file)) {
     return;
   }
   const diskTargets = (version.diskUrls || [])

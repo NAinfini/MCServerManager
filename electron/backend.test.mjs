@@ -3342,9 +3342,15 @@ describe("Electron backend server pack metadata", () => {
         game_versions: ["1.21.4"],
         files: [
           {
+            filename: "external-primary.zip",
+            size: 2048,
+            primary: true,
+            url: "https://example.com/external-primary.zip",
+          },
+          {
             filename: "bbsmc-pack.mrpack",
             size: 8192,
-            primary: true,
+            primary: false,
             url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
             hashes: { sha512: "bbsmc-sha512" },
           },
