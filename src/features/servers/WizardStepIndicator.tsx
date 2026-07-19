@@ -15,29 +15,14 @@ export function WizardStepIndicator({
   const { t } = useAppSettings();
 
   return (
-    <nav className="wizard-steps" aria-label={t("wizard.progress")}>
-      {steps.map((step, index) => {
-        const isCompleted = index < currentStep;
-        const isActive = index === currentStep;
-        const isClickable = isCompleted && onStepClick;
-
-        return (
-          <div key={step.label} className="wizard-step-item-wrapper">
-            {index > 0 && (
-              <div
-                className={`wizard-step-connector${
-                  index <= currentStep ? " wizard-step-connector-active" : ""
-                }`}
-              />
-            )}
-            <button
-              type="button"
-              className="wizard-step-item"
-              aria-current={isActive ? "step" : undefined}
-              disabled={!isClickable}
-              onClick={isClickable ? () => onStepClick(index) : undefined}
-              tabIndex={isClickable ? 0 : -1}
-            >
+    <nav className="wizard-progress" aria-label={t("wizard.progress")}>
+      <ol className="wizard-steps">
+        {steps.map((step, index) => {
+          const isCompleted = index < currentStep;
+          const isActive = index === currentStep;
+          const isClickable = Boolean(isCompleted && onStepClick);
+          const content = (
+            <>
               <div
                 className={`wizard-step-circle${
                   isActive ? " wizard-step-circle-active" : ""
@@ -56,10 +41,41 @@ export function WizardStepIndicator({
               >
                 {step.label}
               </span>
-            </button>
-          </div>
-        );
-      })}
+            </>
+          );
+
+          return (
+            <li key={step.label} className="wizard-step-item-wrapper">
+              {index > 0 ? (
+                <div
+                  aria-hidden="true"
+                  className={`wizard-step-connector${
+                    index <= currentStep
+                      ? " wizard-step-connector-active"
+                      : ""
+                  }`}
+                />
+              ) : null}
+              {isClickable ? (
+                <button
+                  type="button"
+                  className="wizard-step-item"
+                  onClick={() => onStepClick?.(index)}
+                >
+                  {content}
+                </button>
+              ) : (
+                <div
+                  className="wizard-step-item"
+                  aria-current={isActive ? "step" : undefined}
+                >
+                  {content}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

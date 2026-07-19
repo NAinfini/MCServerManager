@@ -3251,8 +3251,10 @@ button {
   align-items: center;
   justify-content: center;
   gap: 0;
+  margin: 0;
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-subtle);
+  list-style: none;
 }
 
 .create-server-wizard-header .wizard-steps {
@@ -3284,7 +3286,7 @@ button {
   padding: 2px 4px;
 }
 
-.wizard-step-item:not(:disabled) {
+.wizard-step-item:is(button) {
   cursor: pointer;
 }
 

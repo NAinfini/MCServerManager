@@ -245,6 +245,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                   aria-label={t("servers.viewMode")}
                 >
                   <Button
+                    aria-label={t("servers.viewCards")}
                     aria-pressed={viewMode === "cards"}
                     variant="ghost"
                     onClick={() => setViewMode("cards")}
@@ -252,6 +253,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                     <LayoutGrid aria-hidden="true" size={14} />
                   </Button>
                   <Button
+                    aria-label={t("servers.viewTable")}
                     aria-pressed={viewMode === "table"}
                     variant="ghost"
                     onClick={() => setViewMode("table")}

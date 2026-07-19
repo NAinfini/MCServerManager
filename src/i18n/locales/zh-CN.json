@@ -63,6 +63,8 @@
   "servers.summary.crashed": "已崩溃",
   "servers.summary.backupFreshness": "备份新鲜度",
   "servers.viewMode": "视图模式",
+  "servers.viewCards": "卡片视图",
+  "servers.viewTable": "表格视图",
   "servers.overview.title": "服务器概览",
   "servers.overview.description": "由此桌面运行时管理的本地配置",
   "servers.empty.title": "暂无服务器",

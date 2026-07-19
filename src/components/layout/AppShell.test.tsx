@@ -242,6 +242,21 @@ describe("AppShell", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("names both server view controls", async () => {
+    renderShell();
+
+    await screen.findByRole("heading", { name: "Servers" });
+
+    expect(screen.getByRole("button", { name: "Card view" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Table view" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
   it("renders the create wizard progress inside the dialog header", async () => {
     renderShell();
 

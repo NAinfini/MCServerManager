@@ -64,6 +64,8 @@
   "servers.summary.crashed": "Crashed",
   "servers.summary.backupFreshness": "Backup freshness",
   "servers.viewMode": "View mode",
+  "servers.viewCards": "Card view",
+  "servers.viewTable": "Table view",
   "servers.overview.title": "Server overview",
   "servers.overview.description": "Local profiles managed by this desktop runtime",
   "servers.empty.title": "No servers yet",
