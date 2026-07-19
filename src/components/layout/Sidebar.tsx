@@ -612,7 +612,7 @@ export function Sidebar({
           onClick={() => onSelectPage("servers")}
         >
           <span className="app-mark">
-            <img alt="" aria-hidden="true" src="/app-icon.png" />
+            <img alt="" aria-hidden="true" src="./app-icon.png" />
           </span>
           {!collapsed && (
             <div className="sidebar-brand-copy">

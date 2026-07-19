@@ -1006,6 +1006,20 @@ button {
   scroll-behavior: smooth;
 }
 
+.page-create-server {
+  overflow: hidden;
+  padding: 0;
+}
+
+.create-server-page {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--bg-panel);
+}
+
 .page-header,
 .section-heading,
 .ops-actions,
@@ -3059,20 +3073,8 @@ button {
   font-size: 13px;
 }
 
-.create-server-dialog {
-  display: flex;
-  flex-direction: column;
-  width: min(1060px, calc(100vw - 48px));
-  height: min(820px, calc(100vh - 64px));
-  max-height: calc(100vh - 64px);
-  overflow: hidden;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-md);
-}
-
-.create-server-dialog-header {
+.create-server-dialog-header,
+.create-server-page-header {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -3088,14 +3090,14 @@ button {
   gap: var(--space-4);
 }
 
-.create-server-dialog-title-row {
+.create-server-page-title-row {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: var(--space-3);
 }
 
-.create-server-wizard-header .create-server-dialog-title-row > div {
+.create-server-wizard-header .create-server-page-title-row > div {
   min-width: 0;
 }
 
@@ -3109,14 +3111,16 @@ button {
   flex: 0 0 auto;
 }
 
-.create-server-dialog-header h2 {
+.create-server-dialog-header h2,
+.create-server-page-header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 650;
   line-height: 24px;
 }
 
-.create-server-dialog-header p {
+.create-server-dialog-header p,
+.create-server-page-header p {
   margin: 2px 0 0;
   color: var(--text-muted);
   font-size: 13px;
@@ -3357,6 +3361,28 @@ button {
   .create-server-wizard-header .wizard-step-connector {
     width: clamp(14px, 2vw, 22px);
     margin-inline: 2px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .create-server-wizard-header {
+    grid-template-areas:
+      "title close"
+      "progress progress";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .create-server-page-title-row {
+    grid-area: title;
+  }
+
+  .create-server-wizard-header > .wizard-progress {
+    grid-area: progress;
+    min-width: 0;
+  }
+
+  .create-server-wizard-header > .icon-button {
+    grid-area: close;
   }
 }
 

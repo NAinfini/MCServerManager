@@ -114,17 +114,21 @@ describe("sidebar brand geometry", () => {
   });
 });
 
-describe("create server modal layout", () => {
-  it("keeps marketplace pages at a stable modal height", () => {
+describe("create server main content layout", () => {
+  it("keeps marketplace pages within the available main content height", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
 
-    expect(css).toMatch(/\.create-server-dialog\s*\{[^}]*\bheight:/s);
+    expect(css).not.toMatch(/\.create-server-dialog\s*\{/s);
+    expect(css).toMatch(
+      /\.page-create-server\s*\{[^}]*\boverflow:\s*hidden[^}]*\bpadding:\s*0/s,
+    );
+    expect(css).toMatch(/\.create-server-page\s*\{[^}]*\bheight:\s*100%/s);
     expect(css).toMatch(/\.create-server-panel\s*\{[^}]*\bflex:\s*1 1 auto/s);
     expect(css).toMatch(/\.wizard-marketplace-step\s*\{[^}]*\bheight:\s*100%/s);
     expect(css).toMatch(/\.create-marketplace\s*\{[^}]*\bheight:\s*100%/s);
   });
 
-  it("lays out wizard progress compactly inside the dialog header", () => {
+  it("lays out wizard progress compactly inside the main content header", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
     const wizardHeader =
       css.match(/\.create-server-wizard-header\s*\{([^}]*)\}/s)?.[1] ?? "";
@@ -138,7 +142,7 @@ describe("create server modal layout", () => {
       )?.[1] ?? "";
     const headerTitleCopy =
       css.match(
-        /\.create-server-wizard-header\s+\.create-server-dialog-title-row\s*>\s*div\s*\{([^}]*)\}/s,
+        /\.create-server-wizard-header\s+\.create-server-page-title-row\s*>\s*div\s*\{([^}]*)\}/s,
       )?.[1] ?? "";
     const headerDescription =
       css.match(/\.create-server-wizard-header\s+p\s*\{([^}]*)\}/s)?.[1] ?? "";

@@ -98,7 +98,7 @@ async function verifyWizardHeaderGeometry(window, viewport) {
 
   const geometry = await window.webContents.executeJavaScript(`(() => {
     const header = document.querySelector(".create-server-wizard-header");
-    const title = header?.querySelector(".create-server-dialog-title-row");
+    const title = header?.querySelector(".create-server-page-title-row");
     const closeButton = header?.querySelector(":scope > .icon-button");
     const wrappers = [...(header?.querySelectorAll(".wizard-step-item-wrapper") ?? [])];
     if (!header || !title || !closeButton || wrappers.length !== 6) return null;
@@ -123,12 +123,15 @@ async function verifyWizardHeaderGeometry(window, viewport) {
         );
       },
     );
+    const overlaps = (left, right) =>
+      left.left < right.right - 0.5 &&
+      left.right > right.left + 0.5 &&
+      left.top < right.bottom - 0.5 &&
+      left.bottom > right.top + 0.5;
 
     return {
-      titleRight: titleRect.right,
-      firstLeft: firstRect.left,
-      lastRight: lastRect.right,
-      closeLeft: closeRect.left,
+      titleOverlapsFirstStep: overlaps(titleRect, firstRect),
+      lastStepOverlapsClose: overlaps(lastRect, closeRect),
       maxConnectorCenterOffset: Math.max(...connectorCenterOffsets),
     };
   })()`);
@@ -136,10 +139,10 @@ async function verifyWizardHeaderGeometry(window, viewport) {
     throw new Error("Could not measure the wizard header geometry.");
   }
   const failures = [];
-  if (geometry.firstLeft < geometry.titleRight - 0.5) {
+  if (geometry.titleOverlapsFirstStep) {
     failures.push("the first step overlaps the title column");
   }
-  if (geometry.lastRight > geometry.closeLeft + 0.5) {
+  if (geometry.lastStepOverlapsClose) {
     failures.push("the last step overlaps the close button column");
   }
   if (geometry.maxConnectorCenterOffset > 1) {
@@ -266,16 +269,46 @@ async function run() {
   await clickAt(window.webContents, await buttonCenter(window.webContents, "Create Server"));
   await waitFor(
     window.webContents,
-    'document.querySelector(".create-server-dialog")',
-    "the Create server dialog",
+    'document.querySelector(".page-create-server .create-server-page")',
+    "the inline Create server page",
   );
-  process.stdout.write("Electron UI smoke: Create server dialog opened.\n");
+  process.stdout.write("Electron UI smoke: inline Create server page opened.\n");
+
+  await waitFor(
+    window.webContents,
+    'document.querySelectorAll(".create-server-page .wizard-step-item").length === 6',
+    "the six Create server wizard steps",
+  );
 
   const stepCount = await window.webContents.executeJavaScript(
-    'document.querySelectorAll(".create-server-dialog .wizard-step-item").length',
+    'document.querySelectorAll(".create-server-page .wizard-step-item").length',
   );
   if (stepCount !== 6) {
     throw new Error(`Expected six provisioning steps, found ${stepCount}.`);
+  }
+  const inlineShellState = await window.webContents.executeJavaScript(`({
+    hasSidebar: Boolean(document.querySelector(".sidebar")),
+    hasRuntimeBar: Boolean(document.querySelector(".runtime-bar")),
+    hasStatusBar: Boolean(document.querySelector(".status-bar")),
+    hasTitlebar: Boolean(document.querySelector(".window-titlebar")),
+    hasLoadedBrandImages: [...document.querySelectorAll(
+      ".window-titlebar-mark img, .app-mark img",
+    )].every((image) => image.complete && image.naturalWidth > 0),
+    hasCreateDialog: Boolean(document.querySelector(".create-server-dialog")),
+    hasBackdrop: Boolean(document.querySelector(".dialog-backdrop")),
+  })`);
+  if (
+    !inlineShellState.hasSidebar ||
+    !inlineShellState.hasRuntimeBar ||
+    !inlineShellState.hasStatusBar ||
+    !inlineShellState.hasTitlebar ||
+    !inlineShellState.hasLoadedBrandImages ||
+    inlineShellState.hasCreateDialog ||
+    inlineShellState.hasBackdrop
+  ) {
+    throw new Error(
+      `Create server did not remain inline with the app shell: ${JSON.stringify(inlineShellState)}`,
+    );
   }
 
   let wizardHeaderScreenshotPath = null;
