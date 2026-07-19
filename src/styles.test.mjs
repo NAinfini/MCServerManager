@@ -40,6 +40,26 @@ function contrastRatio(foreground, background) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+function mixHex(foreground, background, foregroundWeight) {
+  const channels = (hex) =>
+    hex
+      .slice(1)
+      .match(/.{2}/g)
+      .map((channel) => Number.parseInt(channel, 16));
+  const foregroundChannels = channels(foreground);
+  const backgroundChannels = channels(background);
+  return `#${foregroundChannels
+    .map((channel, index) =>
+      Math.round(
+        channel * foregroundWeight +
+          backgroundChannels[index] * (1 - foregroundWeight),
+      )
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
+}
+
 describe("global focus styles", () => {
   it("draws focus only for keyboard-style focus-visible matches", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
@@ -193,6 +213,39 @@ describe("theme color contracts", () => {
       expect(foreground).toMatch(/^#[0-9a-f]{6}$/i);
       expect(background).toMatch(/^#[0-9a-f]{6}$/i);
       expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps success text readable on plain and tinted surfaces", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const root = extractCssBlock(css, ":root");
+    const light = extractCssBlock(css, '[data-theme="light"]');
+    const themes = [
+      {
+        success: readHexToken(root, "--running"),
+        panel: readHexToken(root, "--bg-panel"),
+        elevated: readHexToken(root, "--bg-elevated"),
+        muted: readHexToken(root, "--bg-panel-muted"),
+      },
+      {
+        success: readHexToken(light, "--success"),
+        panel: readHexToken(light, "--bg-panel"),
+        elevated: readHexToken(light, "--bg-elevated"),
+        muted: readHexToken(light, "--bg-panel-muted"),
+      },
+    ];
+
+    for (const theme of themes) {
+      expect(theme.success).toMatch(/^#[0-9a-f]{6}$/i);
+      for (const surface of [
+        theme.panel,
+        theme.elevated,
+        mixHex(theme.success, theme.muted, 0.1),
+      ]) {
+        expect(contrastRatio(theme.success, surface)).toBeGreaterThanOrEqual(
+          4.5,
+        );
+      }
     }
   });
 

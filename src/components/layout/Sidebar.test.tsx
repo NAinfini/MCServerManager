@@ -177,6 +177,10 @@ describe("Sidebar server organization", () => {
     expect(
       await screen.findByRole("group", { name: /new group/i }),
     ).toBeInTheDocument();
+    const groupedServer = within(
+      screen.getByRole("group", { name: /new group/i }),
+    ).getByRole("button", { name: /survival smp/i });
+    await waitFor(() => expect(groupedServer).toHaveFocus());
   });
 
   it("navigates a server context menu by keyboard and restores trigger focus", async () => {
@@ -186,7 +190,8 @@ describe("Sidebar server organization", () => {
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
 
-    fireEvent.contextMenu(trigger);
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "F10", shiftKey: true });
 
     const menu = await screen.findByRole("menu", {
       name: /survival smp actions/i,
@@ -227,7 +232,7 @@ describe("Sidebar server organization", () => {
       ".server-nav-group-header",
     )!;
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
 
     fireEvent.contextMenu(trigger);
 
@@ -239,5 +244,40 @@ describe("Sidebar server organization", () => {
     await userEvent.keyboard("{Escape}");
     expect(menu).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
+
+    fireEvent.contextMenu(trigger);
+    const reopenedMenu = await screen.findByRole("menu", {
+      name: /new group actions/i,
+    });
+    await userEvent.click(
+      within(reopenedMenu).getByRole("menuitem", { name: /disband group/i }),
+    );
+
+    expect(group).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^servers$/i })).toHaveFocus(),
+    );
+  });
+
+  it("closes context menus on Tab and outside click", async () => {
+    renderSidebar();
+
+    const trigger = screen.getByRole("button", { name: /survival smp/i });
+    fireEvent.contextMenu(trigger);
+    const tabMenu = await screen.findByRole("menu", {
+      name: /survival smp actions/i,
+    });
+    await waitFor(() =>
+      expect(within(tabMenu).getAllByRole("menuitem")[0]).toHaveFocus(),
+    );
+    await userEvent.tab();
+    expect(tabMenu).not.toBeInTheDocument();
+
+    fireEvent.contextMenu(trigger);
+    const outsideMenu = await screen.findByRole("menu", {
+      name: /survival smp actions/i,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^servers$/i }));
+    expect(outsideMenu).not.toBeInTheDocument();
   });
 });

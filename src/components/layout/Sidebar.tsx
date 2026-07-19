@@ -155,8 +155,13 @@ export function Sidebar({
   const reduceMotion = useReducedMotion();
   const [draggingServerId, setDraggingServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const sidebarRef = useRef<HTMLElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement | null>(null);
+  const contextMenuTargetRef = useRef<
+    Omit<ContextMenuState, "x" | "y"> | null
+  >(null);
+  const restoreContextMenuFocusRef = useRef(false);
   const statusQueries = useQueries({
     queries: servers.map((server) => ({
       queryKey: ["serverProcessStatus", server.id],
@@ -206,9 +211,8 @@ export function Sidebar({
   }, [serverIdKey, serverIds, syncServerLayout]);
 
   const closeContextMenu = useCallback((restoreFocus = false) => {
-    const trigger = contextMenuTriggerRef.current;
+    restoreContextMenuFocusRef.current = restoreFocus;
     setContextMenu(null);
-    if (restoreFocus) trigger?.focus();
   }, []);
 
   useEffect(() => {
@@ -223,18 +227,80 @@ export function Sidebar({
     return () => document.removeEventListener("click", closeMenu);
   }, [closeContextMenu, contextMenu]);
 
+  useEffect(() => {
+    if (contextMenu || !restoreContextMenuFocusRef.current) return;
+
+    restoreContextMenuFocusRef.current = false;
+    const target = contextMenuTargetRef.current;
+    const targetKey = target ? `${target.type}:${target.id}` : null;
+    const matchingTrigger = Array.from(
+      sidebarRef.current?.querySelectorAll<HTMLElement>(
+        "[data-context-menu-trigger]",
+      ) ?? [],
+    ).find((element) => {
+      if (element.dataset.contextMenuTrigger !== targetKey || !target) {
+        return false;
+      }
+      if (target.type === "group") return groupById.has(target.id);
+      return (
+        serverById.has(target.id) &&
+        Boolean(element.closest(".server-nav-group")) ===
+          groupedServerIds.has(target.id)
+      );
+    });
+    const fallback =
+      matchingTrigger ??
+      sidebarRef.current?.querySelector<HTMLElement>(".sidebar-brand");
+
+    fallback?.focus();
+  }, [contextMenu, groupById, groupedServerIds, serverById]);
+
+  const showContextMenu = useCallback(
+    (
+      trigger: HTMLElement,
+      menu: Omit<ContextMenuState, "x" | "y">,
+      x: number,
+      y: number,
+    ) => {
+      contextMenuTriggerRef.current = trigger;
+      contextMenuTargetRef.current = menu;
+      setContextMenu({ ...menu, x, y });
+    },
+    [],
+  );
+
   const openContextMenu = useCallback(
     (event: MouseEvent<HTMLElement>, menu: Omit<ContextMenuState, "x" | "y">) => {
       event.preventDefault();
       event.stopPropagation();
-      contextMenuTriggerRef.current = event.currentTarget;
-      setContextMenu({
-        ...menu,
-        x: event.clientX,
-        y: event.clientY,
-      });
+      showContextMenu(event.currentTarget, menu, event.clientX, event.clientY);
     },
-    [],
+    [showContextMenu],
+  );
+
+  const openContextMenuFromKeyboard = useCallback(
+    (
+      event: ReactKeyboardEvent<HTMLElement>,
+      menu: Omit<ContextMenuState, "x" | "y">,
+    ) => {
+      if (
+        event.key !== "ContextMenu" &&
+        !(event.shiftKey && event.key === "F10")
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      const bounds = event.currentTarget.getBoundingClientRect();
+      showContextMenu(
+        event.currentTarget,
+        menu,
+        bounds.left + 8,
+        bounds.bottom,
+      );
+    },
+    [showContextMenu],
   );
 
   const handleContextMenuKeyDown = useCallback(
@@ -355,6 +421,7 @@ export function Sidebar({
                 contextMenu?.type === "server" && contextMenu.id === server.id
               }
               aria-haspopup="menu"
+              data-context-menu-trigger={`server:${server.id}`}
               className={[
                 "server-nav-item",
                 isActive ? "server-nav-item-active" : "",
@@ -369,6 +436,12 @@ export function Sidebar({
               onClick={() => onSelectServer?.(server.id)}
               onContextMenu={(event) =>
                 openContextMenu(event, { type: "server", id: server.id })
+              }
+              onKeyDown={(event) =>
+                openContextMenuFromKeyboard(event, {
+                  type: "server",
+                  id: server.id,
+                })
               }
               onDragEnd={() => setDraggingServerId(null)}
               onDragOver={(event) => event.preventDefault()}
@@ -409,6 +482,7 @@ export function Sidebar({
       dropOnServer,
       onSelectServer,
       openContextMenu,
+      openContextMenuFromKeyboard,
       reduceMotion,
       selectedServerId,
       statusByServerId,
@@ -452,15 +526,20 @@ export function Sidebar({
           role="group"
         >
           <button
-            aria-expanded={
-              contextMenu?.type === "group" && contextMenu.id === group.id
-            }
+            aria-expanded={!group.collapsed}
             aria-haspopup="menu"
+            data-context-menu-trigger={`group:${group.id}`}
             className="server-nav-group-header"
             type="button"
             onClick={() => toggleGroup(group.id)}
             onContextMenu={(event) =>
               openContextMenu(event, { type: "group", id: group.id })
+            }
+            onKeyDown={(event) =>
+              openContextMenuFromKeyboard(event, {
+                type: "group",
+                id: group.id,
+              })
             }
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => dropIntoGroup(event, group.id)}
@@ -503,6 +582,7 @@ export function Sidebar({
       contextMenu,
       dropIntoGroup,
       openContextMenu,
+      openContextMenuFromKeyboard,
       reduceMotion,
       renderServerEntry,
       serverById,
@@ -520,7 +600,10 @@ export function Sidebar({
     contextMenu?.type === "server" && groupedServerIds.has(contextMenu.id);
 
   return (
-    <aside className={collapsed ? "sidebar sidebar-collapsed" : "sidebar"}>
+    <aside
+      ref={sidebarRef}
+      className={collapsed ? "sidebar sidebar-collapsed" : "sidebar"}
+    >
       <div className="sidebar-header">
         <button
           className="sidebar-brand"
