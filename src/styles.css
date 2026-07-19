@@ -155,6 +155,18 @@
   --shadow-panel: 0 1px 3px rgba(0, 0, 0, 0.04), 0 0 0 1px var(--border-panel);
 }
 
+[data-theme="light"] .window-titlebar,
+[data-theme="light"] .sidebar {
+  --text-main: #edf2f0;
+  --text-muted: #94a3a0;
+  --text-subtle: #84958f;
+  --text-inverse: #0c0f12;
+  --accent: #62c496;
+  --accent-hover: #7ad0a7;
+  --accent-soft: #1a3d2f;
+  --border-subtle: #2e3c46;
+}
+
 /* --------------------------------------------------------------------------
    Reset & Base
    -------------------------------------------------------------------------- */

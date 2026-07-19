@@ -195,4 +195,21 @@ describe("theme color contracts", () => {
       expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
     }
   });
+
+  it("keeps retained dark chrome readable in the light theme", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const light = extractCssBlock(css, '[data-theme="light"]');
+    const darkChrome = readHexToken(light, "--bg-sidebar");
+
+    for (const selector of [".window-titlebar", ".sidebar"]) {
+      const block = extractCssBlock(css, `[data-theme="light"] ${selector}`);
+      for (const token of ["--text-main", "--text-muted", "--text-subtle", "--accent"]) {
+        const foreground = readHexToken(block, token);
+        expect(foreground).toMatch(/^#[0-9a-f]{6}$/i);
+        expect(contrastRatio(foreground, darkChrome)).toBeGreaterThanOrEqual(
+          4.5,
+        );
+      }
+    }
+  });
 });
