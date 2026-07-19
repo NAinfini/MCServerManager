@@ -30,6 +30,7 @@ import type { GuidedServerConfiguration, LoaderType, ValidatedJavaRuntime } from
 
 type WizardStep = 0 | 1 | 2 | 3 | 4 | 5;
 type SourceView = "choices" | "blank" | "marketplace";
+export type CreateServerWizardLifecycle = "draft" | "running" | "complete";
 
 export interface CreateServerWizardProgress {
   steps: Array<{ label: string; description?: string }>;
@@ -38,6 +39,7 @@ export interface CreateServerWizardProgress {
 
 interface CreateServerWizardProps {
   onCreated?: () => void;
+  onLifecycleChange?: (lifecycle: CreateServerWizardLifecycle) => void;
   onHeaderBackChange?: (handler: (() => void) | null) => void;
   onHeaderHiddenChange?: (hidden: boolean) => void;
   onProgressChange?: (progress: CreateServerWizardProgress | null) => void;
@@ -93,6 +95,7 @@ function errorMessage(error: unknown) {
 
 export function CreateServerWizard({
   onCreated,
+  onLifecycleChange,
   onHeaderBackChange,
   onHeaderHiddenChange,
   onProgressChange,
@@ -124,6 +127,21 @@ export function CreateServerWizard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const plannedInitialPath = useRef<string | null>(null);
+  const lifecycle = useRef<CreateServerWizardLifecycle>("draft");
+  const lifecycleCallback = useRef(onLifecycleChange);
+
+  useEffect(() => {
+    lifecycleCallback.current = onLifecycleChange;
+    onLifecycleChange?.(lifecycle.current);
+  }, [onLifecycleChange]);
+
+  const publishLifecycle = useCallback(
+    (next: CreateServerWizardLifecycle) => {
+      lifecycle.current = next;
+      lifecycleCallback.current?.(next);
+    },
+    [],
+  );
 
   const steps = useMemo(
     () => [
@@ -155,13 +173,14 @@ export function CreateServerWizard({
         if (active && jobs[0]) {
           setJob(jobs[0]);
           setStep(5);
+          publishLifecycle(jobs[0].stage === "ready" ? "complete" : "running");
         }
       })
       .catch((caught) => active && setError(errorMessage(caught)));
     return () => {
       active = false;
     };
-  }, []);
+  }, [publishLifecycle]);
 
   useEffect(() => {
     onHeaderHiddenChange?.(false);
@@ -357,6 +376,7 @@ export function CreateServerWizard({
   const executeJob = async (created: ProvisioningJob) => {
     setJob(created);
     setStep(5);
+    publishLifecycle("running");
     const poll = window.setInterval(() => {
       getProvisioningJob(created.id)
         .then((current) => current && setJob(current))
@@ -366,6 +386,7 @@ export function CreateServerWizard({
       const completed = await runProvisioningJob(created.id);
       setJob(completed);
       if (completed.stage === "ready") {
+        publishLifecycle("complete");
         await queryClient.invalidateQueries({ queryKey: ["serverProfiles"] });
         onCreated?.();
       }
@@ -422,10 +443,14 @@ export function CreateServerWizard({
 
   const retryJob = async (jobId: string) => {
     setBusy(true);
+    publishLifecycle("running");
     try {
       const completed = await retryProvisioningJob(jobId);
       setJob(completed);
-      if (completed.stage === "ready") onCreated?.();
+      if (completed.stage === "ready") {
+        publishLifecycle("complete");
+        onCreated?.();
+      }
     } catch (caught) {
       setError(errorMessage(caught));
     } finally {

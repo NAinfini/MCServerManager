@@ -192,10 +192,13 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
   it("plans a selected local pack, enforces approvals, and creates a persisted job", async () => {
     const onCreated = vi.fn();
+    const onLifecycleChange = vi.fn();
     vi.mocked(invokeDesktopCommand).mockResolvedValue({
       path: "C:/Packs/server.mrpack",
     });
-    renderWizard({ onCreated });
+    renderWizard({ onCreated, onLifecycleChange });
+
+    await waitFor(() => expect(onLifecycleChange).toHaveBeenCalledWith("draft"));
 
     await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
@@ -235,6 +238,10 @@ describe("CreateServerWizard unified provisioning flow", () => {
     );
     expect(provisioningApi.runProvisioningJob).toHaveBeenCalledWith("job-1");
     expect(await screen.findByText("Server is ready")).toBeInTheDocument();
+    expect(onLifecycleChange.mock.calls.map(([value]) => value)).toEqual(
+      expect.arrayContaining(["draft", "running", "complete"]),
+    );
+    expect(onLifecycleChange).toHaveBeenLastCalledWith("complete");
     expect(onCreated).toHaveBeenCalled();
   });
 
@@ -378,6 +385,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
   });
 
   it("recovers a persisted failed job and retries it without creating another job", async () => {
+    const onLifecycleChange = vi.fn();
     const failed = {
       ...job("failed"),
       error: {
@@ -391,11 +399,15 @@ describe("CreateServerWizard unified provisioning flow", () => {
     };
     vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([failed]);
     vi.mocked(provisioningApi.retryProvisioningJob).mockResolvedValue(job("ready"));
-    renderWizard();
+    renderWizard({ onLifecycleChange });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+    expect(onLifecycleChange).toHaveBeenCalledWith("running");
     await userEvent.click(screen.getByRole("button", { name: "Retry installation" }));
     expect(provisioningApi.retryProvisioningJob).toHaveBeenCalledWith("job-1");
+    await waitFor(() =>
+      expect(onLifecycleChange).toHaveBeenLastCalledWith("complete"),
+    );
     expect(provisioningApi.createProvisioningJob).not.toHaveBeenCalled();
   });
 });
