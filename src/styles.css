@@ -20,7 +20,7 @@
   /* Text */
   --text-main: #edf2f0;
   --text-muted: #94a3a0;
-  --text-subtle: #5f706b;
+  --text-subtle: #84958f;
   --text-inverse: #0c0f12;
 
   /* Borders */
@@ -36,6 +36,7 @@
 
   /* Status */
   --running: #5ac486;
+  --success: var(--running);
   --starting: #e3a93c;
   --stopped: #6b7572;
   --crashed: #ef6358;
@@ -118,7 +119,7 @@
 
   --text-main: #1a1a1a;
   --text-muted: #5c5a55;
-  --text-subtle: #8a857a;
+  --text-subtle: #716c62;
   --text-inverse: #ffffff;
 
   --border-subtle: #e8e4dd;
@@ -1411,6 +1412,24 @@ button {
   --meta-badge-color: #c7b7ff;
   --meta-badge-bg: color-mix(in srgb, #7c5cff 13%, var(--bg-elevated));
   --meta-badge-border: color-mix(in srgb, #a78bfa 34%, var(--border-subtle));
+}
+
+[data-theme="light"] .meta-badge-version {
+  --meta-badge-color: #3659b8;
+  --meta-badge-bg: #eef2ff;
+  --meta-badge-border: #b9c7f3;
+}
+
+[data-theme="light"] .meta-badge-provider {
+  --meta-badge-color: #855400;
+  --meta-badge-bg: #fff6df;
+  --meta-badge-border: #e6c98d;
+}
+
+[data-theme="light"] .meta-badge-source {
+  --meta-badge-color: #6544a8;
+  --meta-badge-bg: #f4efff;
+  --meta-badge-border: #cfc1ee;
 }
 
 /* --------------------------------------------------------------------------

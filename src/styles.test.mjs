@@ -18,6 +18,28 @@ function extractCssBlock(css, marker) {
   return "";
 }
 
+function readHexToken(block, token) {
+  return block.match(new RegExp(`${token}:\\s*(#[0-9a-f]{6})`, "i"))?.[1] ?? "";
+}
+
+function contrastRatio(foreground, background) {
+  const luminance = (hex) => {
+    const channels = hex
+      .slice(1)
+      .match(/.{2}/g)
+      .map((channel) => Number.parseInt(channel, 16) / 255)
+      .map((channel) =>
+        channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4,
+      );
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+  };
+  const lighter = Math.max(luminance(foreground), luminance(background));
+  const darker = Math.min(luminance(foreground), luminance(background));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 describe("global focus styles", () => {
   it("draws focus only for keyboard-style focus-visible matches", () => {
     const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
@@ -137,5 +159,40 @@ describe("java runtime panel layout", () => {
     expect(panelBody).toMatch(/min-width:\s*0/);
     expect(panelBody).toMatch(/padding:\s*var\(--space-4\)\s+var\(--space-5\)/);
     expect(bodyActions).toMatch(/flex-wrap:\s*wrap/);
+  });
+});
+
+describe("theme color contracts", () => {
+  it("keeps subtle text readable on panel and input surfaces", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const themes = [extractCssBlock(css, ":root"), extractCssBlock(css, '[data-theme="light"]')];
+
+    for (const theme of themes) {
+      const subtle = readHexToken(theme, "--text-subtle");
+      expect(subtle).toMatch(/^#[0-9a-f]{6}$/i);
+      for (const surfaceToken of ["--bg-panel", "--bg-elevated"]) {
+        const surface = readHexToken(theme, surfaceToken);
+        expect(contrastRatio(subtle, surface)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("defines success and accessible light-theme metadata roles", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const root = extractCssBlock(css, ":root");
+
+    expect(root).toMatch(/--success:\s*var\(--running\)/);
+    for (const role of ["version", "provider", "source"]) {
+      const block = extractCssBlock(
+        css,
+        `[data-theme="light"] .meta-badge-${role}`,
+      );
+      const foreground = readHexToken(block, "--meta-badge-color");
+      const background = readHexToken(block, "--meta-badge-bg");
+
+      expect(foreground).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(background).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });
