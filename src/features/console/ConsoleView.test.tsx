@@ -90,5 +90,22 @@ describe("ConsoleView", () => {
       });
     });
   });
+
+  it("shows the built-in command source and accepts a suggestion with Tab", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_process_events") return [];
+      if (command === "get_server_process_status") return { status: "running" };
+      return null;
+    });
+
+    renderConsole();
+
+    const input = await screen.findByLabelText(/command/i);
+    await userEvent.type(input, "/wh");
+
+    expect(screen.getByText(/built-in command catalog/i)).toBeInTheDocument();
+    await userEvent.keyboard("{Tab}");
+    expect(input).toHaveValue("/whitelist");
+  });
 });
 

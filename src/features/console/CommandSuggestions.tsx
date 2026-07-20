@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAppSettings } from "../../i18n";
 import { MC_COMMANDS } from "./mcCommands";
 
 interface CommandSuggestionsProps {
@@ -14,6 +15,7 @@ export function CommandSuggestions({
   onSelect,
   visible,
 }: CommandSuggestionsProps) {
+  const { t } = useAppSettings();
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
@@ -53,7 +55,7 @@ export function CommandSuggestions({
         setHighlightedIndex(
           (index) => (index - 1 + suggestions.length) % suggestions.length,
         );
-      } else if (event.key === "Enter") {
+      } else if (event.key === "Enter" || event.key === "Tab") {
         event.preventDefault();
         onSelect(suggestions[highlightedIndex].command);
       } else if (event.key === "Escape") {
@@ -72,6 +74,14 @@ export function CommandSuggestions({
 
   return (
     <div className="cmd-suggest-list" role="listbox">
+      <div className="cmd-suggest-header">
+        <span>{t("console.suggestions.source")}</span>
+        <span aria-hidden="true">
+          <kbd>↑↓</kbd> {t("console.suggestions.select")} ·{" "}
+          <kbd>{t("console.suggestions.tab")}</kbd>{" "}
+          {t("console.suggestions.fill")}
+        </span>
+      </div>
       {suggestions.map((suggestion, index) => (
         <button
           className={
@@ -89,8 +99,11 @@ export function CommandSuggestions({
           }}
           onMouseEnter={() => setHighlightedIndex(index)}
         >
-          <strong>{suggestion.command}</strong>
-          <span>{suggestion.description}</span>
+          <strong>/{suggestion.command}</strong>
+          <span className="cmd-suggest-copy">
+            <span>{suggestion.description}</span>
+            {suggestion.usage ? <code>{suggestion.usage}</code> : null}
+          </span>
         </button>
       ))}
     </div>

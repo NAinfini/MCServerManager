@@ -161,6 +161,14 @@ describe("ServerDetail", () => {
     });
   });
 
+  it("uses a left section menu with a bounded content workspace", () => {
+    const { container } = renderDetail();
+
+    expect(container.querySelector(".server-detail-workspace")).not.toBeNull();
+    expect(container.querySelector(".server-detail-menu")).not.toBeNull();
+    expect(container.querySelector(".detail-tab-content")).not.toBeNull();
+  });
+
   it("shows a setup checklist in settings so new users know the current required actions", async () => {
     renderDetail();
 

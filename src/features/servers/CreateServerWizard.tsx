@@ -517,10 +517,12 @@ export function CreateServerWizard({
         ) : null}
 
         {step === 0 && sourceView === "marketplace" ? (
-          <CreateServerMarketplaceBrowser
-            onDetailModeChange={onHeaderHiddenChange}
-            onSelect={handleMarketplaceSelect}
-          />
+          <div className="wizard-marketplace-step">
+            <CreateServerMarketplaceBrowser
+              onDetailModeChange={onHeaderHiddenChange}
+              onSelect={handleMarketplaceSelect}
+            />
+          </div>
         ) : null}
 
         {step === 0 && sourceView === "blank" ? (
@@ -709,18 +711,20 @@ export function CreateServerWizard({
         {error ? <div className="form-error" role="alert">{error}</div> : null}
       </div>
 
-      <div className="wizard-nav-bar">
-        {step > 0 && !(step === 5 && job?.stage !== "ready") ? (
-          <Button variant="ghost" onClick={goBack}>{t("wizard.nav.back")}</Button>
-        ) : sourceView !== "choices" && step === 0 ? (
-          <Button variant="ghost" onClick={() => setSourceView("choices")}>{t("wizard.nav.back")}</Button>
-        ) : null}
-        <div className="wizard-nav-spacer" />
-        {step === 1 ? <Button disabled={!compatibilityReady} onClick={() => setStep(2)}>{t("wizard.nav.next")}</Button> : null}
-        {step === 2 ? <Button disabled={!javaRuntime || busy} onClick={() => setStep(3)}>{t("wizard.nav.next")}</Button> : null}
-        {step === 3 ? <Button disabled={!configurationReady} onClick={() => setStep(4)}>{t("wizard.nav.next")}</Button> : null}
-        {step === 4 ? <Button disabled={!eulaAccepted || busy} onClick={installServer}>{t("provisioning.wizard.install")}</Button> : null}
-      </div>
+      {step === 0 && sourceView === "marketplace" ? null : (
+        <div className="wizard-nav-bar">
+          {step > 0 && !(step === 5 && job?.stage !== "ready") ? (
+            <Button variant="ghost" onClick={goBack}>{t("wizard.nav.back")}</Button>
+          ) : sourceView !== "choices" && step === 0 ? (
+            <Button variant="ghost" onClick={() => setSourceView("choices")}>{t("wizard.nav.back")}</Button>
+          ) : null}
+          <div className="wizard-nav-spacer" />
+          {step === 1 ? <Button disabled={!compatibilityReady} onClick={() => setStep(2)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 2 ? <Button disabled={!javaRuntime || busy} onClick={() => setStep(3)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 3 ? <Button disabled={!configurationReady} onClick={() => setStep(4)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 4 ? <Button disabled={!eulaAccepted || busy} onClick={installServer}>{t("provisioning.wizard.install")}</Button> : null}
+        </div>
+      )}
     </section>
   );
 }

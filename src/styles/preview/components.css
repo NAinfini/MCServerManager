@@ -1,0 +1,29 @@
+button:where(:not(.switch-root):not(.checkbox-root)),
+.button {
+  min-height: var(--preview-button-height);
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea,
+.select-trigger {
+  min-height: var(--preview-control-height);
+}
+
+.panel,
+.server-table-panel,
+.detail-panel,
+.settings-section,
+.java-runtime-card {
+  border-radius: var(--preview-radius-panel);
+  box-shadow: var(--preview-shadow-panel);
+}
+
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.switch-root[data-pointer-focus="true"]:focus-visible {
+  outline: none;
+}

@@ -132,6 +132,12 @@ describe("JavaRuntimesView", () => {
     const install = await screen.findByRole("button", {
       name: "Install managed Java",
     });
+    const consentLabel = screen
+      .getByText(/I agree to download/i)
+      .closest("label");
+
+    expect(install).toHaveClass("java-managed-install");
+    expect(consentLabel).toHaveClass("java-managed-consent");
     expect(install).toBeDisabled();
     await userEvent.click(
       screen.getByRole("checkbox", { name: /I agree to download/i }),
@@ -174,5 +180,27 @@ describe("JavaRuntimesView", () => {
         name: "Prepare Java 21",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("marks Java panels by role instead of relying on render order", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      runtimes: [],
+      failures: [
+        {
+          path: "C:/broken/java.exe",
+          source: "Configured runtime",
+          error: "invalid runtime",
+        },
+      ],
+      compatibility: [],
+    });
+
+    const { container } = renderJavaView();
+    await within(container).findByText("Managed Eclipse Temurin");
+
+    expect(container.querySelector(".java-panel-managed")).not.toBeNull();
+    expect(container.querySelector(".java-panel-installed")).not.toBeNull();
+    expect(container.querySelector(".java-panel-compatibility")).not.toBeNull();
+    expect(container.querySelector(".java-panel-failures")).not.toBeNull();
   });
 });

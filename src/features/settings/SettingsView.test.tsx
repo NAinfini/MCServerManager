@@ -1,6 +1,6 @@
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "../../test/render";
+import { cleanup, render, screen, waitFor, within } from "../../test/render";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { SettingsView } from "./SettingsView";
 
@@ -74,7 +74,10 @@ describe("SettingsView", () => {
       ) {
         return { path: "D:/diagnostics.json" };
       }
-      if (command === "import_app_settings" || command === "reset_app_preferences") {
+      if (
+        command === "import_app_settings" ||
+        command === "reset_app_preferences"
+      ) {
         return preferences;
       }
       return null;
@@ -114,10 +117,14 @@ describe("SettingsView", () => {
   it("persists general and provider controls", async () => {
     render(<SettingsView embedded />);
 
-    await userEvent.click(await screen.findByRole("combobox", {
-      name: /close button behavior/i,
-    }));
-    await userEvent.click(await screen.findByRole("option", { name: /quit app/i }));
+    await userEvent.click(
+      await screen.findByRole("combobox", {
+        name: /close button behavior/i,
+      }),
+    );
+    await userEvent.click(
+      await screen.findByRole("option", { name: /quit app/i }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_app_preferences", {
@@ -140,7 +147,9 @@ describe("SettingsView", () => {
   it("keeps server runtime choices as new-server defaults", async () => {
     render(<SettingsView embedded />);
 
-    await userEvent.click(screen.getByRole("button", { name: /server defaults/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /server defaults/i }),
+    );
     expect(
       await screen.findByText(/used only when creating new servers/i),
     ).toBeInTheDocument();
@@ -153,7 +162,9 @@ describe("SettingsView", () => {
       });
     });
 
-    await userEvent.click(screen.getByRole("combobox", { name: /java version strategy/i }));
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /java version strategy/i }),
+    );
     await userEvent.click(screen.getByRole("option", { name: /latest lts/i }));
 
     await waitFor(() => {
@@ -171,8 +182,12 @@ describe("SettingsView", () => {
   it("persists backup and marketplace defaults without touching server profiles", async () => {
     render(<SettingsView embedded />);
 
-    await userEvent.click(screen.getByRole("button", { name: /backup defaults/i }));
-    await userEvent.click(screen.getByRole("combobox", { name: /compression format/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /backup defaults/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /compression format/i }),
+    );
     await userEvent.click(screen.getByRole("option", { name: /tar.gz/i }));
 
     await waitFor(() => {
@@ -187,7 +202,9 @@ describe("SettingsView", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: /marketplace/i }));
-    await userEvent.click(screen.getByRole("combobox", { name: /default provider/i }));
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /default provider/i }),
+    );
     await userEvent.click(screen.getByRole("option", { name: /bbsmc/i }));
 
     await waitFor(() => {
@@ -211,8 +228,12 @@ describe("SettingsView", () => {
     render(<SettingsView embedded />);
 
     await userEvent.click(screen.getByRole("button", { name: /logging/i }));
-    await userEvent.click(screen.getByRole("button", { name: /open log folder/i }));
-    await userEvent.click(screen.getByRole("button", { name: /export diagnostics/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open log folder/i }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /export diagnostics/i }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("open_app_logs_folder");
@@ -226,10 +247,36 @@ describe("SettingsView", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: /data/i }));
-    await userEvent.click(screen.getByRole("button", { name: /open app data/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open app data/i }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("open_app_data_folder");
     });
+  });
+
+  it("offers visual system, light, and dark theme choices", async () => {
+    render(<SettingsView embedded />);
+
+    await userEvent.click(screen.getByRole("button", { name: /appearance/i }));
+
+    const themeChoices = await screen.findByRole("radiogroup", {
+      name: /^theme$/i,
+    });
+    expect(
+      within(themeChoices).getByRole("radio", { name: /^system$/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(themeChoices).getByRole("radio", { name: /^light$/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(themeChoices).getByRole("radio", { name: /^dark$/i }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(
+      within(themeChoices).getByRole("radio", { name: /^light$/i }),
+    );
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
   });
 });

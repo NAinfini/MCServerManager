@@ -61,6 +61,10 @@ describe("CreateServerMarketplaceBrowser", () => {
           downloads: 6900,
           follows: 47,
           modCount: 2,
+          gallery: [
+            "https://cdn.example.com/screenshot-1.png",
+            "https://cdn.example.com/screenshot-2.png",
+          ],
           websiteUrl: "https://modrinth.com/modpack/lazy-survival",
         };
       }
@@ -199,12 +203,19 @@ describe("CreateServerMarketplaceBrowser", () => {
       await screen.findByRole("button", { name: /lazy survival/i }),
     );
 
-    expect(await screen.findByText("6.9K downloads")).toHaveClass(
-      "meta-badge-downloads",
+    const statistics = await screen.findByRole("group", {
+      name: /project statistics/i,
+    });
+    expect(statistics.querySelector(".meta-badge-downloads")).toHaveTextContent(
+      "6.9K",
     );
-    expect(screen.getByText("2 mods")).toHaveClass("meta-badge-mods");
-    expect(screen.getByText("47 follows")).toHaveClass("meta-badge-follows");
-    expect(screen.getByText("1.21.8")).toHaveClass("meta-badge-version");
+    expect(statistics.querySelector(".meta-badge-mods")).toHaveTextContent("2");
+    expect(statistics.querySelector(".meta-badge-follows")).toHaveTextContent(
+      "47",
+    );
+    expect(statistics.querySelector(".meta-badge-version")).toHaveTextContent(
+      "1.21.8",
+    );
     expect(screen.queryByText(/6WawJDbL/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: /open on modrinth/i }),
@@ -247,6 +258,117 @@ describe("CreateServerMarketplaceBrowser", () => {
     expect(titleRow).toContainElement(
       screen.getByRole("link", { name: /open on modrinth/i }),
     );
+  });
+
+  it("renders discovery results as wide single-column cards with a clear action", async () => {
+    renderBrowser();
+
+    const result = await screen.findByRole("button", { name: /lazy survival/i });
+    const grid = result.closest(".marketplace-results-list");
+
+    expect(grid).toHaveClass("marketplace-card-grid");
+    expect(result).toHaveClass("marketplace-pack-card");
+    expect(result.querySelector(".marketplace-pack-card-action")).not.toBeNull();
+  });
+
+  it("renders an editorial project header with separately labelled statistics", async () => {
+    renderBrowser();
+
+    await selectProvider(/modrinth/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /lazy survival/i }),
+    );
+
+    const details = await screen.findByRole("article", {
+      name: /lazy survival/i,
+    });
+    const hero = details.querySelector("header.marketplace-project-hero");
+    const statistics = screen.getByRole("group", {
+      name: /project statistics/i,
+    });
+
+    expect(hero).toContainElement(
+      screen.getByRole("heading", { name: "Lazy Survival", level: 2 }),
+    );
+    expect(hero).toContainElement(
+      screen.getByRole("img", { name: "Lazy Survival" }),
+    );
+    expect(hero).toHaveTextContent("Modrinth");
+    expect(statistics.querySelectorAll("dt")).toHaveLength(4);
+    expect(statistics).toHaveTextContent("Downloads");
+    expect(statistics).toHaveTextContent("6.9K");
+    expect(statistics).toHaveTextContent("Follows");
+    expect(statistics).toHaveTextContent("47");
+    expect(statistics).toHaveTextContent("Mods");
+    expect(statistics).toHaveTextContent("2");
+    expect(statistics).toHaveTextContent("Minecraft");
+    expect(statistics).toHaveTextContent("1.21.8");
+  });
+
+  it("groups screenshots and project copy into editorial sections", async () => {
+    renderBrowser();
+
+    await selectProvider(/modrinth/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /lazy survival/i }),
+    );
+
+    const details = await screen.findByRole("article", {
+      name: /lazy survival/i,
+    });
+    const screenshots = screen.getByRole("region", { name: /screenshots/i });
+    const about = screen.getByRole("region", {
+      name: /about this project/i,
+    });
+
+    expect(details).toContainElement(screenshots);
+    expect(details).toContainElement(about);
+    expect(
+      screen.getAllByRole("img", { name: /lazy survival project screenshot/i }),
+    ).toHaveLength(2);
+    expect(about).toHaveTextContent("Full HTML description.");
+  });
+
+  it("keeps installable versions in a dedicated version rail", async () => {
+    renderBrowser();
+
+    await selectProvider(/modrinth/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /lazy survival/i }),
+    );
+
+    const versionRail = await screen.findByRole("complementary", {
+      name: /versions/i,
+    });
+    const versionButton = screen.getByRole("button", { name: /1\.0\.0/i });
+
+    expect(versionRail).toHaveClass("marketplace-version-rail");
+    expect(versionRail).toContainElement(
+      screen.getByRole("heading", { name: "Versions", level: 3 }),
+    );
+    expect(versionRail).toHaveTextContent("1");
+    expect(versionButton).toHaveClass("marketplace-install-version");
+  });
+
+  it("does not invent unavailable project statistics", async () => {
+    renderBrowser();
+
+    await selectProvider(/bbsmc/i);
+    await userEvent.click(
+      await screen.findByRole("button", { name: /public pack/i }),
+    );
+
+    const statistics = await screen.findByRole("group", {
+      name: /project statistics/i,
+    });
+
+    expect(statistics.querySelectorAll("dt")).toHaveLength(1);
+    expect(statistics).toHaveTextContent("Minecraft");
+    expect(statistics).toHaveTextContent("1.21.4");
+    expect(statistics).not.toHaveTextContent("Downloads");
+    expect(statistics).not.toHaveTextContent("Follows");
+    expect(statistics).not.toHaveTextContent("Mods");
+    expect(statistics).not.toHaveTextContent("—");
   });
 
   it("shows provider choices as a dropdown to the right of the search box", async () => {
@@ -388,7 +510,7 @@ describe("CreateServerMarketplaceBrowser", () => {
     expect(invokeDesktopCommand).toHaveBeenCalledWith(
       "search_bbsmc_projects",
       expect.objectContaining({
-        input: expect.objectContaining({ projectType: "modpack" }),
+        input: expect.objectContaining({ query: "", projectType: "modpack" }),
       }),
     );
     expect(invokeDesktopCommand).toHaveBeenCalledWith(

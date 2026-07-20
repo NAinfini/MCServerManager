@@ -107,7 +107,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
 
       {javaQuery.data ? (
         <div className="java-layout">
-          <section className="java-panel">
+          <section className="java-panel java-panel-managed">
             <div className="section-heading">
               <h2>{t("java.managed.title")}</h2>
               <span>{t("java.managed.subtitle")}</span>
@@ -159,7 +159,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
                       {t("java.managed.license")}
                     </a>
                   </p>
-                  <label className="checkbox-field">
+                  <label className="java-managed-consent">
                     <Checkbox
                       aria-label={t("java.managed.consent")}
                       checked={managedConsent}
@@ -170,6 +170,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
                     <span>{t("java.managed.consent")}</span>
                   </label>
                   <Button
+                    className="java-managed-install"
                     disabled={!managedConsent || installMutation.isPending}
                     type="button"
                     variant="primary"
@@ -186,7 +187,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
               ) : null}
             </div>
           </section>
-          <section className="java-panel">
+          <section className="java-panel java-panel-installed">
             <div className="section-heading">
               <h2>{t("java.installed.title")}</h2>
               <span>
@@ -247,7 +248,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
             )}
           </section>
 
-          <section className="java-panel">
+          <section className="java-panel java-panel-compatibility">
             <div className="section-heading">
               <h2>{t("java.compatibility.title")}</h2>
               <span>{t("java.compatibility.subtitle")}</span>
@@ -296,7 +297,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
           </section>
 
           {javaQuery.data.failures.length > 0 ? (
-            <section className="java-panel">
+            <section className="java-panel java-panel-failures">
               <div className="section-heading">
                 <h2>{t("java.failures.title")}</h2>
                 <span>

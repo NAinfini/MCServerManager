@@ -71,6 +71,58 @@ describe("Electron backend Java runtime contract", () => {
   });
 });
 
+describe("Electron backend marketplace image loading", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("loads trusted BBSMC CDN images through the desktop backend", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async () =>
+      new Response(Uint8Array.from([1, 2, 3]), {
+        status: 200,
+        headers: { "content-type": "image/webp" },
+      }),
+    );
+
+    try {
+      const result = await backend.handle("fetch_marketplace_image", {
+        input: {
+          url: "https://cdn.bbsmc.net/bbsmc/data/cached_images/example.webp",
+        },
+      });
+
+      expect(result).toEqual({
+        contentType: "image/webp",
+        dataUrl: "data:image/webp;base64,AQID",
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("rejects marketplace image URLs outside the trusted BBSMC CDN path", async () => {
+    const backend = createTestBackend();
+
+    try {
+      await expect(
+        backend.handle("fetch_marketplace_image", {
+          input: { url: "https://example.com/image.png" },
+        }),
+      ).rejects.toMatchObject({ code: "MARKETPLACE_IMAGE_URL_BLOCKED" });
+    } finally {
+      backend.close();
+    }
+  });
+});
+
 describe("Electron backend loader version catalogs", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -3168,6 +3220,67 @@ describe("Electron backend marketplace installation", () => {
         modCount: 2,
         websiteUrl: "https://bbsmc.net/modpack/bbsmc-pack",
       });
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("maps the BBSMC detail followers field to marketplace follows", async () => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        project_id: "bbsmc-pack-1",
+        slug: "public-pack",
+        title: "Public Pack",
+        project_type: "modpack",
+        followers: 809,
+      }),
+    );
+
+    try {
+      const project = await backend.handle("get_bbsmc_project", {
+        input: { projectId: "bbsmc-pack-1" },
+      });
+
+      expect(project.follows).toBe(809);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("returns BBSMC discovery results for an empty query", async () => {
+    const backend = createTestBackend();
+    let requestedUrl = null;
+    globalThis.fetch = vi.fn(async (url) => {
+      requestedUrl = new URL(String(url));
+      return jsonResponse({
+        hits: [
+          {
+            project_id: "pack-1",
+            slug: "first-pack",
+            title: "First Pack",
+            project_type: "modpack",
+          },
+          {
+            project_id: "pack-2",
+            slug: "second-pack",
+            title: "Second Pack",
+            project_type: "modpack",
+          },
+        ],
+      });
+    });
+
+    try {
+      const projects = await backend.handle("search_bbsmc_projects", {
+        input: { query: "", projectType: "modpack" },
+      });
+
+      expect(requestedUrl?.searchParams.get("query")).toBe("");
+      expect(JSON.parse(requestedUrl.searchParams.get("facets"))).toEqual([
+        ["project_type:modpack"],
+      ]);
+      expect(projects.map((project) => project.id)).toEqual(["pack-1", "pack-2"]);
     } finally {
       backend.close();
     }

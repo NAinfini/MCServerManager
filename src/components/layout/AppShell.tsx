@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
 import {
   Archive,
   ChevronLeft,
@@ -86,8 +85,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   const [createServerProgress, setCreateServerProgress] =
     useState<CreateServerWizardProgress | null>(null);
   const [createServerSourcePath, setCreateServerSourcePath] = useState<string | null>(null);
-  const [isJavaOpen, setJavaOpen] = useState(false);
-  const [isSettingsOpen, setSettingsOpen] = useState(false);
   const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ServerViewMode>("cards");
@@ -116,12 +113,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     selectedServerId
       ? servers.find((server) => server.id === selectedServerId) ?? null
       : null;
-  const effectiveSidebarPage: PrimaryPage = isJavaOpen
-    ? "java"
-    : isSettingsOpen
-      ? "settings"
-      : activePage;
-
   useEffect(() => {
     if (selectedServerId && !servers.some((server) => server.id === selectedServerId)) {
       setSelectedServerId(null);
@@ -183,8 +174,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   }, []);
 
   const openCreateServer = useCallback((sourcePath: string | null = null) => {
-    setJavaOpen(false);
-    setSettingsOpen(false);
     setActivePage("servers");
     setSelectedServerId(null);
     setCreateServerSourcePath(sourcePath);
@@ -242,20 +231,12 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
 
       <div className={sidebarCollapsed ? "app-body app-body-sidebar-collapsed" : "app-body"}>
         <Sidebar
-          activePage={effectiveSidebarPage}
+          activePage={activePage}
           selectedServerId={selectedServerId ?? undefined}
           servers={servers}
           onSelectPage={(page) => {
             if (page === "servers") {
               requestCreateServerExit(openServersOverview);
-              return;
-            }
-            if (page === "java") {
-              requestCreateServerExit(() => setJavaOpen(true));
-              return;
-            }
-            if (page === "settings") {
-              requestCreateServerExit(() => setSettingsOpen(true));
               return;
             }
             requestCreateServerExit(() => {
@@ -279,9 +260,13 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           aria-labelledby={
             isCreateServerActive
               ? "create-server-page-title"
-              : activePage === "logger"
-                ? "logger-title"
-                : "servers-title"
+              : activePage === "java"
+                ? "java-runtimes-title"
+                : activePage === "settings"
+                  ? "settings-title"
+                  : activePage === "logger"
+                    ? "logger-title"
+                    : "servers-title"
           }
         >
           {isCreateServerActive ? (
@@ -354,11 +339,15 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                 }}
               />
             </section>
+          ) : activePage === "java" ? (
+            <JavaRuntimesView />
+          ) : activePage === "settings" ? (
+            <SettingsView />
           ) : activePage === "logger" && !selectedServer ? (
             <AppLoggerView />
           ) : (
             <>
-          <section className="page-header">
+          <section className={selectedServer ? "page-header" : "page-header dashboard-page-header"}>
             <div>
               <h1 id="servers-title">
                 {selectedServer ? selectedServer.name : t("servers.page.title")}
@@ -400,11 +389,39 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           </section>
 
               {!selectedServer ? (
-                <>
-                  <section
-                    className="summary-strip"
+                <div className="dashboard-workbench">
+                  <div className="dashboard-primary">
+                    {servers.length > 0 ? <BatchActions servers={servers} /> : null}
+
+                    <div className="server-table-panel">
+                      <div className="section-heading">
+                        <h2>{t("servers.overview.title")}</h2>
+                        <span>{t("servers.overview.description")}</span>
+                      </div>
+                      {viewMode === "cards" ? (
+                        <ServerCardView
+                          error={profilesQuery.error}
+                          isLoading={profilesQuery.isLoading}
+                          selectedServerId={selectedServerId ?? undefined}
+                          servers={servers}
+                          onSelectServer={setSelectedServerId}
+                        />
+                      ) : (
+                        <ServerList
+                          error={profilesQuery.error}
+                          isLoading={profilesQuery.isLoading}
+                          selectedServerId={selectedServerId ?? undefined}
+                          servers={servers}
+                          onSelectServer={setSelectedServerId}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <aside
+                    className="dashboard-status-rail"
                     aria-label={t("servers.summary.aria")}
                   >
+                    <section className="summary-strip">
                     <div>
                       <span className="summary-label summary-label-running">
                         <CirclePlay aria-hidden="true" size={14} />
@@ -437,34 +454,9 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                         {servers.length === 0 ? t("common.none") : t("common.missing")}
                       </strong>
                     </div>
-                  </section>
-
-                  {servers.length > 0 ? <BatchActions servers={servers} /> : null}
-
-                  <div className="server-table-panel">
-                    <div className="section-heading">
-                      <h2>{t("servers.overview.title")}</h2>
-                      <span>{t("servers.overview.description")}</span>
-                    </div>
-                    {viewMode === "cards" ? (
-                      <ServerCardView
-                        error={profilesQuery.error}
-                        isLoading={profilesQuery.isLoading}
-                        selectedServerId={selectedServerId ?? undefined}
-                        servers={servers}
-                        onSelectServer={setSelectedServerId}
-                      />
-                    ) : (
-                      <ServerList
-                        error={profilesQuery.error}
-                        isLoading={profilesQuery.isLoading}
-                        selectedServerId={selectedServerId ?? undefined}
-                        servers={servers}
-                        onSelectServer={setSelectedServerId}
-                      />
-                    )}
-                  </div>
-                </>
+                    </section>
+                  </aside>
+                </div>
               ) : (
                 <div className="server-detail-panel">
                   <ServerDetail server={selectedServer} />
@@ -473,61 +465,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
             </>
           )}
 
-              <Dialog.Root open={isJavaOpen} onOpenChange={setJavaOpen}>
-                <Dialog.Portal>
-                  <Dialog.Overlay className="dialog-backdrop" />
-                  <Dialog.Content className="modal-dialog fullscreen-modal">
-                    <div className="fullscreen-modal-header">
-                      <Dialog.Title asChild>
-                        <h2>{t("java.title")}</h2>
-                      </Dialog.Title>
-                      <Dialog.Description className="visually-hidden">
-                        {t("java.eyebrow")}
-                      </Dialog.Description>
-                      <Dialog.Close asChild>
-                        <Button
-                          aria-label={t("common.cancel")}
-                          className="icon-button"
-                          variant="ghost"
-                        >
-                          <X aria-hidden="true" size={16} />
-                        </Button>
-                      </Dialog.Close>
-                    </div>
-                    <div className="fullscreen-modal-body">
-                      <JavaRuntimesView embedded />
-                    </div>
-                  </Dialog.Content>
-                </Dialog.Portal>
-              </Dialog.Root>
-
-              <Dialog.Root open={isSettingsOpen} onOpenChange={setSettingsOpen}>
-                <Dialog.Portal>
-                  <Dialog.Overlay className="dialog-backdrop" />
-                  <Dialog.Content className="modal-dialog fullscreen-modal">
-                    <div className="fullscreen-modal-header">
-                      <Dialog.Title asChild>
-                        <h2>{t("settings.page.title")}</h2>
-                      </Dialog.Title>
-                      <Dialog.Description className="visually-hidden">
-                        {t("settings.page.eyebrow")}
-                      </Dialog.Description>
-                      <Dialog.Close asChild>
-                        <Button
-                          aria-label={t("common.cancel")}
-                          className="icon-button"
-                          variant="ghost"
-                        >
-                          <X aria-hidden="true" size={16} />
-                        </Button>
-                      </Dialog.Close>
-                    </div>
-                    <div className="fullscreen-modal-body">
-                      <SettingsView embedded />
-                    </div>
-                  </Dialog.Content>
-                </Dialog.Portal>
-              </Dialog.Root>
         </main>
       </div>
       <BottomStatusBar selectedServer={selectedServer} />
