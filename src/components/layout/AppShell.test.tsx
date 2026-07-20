@@ -166,7 +166,9 @@ describe("AppShell", () => {
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getAllByText("MC Server Manager").length).toBeGreaterThan(0);
     expect(await screen.findByText(/1 running/i)).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Servers" }),
+    ).toBeInTheDocument();
     expect(screen.getAllByText("Survival SMP").length).toBeGreaterThan(0);
     expect(
       screen.queryByRole("button", { name: /^marketplace$/i }),
@@ -179,10 +181,22 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders the overview as a structured dashboard workbench", async () => {
+    const { container } = renderShell();
+
+    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
+    expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
+    expect(container.querySelector(".dashboard-workbench")).not.toBeNull();
+    expect(container.querySelector(".dashboard-primary")).not.toBeNull();
+    expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
+  });
+
   it("keeps Servers navigation on the global overview and opens detail from a server row", async () => {
     renderShell();
 
-    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Servers" }),
+    ).toBeInTheDocument();
 
     const serverButtons = await screen.findAllByRole("button", {
       name: /^survival smp$/i,
@@ -196,33 +210,34 @@ describe("AppShell", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /^servers$/i }));
 
-    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Servers" }),
+    ).toBeInTheDocument();
   });
 
-  it("opens Java runtimes as a modal without replacing the servers page", async () => {
+  it("opens Java runtimes in the main content area", async () => {
     renderShell();
 
     fireEvent.click(screen.getByRole("button", { name: /java runtimes/i }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Java Runtimes" });
-    expect(dialog).toHaveAccessibleDescription("Runtime compatibility");
+    const main = screen.getByRole("main");
     expect(
-      within(dialog).getByRole("heading", { name: "Java Runtimes" }),
+      await within(main).findByRole("heading", { name: "Java Runtimes" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      within(main).getByRole("button", { name: /scan/i }),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getAllByRole("heading", { name: "Java Runtimes" }),
-    ).toHaveLength(1);
-    expect(within(dialog).getByRole("button", { name: /scan/i })).toBeInTheDocument();
-    expect(
-      within(dialog).queryByRole("button", { name: /download java/i }),
+      within(main).queryByRole("button", { name: /download java/i }),
     ).not.toBeInTheDocument();
     expect(
-      within(dialog).queryByRole("link", {
+      within(main).queryByRole("link", {
         name: /eclipse temurin download/i,
       }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^servers$/i }));
     expect(
       await screen.findByRole("heading", { name: "Servers" }),
     ).toBeInTheDocument();
@@ -246,7 +261,9 @@ describe("AppShell", () => {
     expect(
       screen.queryByRole("dialog", { name: "Create server" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("navigation", { name: /primary/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: /primary/i }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /new blank server/i }),
     ).toBeInTheDocument();
@@ -354,7 +371,9 @@ describe("AppShell", () => {
     });
 
     await userEvent.click(providerSelect);
-    expect(screen.getByRole("option", { name: "Modrinth" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Modrinth" }),
+    ).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(
       within(main).getByRole("heading", { name: "Create server" }),
@@ -369,19 +388,19 @@ describe("AppShell", () => {
     );
 
     await screen.findByRole("heading", { name: "Create server" });
-    await userEvent.click(
-      screen.getByRole("button", { name: /^logger$/i }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
 
     const confirmation = await screen.findByRole("alertdialog", {
       name: "Discard server creation?",
     });
-    await userEvent.click(within(confirmation).getByRole("button", { name: "Cancel" }));
-    expect(screen.getByRole("heading", { name: "Create server" })).toBeInTheDocument();
-
     await userEvent.click(
-      screen.getByRole("button", { name: /^logger$/i }),
+      within(confirmation).getByRole("button", { name: "Cancel" }),
     );
+    expect(
+      screen.getByRole("heading", { name: "Create server" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
     await userEvent.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", {
         name: "Discard creation",
@@ -419,10 +438,10 @@ describe("AppShell", () => {
     await userEvent.click(
       screen.getByRole("button", { name: /create server/i }),
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
-    await userEvent.click(
-      screen.getByRole("button", { name: /^logger$/i }),
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Download interrupted",
     );
+    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
 
     expect(
       await screen.findByRole("heading", { name: "Application Logger" }),
@@ -432,52 +451,64 @@ describe("AppShell", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("opens settings as a modal with section navigation", async () => {
+  it("opens settings in the main content area with section navigation", async () => {
     renderShell();
 
     fireEvent.click(screen.getByRole("button", { name: /^settings$/i }));
 
-    const dialog = await screen.findByRole("dialog", { name: "Settings" });
-    expect(dialog).toHaveAccessibleDescription("Application preferences");
+    const main = screen.getByRole("main");
     expect(
-      within(dialog).getByRole("heading", { name: "Settings" }),
+      await within(main).findByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
-    expect(
-      within(dialog).getAllByRole("heading", { name: "Settings" }),
-    ).toHaveLength(1);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     // Default section is General
     expect(
-      within(dialog).getByRole("button", { name: /general/i }),
+      within(main).getByRole("button", { name: /general/i }),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("button", { name: /appearance/i }),
+      within(main).getByRole("button", { name: /appearance/i }),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("button", { name: /updates/i }),
+      within(main).getByRole("button", { name: /updates/i }),
     ).toBeInTheDocument();
 
     // Navigate to Appearance section
-    await userEvent.click(within(dialog).getByRole("button", { name: /appearance/i }));
+    await userEvent.click(
+      within(main).getByRole("button", { name: /appearance/i }),
+    );
     expect(
-      await within(dialog).findByRole("heading", { name: "Theme" }),
+      await within(main).findByRole("heading", { name: "Theme" }),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("heading", { name: "Language" }),
+      within(main).getByRole("heading", { name: "Language" }),
     ).toBeInTheDocument();
     expect(
-      within(dialog).getByRole("heading", { name: "Theme" }).closest("section"),
+      within(main).getByRole("heading", { name: "Theme" }).closest("section"),
     ).not.toHaveClass("settings-panel");
     expect(
-      within(dialog).getByRole("heading", { name: "Language" }).closest("section"),
+      within(main)
+        .getByRole("heading", { name: "Language" })
+        .closest("section"),
     ).not.toHaveClass("settings-panel");
-    const themeSelect = within(dialog).getByRole("combobox", { name: /theme/i });
-    const languageSelect = within(dialog).getByRole("combobox", { name: /language/i });
-    expect(themeSelect).toHaveTextContent("System");
+    const themeChoices = within(main).getByRole("radiogroup", {
+      name: /theme/i,
+    });
+    const languageSelect = within(main).getByRole("combobox", {
+      name: /language/i,
+    });
+    expect(
+      within(themeChoices).getByRole("radio", { name: "System" }),
+    ).toHaveAttribute("aria-checked", "true");
     expect(languageSelect).toHaveTextContent("English");
-    await userEvent.click(themeSelect);
-    expect(screen.getByRole("option", { name: "Light" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Dark" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("option", { name: "System" }));
+    expect(
+      within(themeChoices).getByRole("radio", { name: "Light" }),
+    ).toBeInTheDocument();
+    expect(
+      within(themeChoices).getByRole("radio", { name: "Dark" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      within(themeChoices).getByRole("radio", { name: "System" }),
+    );
     await userEvent.click(languageSelect);
     expect(
       screen.getByRole("option", { name: "Chinese (Simplified)" }),
@@ -485,10 +516,12 @@ describe("AppShell", () => {
     await userEvent.click(screen.getByRole("option", { name: "English" }));
 
     // Navigate to Updates section
-    await userEvent.click(within(dialog).getByRole("button", { name: /^updates$/i }));
-    expect(within(dialog).getByText("0.1.0")).toBeInTheDocument();
+    await userEvent.click(
+      within(main).getByRole("button", { name: /^updates$/i }),
+    );
+    expect(within(main).getByText("0.1.0")).toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^servers$/i }));
     expect(
       await screen.findByRole("heading", { name: "Servers" }),
     ).toBeInTheDocument();
@@ -499,10 +532,16 @@ describe("AppShell", () => {
 
     renderShell();
 
-    expect(await screen.findByRole("button", { name: "Java 运行时" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Java 运行时" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "服务器" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "创建服务器" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "服务器" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "创建服务器" }),
+    ).toBeInTheDocument();
   });
 
   it("opens the logger page from the sidebar", async () => {

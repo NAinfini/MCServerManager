@@ -502,9 +502,19 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
         <div className="inline-error">{hangarQueryResult.error.message}</div>
       ) : null}
 
-      <div className="marketplace-layout">
+      <div
+        className={
+          contentType === "modpacks"
+            ? "marketplace-layout marketplace-layout-card-mode"
+            : "marketplace-layout"
+        }
+      >
         <section
-          className="marketplace-results"
+          className={
+            contentType === "modpacks"
+              ? "marketplace-results marketplace-card-grid"
+              : "marketplace-results"
+          }
           aria-label={t("marketplace.results.aria")}
         >
           {contentType !== "plugins" && searchQuery.isFetching ? (
@@ -557,14 +567,19 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                   <span className="marketplace-result-body">
                     <strong>{project.title}</strong>
                     <span>{project.description}</span>
-                      <MarketplaceResultMeta
-                        downloadsLabel={t("marketplace.downloads", {
-                          count: formatCompactNumber(project.downloads),
-                        })}
+                    <MarketplaceResultMeta
+                      downloadsLabel={t("marketplace.downloads", {
+                        count: formatCompactNumber(project.downloads),
+                      })}
                       project={project}
                       provider="Modrinth"
                     />
                   </span>
+                  {contentType === "modpacks" ? (
+                    <span className="marketplace-pack-card-action">
+                      {t("marketplace.viewPack")}
+                    </span>
+                  ) : null}
                 </button>
               ))
             : null}
@@ -595,10 +610,10 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                   <span className="marketplace-result-body">
                     <strong>{project.title}</strong>
                     <span>{project.description}</span>
-                      <MarketplaceResultMeta
-                        downloadsLabel={t("marketplace.downloads", {
-                          count: formatCompactNumber(project.downloads),
-                        })}
+                    <MarketplaceResultMeta
+                      downloadsLabel={t("marketplace.downloads", {
+                        count: formatCompactNumber(project.downloads),
+                      })}
                       project={project}
                       provider="BBSMC"
                     />
@@ -611,6 +626,11 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                       })}
                     </small>
                   </span>
+                  {contentType === "modpacks" ? (
+                    <span className="marketplace-pack-card-action">
+                      {t("marketplace.viewPack")}
+                    </span>
+                  ) : null}
                 </button>
               ))
             : null}

@@ -10,6 +10,7 @@ import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import {
   getBbsmcProject,
+  fetchMarketplaceImage,
   getModrinthProject,
   listBbsmcVersions,
   listModrinthVersions,
@@ -48,7 +49,7 @@ interface CreateServerMarketplaceBrowserProps {
 const providers: MarketplaceProvider[] = ["Modrinth", "BBSMC"];
 const discoveryQueries: Record<MarketplaceProvider, string> = {
   Modrinth: "server",
-  BBSMC: "server",
+  BBSMC: "",
 };
 
 function searchProviderProjects(
@@ -127,10 +128,12 @@ function MarketplaceProjectIcon({
   project,
   provider,
   size = "compact",
+  meaningful = false,
 }: {
   project: MarketplaceProject | null;
   provider: MarketplaceProvider;
   size?: "compact" | "large";
+  meaningful?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   const iconUrl = project?.iconUrl;
@@ -146,33 +149,80 @@ function MarketplaceProjectIcon({
     >
       {iconUrl && !failed ? (
         <img
-          alt=""
+          alt={meaningful ? projectTitle(project) : ""}
           referrerPolicy="no-referrer"
           src={iconUrl}
           onError={() => setFailed(true)}
         />
       ) : (
-        <span>{label}</span>
+        <span
+          aria-label={meaningful ? projectTitle(project) : undefined}
+          role={meaningful ? "img" : undefined}
+        >
+          {label}
+        </span>
       )}
     </div>
   );
 }
 
-function MarketplaceGalleryImage({ src }: { src: string }) {
+function MarketplaceGalleryImage({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(() =>
+    isBbsmcImageUrl(src) ? null : src,
+  );
 
-  if (failed) {
+  useEffect(() => {
+    let cancelled = false;
+    setFailed(false);
+
+    if (!isBbsmcImageUrl(src)) {
+      setResolvedSrc(src);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setResolvedSrc(null);
+    void fetchMarketplaceImage(src)
+      .then(({ dataUrl }) => {
+        if (!cancelled) setResolvedSrc(dataUrl);
+      })
+      .catch((error) => {
+        console.error("Failed to load BBSMC gallery image", error);
+        if (!cancelled) setFailed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  if (failed || !resolvedSrc) {
     return null;
   }
 
   return (
     <img
-      alt=""
+      alt={alt}
       referrerPolicy="no-referrer"
-      src={src}
+      src={resolvedSrc}
       onError={() => setFailed(true)}
     />
   );
+}
+
+function isBbsmcImageUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname.toLowerCase() === "cdn.bbsmc.net" &&
+      url.pathname.startsWith("/bbsmc/data/")
+    );
+  } catch {
+    return false;
+  }
 }
 
 function versionLabel(version: ProjectVersion) {
@@ -277,7 +327,7 @@ export function CreateServerMarketplaceBrowser({
       loaderFilter,
       sortOrder,
     ],
-    enabled: submittedQuery.trim() !== "",
+    enabled: provider === "BBSMC" || submittedQuery.trim() !== "",
     queryFn: () =>
       searchProviderProjects(provider, submittedQuery, {
         projectType: "modpack",
@@ -330,6 +380,8 @@ export function CreateServerMarketplaceBrowser({
     [versionsQuery.data],
   );
   const selectedDetails = selectedDetailsQuery.data ?? selectedProject;
+  const gallery = projectGallery(selectedDetails);
+  const minecraftVersions = readableVersionLabels(selectedDetails, versions);
   const isDiscoverySearch =
     query.trim() === "" && submittedQuery === discoveryQueries[provider];
   const noDescription = t("marketplace.noDescription");
@@ -390,7 +442,9 @@ export function CreateServerMarketplaceBrowser({
 
   return (
     <section
-      className="create-marketplace"
+      className={`create-marketplace${
+        isDetailMode ? " create-marketplace-detail" : ""
+      }`}
       aria-label={t("marketplace.browser.aria")}
     >
       {!isDetailMode ? (
@@ -459,7 +513,7 @@ export function CreateServerMarketplaceBrowser({
       {!selectedProject ? (
         <div className="create-marketplace-layout">
           <section
-            className="marketplace-results-list"
+            className="marketplace-results-list marketplace-card-grid"
             aria-label={t("marketplace.projects.aria")}
           >
             {resultsQuery.isFetching ? (
@@ -528,6 +582,9 @@ export function CreateServerMarketplaceBrowser({
                         ))}
                     </div>
                   </div>
+                  <span className="marketplace-pack-card-action">
+                    {t("marketplace.viewPack")}
+                  </span>
                 </button>
               );
             })}
@@ -554,85 +611,145 @@ export function CreateServerMarketplaceBrowser({
                 </Button>
                 <div className="marketplace-pack-detail-grid">
                   <div className="marketplace-pack-detail-main">
-                    <div className="marketplace-pack-detail-hero">
-                      <MarketplaceProjectIcon
-                        project={selectedDetails}
-                        provider={provider}
-                        size="large"
-                      />
-                      <div>
-                        <div className="marketplace-pack-detail-title">
-                          <h3>{projectTitle(selectedDetails)}</h3>
-                          {selectedDetails?.websiteUrl ? (
-                            <a
-                              aria-label={t("marketplace.openProviderPage", {
-                                provider,
-                              })}
-                              className="marketplace-site-link-icon"
-                              href={selectedDetails.websiteUrl}
-                              title={t("marketplace.openProviderPage", {
-                                provider,
-                              })}
-                            >
-                              <ExternalLink aria-hidden="true" size={15} />
-                            </a>
-                          ) : null}
-                        </div>
-                        <p>
-                          {projectDescription(selectedDetails, noDescription)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="marketplace-pack-detail-meta">
-                      <span className="meta-badge meta-badge-downloads">
-                        {t("marketplace.downloads", {
-                          count: formatCompactNumber(selectedDetails?.downloads),
-                        })}
-                      </span>
-                      {projectModCount(selectedDetails) !== null ? (
-                        <span className="meta-badge meta-badge-mods">
-                          {t("marketplace.modsCount", {
-                            count: formatCompactNumber(
-                              projectModCount(selectedDetails) ?? 0,
-                            ),
-                          })}
-                        </span>
-                      ) : null}
-                      <span className="meta-badge meta-badge-follows">
-                        {t("marketplace.follows", {
-                          count: formatCompactNumber(selectedDetails?.follows),
-                        })}
-                      </span>
-                      <span className="meta-badge meta-badge-version">
-                        {readableVersionLabels(selectedDetails, versions).join(
-                          ", ",
-                        ) || t("marketplace.versionsUnknown")}
-                      </span>
-                    </div>
-                    {projectGallery(selectedDetails).length > 0 ? (
+                    <header className="marketplace-project-hero">
                       <div
-                        className="marketplace-pack-gallery"
-                        aria-label={t("marketplace.screenshots")}
+                        aria-hidden="true"
+                        className="marketplace-project-hero-ambient"
                       >
-                        {projectGallery(selectedDetails).map((image) => (
-                          <MarketplaceGalleryImage key={image} src={image} />
-                        ))}
+                        <MarketplaceProjectIcon
+                          project={selectedDetails}
+                          provider={provider}
+                          size="large"
+                        />
                       </div>
+                      <div className="marketplace-project-hero-content">
+                        <MarketplaceProjectIcon
+                          meaningful
+                          project={selectedDetails}
+                          provider={provider}
+                          size="large"
+                        />
+                        <div className="marketplace-project-identity">
+                          <small className="marketplace-project-provider">
+                            {provider}
+                          </small>
+                          <div className="marketplace-pack-detail-title">
+                            <h2>{projectTitle(selectedDetails)}</h2>
+                            {selectedDetails?.websiteUrl ? (
+                              <a
+                                aria-label={t("marketplace.openProviderPage", {
+                                  provider,
+                                })}
+                                className="marketplace-site-link-icon"
+                                href={selectedDetails.websiteUrl}
+                                title={t("marketplace.openProviderPage", {
+                                  provider,
+                                })}
+                              >
+                                <ExternalLink aria-hidden="true" size={16} />
+                              </a>
+                            ) : null}
+                          </div>
+                          <p>
+                            {projectDescription(selectedDetails, noDescription)}
+                          </p>
+                        </div>
+                      </div>
+                    </header>
+                    <dl
+                      aria-label={t("marketplace.projectStats")}
+                      className="marketplace-project-stats"
+                      role="group"
+                    >
+                      {typeof selectedDetails?.downloads === "number" ? (
+                        <div>
+                          <dt>{t("marketplace.stat.downloads")}</dt>
+                          <dd className="meta-badge-downloads">
+                            {formatCompactNumber(selectedDetails.downloads)}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {typeof selectedDetails?.follows === "number" ? (
+                        <div>
+                          <dt>{t("marketplace.stat.follows")}</dt>
+                          <dd className="meta-badge-follows">
+                            {formatCompactNumber(selectedDetails.follows)}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {projectModCount(selectedDetails) !== null ? (
+                        <div>
+                          <dt>{t("marketplace.stat.mods")}</dt>
+                          <dd className="meta-badge-mods">
+                            {formatCompactNumber(
+                              projectModCount(selectedDetails) ?? 0,
+                            )}
+                          </dd>
+                        </div>
+                      ) : null}
+                      <div>
+                        <dt>{t("marketplace.stat.minecraft")}</dt>
+                        <dd className="meta-badge-version">
+                          {minecraftVersions.join(", ") ||
+                            t("marketplace.versionsUnknown")}
+                        </dd>
+                      </div>
+                    </dl>
+                    {gallery.length > 0 ? (
+                      <section
+                        aria-labelledby="marketplace-screenshots-title"
+                        className="marketplace-project-section"
+                      >
+                        <div className="marketplace-project-section-heading">
+                          <h3 id="marketplace-screenshots-title">
+                            {t("marketplace.screenshots")}
+                          </h3>
+                          <span>{gallery.length}</span>
+                        </div>
+                        <div
+                          className={`marketplace-pack-gallery marketplace-project-gallery-grid${
+                            gallery.length >= 3
+                              ? " marketplace-project-gallery-grid-featured"
+                              : ""
+                          }`}
+                        >
+                          {gallery.map((image, index) => (
+                            <MarketplaceGalleryImage
+                              alt={t("marketplace.projectScreenshot", {
+                                index: index + 1,
+                                title: projectTitle(selectedDetails),
+                              })}
+                              key={image}
+                              src={image}
+                            />
+                          ))}
+                        </div>
+                      </section>
                     ) : null}
                     {selectedDetails?.body || selectedDetails?.description ? (
-                      <MarketplaceMarkdown
-                        source={
-                          selectedDetails.body || selectedDetails.description
-                        }
-                      />
+                      <section
+                        aria-labelledby="marketplace-about-title"
+                        className="marketplace-project-section marketplace-project-about"
+                      >
+                        <div className="marketplace-project-section-heading">
+                          <h3 id="marketplace-about-title">
+                            {t("marketplace.aboutProject")}
+                          </h3>
+                        </div>
+                        <MarketplaceMarkdown
+                          source={
+                            selectedDetails.body || selectedDetails.description
+                          }
+                        />
+                      </section>
                     ) : null}
                   </div>
                   <aside
                     aria-label={t("marketplace.versions.aria")}
-                    className="marketplace-pack-version-sidebar"
+                    className="marketplace-pack-version-sidebar marketplace-version-rail"
                   >
                     <div className="marketplace-pack-version-sidebar-header">
-                      <h4>{t("marketplace.versions.aria")}</h4>
+                      <h3>{t("marketplace.versions.aria")}</h3>
                       <span>{versions.length}</span>
                     </div>
                     {versions.length === 0 ? (

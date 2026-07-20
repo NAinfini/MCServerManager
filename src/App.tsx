@@ -32,6 +32,10 @@ import {
 } from "./lib/desktop-runtime";
 import { installRendererLogger } from "./lib/app-logger";
 import "./styles.css";
+import "./styles/preview/tokens.css";
+import "./styles/preview/shell.css";
+import "./styles/preview/components.css";
+import "./styles/preview/pages.css";
 
 const queryClient = new QueryClient();
 

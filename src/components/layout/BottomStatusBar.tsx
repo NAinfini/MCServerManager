@@ -27,29 +27,29 @@ export function BottomStatusBar({ selectedServer }: BottomStatusBarProps) {
       <div className="status-bar-left">
         <span className="status-bar-item">
           <Coffee aria-hidden="true" size={12} />
-          {javaVersion ? `Java ${javaVersion}` : t("status.javaUnset")}
+          <span className="status-bar-copy">
+            {javaVersion ? `Java ${javaVersion}` : t("status.javaUnset")}
+          </span>
         </span>
         <span className="status-bar-item">
           <HardDrive aria-hidden="true" size={12} />
-          {memory ? <span className="status-bar-mono">{memory} MB</span> : t("server.meta.unset")}
+          <span className="status-bar-copy status-bar-mono">
+            {memory ? `${memory} MB` : t("server.meta.unset")}
+          </span>
         </span>
       </div>
       <div className="status-bar-center">
         <span className="status-bar-item">
           <Globe aria-hidden="true" size={12} />
-          {port ? (
-            <span className="status-bar-mono">
-              {t("server.meta.port", { port })}
-            </span>
-          ) : (
-            t("server.meta.unset")
-          )}
+          <span className="status-bar-copy status-bar-mono">
+            {port ? t("server.meta.port", { port }) : t("server.meta.unset")}
+          </span>
         </span>
       </div>
       <div className="status-bar-right">
         <span className="status-bar-item">
           <Info aria-hidden="true" size={12} />
-          v0.1.0
+          <span className="status-bar-copy">v0.1.0</span>
         </span>
       </div>
     </footer>

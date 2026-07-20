@@ -29,6 +29,7 @@ const allowedAppCommands = new Set([
   "export_diagnostic_package",
   "export_server_backup",
   "export_server_profile",
+  "fetch_marketplace_image",
   "get_app_data_folder",
   "get_app_logs_folder",
   "get_app_preferences",

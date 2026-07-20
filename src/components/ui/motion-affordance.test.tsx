@@ -1,4 +1,4 @@
-import { render, screen } from "../../test/render";
+import { fireEvent, render, screen, within } from "../../test/render";
 import { describe, expect, it, vi } from "vitest";
 import { Button } from "./button";
 import { Checkbox } from "./checkbox";
@@ -53,5 +53,22 @@ describe("motion affordance classes", () => {
     expect(screen.getByRole("switch", { name: "Auto restart" })).toHaveClass(
       "motion-toggle",
     );
+  });
+
+  it("distinguishes pointer focus from keyboard focus on switches", () => {
+    const { container } = render(<Switch aria-label="Auto restart" />);
+    const control = within(container).getByRole("switch", {
+      name: "Auto restart",
+    });
+
+    fireEvent.pointerDown(control);
+    expect(control).toHaveAttribute("data-pointer-focus", "true");
+
+    fireEvent.keyDown(control, { key: "Tab" });
+    expect(control).not.toHaveAttribute("data-pointer-focus");
+
+    fireEvent.pointerDown(control);
+    fireEvent.blur(control);
+    expect(control).not.toHaveAttribute("data-pointer-focus");
   });
 });

@@ -315,6 +315,17 @@ describe("CreateServerWizard unified provisioning flow", () => {
     });
   });
 
+  it("fills the marketplace step and keeps its back action in the host header", async () => {
+    const onHeaderBackChange = vi.fn();
+    const { container } = renderWizard({ onHeaderBackChange });
+
+    await userEvent.click(screen.getByRole("button", { name: "Browse marketplace" }));
+
+    expect(container.querySelector(".wizard-marketplace-step")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+    expect(onHeaderBackChange).toHaveBeenLastCalledWith(expect.any(Function));
+  });
+
   it("warns for unverified archives but allows an explicit compatible runtime selection", async () => {
     const unverifiedPlan = {
       source: { kind: "localModpackFile" as const, path: "C:/Packs/unknown.zip" },

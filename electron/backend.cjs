@@ -600,6 +600,8 @@ function handleCommand(db, command, args) {
       return searchBbsmcProjects(args?.input);
     case "get_bbsmc_project":
       return getBbsmcProject(args?.input);
+    case "fetch_marketplace_image":
+      return fetchMarketplaceImage(args?.input);
     case "list_bbsmc_versions":
       return listBbsmcVersions(args?.input);
     case "install_bbsmc_public_file":
@@ -6050,9 +6052,90 @@ async function installCurseForgeFile(db, input) {
 }
 
 const BBSMC_API_BASE = "https://api.bbsmc.net/v2";
+const MARKETPLACE_IMAGE_MAX_BYTES = 12 * 1024 * 1024;
+const MARKETPLACE_IMAGE_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 function bbsmcUrl(pathname) {
   return `${BBSMC_API_BASE}/${pathname.replace(/^\/+/, "")}`;
+}
+
+function marketplaceImageError(message, code) {
+  return Object.assign(new Error(message), { code });
+}
+
+async function fetchMarketplaceImage(input) {
+  const value = trimRequired(input?.url, "Marketplace image URL is required");
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw marketplaceImageError(
+      "Marketplace image URL is invalid.",
+      "MARKETPLACE_IMAGE_URL_BLOCKED",
+    );
+  }
+
+  if (
+    url.protocol !== "https:" ||
+    url.username ||
+    url.password ||
+    url.hostname.toLowerCase() !== "cdn.bbsmc.net" ||
+    !url.pathname.startsWith("/bbsmc/data/")
+  ) {
+    throw marketplaceImageError(
+      "Marketplace image URL is outside the trusted BBSMC CDN path.",
+      "MARKETPLACE_IMAGE_URL_BLOCKED",
+    );
+  }
+
+  const response = await fetch(url, {
+    headers: { "User-Agent": "MCServerManager/0.1" },
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) {
+    throw marketplaceImageError(
+      `BBSMC image request failed (${response.status}).`,
+      "MARKETPLACE_IMAGE_FETCH_FAILED",
+    );
+  }
+
+  const contentType = String(response.headers.get("content-type") || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (!MARKETPLACE_IMAGE_TYPES.has(contentType)) {
+    throw marketplaceImageError(
+      "BBSMC image response has an unsupported content type.",
+      "MARKETPLACE_IMAGE_INVALID_RESPONSE",
+    );
+  }
+
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > MARKETPLACE_IMAGE_MAX_BYTES) {
+    throw marketplaceImageError(
+      "BBSMC image exceeds the 12 MiB safety limit.",
+      "MARKETPLACE_IMAGE_TOO_LARGE",
+    );
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (bytes.byteLength > MARKETPLACE_IMAGE_MAX_BYTES) {
+    throw marketplaceImageError(
+      "BBSMC image exceeds the 12 MiB safety limit.",
+      "MARKETPLACE_IMAGE_TOO_LARGE",
+    );
+  }
+
+  return {
+    contentType,
+    dataUrl: `data:${contentType};base64,${bytes.toString("base64")}`,
+  };
 }
 
 function countBbsmcModListItems(body) {
@@ -6086,7 +6169,7 @@ function mapBbsmcProject(item) {
     iconUrl: item.icon_url || null,
     gallery: normalizeMarketplaceGallery(item.gallery),
     downloads: item.downloads || 0,
-    follows: item.follows || 0,
+    follows: item.follows ?? item.followers ?? 0,
     updatedAt: item.date_modified || item.updated || null,
     body: item.body || null,
     modCount:
@@ -6100,7 +6183,6 @@ function mapBbsmcProject(item) {
 
 async function searchBbsmcProjects(input) {
   const query = encodeURIComponent(input?.query || "");
-  if (!query) return [];
   const facets = marketplaceFacets(input?.projectType, input?.loader);
   const index = encodeURIComponent(marketplaceSortIndex(input?.sort));
   const data = await fetchJson(

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { fetchMarketplaceImage } from "./marketplaceApi";
 
 interface MarketplaceMarkdownProps {
   source: string;
@@ -64,6 +65,19 @@ function safeUrl(
   }
 }
 
+function isProxiedMarketplaceImage(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      url.hostname.toLowerCase() === "cdn.bbsmc.net" &&
+      url.pathname.startsWith("/bbsmc/data/")
+    );
+  } catch {
+    return false;
+  }
+}
+
 function unwrapElement(element: Element) {
   const parent = element.parentNode;
   if (!parent) return;
@@ -92,7 +106,12 @@ function sanitizeHtml(html: string) {
     }
 
     const href = node.tagName === "A" ? (node.getAttribute("href") ?? "") : "";
-    const src = node.tagName === "IMG" ? (node.getAttribute("src") ?? "") : "";
+    const src =
+      node.tagName === "IMG"
+        ? (node.getAttribute("src") ??
+          node.getAttribute("data-marketplace-image-src") ??
+          "")
+        : "";
     const alt = node.tagName === "IMG" ? (node.getAttribute("alt") ?? "") : "";
 
     for (const attribute of Array.from(node.attributes)) {
@@ -120,7 +139,11 @@ function sanitizeHtml(html: string) {
     if (node.tagName === "IMG" && src) {
       const safeSrc = safeUrl(src, ["http:", "https:"]);
       if (safeSrc) {
-        node.setAttribute("src", safeSrc);
+        if (isProxiedMarketplaceImage(safeSrc)) {
+          node.setAttribute("data-marketplace-image-src", safeSrc);
+        } else {
+          node.setAttribute("src", safeSrc);
+        }
         node.setAttribute("alt", alt);
         node.setAttribute("loading", "lazy");
         node.setAttribute("referrerpolicy", "no-referrer");
@@ -150,8 +173,12 @@ function renderInlineMarkdown(value: string) {
     /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
     (_match: string, alt: string, url: string) => {
       const src = safeUrl(url, ["http:", "https:"]);
+      const sourceAttribute =
+        src && isProxiedMarketplaceImage(src)
+          ? `data-marketplace-image-src="${escapeHtml(src)}"`
+          : `src="${escapeHtml(src || "")}"`;
       return src
-        ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer">`
+        ? `<img ${sourceAttribute} alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer">`
         : "";
     },
   );
@@ -338,6 +365,39 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
       details.forEach((item) => {
         item.removeEventListener("toggle", handleToggle);
       });
+    };
+  }, [html]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const images = Array.from(
+      rootRef.current?.querySelectorAll<HTMLImageElement>(
+        "img[data-marketplace-image-src]",
+      ) ?? [],
+    );
+
+    for (const image of images) {
+      const remoteSrc = image.dataset.marketplaceImageSrc;
+      if (!remoteSrc) continue;
+
+      void fetchMarketplaceImage(remoteSrc)
+        .then(({ dataUrl }) => {
+          if (cancelled || !image.isConnected) return;
+          image.src = dataUrl;
+          image.removeAttribute("data-marketplace-image-src");
+        })
+        .catch((error) => {
+          console.error("Failed to load BBSMC marketplace image", error);
+          if (cancelled || !image.isConnected) return;
+          image.dataset.marketplaceImageError = "true";
+          image.removeAttribute("data-marketplace-image-src");
+          image.title =
+            error instanceof Error ? error.message : "BBSMC image load failed";
+        });
+    }
+
+    return () => {
+      cancelled = true;
     };
   }, [html]);
 

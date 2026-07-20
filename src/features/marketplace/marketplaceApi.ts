@@ -271,6 +271,15 @@ export function getBbsmcProject(projectId: string) {
   );
 }
 
+export function fetchMarketplaceImage(url: string) {
+  return invokeDesktopCommandWithErrorHandling<{
+    contentType: string;
+    dataUrl: string;
+  }>("fetch_marketplace_image", {
+    input: { url },
+  });
+}
+
 export function listBbsmcVersions(projectId: string) {
   return invokeDesktopCommandWithErrorHandling<ProjectVersion[]>(
     "list_bbsmc_versions",

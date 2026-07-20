@@ -245,11 +245,12 @@ export function ServerDetail({ server }: ServerDetailProps) {
         <p className="detail-panel-error">{backupMutation.error.message}</p>
       ) : null}
       <Tabs.Root
+        className="server-detail-workspace"
         value={activeTab}
         onValueChange={(value) => setActiveTab(value as ServerDetailTab)}
       >
         <Tabs.List
-          className="detail-tabs"
+          className="detail-tabs server-detail-menu"
           aria-label={t("server.tabs.aria", { server: server.name })}
         >
           {detailTabs.map((tab) => (
