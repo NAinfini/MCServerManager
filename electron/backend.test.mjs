@@ -2858,6 +2858,77 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("counts only each server's latest process row in the summary", () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const serverRootA = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    const serverRootB = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRootA, serverRootB);
+
+    try {
+      const serverA = createServer(backend, serverRootA);
+      const serverB = createServer(backend, serverRootB);
+      const db = new DatabaseSync(
+        path.join(appDataDir, "mc-server-manager.sqlite"),
+      );
+      try {
+        const insert = db.prepare(
+          `INSERT INTO managed_processes
+             (id, server_id, pid, command, status, started_at, exited_at, exit_code)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        insert.run(
+          "proc-a-old",
+          serverA.id,
+          null,
+          "java -jar server.jar",
+          "crashed",
+          "2026-07-01T00:00:00Z",
+          "2026-07-01T00:01:00Z",
+          1,
+        );
+        insert.run(
+          "proc-a-new",
+          serverA.id,
+          null,
+          "java -jar server.jar",
+          "crashed",
+          "2026-07-01T01:00:00Z",
+          "2026-07-01T01:01:00Z",
+          1,
+        );
+        insert.run(
+          "proc-b-old",
+          serverB.id,
+          null,
+          "java -jar server.jar",
+          "crashed",
+          "2026-07-01T00:00:00Z",
+          "2026-07-01T00:01:00Z",
+          1,
+        );
+        insert.run(
+          "proc-b-new",
+          serverB.id,
+          null,
+          "java -jar server.jar",
+          "stopped",
+          "2026-07-01T02:00:00Z",
+          "2026-07-01T02:01:00Z",
+          0,
+        );
+      } finally {
+        db.close();
+      }
+
+      expect(backend.handle("get_process_summary")).toEqual({
+        runningCount: 0,
+        crashedCount: 1,
+      });
+    } finally {
+      backend.close();
+    }
+  });
+
   it("lists and removes tunnel bindings", () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));

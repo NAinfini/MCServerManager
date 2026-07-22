@@ -1825,7 +1825,12 @@ function getProcessSummary(db) {
     .prepare(
       `SELECT status, COUNT(*) AS count
        FROM managed_processes
-       WHERE status IN ('running', 'external_running', 'crashed')
+       WHERE started_at = (
+         SELECT MAX(started_at)
+         FROM managed_processes m2
+         WHERE m2.server_id = managed_processes.server_id
+       )
+       AND status IN ('running', 'external_running', 'crashed')
        GROUP BY status`,
     )
     .all();

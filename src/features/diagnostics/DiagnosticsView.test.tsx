@@ -72,7 +72,7 @@ describe("DiagnosticsView", () => {
         createdAt: "2026-07-01T00:00:00Z",
         results: [
           {
-            key: "serverJar",
+            name: "serverJar",
             status: "fail",
             message: "server.jar is missing",
           },
@@ -90,9 +90,7 @@ describe("DiagnosticsView", () => {
     ).toBeInTheDocument();
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("run_server_diagnostics", {
-        input: {
-          serverId: server.id,
-        },
+        serverId: server.id,
       });
     });
   });

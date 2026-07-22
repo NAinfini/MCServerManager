@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "../../test/render";
+import { cleanup, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -110,6 +110,47 @@ describe("ServerActions", () => {
     await userEvent.click(screen.getByRole("button", { name: "Restart" }));
     expect(restartServerWithCountdown).toHaveBeenCalledWith("server-1");
     expect(restartServer).not.toHaveBeenCalled();
+  });
+
+  it("enables stop for a crashed server so a pending auto-restart can be cancelled", async () => {
+    vi.mocked(getServerProcessStatus).mockResolvedValue({
+      id: "process-1",
+      serverId: "server-1",
+      command: "java -jar server.jar",
+      status: "crashed",
+      pid: null,
+      startedAt: "2026-07-02T00:00:00Z",
+      exitCode: 1,
+    });
+
+    renderActions();
+
+    const stopButton = await screen.findByRole("button", {
+      name: /stop survival/i,
+    });
+    await waitFor(() => expect(stopButton).toBeEnabled());
+  });
+
+  it("keeps stop disabled for a stopped server", async () => {
+    vi.mocked(getServerProcessStatus).mockResolvedValue({
+      id: "process-1",
+      serverId: "server-1",
+      command: "java -jar server.jar",
+      status: "stopped",
+      pid: null,
+      startedAt: null,
+      exitCode: null,
+    });
+
+    renderActions();
+
+    const startButton = await screen.findByRole("button", {
+      name: /^start survival$/i,
+    });
+    await waitFor(() => expect(startButton).toBeEnabled());
+    expect(
+      screen.getByRole("button", { name: /stop survival/i }),
+    ).toBeDisabled();
   });
 
   it("explains the next step when start fails because server.jar is missing", async () => {

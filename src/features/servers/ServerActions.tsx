@@ -83,6 +83,7 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
   const process = processQuery.data;
   const isRunning = process?.status === "running";
   const isExternalRunning = process?.status === "externalRunning";
+  const isCrashed = process?.status === "crashed";
   const isProcessStatusLoading = processQuery.isLoading;
 
   const refreshRuntimeState = async () => {
@@ -147,7 +148,9 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
       <ActionTooltip label={t("servers.actions.stop")}>
         <Button
           aria-label={t("servers.actions.stopAria", { server: server.name })}
-          disabled={!isRunning || isPending || isProcessStatusLoading}
+          disabled={
+            (!isRunning && !isCrashed) || isPending || isProcessStatusLoading
+          }
           variant="secondary"
           onClick={() => {
             clearActionErrors();

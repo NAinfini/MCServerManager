@@ -6,7 +6,7 @@ import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../servers/types";
 
 interface DiagnosticCheck {
-  key: string;
+  name: string;
   status: "pass" | "warn" | "fail";
   message: string;
 }
@@ -43,9 +43,7 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
   const runMutation = useMutation({
     mutationFn: () =>
       invokeDesktopCommandWithErrorHandling<DiagnosticRun>("run_server_diagnostics", {
-        input: {
-          serverId: server.id,
-        },
+        serverId: server.id,
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -88,7 +86,7 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
           </div>
           <div className="compatibility-list">
             {latest.results.map((result) => (
-              <div key={result.key}>
+              <div key={result.name}>
                 <strong>{result.status}</strong>
                 <span>{result.message}</span>
               </div>
