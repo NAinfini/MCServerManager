@@ -1,7 +1,9 @@
-import { Coffee, HardDrive, Globe, Info } from "lucide-react";
+import { CircleDot, Coffee, HardDrive, Globe, Info } from "lucide-react";
 import { useAppSettings } from "../../i18n";
 
 interface BottomStatusBarProps {
+  runningCount?: number;
+  crashedCount?: number;
   selectedServer?: {
     javaPath?: string | null;
     maxMemoryMb?: number | null;
@@ -16,7 +18,11 @@ function extractJavaVersion(javaPath?: string | null): string | null {
   return match ? match[1] : null;
 }
 
-export function BottomStatusBar({ selectedServer }: BottomStatusBarProps) {
+export function BottomStatusBar({
+  runningCount = 0,
+  crashedCount = 0,
+  selectedServer,
+}: BottomStatusBarProps) {
   const { t } = useAppSettings();
   const javaVersion = extractJavaVersion(selectedServer?.javaPath);
   const memory = selectedServer?.maxMemoryMb;
@@ -25,6 +31,18 @@ export function BottomStatusBar({ selectedServer }: BottomStatusBarProps) {
   return (
     <footer className="status-bar">
       <div className="status-bar-left">
+        {runningCount > 0 && (
+          <span className="status-bar-badge status-bar-badge-running">
+            <CircleDot aria-hidden="true" size={12} />
+            {t("runtime.running", { count: runningCount })}
+          </span>
+        )}
+        {crashedCount > 0 && (
+          <span className="status-bar-badge status-bar-badge-crashed">
+            <CircleDot aria-hidden="true" size={12} />
+            {t("runtime.crashed", { count: crashedCount })}
+          </span>
+        )}
         <span className="status-bar-item">
           <Coffee aria-hidden="true" size={12} />
           <span className="status-bar-copy">

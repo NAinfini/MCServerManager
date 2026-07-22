@@ -11,11 +11,13 @@ import { motion } from "motion/react";
 import {
   Activity,
   Archive,
+  ChevronLeft,
   FileCode2,
   Package,
   Settings,
   Terminal,
 } from "lucide-react";
+import { Button } from "../../components/ui/button";
 import { createWorldBackup } from "../backups/backupApi";
 import { ProfileImportExport } from "../profiles/ProfileImportExport";
 import { TunnelProvidersView } from "../tunnels/TunnelProvidersView";
@@ -80,6 +82,7 @@ const ContentUpdatePolicyView = lazy(() =>
 );
 interface ServerDetailProps {
   server: ServerProfile;
+  onBack?: () => void;
 }
 
 interface PanelErrorBoundaryProps {
@@ -187,7 +190,7 @@ function ServerDetailPanel({
   }
 }
 
-export function ServerDetail({ server }: ServerDetailProps) {
+export function ServerDetail({ server, onBack }: ServerDetailProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const storedTab = useServerUiStore(
@@ -211,7 +214,22 @@ export function ServerDetail({ server }: ServerDetailProps) {
     <div className="detail-panel">
       <div className="detail-panel-header">
         <div className="detail-panel-title">
-          <strong className="detail-panel-name">{server.name}</strong>
+          <div className="detail-panel-heading">
+            {onBack ? (
+              <Button
+                aria-label={t("wizard.nav.back")}
+                className="icon-button page-header-back"
+                type="button"
+                variant="ghost"
+                onClick={onBack}
+              >
+                <ChevronLeft aria-hidden="true" size={17} />
+              </Button>
+            ) : null}
+            <h1 className="detail-panel-name" id="servers-title">
+              {server.name}
+            </h1>
+          </div>
           <div className="detail-panel-meta">
             <LoaderPill loaderType={server.loaderType} />
             <span className="detail-meta-separator" />

@@ -415,98 +415,6 @@ button {
 }
 
 /* --------------------------------------------------------------------------
-   Top Runtime Bar
-   -------------------------------------------------------------------------- */
-
-.runtime-bar {
-  display: flex;
-  grid-column: 2;
-  grid-row: 1;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 28px;
-  padding: 0 var(--page-padding);
-}
-
-.runtime-bar:not(:has(.runtime-bar-badge)) {
-  display: none;
-}
-
-.runtime-bar-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.runtime-bar-badge {
-  --runtime-badge-color: var(--text-muted);
-  --runtime-badge-bg: var(--bg-elevated);
-  --runtime-badge-border: var(--border-subtle);
-
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  border: 1px solid var(--runtime-badge-border);
-  border-radius: var(--radius-pill);
-  padding: 1px 8px;
-  color: var(--runtime-badge-color);
-  background: var(--runtime-badge-bg);
-  font-size: var(--text-sm);
-  line-height: 18px;
-  white-space: nowrap;
-}
-
-.runtime-bar-badge-running {
-  --runtime-badge-color: var(--running);
-  --runtime-badge-bg: color-mix(
-    in srgb,
-    var(--running) 12%,
-    var(--bg-elevated)
-  );
-  --runtime-badge-border: color-mix(
-    in srgb,
-    var(--running) 30%,
-    var(--border-subtle)
-  );
-}
-
-.runtime-bar-badge-running svg {
-  color: var(--accent);
-}
-
-.runtime-bar-badge-crashed svg {
-  color: var(--danger);
-}
-
-.runtime-bar-badge-crashed {
-  --runtime-badge-color: var(--danger);
-  --runtime-badge-bg: color-mix(in srgb, var(--danger) 12%, var(--bg-elevated));
-  --runtime-badge-border: color-mix(
-    in srgb,
-    var(--danger) 32%,
-    var(--border-subtle)
-  );
-}
-
-.runtime-bar-badge-warning svg {
-  color: var(--warning, #d97706);
-}
-
-.runtime-bar-badge-warning {
-  --runtime-badge-color: var(--warning, #d97706);
-  --runtime-badge-bg: color-mix(
-    in srgb,
-    var(--warning) 13%,
-    var(--bg-elevated)
-  );
-  --runtime-badge-border: color-mix(
-    in srgb,
-    var(--warning) 34%,
-    var(--border-subtle)
-  );
-}
-
-/* --------------------------------------------------------------------------
    Bottom Status Bar
    -------------------------------------------------------------------------- */
 
@@ -558,6 +466,56 @@ button {
   color: var(--text-main);
 }
 
+.status-bar-badge {
+  --runtime-badge-color: var(--text-muted);
+  --runtime-badge-bg: var(--bg-elevated);
+  --runtime-badge-border: var(--border-subtle);
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--runtime-badge-border);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  color: var(--runtime-badge-color);
+  background: var(--runtime-badge-bg);
+  font-size: var(--text-sm);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.status-bar-badge-running {
+  --runtime-badge-color: var(--running);
+  --runtime-badge-bg: color-mix(
+    in srgb,
+    var(--running) 12%,
+    var(--bg-elevated)
+  );
+  --runtime-badge-border: color-mix(
+    in srgb,
+    var(--running) 30%,
+    var(--border-subtle)
+  );
+}
+
+.status-bar-badge-running svg {
+  color: var(--accent);
+}
+
+.status-bar-badge-crashed svg {
+  color: var(--danger);
+}
+
+.status-bar-badge-crashed {
+  --runtime-badge-color: var(--danger);
+  --runtime-badge-bg: color-mix(in srgb, var(--danger) 12%, var(--bg-elevated));
+  --runtime-badge-border: color-mix(
+    in srgb,
+    var(--danger) 32%,
+    var(--border-subtle)
+  );
+}
+
 /* --------------------------------------------------------------------------
    Typography Utilities
    -------------------------------------------------------------------------- */
@@ -583,7 +541,6 @@ button {
 .app-body {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
   gap: 0;
   height: calc(
     100vh - var(--window-titlebar-height) - var(--status-bar-height)
@@ -598,7 +555,6 @@ button {
 }
 
 .sidebar {
-  grid-row: 1 / -1;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1079,8 +1035,6 @@ button {
    -------------------------------------------------------------------------- */
 
 .page {
-  grid-column: 2;
-  grid-row: 2;
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
@@ -1303,8 +1257,7 @@ button {
   gap: var(--space-4);
 }
 
-.server-table-panel,
-.server-detail-panel {
+.server-table-panel {
   border: 0;
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
@@ -1806,6 +1759,18 @@ button {
   display: grid;
   min-width: 0;
   min-height: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+
+.detail-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .detail-panel-header {
@@ -1830,9 +1795,9 @@ button {
 
 .detail-panel-name {
   margin: 0;
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
   font-weight: var(--weight-bold);
-  line-height: 22px;
+  line-height: 24px;
   letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;

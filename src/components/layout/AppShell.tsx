@@ -13,7 +13,6 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { BottomStatusBar } from "./BottomStatusBar";
 import { Sidebar, type PrimaryPage } from "./Sidebar";
-import { TopRuntimeBar } from "./TopRuntimeBar";
 import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
 import { ConfirmDangerDialog } from "../ui/ConfirmDangerDialog";
@@ -274,10 +273,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
             });
           }}
         />
-        <TopRuntimeBar
-          runningCount={runningCount}
-          crashedCount={crashedCount}
-        />
         <main
           className={isCreateServerActive ? "page page-create-server" : "page"}
           aria-labelledby={
@@ -375,130 +370,106 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
             <SettingsView />
           ) : activePage === "logger" && !selectedServer ? (
             <AppLoggerView />
+          ) : selectedServer ? (
+            <ServerDetail server={selectedServer} onBack={openServersOverview} />
           ) : (
             <>
-          <section className={selectedServer ? "page-header" : "page-header dashboard-page-header"}>
-            <div className="page-header-heading">
-              {selectedServer ? (
-                <Button
-                  aria-label={t("wizard.nav.back")}
-                  className="icon-button page-header-back"
-                  type="button"
-                  variant="ghost"
-                  onClick={openServersOverview}
-                >
-                  <ChevronLeft aria-hidden="true" size={17} />
-                </Button>
-              ) : null}
-              <h1 id="servers-title">
-                {selectedServer ? selectedServer.name : t("servers.page.title")}
-              </h1>
-            </div>
-            <div className="page-header-actions">
-              {!selectedServer ? (
-                <div
-                  className="server-view-toggle"
-                  role="group"
-                  aria-label={t("servers.viewMode")}
-                >
-                  <Button
-                    aria-label={t("servers.viewCards")}
-                    aria-pressed={viewMode === "cards"}
-                    variant="ghost"
-                    onClick={() => setViewMode("cards")}
-                  >
-                    <LayoutGrid aria-hidden="true" size={14} />
-                  </Button>
-                  <Button
-                    aria-label={t("servers.viewTable")}
-                    aria-pressed={viewMode === "table"}
-                    variant="ghost"
-                    onClick={() => setViewMode("table")}
-                  >
-                    <List aria-hidden="true" size={14} />
-                  </Button>
+              <section className="page-header dashboard-page-header">
+                <div className="page-header-heading">
+                  <h1 id="servers-title">{t("servers.page.title")}</h1>
                 </div>
-              ) : null}
-              <Button
-                onClick={() => openCreateServer()}
-                variant="primary"
-              >
-                <Plus aria-hidden="true" size={15} />
-                {t("servers.create.button")}
-              </Button>
-            </div>
-          </section>
-
-              {!selectedServer ? (
-                <div className="dashboard-workbench">
-                  <aside
-                    className="dashboard-status-rail"
-                    aria-label={t("servers.summary.aria")}
+                <div className="page-header-actions">
+                  <div
+                    className="server-view-toggle"
+                    role="group"
+                    aria-label={t("servers.viewMode")}
                   >
-                    <section className="summary-strip">
-                    <div>
-                      <span className="summary-label summary-label-running">
-                        <CirclePlay aria-hidden="true" size={14} />
-                        {t("servers.summary.running")}
-                      </span>
-                      <strong>{runningCount ?? t("common.unknown")}</strong>
-                    </div>
-                    <div>
-                      <span className="summary-label summary-label-stopped">
-                        <CircleStop aria-hidden="true" size={14} />
-                        {t("servers.summary.stopped")}
-                      </span>
-                      <strong>{stoppedCount}</strong>
-                    </div>
-                    <div>
-                      <span className="summary-label summary-label-crashed">
-                        <CircleAlert aria-hidden="true" size={14} />
-                        {t("servers.summary.crashed")}
-                      </span>
-                      <strong className="danger-text">
-                        {crashedCount ?? t("common.unknown")}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="summary-label summary-label-total">
-                        <ServerIcon aria-hidden="true" size={14} />
-                        {t("servers.summary.total")}
-                      </span>
-                      <strong>{servers.length}</strong>
-                    </div>
-                    </section>
-                  </aside>
-                  <div className="dashboard-primary">
-                    {servers.length > 0 ? <BatchActions servers={servers} /> : null}
-
-                    {viewMode === "cards" ? (
-                      <ServerCardView
-                        error={profilesQuery.error}
-                        isLoading={profilesQuery.isLoading}
-                        selectedServerId={selectedServerId ?? undefined}
-                        servers={servers}
-                        onSelectServer={setSelectedServerId}
-                      />
-                    ) : (
-                      <div className="server-table-panel">
-                        <div className="section-heading">
-                          <h2>{t("servers.overview.title")}</h2>
-                          <span>{t("servers.overview.description")}</span>
-                        </div>
-                        <ServerList
-                          error={profilesQuery.error}
-                          isLoading={profilesQuery.isLoading}
-                          selectedServerId={selectedServerId ?? undefined}
-                          servers={servers}
-                          onSelectServer={setSelectedServerId}
-                        />
-                      </div>
-                    )}
+                    <Button
+                      aria-label={t("servers.viewCards")}
+                      aria-pressed={viewMode === "cards"}
+                      variant="ghost"
+                      onClick={() => setViewMode("cards")}
+                    >
+                      <LayoutGrid aria-hidden="true" size={14} />
+                    </Button>
+                    <Button
+                      aria-label={t("servers.viewTable")}
+                      aria-pressed={viewMode === "table"}
+                      variant="ghost"
+                      onClick={() => setViewMode("table")}
+                    >
+                      <List aria-hidden="true" size={14} />
+                    </Button>
                   </div>
+                  <Button
+                    onClick={() => openCreateServer()}
+                    variant="primary"
+                  >
+                    <Plus aria-hidden="true" size={15} />
+                    {t("servers.create.button")}
+                  </Button>
                 </div>
+              </section>
+
+              <section
+                className="summary-strip"
+                aria-label={t("servers.summary.aria")}
+              >
+                <div>
+                  <span className="summary-label summary-label-running">
+                    <CirclePlay aria-hidden="true" size={14} />
+                    {t("servers.summary.running")}
+                  </span>
+                  <strong>{runningCount ?? t("common.unknown")}</strong>
+                </div>
+                <div>
+                  <span className="summary-label summary-label-stopped">
+                    <CircleStop aria-hidden="true" size={14} />
+                    {t("servers.summary.stopped")}
+                  </span>
+                  <strong>{stoppedCount}</strong>
+                </div>
+                <div>
+                  <span className="summary-label summary-label-crashed">
+                    <CircleAlert aria-hidden="true" size={14} />
+                    {t("servers.summary.crashed")}
+                  </span>
+                  <strong className="danger-text">
+                    {crashedCount ?? t("common.unknown")}
+                  </strong>
+                </div>
+                <div>
+                  <span className="summary-label summary-label-total">
+                    <ServerIcon aria-hidden="true" size={14} />
+                    {t("servers.summary.total")}
+                  </span>
+                  <strong>{servers.length}</strong>
+                </div>
+              </section>
+
+              {servers.length > 0 ? <BatchActions servers={servers} /> : null}
+
+              {viewMode === "cards" ? (
+                <ServerCardView
+                  error={profilesQuery.error}
+                  isLoading={profilesQuery.isLoading}
+                  selectedServerId={selectedServerId ?? undefined}
+                  servers={servers}
+                  onSelectServer={setSelectedServerId}
+                />
               ) : (
-                <div className="server-detail-panel">
-                  <ServerDetail server={selectedServer} />
+                <div className="server-table-panel">
+                  <div className="section-heading">
+                    <h2>{t("servers.overview.title")}</h2>
+                    <span>{t("servers.overview.description")}</span>
+                  </div>
+                  <ServerList
+                    error={profilesQuery.error}
+                    isLoading={profilesQuery.isLoading}
+                    selectedServerId={selectedServerId ?? undefined}
+                    servers={servers}
+                    onSelectServer={setSelectedServerId}
+                  />
                 </div>
               )}
             </>
@@ -506,7 +477,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
 
         </main>
       </div>
-      <BottomStatusBar selectedServer={selectedServer} />
+      <BottomStatusBar
+        runningCount={runningCount}
+        crashedCount={crashedCount}
+        selectedServer={selectedServer}
+      />
     </div>
   );
 }

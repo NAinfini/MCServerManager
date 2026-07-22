@@ -181,14 +181,17 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the overview as a structured dashboard workbench", async () => {
+  it("renders the overview as a flat dashboard flow", async () => {
     const { container } = renderShell();
 
     expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
+    expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(0);
     expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
-    expect(container.querySelector(".dashboard-workbench")).not.toBeNull();
-    expect(container.querySelector(".dashboard-primary")).not.toBeNull();
-    expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
+    expect(container.querySelector(".summary-strip")).not.toBeNull();
+    expect(container.querySelector(".batch-actions")).not.toBeNull();
+    expect(container.querySelector(".dashboard-workbench")).toBeNull();
+    expect(container.querySelector(".dashboard-primary")).toBeNull();
+    expect(container.querySelector(".dashboard-status-rail")).toBeNull();
   });
 
   it("keeps Servers navigation on the global overview and opens detail from a server row", async () => {

@@ -542,7 +542,7 @@ describe("responsive text and control spacing", () => {
       /\.app-body,\s*\.app-body-sidebar-collapsed\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
     );
     expect(narrow).toMatch(
-      /\.runtime-bar,\s*\.sidebar,\s*\.page\s*\{[^}]*grid-column:\s*1/s,
+      /\.sidebar,\s*\.page\s*\{[^}]*grid-column:\s*1/s,
     );
   });
 

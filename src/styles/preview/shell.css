@@ -35,7 +35,6 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .runtime-bar,
   .sidebar,
   .page {
     grid-column: 1;
