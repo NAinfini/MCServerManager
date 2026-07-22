@@ -17,7 +17,6 @@ import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
 import { ConfirmDangerDialog } from "../ui/ConfirmDangerDialog";
 import { listServerProfiles } from "../../features/servers/api";
-import { BatchActions } from "../../features/servers/BatchActions";
 import {
   CreateServerWizard,
   type CreateServerWizardLifecycle,
@@ -455,8 +454,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                   <strong>{servers.length}</strong>
                 </div>
               </section>
-
-              {servers.length > 0 ? <BatchActions servers={servers} /> : null}
 
               {viewMode === "cards" ? (
                 <ServerCardView

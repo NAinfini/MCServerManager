@@ -188,7 +188,7 @@ describe("AppShell", () => {
     expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(0);
     expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
     expect(container.querySelector(".summary-strip")).not.toBeNull();
-    expect(container.querySelector(".batch-actions")).not.toBeNull();
+    expect(container.querySelector(".batch-actions")).toBeNull();
     expect(container.querySelector(".dashboard-workbench")).toBeNull();
     expect(container.querySelector(".dashboard-primary")).toBeNull();
     expect(container.querySelector(".dashboard-status-rail")).toBeNull();
