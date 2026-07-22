@@ -1,12 +1,13 @@
 import { FormEvent, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Blocks, Package, Plug, Search } from "lucide-react";
+import { Blocks, FolderOpen, Package, Plug, Search } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { Select, type SelectOption } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
+import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import type { ServerProfile } from "../servers/types";
 import { InstallDialog } from "./InstallDialog";
 import { ProjectDetails } from "./ProjectDetails";
@@ -32,12 +33,19 @@ interface ServerMarketplaceViewProps {
 }
 
 type MarketplaceContentType = "mods" | "plugins" | "modpacks";
+type MarketplaceSource = "Modrinth" | "BBSMC" | "Hangar";
 
 const contentTypeIcons: Record<MarketplaceContentType, typeof Blocks> = {
   mods: Blocks,
   plugins: Plug,
   modpacks: Package,
 };
+
+function sourcesForContentType(
+  contentType: MarketplaceContentType,
+): MarketplaceSource[] {
+  return contentType === "plugins" ? ["Hangar"] : ["Modrinth", "BBSMC"];
+}
 
 function MarketplaceResultIcon({
   fallback,
@@ -106,12 +114,8 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
   const queryClient = useQueryClient();
   const [contentType, setContentType] =
     useState<MarketplaceContentType>("mods");
+  const [source, setSource] = useState<MarketplaceSource>("Modrinth");
   const [query, setQuery] = useState("");
-  const [manualPath, setManualPath] = useState("");
-  const [bbsmcQuery, setBbsmcQuery] = useState("");
-  const [hangarQuery, setHangarQuery] = useState("");
-  const [submittedBbsmcQuery, setSubmittedBbsmcQuery] = useState("");
-  const [submittedHangarQuery, setSubmittedHangarQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [loaderFilter, setLoaderFilter] =
     useState<MarketplaceLoaderFilter>("any");
@@ -127,7 +131,7 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
   );
   const [installAnyway, setInstallAnyway] = useState(false);
   const searchQuery = useQuery({
-    enabled: contentType !== "plugins" && submittedQuery.trim() !== "",
+    enabled: source === "Modrinth" && submittedQuery.trim() !== "",
     queryKey: [
       "modrinthSearch",
       server.id,
@@ -144,25 +148,25 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
       }),
   });
   const bbsmcQueryResult = useQuery({
-    enabled: contentType !== "plugins" && submittedBbsmcQuery.trim() !== "",
+    enabled: source === "BBSMC" && submittedQuery.trim() !== "",
     queryKey: [
       "bbsmcSearch",
       contentType,
-      submittedBbsmcQuery,
+      submittedQuery,
       loaderFilter,
       sortOrder,
     ],
     queryFn: () =>
-      searchBbsmcProjects(submittedBbsmcQuery, {
+      searchBbsmcProjects(submittedQuery, {
         projectType: contentType === "modpacks" ? "modpack" : "mod",
         loader: loaderFilter,
         sort: sortOrder,
       }),
   });
   const hangarQueryResult = useQuery({
-    enabled: contentType === "plugins" && submittedHangarQuery.trim() !== "",
-    queryKey: ["hangarSearch", contentType, submittedHangarQuery],
-    queryFn: () => searchHangarProjects(submittedHangarQuery),
+    enabled: source === "Hangar" && submittedQuery.trim() !== "",
+    queryKey: ["hangarSearch", contentType, submittedQuery],
+    queryFn: () => searchHangarProjects(submittedQuery),
   });
   const projectQuery = useQuery({
     enabled: selectedProject !== null && selectedProvider === "Modrinth",
@@ -200,18 +204,27 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
       });
     },
   });
-  const manualMutation = useMutation({
-    mutationFn: () =>
-      importCurseForgeManual(server.id, {
-        filePath: manualPath,
+  const importFileMutation = useMutation({
+    mutationFn: async () => {
+      const dialog = await invokeDesktopCommandWithErrorHandling<{
+        path: string | null;
+      }>("show_open_dialog", {
+        kind: "file",
+        filters: [{ name: "Minecraft content JAR", extensions: ["jar"] }],
+      });
+      if (!dialog?.path) {
+        return null;
+      }
+      return importCurseForgeManual(server.id, {
+        filePath: dialog.path,
         name:
-          manualPath
+          dialog.path
             .split(/[\\/]/)
             .pop()
             ?.replace(/\.jar$/i, "") || t("marketplace.manual.curseforge"),
-      }),
+      });
+    },
     onSuccess: async () => {
-      setManualPath("");
       await queryClient.invalidateQueries({
         queryKey: ["installedContent", server.id],
       });
@@ -220,10 +233,9 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
   const versions = versionsQuery.data ?? [];
   const selectedVersion =
     versions.find((version) => version.id === selectedVersionId) ?? null;
-  const modrinthBranding = getMarketplaceProviderBranding("Modrinth");
-  const curseForgeBranding = getMarketplaceProviderBranding("CurseForge");
-  const hangarBranding = getMarketplaceProviderBranding("Hangar");
-  const bbsmcBranding = getMarketplaceProviderBranding("BBSMC");
+  const sourceOptions: SelectOption[] = sourcesForContentType(contentType).map(
+    (value) => ({ value, label: value }),
+  );
   const loaderFilterOptions: SelectOption[] = [
     { value: "any", label: t("marketplace.loader.any") },
     { value: "fabric", label: "Fabric" },
@@ -237,23 +249,28 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
     { value: "downloads", label: t("marketplace.sort.downloads") },
     { value: "updated", label: t("marketplace.sort.updated") },
   ];
-  const searchLabel =
-    contentType === "modpacks"
-      ? t("marketplace.modrinth.modpackSearch")
-      : t("marketplace.modrinth.modSearch");
-  const bbsmcSearchLabel =
-    contentType === "modpacks"
-      ? t("marketplace.bbsmc.modpackSearch")
-      : t("marketplace.bbsmc.modSearch");
   const emptyDescription =
     contentType === "plugins"
       ? t("marketplace.empty.plugins")
       : contentType === "modpacks"
         ? t("marketplace.empty.modpacks")
         : t("marketplace.empty.mods");
+  const searchPlaceholder =
+    contentType === "plugins"
+      ? t("marketplace.hangar.placeholder")
+      : contentType === "modpacks"
+        ? t("marketplace.modrinth.modpackPlaceholder")
+        : t("marketplace.modrinth.modPlaceholder");
+  const isSearching =
+    searchQuery.isFetching ||
+    bbsmcQueryResult.isFetching ||
+    hangarQueryResult.isFetching;
+  const hasSearched = submittedQuery.trim() !== "";
 
   const changeContentType = (nextType: MarketplaceContentType) => {
     setContentType(nextType);
+    setSource(sourcesForContentType(nextType)[0]);
+    setSubmittedQuery("");
     setSelectedProject(null);
     setSelectedVersionId(null);
     setInstallAnyway(false);
@@ -263,7 +280,6 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     setSubmittedQuery(query.trim());
-    setSelectedProvider("Modrinth");
     setSelectedProject(null);
     setSelectedVersionId(null);
     setInstallAnyway(false);
@@ -306,184 +322,68 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
         )}
       </div>
 
-      {contentType !== "plugins" ? (
-        <form className="marketplace-search" onSubmit={handleSubmit}>
-          <label>
-            <span className="provider-label">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="provider-icon"
-                src={modrinthBranding?.iconSrc}
-              />
-              {searchLabel}
-            </span>
-            <TextField
-              placeholder={
-                contentType === "modpacks"
-                  ? t("marketplace.modrinth.modpackPlaceholder")
-                  : t("marketplace.modrinth.modPlaceholder")
-              }
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-          <Select
-            ariaLabel={t("marketplace.loaderFilter")}
-            options={loaderFilterOptions}
-            value={loaderFilter}
-            onValueChange={(value) => {
-              setLoaderFilter(value as MarketplaceLoaderFilter);
-              setSelectedProject(null);
-              setSelectedVersionId(null);
-            }}
-          />
-          <Select
-            ariaLabel={t("marketplace.sortOrder")}
-            options={sortOrderOptions}
-            value={sortOrder}
-            onValueChange={(value) => {
-              setSortOrder(value as MarketplaceSortOrder);
-              setSelectedProject(null);
-              setSelectedVersionId(null);
-            }}
-          />
-          <Button
-            disabled={query.trim() === "" || searchQuery.isFetching}
-            type="submit"
-            variant="primary"
-          >
-            <Search aria-hidden="true" size={15} />
-            {t("marketplace.search.button")}
-          </Button>
-        </form>
-      ) : null}
-
-      {contentType !== "modpacks" ? (
-        <form
-          className="marketplace-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            manualMutation.mutate();
+      <form className="marketplace-search-row" onSubmit={handleSubmit}>
+        <Select
+          ariaLabel={t("marketplace.source")}
+          options={sourceOptions}
+          value={source}
+          onValueChange={(value) => {
+            setSource(value as MarketplaceSource);
+            setSelectedProject(null);
+            setSelectedVersionId(null);
           }}
-        >
-          <label>
-            <span className="provider-label">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="provider-icon"
-                src={curseForgeBranding?.iconSrc}
-              />
-              {t("marketplace.manual.curseforge")}
-            </span>
-            <TextField
-              placeholder={t("marketplace.manual.placeholder")}
-              value={manualPath}
-              onChange={(event) => setManualPath(event.target.value)}
+        />
+        <TextField
+          aria-label={t("marketplace.search.aria")}
+          placeholder={searchPlaceholder}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {source !== "Hangar" ? (
+          <>
+            <Select
+              ariaLabel={t("marketplace.loaderFilter")}
+              options={loaderFilterOptions}
+              value={loaderFilter}
+              onValueChange={(value) => {
+                setLoaderFilter(value as MarketplaceLoaderFilter);
+                setSelectedProject(null);
+                setSelectedVersionId(null);
+              }}
             />
-          </label>
-          <Button
-            disabled={manualPath.trim() === "" || manualMutation.isPending}
-            type="submit"
-            variant="secondary"
-          >
-            {t("marketplace.manual.import")}
-          </Button>
-        </form>
-      ) : null}
-
-      {contentType === "plugins" ? (
-        <form
-          className="marketplace-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSubmittedHangarQuery(hangarQuery.trim());
-          }}
-        >
-          <label>
-            <span className="provider-label">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="provider-icon"
-                src={hangarBranding?.iconSrc}
-              />
-              {t("marketplace.hangar.search")}
-            </span>
-            <TextField
-              placeholder={t("marketplace.hangar.placeholder")}
-              value={hangarQuery}
-              onChange={(event) => setHangarQuery(event.target.value)}
+            <Select
+              ariaLabel={t("marketplace.sortOrder")}
+              options={sortOrderOptions}
+              value={sortOrder}
+              onValueChange={(value) => {
+                setSortOrder(value as MarketplaceSortOrder);
+                setSelectedProject(null);
+                setSelectedVersionId(null);
+              }}
             />
-          </label>
-          <Button
-            disabled={hangarQuery.trim() === "" || hangarQueryResult.isFetching}
-            type="submit"
-            variant="primary"
-          >
-            <Search aria-hidden="true" size={15} />
-            {t("marketplace.hangar.button")}
-          </Button>
-        </form>
-      ) : null}
+          </>
+        ) : null}
+        <Button
+          disabled={query.trim() === "" || isSearching}
+          type="submit"
+          variant="primary"
+        >
+          <Search aria-hidden="true" size={15} />
+          {t("marketplace.search.button")}
+        </Button>
+      </form>
 
       {contentType !== "plugins" ? (
-        <form
-          className="marketplace-search"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setSubmittedBbsmcQuery(bbsmcQuery.trim());
-          }}
-        >
-          <label>
-            <span className="provider-label">
-              <img
-                alt=""
-                aria-hidden="true"
-                className="provider-icon"
-                src={bbsmcBranding?.iconSrc}
-              />
-              {bbsmcSearchLabel}
-            </span>
-            <TextField
-              placeholder={
-                contentType === "modpacks"
-                  ? t("marketplace.bbsmc.modpackPlaceholder")
-                  : t("marketplace.bbsmc.modPlaceholder")
-              }
-              value={bbsmcQuery}
-              onChange={(event) => setBbsmcQuery(event.target.value)}
-            />
-          </label>
-          <Select
-            ariaLabel={t("marketplace.loaderFilter")}
-            options={loaderFilterOptions}
-            value={loaderFilter}
-            onValueChange={(value) => {
-              setLoaderFilter(value as MarketplaceLoaderFilter);
-              setSelectedProject(null);
-              setSelectedVersionId(null);
-            }}
-          />
-          <Select
-            ariaLabel={t("marketplace.sortOrder")}
-            options={sortOrderOptions}
-            value={sortOrder}
-            onValueChange={(value) => {
-              setSortOrder(value as MarketplaceSortOrder);
-              setSelectedProject(null);
-              setSelectedVersionId(null);
-            }}
-          />
+        <div className="marketplace-secondary-actions">
           <Button
-            disabled={bbsmcQuery.trim() === "" || bbsmcQueryResult.isFetching}
-            type="submit"
+            disabled={importFileMutation.isPending}
             variant="secondary"
+            onClick={() => importFileMutation.mutate()}
           >
-            {t("marketplace.bbsmc.button")}
+            <FolderOpen aria-hidden="true" size={15} />
+            {t("marketplace.manual.importFile")}
           </Button>
-        </form>
+        </div>
       ) : null}
 
       {searchQuery.error ? (
@@ -495,8 +395,8 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
       {projectQuery.error ? (
         <div className="inline-error">{projectQuery.error.message}</div>
       ) : null}
-      {manualMutation.error ? (
-        <div className="inline-error">{manualMutation.error.message}</div>
+      {importFileMutation.error ? (
+        <div className="inline-error">{importFileMutation.error.message}</div>
       ) : null}
       {bbsmcQueryResult.error ? (
         <div className="inline-error">{bbsmcQueryResult.error.message}</div>
@@ -520,22 +420,22 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
           }
           aria-label={t("marketplace.results.aria")}
         >
-          {contentType !== "plugins" && searchQuery.isFetching ? (
-            <LoadingState message={t("marketplace.searchingModrinth")} />
+          {isSearching ? (
+            <LoadingState message={t("marketplace.searching", { provider: source })} />
           ) : null}
-          {contentType !== "plugins" && bbsmcQueryResult.isFetching ? (
-            <LoadingState
-              message={t("marketplace.searching", { provider: "BBSMC" })}
+          {source === "Modrinth" &&
+          hasSearched &&
+          !searchQuery.isFetching &&
+          (searchQuery.data?.length ?? 0) === 0 ? (
+            <EmptyState
+              illustration="/illustrations/no-results.png"
+              title={t("marketplace.empty.results.title")}
+              description={emptyDescription}
             />
           ) : null}
-          {contentType === "plugins" && hangarQueryResult.isFetching ? (
-            <LoadingState message={t("marketplace.searchingHangar")} />
-          ) : null}
-          {contentType !== "plugins" &&
-          (submittedQuery.trim() !== "" || submittedBbsmcQuery.trim() !== "") &&
-          !searchQuery.isFetching &&
+          {source === "BBSMC" &&
+          hasSearched &&
           !bbsmcQueryResult.isFetching &&
-          (searchQuery.data?.length ?? 0) === 0 &&
           (bbsmcQueryResult.data?.length ?? 0) === 0 ? (
             <EmptyState
               illustration="/illustrations/no-results.png"
@@ -543,8 +443,8 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
               description={emptyDescription}
             />
           ) : null}
-          {contentType === "plugins" &&
-          submittedHangarQuery.trim() !== "" &&
+          {source === "Hangar" &&
+          hasSearched &&
           !hangarQueryResult.isFetching &&
           (hangarQueryResult.data?.length ?? 0) === 0 ? (
             <EmptyState
@@ -553,7 +453,14 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
               description={emptyDescription}
             />
           ) : null}
-          {contentType !== "plugins"
+          {!hasSearched && !isSearching ? (
+            <EmptyState
+              illustration="/illustrations/no-results.png"
+              title={t("marketplace.empty.search.title")}
+              description={emptyDescription}
+            />
+          ) : null}
+          {source === "Modrinth"
             ? searchQuery.data?.map((project) => (
                 <button
                   className={
@@ -595,7 +502,7 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                 </button>
               ))
             : null}
-          {contentType !== "plugins"
+          {source === "BBSMC"
             ? bbsmcQueryResult.data?.map((project) => (
                 <button
                   className={
@@ -646,7 +553,7 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                 </button>
               ))
             : null}
-          {contentType === "plugins"
+          {source === "Hangar"
             ? hangarQueryResult.data?.map((project) => (
                 <div
                   className="marketplace-result"
@@ -660,14 +567,6 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
                     <strong>{project.name}</strong>
                     <span>{project.description}</span>
                     <span className="marketplace-result-meta">
-                      {hangarBranding?.iconSrc ? (
-                        <img
-                          alt=""
-                          aria-hidden="true"
-                          className="provider-icon"
-                          src={hangarBranding.iconSrc}
-                        />
-                      ) : null}
                       <span className="meta-badge meta-badge-provider">
                         Hangar
                       </span>

@@ -470,6 +470,20 @@ button {
   color: var(--text-main);
 }
 
+.status-bar-action {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0 4px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.status-bar-action:hover {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
 .status-bar-badge {
   --runtime-badge-color: var(--text-muted);
   --runtime-badge-bg: var(--bg-elevated);
@@ -1853,9 +1867,9 @@ button {
   min-height: 0;
 }
 
-/* Only the active Radix tab panel is mounted; let it and the animated body
-   inherit the full-height flex chain so every tab fills the viewport. */
-.detail-tab-content > [role="tabpanel"] {
+/* Radix keeps every tab panel mounted and hides inactive ones with [hidden];
+   scope the flex chain to the active panel so hidden panels take no space. */
+.detail-tab-content > [role="tabpanel"][data-state="active"] {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -1869,13 +1883,66 @@ button {
   min-height: 0;
 }
 
-.detail-tab-body-settings,
 .detail-tab-body-activity {
   padding: var(--space-5) var(--space-6);
 }
 
-.detail-tab-body-settings {
-  display: grid;
+/* Settings tab: sticky chip nav header + scrolling section list. */
+.server-settings {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-chip-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  padding: var(--space-3) var(--space-6);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-app);
+}
+
+.settings-chip {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  padding: 4px 12px;
+  color: var(--text-muted);
+  background: var(--bg-raised);
+  font-size: var(--text-compact);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.settings-chip:hover {
+  color: var(--text-main);
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.settings-sections {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--space-5);
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6);
+}
+
+.settings-section {
+  scroll-margin-top: var(--space-4);
+}
+
+.settings-advanced {
+  scroll-margin-top: var(--space-4);
+}
+
+.settings-advanced .disclosure-body {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-5);
 }
 
@@ -2853,13 +2920,113 @@ button {
    -------------------------------------------------------------------------- */
 
 .backups-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
 }
 
-.backup-warning {
+/* Hero: action first, quiet last-backup summary. */
+.backups-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.backups-hero-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.backups-hero-copy strong {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.backups-hero-copy span {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+/* Neutral info note (never red) with a leading icon. */
+.info-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
   margin: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  font-size: var(--text-compact);
+}
+
+.info-note > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+
+.field-hint {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+  font-weight: 400;
+}
+
+/* Native details accordion for progressive disclosure. */
+.disclosure {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-raised);
+}
+
+.disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  list-style: none;
+}
+
+.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.disclosure > summary::before {
+  content: "▸";
+  color: var(--text-muted);
+}
+
+.disclosure[open] > summary::before {
+  content: "▾";
+}
+
+.disclosure[open] > summary {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.disclosure-body {
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+/* Flatten the embedded settings panel inside a disclosure body. */
+.disclosure-body > .settings-panel {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.backups-advanced {
+  flex: 0 0 auto;
 }
 
 .backups-error {
@@ -2878,7 +3045,9 @@ button {
 }
 
 .backups-table-scroll {
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .backups-table {
@@ -3200,6 +3369,122 @@ button {
   gap: var(--space-2);
 }
 
+/* Content workspace: Installed | Browse internal tabs. */
+.content-workspace {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.content-inner-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-6) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.content-inner-tabs > button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  background: transparent;
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.content-inner-tabs > button[data-state="active"] {
+  color: var(--text-main);
+  border-bottom-color: var(--accent);
+}
+
+.content-inner-panel[data-state="active"] {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.content-policy-advanced {
+  margin: 0 var(--space-6) var(--space-5);
+}
+
+/* Compact empty state (installed content). */
+.content-empty-compact .empty-state {
+  gap: var(--space-2);
+  max-width: 420px;
+  margin: var(--space-4) auto;
+  padding: var(--space-4);
+}
+
+/* Native details dropdown menu (Add content). */
+.dropdown {
+  position: relative;
+}
+
+.dropdown > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.dropdown > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  display: grid;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-lg);
+}
+
+.dropdown-menu > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-main);
+  background: transparent;
+  font-size: var(--text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dropdown-menu > button:hover {
+  background: var(--bg-hover);
+}
+
+/* One search row per §6, plus the secondary CurseForge import. */
+.marketplace-search-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.marketplace-search-row .field-control {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.marketplace-secondary-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .content-update-cell {
   display: inline-grid;
   gap: 2px;
@@ -3316,27 +3601,6 @@ button {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
-}
-
-.marketplace-search {
-  display: grid;
-  grid-template-columns:
-    minmax(220px, 1fr) minmax(150px, auto)
-    minmax(170px, auto) auto;
-  gap: var(--space-2);
-  align-items: end;
-}
-
-.marketplace-search label {
-  display: grid;
-  min-width: 0;
-  gap: 6px;
-}
-
-.marketplace-search label > span {
-  color: var(--text-muted);
-  font-size: var(--text-compact);
-  font-weight: var(--weight-semibold);
 }
 
 .provider-label {
@@ -4487,7 +4751,6 @@ button {
   gap: var(--space-2);
 }
 
-.marketplace-search .select-trigger,
 .create-marketplace-search .select-trigger {
   width: 100%;
   max-width: none;
@@ -6138,6 +6401,15 @@ button {
   color: var(--text-muted);
   font-size: var(--text-compact);
   line-height: 17px;
+}
+
+.server-setup-check-compact {
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+}
+
+.server-setup-check-actions {
+  margin-top: var(--space-2);
 }
 
 .gamerule-grid {
@@ -8857,7 +9129,6 @@ textarea:focus-visible,
   }
 
   .form-grid,
-  .marketplace-search,
   .create-marketplace-search,
   .console-command-form,
   .server-skeleton-row {

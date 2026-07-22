@@ -20,11 +20,7 @@ import {
 import { Button } from "../../components/ui/button";
 import { ServerCover } from "../../components/ui/server-cover";
 import { createWorldBackup } from "../backups/backupApi";
-import { ProfileImportExport } from "../profiles/ProfileImportExport";
-import { TunnelProvidersView } from "../tunnels/TunnelProvidersView";
 import { ServerActions, ServerProcessStatusBadge } from "./ServerActions";
-import { ServerProfileSettings } from "./ServerProfileSettings";
-import { ServerSetupChecklist } from "./ServerSetupChecklist";
 import type { ServerProfile } from "./types";
 import { useServerUiStore, type ServerDetailTab } from "./serverUiStore";
 import { LoaderPill } from "../loaders/LoaderIdentity";
@@ -36,24 +32,9 @@ const ConsoleView = lazy(() =>
     default: module.ConsoleView,
   })),
 );
-const ServerPropertiesEditor = lazy(() =>
-  import("../config/ServerPropertiesEditor").then((module) => ({
-    default: module.ServerPropertiesEditor,
-  })),
-);
-const GamerulesEditor = lazy(() =>
-  import("../config/GamerulesEditor").then((module) => ({
-    default: module.GamerulesEditor,
-  })),
-);
-const ServerUpdatesView = lazy(() =>
-  import("../updates/ServerUpdatesView").then((module) => ({
-    default: module.ServerUpdatesView,
-  })),
-);
-const DiagnosticsView = lazy(() =>
-  import("../diagnostics/DiagnosticsView").then((module) => ({
-    default: module.DiagnosticsView,
+const ServerSettingsView = lazy(() =>
+  import("./ServerSettingsView").then((module) => ({
+    default: module.ServerSettingsView,
   })),
 );
 const ServerFilesView = lazy(() =>
@@ -66,24 +47,15 @@ const ServerBackupsView = lazy(() =>
     default: module.ServerBackupsView,
   })),
 );
-const InstalledContentView = lazy(() =>
-  import("../content/InstalledContentView").then((module) => ({
-    default: module.InstalledContentView,
-  })),
-);
-const ServerMarketplaceView = lazy(() =>
-  import("../marketplace/ServerMarketplaceView").then((module) => ({
-    default: module.ServerMarketplaceView,
-  })),
-);
-const ContentUpdatePolicyView = lazy(() =>
-  import("../content/ContentUpdatePolicyView").then((module) => ({
-    default: module.ContentUpdatePolicyView,
+const ServerContentView = lazy(() =>
+  import("../content/ServerContentView").then((module) => ({
+    default: module.ServerContentView,
   })),
 );
 interface ServerDetailProps {
   server: ServerProfile;
   onBack?: () => void;
+  onOpenJava?: () => void;
 }
 
 interface PanelErrorBoundaryProps {
@@ -154,44 +126,29 @@ const detailTabs: Array<{
 function ServerDetailPanel({
   server,
   tab,
+  onOpenJava,
 }: {
   server: ServerProfile;
   tab: ServerDetailTab;
+  onOpenJava?: () => void;
 }) {
   switch (tab) {
     case "console":
       return <ConsoleView serverId={server.id} />;
     case "settings":
-      return (
-        <>
-          <ServerSetupChecklist server={server} />
-          <ServerProfileSettings server={server} />
-          <ServerPropertiesEditor server={server} />
-          <GamerulesEditor server={server} />
-          <TunnelProvidersView servers={[server]} />
-          <ServerUpdatesView server={server} />
-          <DiagnosticsView server={server} />
-          <ProfileImportExport server={server} />
-        </>
-      );
+      return <ServerSettingsView server={server} onOpenJava={onOpenJava} />;
     case "files":
       return <ServerFilesView server={server} />;
     case "backups":
       return <ServerBackupsView server={server} />;
     case "content":
-      return (
-        <>
-          <InstalledContentView server={server} />
-          <ServerMarketplaceView server={server} />
-          <ContentUpdatePolicyView server={server} />
-        </>
-      );
+      return <ServerContentView server={server} />;
     case "activity":
       return <ServerActivityView server={server} />;
   }
 }
 
-export function ServerDetail({ server, onBack }: ServerDetailProps) {
+export function ServerDetail({ server, onBack, onOpenJava }: ServerDetailProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const storedTab = useServerUiStore(
@@ -303,7 +260,11 @@ export function ServerDetail({ server, onBack }: ServerDetailProps) {
                         </div>
                       }
                     >
-                      <ServerDetailPanel server={server} tab={tab.id} />
+                      <ServerDetailPanel
+                        server={server}
+                        tab={tab.id}
+                        onOpenJava={onOpenJava}
+                      />
                     </Suspense>
                   </PanelErrorBoundary>
                 </motion.div>

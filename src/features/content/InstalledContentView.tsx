@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ChevronDown,
+  Compass,
   Download,
+  FolderOpen,
   Package,
   PackagePlus,
   RefreshCw,
@@ -30,6 +33,7 @@ import {
 
 interface InstalledContentViewProps {
   server: ServerProfile;
+  onBrowse?: () => void;
 }
 
 function formatDate(value: string) {
@@ -39,10 +43,19 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
-export function InstalledContentView({ server }: InstalledContentViewProps) {
+export function InstalledContentView({
+  server,
+  onBrowse,
+}: InstalledContentViewProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const [showImport, setShowImport] = useState(false);
+  const addMenuRef = useRef<HTMLDetailsElement>(null);
+  const closeAddMenu = () => {
+    if (addMenuRef.current) {
+      addMenuRef.current.open = false;
+    }
+  };
   const [dangerAction, setDangerAction] = useState<{
     kind: "disable" | "uninstall";
     item: InstalledContent;
@@ -152,10 +165,37 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
             <Download aria-hidden="true" size={15} />
             {t("content.installed.updateAll")}
           </Button>
-          <Button variant="primary" onClick={() => setShowImport(true)}>
-            <PackagePlus aria-hidden="true" size={15} />
-            {t("content.installed.importJar")}
-          </Button>
+          <details ref={addMenuRef} className="dropdown content-add-menu">
+            <summary className="button button-primary">
+              <PackagePlus aria-hidden="true" size={15} />
+              {t("content.installed.addContent")}
+              <ChevronDown aria-hidden="true" size={14} />
+            </summary>
+            <div className="dropdown-menu" role="menu">
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  closeAddMenu();
+                  onBrowse?.();
+                }}
+              >
+                <Compass aria-hidden="true" size={15} />
+                {t("content.installed.browseOnline")}
+              </button>
+              <button
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  closeAddMenu();
+                  setShowImport(true);
+                }}
+              >
+                <FolderOpen aria-hidden="true" size={15} />
+                {t("content.installed.importFile")}
+              </button>
+            </div>
+          </details>
         </div>
       </div>
 
@@ -213,11 +253,17 @@ export function InstalledContentView({ server }: InstalledContentViewProps) {
       {!contentQuery.isLoading &&
       !contentQuery.error &&
       content.length === 0 ? (
-        <EmptyState
-          illustration="/illustrations/no-content.png"
-          title={t("content.installed.empty.title")}
-          description={t("content.installed.empty.description")}
-        />
+        <div className="content-empty-compact">
+          <EmptyState
+            title={t("content.installed.empty.title")}
+            description={t("content.installed.empty.description")}
+          >
+            <Button variant="primary" onClick={() => onBrowse?.()}>
+              <Compass aria-hidden="true" size={15} />
+              {t("content.installed.browseContent")}
+            </Button>
+          </EmptyState>
+        </div>
       ) : null}
 
       {content.length > 0 ? (

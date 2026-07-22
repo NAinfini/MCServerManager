@@ -66,7 +66,7 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
   const [mode, setMode] = useState<BackupProfileMode>("worldOnly");
   const [includePaths, setIncludePaths] = useState("");
   const [excludePaths, setExcludePaths] = useState("");
-  const [retentionCount, setRetentionCount] = useState("");
+  const [retentionCount, setRetentionCount] = useState("5");
   const [confirmFullServer, setConfirmFullServer] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [deleteProfile, setDeleteProfile] = useState<BackupProfile | null>(null);
@@ -88,7 +88,7 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     setMode("worldOnly");
     setIncludePaths("");
     setExcludePaths("");
-    setRetentionCount("");
+    setRetentionCount("5");
     setConfirmFullServer(false);
     setEditingProfileId(null);
   };
@@ -204,6 +204,8 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
         <label>
           {t("backups.profiles.includePaths")}
           <TextArea
+            placeholder={t("backups.profiles.pathPlaceholder")}
+            rows={3}
             value={includePaths}
             onChange={(event) => setIncludePaths(event.target.value)}
           />
@@ -211,6 +213,8 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
         <label>
           {t("backups.profiles.excludePaths")}
           <TextArea
+            placeholder={t("backups.profiles.pathPlaceholder")}
+            rows={3}
             value={excludePaths}
             onChange={(event) => setExcludePaths(event.target.value)}
           />
@@ -223,6 +227,9 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
             value={retentionCount}
             onChange={(event) => setRetentionCount(event.target.value)}
           />
+          <small className="field-hint">
+            {t("backups.profiles.retentionHelp")}
+          </small>
         </label>
         {mode === "fullServer" ? (
           <label className="checkbox-row">

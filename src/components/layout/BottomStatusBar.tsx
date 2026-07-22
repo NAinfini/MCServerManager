@@ -10,6 +10,7 @@ interface BottomStatusBarProps {
     minMemoryMb?: number | null;
     serverPort?: number | null;
   } | null;
+  onOpenJava?: () => void;
 }
 
 function extractJavaVersion(javaPath?: string | null): string | null {
@@ -22,11 +23,13 @@ export function BottomStatusBar({
   runningCount = 0,
   crashedCount = 0,
   selectedServer,
+  onOpenJava,
 }: BottomStatusBarProps) {
   const { t } = useAppSettings();
   const javaVersion = extractJavaVersion(selectedServer?.javaPath);
   const memory = selectedServer?.maxMemoryMb;
   const port = selectedServer?.serverPort;
+  const javaCopy = javaVersion ? `Java ${javaVersion}` : t("status.javaNotSet");
 
   return (
     <footer className="status-bar">
@@ -43,12 +46,21 @@ export function BottomStatusBar({
             {t("runtime.crashed", { count: crashedCount })}
           </span>
         )}
-        <span className="status-bar-item">
-          <Coffee aria-hidden="true" size={12} />
-          <span className="status-bar-copy">
-            {javaVersion ? `Java ${javaVersion}` : t("status.javaUnset")}
+        {!javaVersion && onOpenJava ? (
+          <button
+            className="status-bar-item status-bar-action"
+            type="button"
+            onClick={onOpenJava}
+          >
+            <Coffee aria-hidden="true" size={12} />
+            <span className="status-bar-copy">{javaCopy}</span>
+          </button>
+        ) : (
+          <span className="status-bar-item">
+            <Coffee aria-hidden="true" size={12} />
+            <span className="status-bar-copy">{javaCopy}</span>
           </span>
-        </span>
+        )}
         <span className="status-bar-item">
           <HardDrive aria-hidden="true" size={12} />
           <span className="status-bar-copy status-bar-mono">

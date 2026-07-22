@@ -1,5 +1,6 @@
 import { cleanup, render, screen } from "../../test/render";
-import { afterEach, describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BottomStatusBar } from "./BottomStatusBar";
 
 const selectedServer = {
@@ -17,9 +18,18 @@ describe("BottomStatusBar", () => {
   it("shows unset placeholders when no server is selected", () => {
     render(<BottomStatusBar />);
 
-    expect(screen.getByText("Java: unset")).toBeInTheDocument();
+    expect(screen.getByText("Java: not set")).toBeInTheDocument();
     expect(screen.getAllByText("unset").length).toBeGreaterThan(0);
     expect(screen.getByText("v0.1.0")).toBeInTheDocument();
+  });
+
+  it("opens Java Runtimes when the unset Java segment is clicked", async () => {
+    const onOpenJava = vi.fn();
+    render(<BottomStatusBar onOpenJava={onOpenJava} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /Java: not set/ }));
+
+    expect(onOpenJava).toHaveBeenCalledTimes(1);
   });
 
   it("shows Java version, memory, and port for the selected server", () => {

@@ -4,6 +4,7 @@ import {
   Archive,
   CheckCircle2,
   Download,
+  Info,
   RotateCcw,
   Trash2,
   XCircle,
@@ -52,6 +53,28 @@ function formatDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatRelativeTime(value: string, language: string) {
+  const then = new Date(value).getTime();
+  if (Number.isNaN(then)) {
+    return "";
+  }
+  const diffMs = then - Date.now();
+  const rtf = new Intl.RelativeTimeFormat(language, { numeric: "auto" });
+  const units: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+    ["year", 1000 * 60 * 60 * 24 * 365],
+    ["month", 1000 * 60 * 60 * 24 * 30],
+    ["day", 1000 * 60 * 60 * 24],
+    ["hour", 1000 * 60 * 60],
+    ["minute", 1000 * 60],
+  ];
+  for (const [unit, unitMs] of units) {
+    if (Math.abs(diffMs) >= unitMs) {
+      return rtf.format(Math.round(diffMs / unitMs), unit);
+    }
+  }
+  return rtf.format(Math.round(diffMs / 1000), "second");
+}
+
 function backupStatusIcon(backup: BackupRecord) {
   if (backup.status === "completed") {
     return (
@@ -81,7 +104,7 @@ function isSafeRestoreTarget(value: string) {
 }
 
 export function ServerBackupsView({ server }: ServerBackupsViewProps) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [restoreBackup, setRestoreBackup] = useState<BackupRecord | null>(null);
   const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
@@ -145,6 +168,21 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   });
 
   const backups = backupsQuery.data ?? [];
+  const lastCompletedBackup = backups
+    .filter((entry) => entry.status === "completed")
+    .reduce<BackupRecord | null>(
+      (latest, entry) =>
+        !latest || new Date(entry.createdAt) > new Date(latest.createdAt)
+          ? entry
+          : latest,
+      null,
+    );
+  const lastBackupSummary = lastCompletedBackup
+    ? t("backups.lastBackup", {
+        time: formatRelativeTime(lastCompletedBackup.createdAt, language),
+        size: formatBytes(lastCompletedBackup.sizeBytes),
+      })
+    : t("backups.lastBackupNone");
   const canRestoreTarget = isSafeRestoreTarget(targetWorldDir);
   const restoreBlocked =
     processQuery.isError ||
@@ -153,10 +191,10 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
 
   return (
     <section className="backups-panel" aria-label={t("backups.aria")}>
-      <div className="backups-toolbar">
-        <div>
+      <div className="backups-hero">
+        <div className="backups-hero-copy">
           <strong>{t("backups.title")}</strong>
-          <span>{t("backups.description")}</span>
+          <span>{lastBackupSummary}</span>
         </div>
         <Button
           disabled={createMutation.isPending}
@@ -168,12 +206,10 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
         </Button>
       </div>
 
-      <div className="warning-panel backup-warning">
-        <p>
-          {t("backups.liveWarning")}
-        </p>
-      </div>
-      <BackupProfilesView server={server} />
+      <p className="info-note backup-info-note">
+        <Info aria-hidden="true" size={15} />
+        <span>{t("backups.liveWarning")}</span>
+      </p>
 
       {createMutation.error ? (
         <div className="inline-error backups-error">
@@ -273,7 +309,16 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
           illustration="/illustrations/no-backups.png"
           title={t("backups.empty.title")}
           description={t("backups.empty.description")}
-        />
+        >
+          <Button
+            disabled={createMutation.isPending}
+            variant="primary"
+            onClick={() => createMutation.mutate()}
+          >
+            <Archive aria-hidden="true" size={15} />
+            {t("backups.now")}
+          </Button>
+        </EmptyState>
       ) : null}
 
       {backups.length > 0 ? (
@@ -355,6 +400,14 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
           </table>
         </div>
       ) : null}
+
+      <details className="disclosure backups-advanced">
+        <summary>{t("backups.profiles.advancedTitle")}</summary>
+        <div className="disclosure-body">
+          <BackupProfilesView server={server} />
+        </div>
+      </details>
+
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.restoreBackup")}
         description={t("danger.backup.restore.description", {

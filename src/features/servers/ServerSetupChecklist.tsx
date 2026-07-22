@@ -1,5 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, CircleAlert, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  CircleAlert,
+  Coffee,
+  RefreshCw,
+} from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
@@ -36,7 +42,13 @@ function CheckIcon({ status }: { status: ServerSetupCheck["status"] }) {
   return <CircleAlert aria-hidden="true" size={16} />;
 }
 
-export function ServerSetupChecklist({ server }: { server: ServerProfile }) {
+export function ServerSetupChecklist({
+  server,
+  onOpenJava,
+}: {
+  server: ServerProfile;
+  onOpenJava?: () => void;
+}) {
   const { t } = useAppSettings();
   const setupQuery = useQuery({
     queryKey: ["serverSetupStatus", server.id],
@@ -77,24 +89,41 @@ export function ServerSetupChecklist({ server }: { server: ServerProfile }) {
 
       {setupQuery.data ? (
         <div className="server-setup-checks" role="list">
-          {setupQuery.data.checks.map((check) => (
-            <article
-              className={`server-setup-check server-setup-check-${check.status}`}
-              key={check.id}
-              role="listitem"
-            >
-              <span className="server-setup-check-icon">
-                <CheckIcon status={check.status} />
-              </span>
-              <div>
-                <div className="server-setup-check-heading">
-                  <strong>{t(checkLabelKey(check.id))}</strong>
-                  <span>{t(statusLabelKey(check.status))}</span>
+          {setupQuery.data.checks.map((check) => {
+            const isReady = check.status === "ready";
+            const showJavaAction =
+              check.id === "java" &&
+              check.status === "actionRequired" &&
+              Boolean(onOpenJava);
+            return (
+              <article
+                className={`server-setup-check server-setup-check-${check.status}${
+                  isReady ? " server-setup-check-compact" : ""
+                }`}
+                key={check.id}
+                role="listitem"
+              >
+                <span className="server-setup-check-icon">
+                  <CheckIcon status={check.status} />
+                </span>
+                <div>
+                  <div className="server-setup-check-heading">
+                    <strong>{t(checkLabelKey(check.id))}</strong>
+                    <span>{t(statusLabelKey(check.status))}</span>
+                  </div>
+                  {isReady ? null : <p>{t(checkMessageKey(check))}</p>}
+                  {showJavaAction ? (
+                    <div className="server-setup-check-actions">
+                      <Button variant="primary" onClick={onOpenJava}>
+                        <Coffee aria-hidden="true" size={15} />
+                        {t("server.setupChecklist.openJava")}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
-                <p>{t(checkMessageKey(check))}</p>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       ) : null}
     </section>

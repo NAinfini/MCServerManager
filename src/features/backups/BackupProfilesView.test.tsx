@@ -84,8 +84,8 @@ describe("BackupProfilesView", () => {
       await screen.findByLabelText(/profile name/i),
       "Configs",
     );
-    await userEvent.clear(screen.getByLabelText(/retention count/i));
-    await userEvent.type(screen.getByLabelText(/retention count/i), "3");
+    await userEvent.clear(screen.getByLabelText(/backups to keep/i));
+    await userEvent.type(screen.getByLabelText(/backups to keep/i), "3");
     fireEvent.click(screen.getByRole("button", { name: /add profile/i }));
 
     await waitFor(() => {

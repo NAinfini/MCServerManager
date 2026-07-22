@@ -156,6 +156,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     setSelectedServerId(null);
   }, []);
 
+  const openJavaRuntimes = useCallback(() => {
+    setActivePage("java");
+    setSelectedServerId(null);
+  }, []);
+
   const handleCreateServerHeaderBackChange = useCallback(
     (handler: (() => void) | null) => {
       setCreateServerHeaderBack(() => handler);
@@ -371,7 +376,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           ) : activePage === "logger" && !selectedServer ? (
             <AppLoggerView />
           ) : selectedServer ? (
-            <ServerDetail server={selectedServer} onBack={openServersOverview} />
+            <ServerDetail
+              server={selectedServer}
+              onBack={openServersOverview}
+              onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
+            />
           ) : (
             <>
               <section className="page-header dashboard-page-header">
@@ -481,6 +490,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
         runningCount={runningCount}
         crashedCount={crashedCount}
         selectedServer={selectedServer}
+        onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
       />
     </div>
   );
