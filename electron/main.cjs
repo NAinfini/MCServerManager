@@ -248,6 +248,27 @@ async function openBackendFolder(command) {
   return result;
 }
 
+async function openServerFolder(args) {
+  const serverId = args?.serverId;
+  if (typeof serverId !== "string" || serverId.trim().length === 0) {
+    throw new Error("server id is required");
+  }
+  // Resolve the folder in the main process so the renderer can only ever open
+  // a managed server's root directory, never an arbitrary path.
+  const profiles = backend?.handle("list_server_profiles");
+  const profile = Array.isArray(profiles)
+    ? profiles.find((item) => item?.id === serverId)
+    : null;
+  if (!profile?.rootDir) {
+    throw new Error(`server profile not found: ${serverId}`);
+  }
+  const failure = await shell.openPath(profile.rootDir);
+  if (failure) {
+    throw new Error(`failed to open folder: ${failure}`);
+  }
+  return null;
+}
+
 async function openTunnelApplication(args) {
   const provider = backend?.handle("get_tunnel_provider", {
     input: { providerId: args?.input?.providerId || args?.providerId },
@@ -349,6 +370,10 @@ ipcMain.handle("app-command", async (_event, command, args) => {
 
     if (command === "open_app_data_folder") {
       return openBackendFolder("get_app_data_folder");
+    }
+
+    if (command === "open_server_folder") {
+      return openServerFolder(args);
     }
 
     if (command === "open_tunnel_application") {

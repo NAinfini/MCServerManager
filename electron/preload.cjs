@@ -86,6 +86,7 @@ const allowedAppCommands = new Set([
   "list_tunnel_statuses",
   "open_app_data_folder",
   "open_app_logs_folder",
+  "open_server_folder",
   "open_tunnel_application",
   "plan_content_updates",
   "plan_java_runtime",

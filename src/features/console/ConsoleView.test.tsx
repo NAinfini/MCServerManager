@@ -56,7 +56,7 @@ describe("ConsoleView", () => {
     renderConsole();
 
     await userEvent.type(
-      await screen.findByLabelText(/command/i),
+      await screen.findByLabelText(/^command$/i),
       "say hello",
     );
 
@@ -79,7 +79,7 @@ describe("ConsoleView", () => {
     renderConsole();
 
     await userEvent.click(await screen.findByRole("button", { name: /save world/i }));
-    expect(screen.getByLabelText(/command/i)).toHaveValue("save-all flush");
+    expect(screen.getByLabelText(/^command$/i)).toHaveValue("save-all flush");
 
     await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
 
@@ -100,7 +100,7 @@ describe("ConsoleView", () => {
 
     renderConsole();
 
-    const input = await screen.findByLabelText(/command/i);
+    const input = await screen.findByLabelText(/^command$/i);
     await userEvent.type(input, "/wh");
 
     expect(screen.getByText(/built-in command catalog/i)).toBeInTheDocument();

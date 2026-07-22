@@ -729,7 +729,9 @@ describe("theme color contracts", () => {
     for (const theme of themes) {
       const subtle = readHexToken(theme, "--text-subtle");
       expect(subtle).toMatch(/^#[0-9a-f]{6}$/i);
-      for (const surfaceToken of ["--bg-panel", "--bg-elevated"]) {
+      // Surfaces collapse to a single raised token plus the inset used for
+      // inputs/terminals; both must keep subtle text readable.
+      for (const surfaceToken of ["--bg-raised", "--bg-inset"]) {
         const surface = readHexToken(theme, surfaceToken);
         expect(contrastRatio(subtle, surface)).toBeGreaterThanOrEqual(4.5);
       }
@@ -762,14 +764,14 @@ describe("theme color contracts", () => {
     const themes = [
       {
         success: readHexToken(root, "--running"),
-        panel: readHexToken(root, "--bg-panel"),
-        elevated: readHexToken(root, "--bg-elevated"),
+        panel: readHexToken(root, "--bg-raised"),
+        elevated: readHexToken(root, "--bg-inset"),
         muted: readHexToken(root, "--bg-panel-muted"),
       },
       {
         success: readHexToken(light, "--success"),
-        panel: readHexToken(light, "--bg-panel"),
-        elevated: readHexToken(light, "--bg-elevated"),
+        panel: readHexToken(light, "--bg-raised"),
+        elevated: readHexToken(light, "--bg-inset"),
         muted: readHexToken(light, "--bg-panel-muted"),
       },
     ];

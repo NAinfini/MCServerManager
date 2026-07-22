@@ -27,6 +27,7 @@ import { useQueries } from "@tanstack/react-query";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useAppSettings } from "../../i18n";
 import { StatusBadge } from "../ui/status-badge";
+import { ServerCover } from "../ui/server-cover";
 import type { ServerProfile } from "../../features/servers/types";
 import { getServerProcessStatus } from "../../features/process/api";
 import { LoaderPill } from "../../features/loaders/LoaderIdentity";
@@ -459,6 +460,13 @@ export function Sidebar({
                 aria-hidden="true"
               />
               {!collapsed && (
+                <ServerCover
+                  className="server-nav-cover"
+                  loaderType={server.loaderType}
+                  size={28}
+                />
+              )}
+              {!collapsed && (
                 <span className="server-nav-copy">
                   <span className="server-nav-name">{server.name}</span>
                   <span className="server-nav-meta">
@@ -466,11 +474,15 @@ export function Sidebar({
                       loaderType={server.loaderType}
                       minecraftVersion={server.minecraftVersion}
                     />
-                    <span>
-                      {t("nav.port", {
-                        port: server.serverPort ?? t("nav.portUnset"),
-                      })}
-                    </span>
+                    {/* Hide the port when a status badge needs the room, so the
+                        loader/version never collapses into "P…". */}
+                    {status !== "crashed" && status !== "externalRunning" && (
+                      <span>
+                        {t("nav.port", {
+                          port: server.serverPort ?? t("nav.portUnset"),
+                        })}
+                      </span>
+                    )}
                   </span>
                 </span>
               )}

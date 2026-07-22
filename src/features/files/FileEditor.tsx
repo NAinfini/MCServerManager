@@ -112,7 +112,7 @@ export function FileEditor({
 
       <div className="monaco-host">
         <Editor
-          height="360px"
+          height="100%"
           language={languageForPath(file.relativePath)}
           options={{
             minimap: { enabled: false },

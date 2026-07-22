@@ -3,6 +3,7 @@ import { ServerActions } from "./ServerActions";
 import type { ServerProfile } from "./types";
 import { LoaderPill } from "../loaders/LoaderIdentity";
 import { StatusBadge } from "../../components/ui/status-badge";
+import { ServerCover } from "../../components/ui/server-cover";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
@@ -17,12 +18,10 @@ interface ServerCardViewProps {
   onSelectServer?: (serverId: string) => void;
 }
 
-const borderColorClass: Record<ManagedProcessStatus, string> = {
-  running: "server-card-border-running",
-  stopped: "server-card-border-stopped",
-  crashed: "server-card-border-crashed",
-  externalRunning: "server-card-border-running",
-};
+function formatMemoryGb(memoryMb: number) {
+  const gb = memoryMb / 1024;
+  return Number.isInteger(gb) ? String(gb) : gb.toFixed(1);
+}
 
 function ServerCard({
   server,
@@ -41,56 +40,67 @@ function ServerCard({
   });
 
   const status: ManagedProcessStatus = processQuery.data?.status ?? "stopped";
-  const borderClass = borderColorClass[status] ?? "server-card-border-stopped";
+  const isRunning = status === "running" || status === "externalRunning";
 
   return (
-    <div
-      className={`server-card ${borderClass}${selected ? " server-card-selected" : ""}`}
-    >
+    <div className={`server-card${selected ? " server-card-selected" : ""}`}>
       <button
         aria-label={server.name}
         className="server-card-open"
         type="button"
         onClick={onSelect}
       >
-        <div className="server-card-header">
-          <span className="server-card-name" title={server.name}>
-            {server.name}
-          </span>
-          <StatusBadge status={status} compact />
-        </div>
-
-        <div className="server-card-meta">
-          <LoaderPill
-            loaderType={server.loaderType}
-            minecraftVersion={server.minecraftVersion}
-          />
-          <span className="server-card-port">
-            {server.serverPort ?? t("server.meta.unset")}
-          </span>
-        </div>
-
-        <div className="server-card-memory">
-          <div className="server-card-memory-bar">
-            <div
-              className="server-card-memory-fill"
-              style={{
-                width: server.maxMemoryMb
-                  ? `${Math.min(100, ((server.minMemoryMb ?? 0) / server.maxMemoryMb) * 100)}%`
-                  : "0%",
-              }}
-            />
+        <ServerCover loaderType={server.loaderType} size={48} />
+        <div className="server-card-body">
+          <div className="server-card-header">
+            <span className="server-card-name" title={server.name}>
+              {server.name}
+            </span>
+            <StatusBadge status={status} compact />
           </div>
-          <span className="server-card-memory-label">
-            {server.maxMemoryMb
-              ? `${server.minMemoryMb ?? 0} / ${server.maxMemoryMb} MB`
-              : t("server.meta.unset")}
-          </span>
+
+          <div className="server-card-meta">
+            <LoaderPill
+              loaderType={server.loaderType}
+              minecraftVersion={server.minecraftVersion}
+            />
+            <span className="server-card-port">
+              {server.serverPort ?? t("server.meta.unset")}
+            </span>
+          </div>
+
+          {isRunning ? (
+            <div className="server-card-memory">
+              <div className="server-card-memory-bar">
+                <div
+                  className="server-card-memory-fill"
+                  style={{
+                    width: server.maxMemoryMb
+                      ? `${Math.min(100, ((server.minMemoryMb ?? 0) / server.maxMemoryMb) * 100)}%`
+                      : "0%",
+                  }}
+                />
+              </div>
+              <span className="server-card-memory-label">
+                {server.maxMemoryMb
+                  ? `${server.minMemoryMb ?? 0} / ${server.maxMemoryMb} MB`
+                  : t("server.meta.unset")}
+              </span>
+            </div>
+          ) : (
+            <span className="server-card-ram-note">
+              {server.maxMemoryMb
+                ? t("server.card.ramUpTo", {
+                    size: formatMemoryGb(server.maxMemoryMb),
+                  })
+                : t("server.meta.unset")}
+            </span>
+          )}
         </div>
       </button>
 
       <div className="server-card-actions">
-        <ServerActions compact server={server} />
+        <ServerActions server={server} />
       </div>
     </div>
   );

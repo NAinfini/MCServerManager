@@ -4,7 +4,7 @@ import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import * as Toolbar from "@radix-ui/react-toolbar";
 import * as Separator from "@radix-ui/react-separator";
-import { Copy, Eraser, RefreshCw } from "lucide-react";
+import { Copy, Eraser, RefreshCw, X } from "lucide-react";
 import {
   getServerProcessStatus,
   sendServerCommand,
@@ -14,6 +14,7 @@ import {
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { TextField } from "../../components/ui/text-field";
+import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
 import { CommandSuggestions } from "./CommandSuggestions";
 import { MC_COMMANDS } from "./mcCommands";
@@ -22,13 +23,16 @@ interface ConsoleViewProps {
   serverId: string;
 }
 
-const commandTemplates = [
+const quickCommands = [
   { labelKey: "console.templates.list", command: "list" },
   { labelKey: "console.templates.save", command: "save-all flush" },
-  { labelKey: "console.templates.whitelistReload", command: "whitelist reload" },
-  { labelKey: "console.templates.whitelistOn", command: "whitelist on" },
-  { labelKey: "console.templates.whitelistOff", command: "whitelist off" },
   { labelKey: "console.templates.stop", command: "stop" },
+];
+
+const whitelistOptions = [
+  { value: "whitelist reload", labelKey: "console.whitelist.reload" },
+  { value: "whitelist on", labelKey: "console.whitelist.on" },
+  { value: "whitelist off", labelKey: "console.whitelist.off" },
 ];
 
 export function ConsoleView({ serverId }: ConsoleViewProps) {
@@ -46,6 +50,8 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const [terminalLoadError, setTerminalLoadError] = useState<string | null>(
     null,
   );
+  const [warningsDismissed, setWarningsDismissed] = useState(false);
+  const [whitelistValue, setWhitelistValue] = useState("");
   const normalizedSearch = searchText.trim().toLowerCase();
   const eventsQuery = useQuery({
     queryKey: ["processEvents", serverId],
@@ -178,9 +184,17 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
       ) ?? [],
     [eventsQuery.data, normalizedSearch],
   );
+  const status = processQuery.data?.status ?? "stopped";
+  const statusLabel = t(`servers.status.${status}`);
+  const dotStatus = status === "externalRunning" ? "running" : status;
   const recentWarnings = visibleEvents
     .filter((event) => event.level === "error" || event.level === "warning")
     .slice(0, 5);
+  const topWarningId = recentWarnings[0]?.id ?? null;
+  const showWarnings = recentWarnings.length > 0 && !warningsDismissed;
+  useEffect(() => {
+    setWarningsDismissed(false);
+  }, [topWarningId]);
   const copyConsole = async () => {
     await navigator.clipboard.writeText(
       [...visibleEvents]
@@ -189,136 +203,146 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
         .join("\n"),
     );
   };
+  const fillCommand = (command: string) => {
+    setCommandText(command);
+    setShowSuggestions(false);
+    document.getElementById(`console-command-${serverId}`)?.focus();
+  };
 
   return (
     <div className="console-panel" aria-label={t("console.aria")}>
-      <div className="section-heading">
-        <h2>{t("console.title")}</h2>
-        <span>
-          {eventsQuery.isFetching ? t("console.syncing") : t("console.live")} /{" "}
-          {t("console.events", { count: visibleEvents.length })}
-        </span>
-      </div>
-      <Toolbar.Root className="console-toolbar" aria-label={t("console.actions")}>
-        <TextField
-          aria-label={t("console.search")}
-          placeholder={t("console.search")}
-          value={searchText}
-          onChange={(event) => setSearchText(event.target.value)}
-        />
-        <Toolbar.Separator asChild>
-          <Separator.Root
-            orientation="vertical"
-            className="console-toolbar-separator"
+      <div className="console-toolbar">
+        <div className="console-status-strip">
+          <span
+            className={`status-dot status-dot-${dotStatus}`}
+            aria-hidden="true"
           />
-        </Toolbar.Separator>
-        <Toolbar.Button
-          className="button button-secondary"
-          type="button"
-          onClick={() => {
-            terminalRef.current?.clear();
-          }}
-        >
-          <Eraser size={14} />
-          {t("console.clear")}
-        </Toolbar.Button>
-        <Toolbar.Button
-          className="button button-secondary"
-          disabled={visibleEvents.length === 0}
-          type="button"
-          onClick={copyConsole}
-        >
-          <Copy size={14} />
-          {t("console.copy")}
-        </Toolbar.Button>
-        <Toolbar.Button
-          className="button button-secondary"
-          disabled={eventsQuery.isFetching}
-          type="button"
-          onClick={() => eventsQuery.refetch()}
-        >
-          <RefreshCw size={14} />
-          {t("common.refresh")}
-        </Toolbar.Button>
-      </Toolbar.Root>
-      <div className="console-workspace">
-        <div className="console-main">
-          {eventsQuery.error ? (
-            <div className="list-state list-state-error">
-              <strong>{t("console.eventsError.title")}</strong>
-              <span>{eventsQuery.error.message}</span>
-              <Button variant="secondary" onClick={() => eventsQuery.refetch()}>
-                {t("common.retry")}
-              </Button>
-            </div>
-          ) : null}
-          {terminalLoadError ? (
-            <div className="inline-error console-load-error">
-              {terminalLoadError}
-            </div>
-          ) : null}
-          {!eventsQuery.error && eventsQuery.data?.length === 0 ? (
-            <EmptyState
-              illustration="/illustrations/no-console-output.png"
-              title={t("console.empty.title")}
-              description={t("console.empty.description")}
-            />
-          ) : null}
-          <div className="xterm-host" ref={terminalElementRef} />
+          <span className="console-status-label">{statusLabel}</span>
+          <span className="console-status-sep" aria-hidden="true">
+            ·
+          </span>
+          <span className="console-status-events">
+            {t("console.events", { count: visibleEvents.length })}
+          </span>
         </div>
-        <aside className="console-side-panel" aria-label={t("console.side.aria")}>
-          <div className="console-side-card">
-            <h3>{t("console.side.status")}</h3>
-            <dl>
-              <div>
-                <dt>{t("console.side.process")}</dt>
-                <dd>{processQuery.data?.status ?? t("common.unknown")}</dd>
-              </div>
-              <div>
-                <dt>{t("console.side.events")}</dt>
-                <dd>{visibleEvents.length}</dd>
-              </div>
-              <div>
-                <dt>{t("console.side.commands")}</dt>
-                <dd>
-                  {canSendCommand
-                    ? t("console.side.ready")
-                    : t("console.side.startRequired")}
-                </dd>
-              </div>
-            </dl>
-          </div>
-          <div className="console-side-card">
-            <h3>{t("console.side.recentWarnings")}</h3>
-            {recentWarnings.length > 0 ? (
-              <ul className="console-warning-list">
-                {recentWarnings.map((event) => (
-                  <li key={event.id}>{event.message}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>{t("console.side.noWarnings")}</p>
-            )}
-          </div>
-        </aside>
+        <Toolbar.Root
+          className="console-toolbar-actions"
+          aria-label={t("console.actions")}
+        >
+          <TextField
+            aria-label={t("console.search")}
+            placeholder={t("console.search")}
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+          <Toolbar.Separator asChild>
+            <Separator.Root
+              orientation="vertical"
+              className="console-toolbar-separator"
+            />
+          </Toolbar.Separator>
+          <Toolbar.Button
+            className="button button-secondary"
+            type="button"
+            onClick={() => {
+              terminalRef.current?.clear();
+            }}
+          >
+            <Eraser size={14} />
+            {t("console.clear")}
+          </Toolbar.Button>
+          <Toolbar.Button
+            className="button button-secondary"
+            disabled={visibleEvents.length === 0}
+            type="button"
+            onClick={copyConsole}
+          >
+            <Copy size={14} />
+            {t("console.copy")}
+          </Toolbar.Button>
+          <Toolbar.Button
+            className="button button-secondary"
+            disabled={eventsQuery.isFetching}
+            type="button"
+            onClick={() => eventsQuery.refetch()}
+          >
+            <RefreshCw size={14} />
+            {t("common.refresh")}
+          </Toolbar.Button>
+        </Toolbar.Root>
       </div>
+
+      {showWarnings ? (
+        <div className="console-warning-banner" role="status">
+          <div className="console-warning-banner-body">
+            <strong>{t("console.warnings.title")}</strong>
+            <ul className="console-warning-list">
+              {recentWarnings.map((event) => (
+                <li key={event.id}>{event.message}</li>
+              ))}
+            </ul>
+          </div>
+          <button
+            aria-label={t("console.warnings.dismiss")}
+            className="console-warning-dismiss"
+            type="button"
+            onClick={() => setWarningsDismissed(true)}
+          >
+            <X aria-hidden="true" size={14} />
+          </button>
+        </div>
+      ) : null}
+
+      <div className="console-output">
+        {eventsQuery.error ? (
+          <div className="list-state list-state-error">
+            <strong>{t("console.eventsError.title")}</strong>
+            <span>{eventsQuery.error.message}</span>
+            <Button variant="secondary" onClick={() => eventsQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : null}
+        {terminalLoadError ? (
+          <div className="inline-error console-load-error">
+            {terminalLoadError}
+          </div>
+        ) : null}
+        {!eventsQuery.error && eventsQuery.data?.length === 0 ? (
+          <EmptyState
+            illustration="/illustrations/no-console-output.png"
+            title={t("console.empty.title")}
+            description={t("console.empty.description")}
+          />
+        ) : null}
+        <div className="xterm-host" ref={terminalElementRef} />
+      </div>
+
       <div className="command-template-bar" aria-label={t("console.templates.aria")}>
-        {commandTemplates.map((template) => (
+        {quickCommands.map((template) => (
           <Button
             key={template.command}
+            title={template.command}
             type="button"
             variant="secondary"
-            onClick={() => {
-              setCommandText(template.command);
-              setShowSuggestions(false);
-              document
-                .getElementById(`console-command-${serverId}`)
-                ?.focus();
-            }}
+            onClick={() => fillCommand(template.command)}
           >
             {t(template.labelKey)}
           </Button>
         ))}
+        <Select
+          ariaLabel={t("console.whitelist.label")}
+          placeholder={t("console.whitelist.label")}
+          value={whitelistValue}
+          options={whitelistOptions.map((option) => ({
+            value: option.value,
+            label: t(option.labelKey),
+          }))}
+          onValueChange={(value) => {
+            setWhitelistValue("");
+            fillCommand(value);
+          }}
+        />
       </div>
       <form
         className="console-command-form"

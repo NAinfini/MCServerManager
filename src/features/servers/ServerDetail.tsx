@@ -18,6 +18,7 @@ import {
   Terminal,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { ServerCover } from "../../components/ui/server-cover";
 import { createWorldBackup } from "../backups/backupApi";
 import { ProfileImportExport } from "../profiles/ProfileImportExport";
 import { TunnelProvidersView } from "../tunnels/TunnelProvidersView";
@@ -226,6 +227,7 @@ export function ServerDetail({ server, onBack }: ServerDetailProps) {
                 <ChevronLeft aria-hidden="true" size={17} />
               </Button>
             ) : null}
+            <ServerCover loaderType={server.loaderType} size={40} />
             <h1 className="detail-panel-name" id="servers-title">
               {server.name}
             </h1>

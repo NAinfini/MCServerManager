@@ -42,3 +42,9 @@ export function writeServerTextFile(
     content,
   });
 }
+
+export function openServerFolder(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<null>("open_server_folder", {
+    serverId,
+  });
+}
