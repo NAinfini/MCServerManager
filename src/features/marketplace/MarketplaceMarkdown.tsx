@@ -221,6 +221,45 @@ function renderList(lines: string[], ordered: boolean) {
   return `<${tag}>${items}</${tag}>`;
 }
 
+function convertMarkdownInHtml(source: string) {
+  let result = source
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => {
+      const heading = /^(#{1,6})\s+(.+)$/.exec(line);
+      if (heading) {
+        const level = heading[1].length;
+        return `<h${level}>${heading[2]}</h${level}>`;
+      }
+      return line;
+    })
+    .join("\n");
+
+  result = result.replace(
+    /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (_match: string, alt: string, url: string) => {
+      const src = safeUrl(url, ["http:", "https:"]);
+      if (!src) return "";
+      const sourceAttribute = isProxiedMarketplaceImage(src)
+        ? `data-marketplace-image-src="${escapeHtml(src)}"`
+        : `src="${escapeHtml(src)}"`;
+      return `<img ${sourceAttribute} alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer">`;
+    },
+  );
+
+  result = result.replace(
+    /\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,
+    (_match: string, text: string, url: string) => {
+      const href = safeUrl(url);
+      return href
+        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer noopener">${text}</a>`
+        : text;
+    },
+  );
+
+  return result;
+}
+
 function renderMarkdown(source: string) {
   const safeSource = source.replace(
     /<(script|style|iframe|object|embed|form|svg|math)\b[\s\S]*?<\/\1>/gi,
@@ -330,7 +369,10 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const openDetailsRef = useRef(new Set<string>());
   const html = useMemo(
-    () => (looksLikeHtml(source) ? sanitizeHtml(source) : renderMarkdown(source)),
+    () =>
+      looksLikeHtml(source)
+        ? sanitizeHtml(convertMarkdownInHtml(source))
+        : renderMarkdown(source),
     [source],
   );
 
@@ -398,6 +440,49 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
 
     return () => {
       cancelled = true;
+    };
+  }, [html]);
+
+  // Modpack descriptions embed arbitrary remote images (Modrinth CDN, raw
+  // GitHub, dead hotlinks in years-old bodies). A broken one otherwise renders
+  // as the browser's broken-image glyph with the alt text leaking beside it.
+  // Mark failures so CSS can hide them, matching the gallery's null fallback,
+  // and log the URL so the failure stays diagnosable instead of silent.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const markFailed = (image: HTMLImageElement) => {
+      if (image.dataset.marketplaceImageError === "true") return;
+      image.dataset.marketplaceImageError = "true";
+      console.error(
+        "Marketplace body image failed to load",
+        image.currentSrc || image.getAttribute("src") || "(no src)",
+      );
+    };
+
+    const handleError = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLImageElement) markFailed(target);
+    };
+
+    // `error` does not bubble, so capture it at the root instead of per-image.
+    root.addEventListener("error", handleError, true);
+
+    // Images that already resolved to a broken state before this effect ran
+    // never fire a fresh `error` event, so reconcile them directly.
+    for (const image of Array.from(root.querySelectorAll("img"))) {
+      if (
+        !image.hasAttribute("data-marketplace-image-src") &&
+        image.complete &&
+        image.naturalWidth === 0
+      ) {
+        markFailed(image);
+      }
+    }
+
+    return () => {
+      root.removeEventListener("error", handleError, true);
     };
   }, [html]);
 

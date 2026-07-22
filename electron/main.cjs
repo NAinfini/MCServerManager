@@ -131,7 +131,7 @@ function createWindow() {
     title: "MC Server Manager",
     frame: false,
     show: false,
-    backgroundColor: "#10171a",
+    backgroundColor: "#1e1f22",
     ...windowIconOption(),
     webPreferences: {
       contextIsolation: true,

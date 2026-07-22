@@ -81,8 +81,8 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           fontSize: 12,
           rows: 10,
           theme: {
-            background: "#0d0d1a",
-            foreground: "#e0ddd0",
+            background: "#07090b",
+            foreground: "#e9eef4",
           },
         });
         terminal.open(terminalElementRef.current);
@@ -217,7 +217,6 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           type="button"
           onClick={() => {
             terminalRef.current?.clear();
-            writtenEventIdsRef.current = new Set();
           }}
         >
           <Eraser size={14} />
@@ -312,6 +311,9 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
             onClick={() => {
               setCommandText(template.command);
               setShowSuggestions(false);
+              document
+                .getElementById(`console-command-${serverId}`)
+                ?.focus();
             }}
           >
             {t(template.labelKey)}
@@ -350,16 +352,25 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
                 return;
               }
               event.preventDefault();
-              const nextIndex =
-                event.key === "ArrowUp"
-                  ? historyIndex === null
+              if (event.key === "ArrowUp") {
+                const nextIndex =
+                  historyIndex === null
                     ? history.length - 1
-                    : Math.max(historyIndex - 1, 0)
-                  : historyIndex === null
-                    ? history.length - 1
-                    : Math.min(historyIndex + 1, history.length - 1);
-              setHistoryIndex(nextIndex);
-              setCommandText(history[nextIndex]);
+                    : Math.max(historyIndex - 1, 0);
+                setHistoryIndex(nextIndex);
+                setCommandText(history[nextIndex]);
+                return;
+              }
+              if (historyIndex === null) {
+                return;
+              }
+              if (historyIndex >= history.length - 1) {
+                setHistoryIndex(null);
+                setCommandText("");
+                return;
+              }
+              setHistoryIndex(historyIndex + 1);
+              setCommandText(history[historyIndex + 1]);
             }}
           />
           <CommandSuggestions

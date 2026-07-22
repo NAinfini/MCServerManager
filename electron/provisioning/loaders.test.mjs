@@ -126,6 +126,9 @@ describe("trusted loader adapters", () => {
         if (url === "https://meta.fabricmc.net/v2/versions/installer") {
           return [{ version: "1.0.3", stable: true }];
         }
+        if (url === "https://meta.fabricmc.net/v2/versions/loader/1.21.4") {
+          return [{ loader: { version: "0.16.10", stable: true } }];
+        }
         if (url === "https://meta.quiltmc.org/v3/versions/installer") {
           return [{ version: "0.13.1" }];
         }
@@ -169,6 +172,31 @@ describe("trusted loader adapters", () => {
       });
     },
   );
+
+  it("names an unpublished Fabric loader instead of letting the URL 400", async () => {
+    const { createLoaderRegistry } = require("./loaders.cjs");
+    const registry = createLoaderRegistry({
+      fetchJson: vi.fn(async (url) => {
+        if (url === "https://meta.fabricmc.net/v2/versions/installer") {
+          return [{ version: "1.1.1", stable: true }];
+        }
+        if (url === "https://meta.fabricmc.net/v2/versions/loader/26.2") {
+          return [{ loader: { version: "0.19.3", stable: true } }];
+        }
+        throw new Error(`unexpected JSON ${url}`);
+      }),
+      fetchText: vi.fn(),
+      platform: "win32",
+    });
+
+    await expect(
+      registry.get("fabric").buildInstallPlan({
+        minecraftVersion: "26.2",
+        loaderVersion: "latest",
+        workingDirectory: ".",
+      }),
+    ).rejects.toMatchObject({ code: "LOADER_VERSION_UNAVAILABLE" });
+  });
 
   it("uses structured modern Forge and NeoForge argument-file launch specs", async () => {
     const { createLoaderRegistry } = require("./loaders.cjs");

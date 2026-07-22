@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import {
-  Archive,
   ChevronLeft,
   CircleAlert,
   CirclePlay,
@@ -8,6 +7,7 @@ import {
   LayoutGrid,
   List,
   Plus,
+  Server as ServerIcon,
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +29,7 @@ import { DropImportReviewDialog } from "../../features/servers/DropImportReviewD
 import { ServerCardView } from "../../features/servers/ServerCardView";
 import { ServerList } from "../../features/servers/ServerList";
 import { ServerDetail } from "../../features/servers/ServerDetail";
+import { useServerUiStore } from "../../features/servers/serverUiStore";
 import { WizardStepIndicator } from "../../features/servers/WizardStepIndicator";
 import type { ServerProfile } from "../../features/servers/types";
 import {
@@ -44,8 +45,6 @@ import {
   openExternalUrl,
 } from "../../lib/desktop-runtime";
 import { useSidebarStore } from "./sidebarStore";
-
-type ServerViewMode = "table" | "cards";
 
 const externalLinkProtocols = new Set(["http:", "https:", "mailto:"]);
 
@@ -87,7 +86,8 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   const [createServerSourcePath, setCreateServerSourcePath] = useState<string | null>(null);
   const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ServerViewMode>("cards");
+  const viewMode = useServerUiStore((s) => s.viewMode);
+  const setViewMode = useServerUiStore((s) => s.setViewMode);
   const shouldOwnProcessSummary = processSummary === undefined;
   const profilesQuery = useQuery({
     queryKey: ["serverProfiles"],
@@ -204,6 +204,29 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     destination?.();
   }, [pendingCreateServerExit, resetCreateServer]);
 
+  useEffect(() => {
+    if (!isCreateServerActive) {
+      return;
+    }
+    const handleEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Escape" ||
+        event.defaultPrevented ||
+        pendingCreateServerExit !== null
+      ) {
+        return;
+      }
+      requestCreateServerExit(openServersOverview);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [
+    isCreateServerActive,
+    pendingCreateServerExit,
+    requestCreateServerExit,
+    openServersOverview,
+  ]);
+
   return (
     <div className="app-shell">
       <WindowTitlebar />
@@ -307,7 +330,14 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                       <h1 id="create-server-page-title">
                         {t("servers.create.title")}
                       </h1>
-                      <p>{t("servers.create.description")}</p>
+                      <p>
+                        {createServerProgress
+                          ? t("wizard.progress.counter", {
+                              current: createServerProgress.currentStep + 1,
+                              total: createServerProgress.steps.length,
+                            })
+                          : t("servers.create.description")}
+                      </p>
                     </div>
                   </div>
                   {createServerProgress ? (
@@ -348,7 +378,18 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
           ) : (
             <>
           <section className={selectedServer ? "page-header" : "page-header dashboard-page-header"}>
-            <div>
+            <div className="page-header-heading">
+              {selectedServer ? (
+                <Button
+                  aria-label={t("wizard.nav.back")}
+                  className="icon-button page-header-back"
+                  type="button"
+                  variant="ghost"
+                  onClick={openServersOverview}
+                >
+                  <ChevronLeft aria-hidden="true" size={17} />
+                </Button>
+              ) : null}
               <h1 id="servers-title">
                 {selectedServer ? selectedServer.name : t("servers.page.title")}
               </h1>
@@ -390,33 +431,6 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
 
               {!selectedServer ? (
                 <div className="dashboard-workbench">
-                  <div className="dashboard-primary">
-                    {servers.length > 0 ? <BatchActions servers={servers} /> : null}
-
-                    <div className="server-table-panel">
-                      <div className="section-heading">
-                        <h2>{t("servers.overview.title")}</h2>
-                        <span>{t("servers.overview.description")}</span>
-                      </div>
-                      {viewMode === "cards" ? (
-                        <ServerCardView
-                          error={profilesQuery.error}
-                          isLoading={profilesQuery.isLoading}
-                          selectedServerId={selectedServerId ?? undefined}
-                          servers={servers}
-                          onSelectServer={setSelectedServerId}
-                        />
-                      ) : (
-                        <ServerList
-                          error={profilesQuery.error}
-                          isLoading={profilesQuery.isLoading}
-                          selectedServerId={selectedServerId ?? undefined}
-                          servers={servers}
-                          onSelectServer={setSelectedServerId}
-                        />
-                      )}
-                    </div>
-                  </div>
                   <aside
                     className="dashboard-status-rail"
                     aria-label={t("servers.summary.aria")}
@@ -446,16 +460,41 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                       </strong>
                     </div>
                     <div>
-                      <span className="summary-label summary-label-backups">
-                        <Archive aria-hidden="true" size={14} />
-                        {t("servers.summary.backupFreshness")}
+                      <span className="summary-label summary-label-total">
+                        <ServerIcon aria-hidden="true" size={14} />
+                        {t("servers.summary.total")}
                       </span>
-                      <strong>
-                        {servers.length === 0 ? t("common.none") : t("common.missing")}
-                      </strong>
+                      <strong>{servers.length}</strong>
                     </div>
                     </section>
                   </aside>
+                  <div className="dashboard-primary">
+                    {servers.length > 0 ? <BatchActions servers={servers} /> : null}
+
+                    {viewMode === "cards" ? (
+                      <ServerCardView
+                        error={profilesQuery.error}
+                        isLoading={profilesQuery.isLoading}
+                        selectedServerId={selectedServerId ?? undefined}
+                        servers={servers}
+                        onSelectServer={setSelectedServerId}
+                      />
+                    ) : (
+                      <div className="server-table-panel">
+                        <div className="section-heading">
+                          <h2>{t("servers.overview.title")}</h2>
+                          <span>{t("servers.overview.description")}</span>
+                        </div>
+                        <ServerList
+                          error={profilesQuery.error}
+                          isLoading={profilesQuery.isLoading}
+                          selectedServerId={selectedServerId ?? undefined}
+                          servers={servers}
+                          onSelectServer={setSelectedServerId}
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="server-detail-panel">

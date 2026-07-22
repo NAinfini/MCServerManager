@@ -15,8 +15,8 @@ textarea,
 .detail-panel,
 .settings-section,
 .java-runtime-card {
-  border-radius: var(--preview-radius-panel);
-  box-shadow: var(--preview-shadow-panel);
+  border-radius: var(--radius-panel);
+  box-shadow: none;
 }
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {

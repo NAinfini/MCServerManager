@@ -17,10 +17,14 @@ export function TopRuntimeBar({
   return (
     <header className="runtime-bar" aria-label={t("runtime.aria")}>
       <div className="runtime-bar-left">
-        <span className="runtime-bar-badge runtime-bar-badge-running">
-          <CircleDot aria-hidden="true" size={12} />
-          {t("runtime.running", { count: runningCount })}
-        </span>
+        {/* Idle is the resting state, so it is reported by absence like the other
+            two badges; the dashboard still carries the explicit zero. */}
+        {runningCount > 0 && (
+          <span className="runtime-bar-badge runtime-bar-badge-running">
+            <CircleDot aria-hidden="true" size={12} />
+            {t("runtime.running", { count: runningCount })}
+          </span>
+        )}
         {crashedCount > 0 && (
           <span className="runtime-bar-badge runtime-bar-badge-crashed">
             <CircleDot aria-hidden="true" size={12} />

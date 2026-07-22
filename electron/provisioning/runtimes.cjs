@@ -4,6 +4,10 @@ const { createHash, randomUUID } = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { extractZipArchive } = require("./archive.cjs");
 const { provisioningError } = require("./contracts.cjs");
+const {
+  isTransientFsError,
+  retryTransientFsOperation,
+} = require("./fs-retry.cjs");
 
 const TEMURIN_LICENSE_URL = "https://openjdk.org/legal/gplv2+ce.html";
 const TEMURIN_DOWNLOAD_HOSTS = new Set([
@@ -271,7 +275,20 @@ function createRuntimeManager(dependencies = {}) {
           );
         }
         const relativeExecutable = path.relative(extracted, stagedJavaPath);
-        fs.renameSync(extracted, targetDir);
+        try {
+          await retryTransientFsOperation(
+            () => fs.renameSync(extracted, targetDir),
+            `commit managed Java runtime to ${targetDir}`,
+          );
+        } catch (caught) {
+          if (isTransientFsError(caught)) {
+            throw provisioningError(
+              "JAVA_TARGET_LOCKED",
+              `Managed Java could not be moved into place: ${caught.code} on ${caught.path || targetDir}. Another process (commonly antivirus real-time scanning) is holding the extracted runtime open.`,
+            );
+          }
+          throw caught;
+        }
         const javaPath = path.join(targetDir, relativeExecutable);
         return {
           ...inspected,
@@ -283,7 +300,18 @@ function createRuntimeManager(dependencies = {}) {
           checksum: plan.checksum,
         };
       } finally {
-        fs.rmSync(staging, { recursive: true, force: true });
+        // Throwing from `finally` would replace whatever real failure brought us
+        // here, so a staging directory we cannot reclaim is reported, not raised.
+        try {
+          await retryTransientFsOperation(
+            () => fs.rmSync(staging, { recursive: true, force: true }),
+            `remove Java staging directory ${staging}`,
+          );
+        } catch (caught) {
+          console.error(
+            `[provisioning] left behind staging directory ${staging}: ${caught?.code || caught}`,
+          );
+        }
       }
     },
   };

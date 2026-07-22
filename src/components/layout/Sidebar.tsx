@@ -264,7 +264,13 @@ export function Sidebar({
     ) => {
       contextMenuTriggerRef.current = trigger;
       contextMenuTargetRef.current = menu;
-      setContextMenu({ ...menu, x, y });
+      const menuWidth = 220;
+      const menuHeight = 200;
+      setContextMenu({
+        ...menu,
+        x: Math.max(0, Math.min(x, window.innerWidth - menuWidth)),
+        y: Math.max(0, Math.min(y, window.innerHeight - menuHeight)),
+      });
     },
     [],
   );
@@ -468,7 +474,9 @@ export function Sidebar({
                   </span>
                 </span>
               )}
-              {!collapsed && <StatusBadge compact status={status} />}
+              {!collapsed &&
+                status !== "stopped" &&
+                status !== "running" && <StatusBadge compact status={status} />}
             </button>
           </NavTooltip>
         </motion.div>

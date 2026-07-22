@@ -266,6 +266,7 @@ export function ServerDetail({ server }: ServerDetailProps) {
               {activeTab === tab.id ? (
                 <motion.div
                   key={`${server.id}-${activeTab}`}
+                  className={`detail-tab-body detail-tab-body-${tab.id}`}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.14, ease: "easeOut" }}

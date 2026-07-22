@@ -429,7 +429,7 @@ describe("create server main content layout", () => {
 
     expect(wizardHeader).toMatch(/display:\s*grid/);
     expect(wizardHeader).toMatch(
-      /grid-template-columns:\s*minmax\(170px,\s*220px\)\s+minmax\(0,\s*1fr\)\s+auto/,
+      /grid-template-columns:\s*minmax\(170px,\s*220px\)\s+minmax\(0,\s*1fr\)\s+minmax\(170px,\s*220px\)/,
     );
     expect(headerSteps).toMatch(/min-width:\s*0/);
     expect(headerSteps).toMatch(/padding:\s*0/);
@@ -441,6 +441,43 @@ describe("create server main content layout", () => {
     expect(headerDescription).toMatch(/text-overflow:\s*ellipsis/);
     expect(narrowWizardStyles).toMatch(
       /\.create-server-wizard-header\s+\.wizard-step-label\s*\{[^}]*display:\s*none/s,
+    );
+  });
+
+  it("groups the configuration step into two-column titled sections", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const section =
+      css.match(/\.wizard-form-section\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const sectionGrid =
+      css.match(/\.wizard-form-section\s*>\s*\.form-grid\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const spanTwo =
+      css.match(/\.wizard-form-section\s+\.field-span-2\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const reviewGrid =
+      css.match(/\.wizard-review-groups\s+\.form-grid\s*\{([^}]*)\}/s)?.[1] ?? "";
+
+    expect(section).toMatch(/display:\s*grid/);
+    expect(sectionGrid).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    expect(spanTwo).toMatch(/grid-column:\s*1\s*\/\s*-1/);
+    // A review section holds a single <dl>, which must not be squeezed into
+    // one half of the shared two-column field grid.
+    expect(reviewGrid).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  });
+
+  it("distinguishes install stages and blocking compatibility warnings", () => {
+    const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8");
+    const currentStage =
+      css.match(/\.provisioning-stage-item\[data-state="current"\]\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const failedStage =
+      css.match(/\.provisioning-stage-item\[data-state="failed"\]\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const blockingWarning =
+      css.match(/\.provisioning-warning\[data-blocking="true"\]\s*\{([^}]*)\}/s)?.[1] ?? "";
+
+    expect(currentStage).toMatch(/font-weight:\s*600/);
+    expect(failedStage).toMatch(/var\(--danger\)/);
+    expect(blockingWarning).toMatch(/var\(--warning\)/);
+    // Motion is decorative here, so it must yield to the reduced-motion setting.
+    expect(css).toMatch(
+      /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.provisioning-stage-item\[data-state="current"\]\s*>\s*svg\s*\{[^}]*animation:\s*none/s,
     );
   });
 });

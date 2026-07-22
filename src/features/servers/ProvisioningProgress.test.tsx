@@ -33,9 +33,29 @@ describe("ProvisioningProgress", () => {
     );
 
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "44");
-    expect(screen.getByText("Installing server loader")).toBeInTheDocument();
+    // The stage name appears twice: once as the heading subtitle, once in the
+    // checklist that marks it as the running stage.
+    expect(screen.getAllByText("Installing server loader")).toHaveLength(2);
     await userEvent.click(screen.getByRole("button", { name: "Cancel installation" }));
     expect(onCancel).toHaveBeenCalledWith("job-1");
+  });
+
+  it("marks completed, running, and pending stages in the checklist", () => {
+    render(
+      <AppSettingsProvider>
+        <ProvisioningProgress job={job} onCancel={vi.fn()} onRetry={vi.fn()} />
+      </AppSettingsProvider>,
+    );
+
+    const states = Array.from(
+      document.querySelectorAll(".provisioning-stage-item"),
+    ).map((item) => item.getAttribute("data-state"));
+
+    // downloading, verifying, extracting completed; installingRuntime precedes
+    // the current stage so index ordering marks it done too.
+    expect(states.slice(0, 4)).toEqual(["done", "done", "done", "done"]);
+    expect(states[4]).toBe("current");
+    expect(states.slice(5)).toEqual(["pending", "pending", "pending", "pending"]);
   });
 
   it("keeps failures visible and exposes retry only when retryable", async () => {

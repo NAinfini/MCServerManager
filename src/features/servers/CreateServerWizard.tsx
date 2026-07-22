@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileArchive, FolderOpen, Package, Server, Upload } from "lucide-react";
+import {
+  AlertTriangle,
+  Cpu,
+  FileArchive,
+  FolderOpen,
+  Gamepad2,
+  HardDrive,
+  Info,
+  Package,
+  RefreshCw,
+  Server,
+  ShieldCheck,
+  Upload,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { TextField } from "../../components/ui/text-field";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
@@ -124,9 +138,23 @@ export function CreateServerWizard({
   const [autoStart, setAutoStart] = useState(true);
   const [eulaAccepted, setEulaAccepted] = useState(false);
   const [job, setJob] = useState<ProvisioningJob | null>(null);
+  const [isRecoveredJob, setIsRecoveredJob] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const plannedInitialPath = useRef<string | null>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (pollIntervalRef.current !== null) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
   const lifecycle = useRef<CreateServerWizardLifecycle>("draft");
   const lifecycleCallback = useRef(onLifecycleChange);
 
@@ -172,6 +200,7 @@ export function CreateServerWizard({
       .then((jobs) => {
         if (active && jobs[0]) {
           setJob(jobs[0]);
+          setIsRecoveredJob(true);
           setStep(5);
           publishLifecycle(jobs[0].stage === "ready" ? "complete" : "running");
         }
@@ -212,7 +241,17 @@ export function CreateServerWizard({
     if ((sourceView !== "blank" && !needsRuntimeMetadata) || !minecraftVersion) return;
     let active = true;
     listLoaderVersions(loaderType, minecraftVersion)
-      .then((options) => active && setLoaderOptions(options.map((item) => item.value)))
+      .then((options) => {
+        if (!active) return;
+        const values = options.map((item) => item.value);
+        setLoaderOptions(values);
+        /* A loader version selected for a different loader/Minecraft pair has
+           no matching <option>, so the select renders blank while the stale
+           value is still submitted. Drop it instead of shipping a mismatch. */
+        setLoaderVersion((current) =>
+          current && !values.includes(current) ? "" : current,
+        );
+      })
       .catch((caught) => active && setError(errorMessage(caught)));
     return () => {
       active = false;
@@ -375,15 +414,23 @@ export function CreateServerWizard({
 
   const executeJob = async (created: ProvisioningJob) => {
     setJob(created);
+    setIsRecoveredJob(false);
     setStep(5);
     publishLifecycle("running");
-    const poll = window.setInterval(() => {
+    pollIntervalRef.current = window.setInterval(() => {
       getProvisioningJob(created.id)
-        .then((current) => current && setJob(current))
+        .then((current) => {
+          if (current && isMountedRef.current) {
+            setJob(current);
+          }
+        })
         .catch(() => undefined);
     }, 500);
     try {
       const completed = await runProvisioningJob(created.id);
+      if (!isMountedRef.current) {
+        return;
+      }
       setJob(completed);
       if (completed.stage === "ready") {
         publishLifecycle("complete");
@@ -391,6 +438,9 @@ export function CreateServerWizard({
         onCreated?.();
       }
     } catch (caught) {
+      if (!isMountedRef.current) {
+        return;
+      }
       setError(errorMessage(caught));
       try {
         setJob(await getProvisioningJob(created.id));
@@ -398,7 +448,10 @@ export function CreateServerWizard({
         // The command error remains visible if the persisted job cannot be reloaded.
       }
     } finally {
-      window.clearInterval(poll);
+      if (pollIntervalRef.current !== null) {
+        window.clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     }
   };
 
@@ -472,7 +525,22 @@ export function CreateServerWizard({
   const goBack = () => {
     if (step === 0) return;
     if (step === 5 && job && job.stage !== "ready") return;
+    setError(null);
     setStep((step - 1) as WizardStep);
+  };
+
+  const goToStep = (next: WizardStep) => {
+    setError(null);
+    setStep(next);
+  };
+
+  const startFreshDraft = () => {
+    setJob(null);
+    setIsRecoveredJob(false);
+    setError(null);
+    setStep(0);
+    setSourceView("choices");
+    publishLifecycle("draft");
   };
 
   return (
@@ -492,26 +560,66 @@ export function CreateServerWizard({
               onDragOver={(event) => event.preventDefault()}
               onDrop={handleDrop}
             >
-              <Upload aria-hidden="true" size={22} />
-              <span>{t("provisioning.wizard.drop")}</span>
+              <Upload aria-hidden="true" size={20} />
+              <span className="wizard-dropzone-title">
+                {t("provisioning.wizard.dropTitle")}
+              </span>
+              <span className="wizard-dropzone-hint">
+                {t("provisioning.wizard.dropHint")}
+              </span>
             </button>
+            <p className="wizard-source-question">
+              {t("provisioning.wizard.sourceQuestion")}
+            </p>
             <div className="wizard-actions">
-              <button className="wizard-action" type="button" onClick={() => setSourceView("blank")}>
-                <Server aria-hidden="true" size={24} />
-                <span>{t("createServer.newBlank")}</span>
-              </button>
-              <button className="wizard-action" type="button" onClick={chooseExistingFolder}>
-                <FolderOpen aria-hidden="true" size={24} />
-                <span>{t("createServer.importFolder")}</span>
-              </button>
-              <button className="wizard-action" type="button" onClick={() => setSourceView("marketplace")}>
-                <Package aria-hidden="true" size={24} />
-                <span>{t("createServer.browseMarketplace")}</span>
-              </button>
-              <button className="wizard-action" type="button" onClick={chooseLocalFile}>
-                <FileArchive aria-hidden="true" size={24} />
-                <span>{t("createServer.openModpackFile")}</span>
-              </button>
+              {[
+                {
+                  key: "blank",
+                  icon: Server,
+                  label: t("createServer.newBlank"),
+                  description: t("createServer.newBlank.description"),
+                  onClick: () => setSourceView("blank"),
+                },
+                {
+                  key: "folder",
+                  icon: FolderOpen,
+                  label: t("createServer.importFolder"),
+                  description: t("createServer.importFolder.description"),
+                  onClick: chooseExistingFolder,
+                },
+                {
+                  key: "marketplace",
+                  icon: Package,
+                  label: t("createServer.browseMarketplace"),
+                  description: t("createServer.browseMarketplace.description"),
+                  onClick: () => setSourceView("marketplace"),
+                },
+                {
+                  key: "file",
+                  icon: FileArchive,
+                  label: t("createServer.openModpackFile"),
+                  description: t("createServer.openModpackFile.description"),
+                  onClick: chooseLocalFile,
+                },
+              ].map((choice) => (
+                <button
+                  aria-label={choice.label}
+                  className="wizard-action"
+                  key={choice.key}
+                  type="button"
+                  onClick={choice.onClick}
+                >
+                  <choice.icon
+                    aria-hidden="true"
+                    className="wizard-action-icon"
+                    size={18}
+                  />
+                  <span className="wizard-action-title">{choice.label}</span>
+                  <span className="wizard-action-description">
+                    {choice.description}
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         ) : null}
@@ -533,13 +641,13 @@ export function CreateServerWizard({
             </label>
             <label>
               <span>{t("profileSettings.loader")}</span>
-              <select aria-label={t("profileSettings.loader")} className="field-control" value={loaderType} onChange={(event) => setLoaderType(event.target.value as LoaderType)}>
+              <select aria-label={t("profileSettings.loader")} className="field-control" value={loaderType} onChange={(event) => { setLoaderType(event.target.value as LoaderType); setMinecraftVersion(""); setLoaderVersion(""); }}>
                 {loaders.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
               </select>
             </label>
             <label>
               <span>{t("profileSettings.minecraftVersion")}</span>
-              <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" value={minecraftVersion} onChange={(event) => setMinecraftVersion(event.target.value)}>
+              <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
                 <option value="">{t("provisioning.wizard.select")}</option>
                 {minecraftOptions.map((version) => <option key={version}>{version}</option>)}
               </select>
@@ -599,12 +707,56 @@ export function CreateServerWizard({
                 </Button>
               </div>
             ) : null}
+            <dl className="provisioning-detected">
+              <div>
+                <dt>{t("profileSettings.loader")}</dt>
+                <dd>{sourcePlan.loaderType ?? loaderType}</dd>
+              </div>
+              <div>
+                <dt>{t("profileSettings.minecraftVersion")}</dt>
+                <dd>
+                  {sourcePlan.minecraftVersion ||
+                    minecraftVersion ||
+                    t("provisioning.wizard.detectedUnknown")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("profileSettings.loaderVersion")}</dt>
+                <dd>
+                  {sourcePlan.loaderVersion ||
+                    loaderVersion ||
+                    t("provisioning.wizard.detectedUnknown")}
+                </dd>
+              </div>
+              <div>
+                <dt>{t("provisioning.wizard.detectedJava")}</dt>
+                <dd>
+                  {sourcePlan.requiredJavaMajor
+                    ? `Java ${sourcePlan.requiredJavaMajor}`
+                    : t("provisioning.wizard.detectedUnknown")}
+                </dd>
+              </div>
+            </dl>
             {sourcePlan.warnings.length === 0 ? (
-              <p>{t("provisioning.wizard.noWarnings")}</p>
+              <p className="provisioning-all-clear">
+                <ShieldCheck aria-hidden="true" size={16} />
+                {t("provisioning.wizard.noWarnings")}
+              </p>
             ) : (
               sourcePlan.warnings.map((warning) => (
-                <label className="provisioning-warning" key={warning.code}>
-                  <span>{warning.message}</span>
+                <label
+                  className="provisioning-warning"
+                  data-blocking={warning.requiresAcknowledgement ? "true" : "false"}
+                  key={warning.code}
+                >
+                  <span className="provisioning-warning-message">
+                    {warning.requiresAcknowledgement ? (
+                      <AlertTriangle aria-hidden="true" size={15} />
+                    ) : (
+                      <Info aria-hidden="true" size={15} />
+                    )}
+                    {warning.message}
+                  </span>
                   {warning.requiresAcknowledgement ? (
                     <span className="checkbox-row">
                       <input
@@ -631,11 +783,38 @@ export function CreateServerWizard({
         {step === 2 ? (
           <div className="provisioning-java-step">
             <h3>{t("provisioning.wizard.javaTitle", { version: sourcePlan?.requiredJavaMajor || 21 })}</h3>
-            {javaRuntime ? <p>{t("provisioning.wizard.javaReady", { path: javaRuntime.path })}</p> : null}
+            {busy && !javaRuntime ? (
+              <p className="provisioning-step-hint">
+                {t("provisioning.wizard.javaPlanning")}
+              </p>
+            ) : null}
+            {javaRuntime ? (
+              <div className="provisioning-java-ready">
+                <ShieldCheck aria-hidden="true" size={16} />
+                <div>
+                  <strong>{t("provisioning.wizard.javaReady")}</strong>
+                  <code>{javaRuntime.path}</code>
+                </div>
+              </div>
+            ) : null}
             {javaPlan?.action === "install" && !javaRuntime ? (
-              <>
+              <div className="provisioning-java-install">
                 <p>{t("provisioning.wizard.javaDownload")}</p>
-                {javaPlan.licenseUrl ? <a href={javaPlan.licenseUrl}>{t("provisioning.wizard.javaLicense")}</a> : null}
+                <dl className="provisioning-detected">
+                  <div>
+                    <dt>{t("provisioning.wizard.javaVendor")}</dt>
+                    <dd>{javaPlan.vendor || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("provisioning.wizard.javaVersion")}</dt>
+                    <dd>{javaPlan.version || `Java ${javaPlan.majorVersion}`}</dd>
+                  </div>
+                </dl>
+                {javaPlan.licenseUrl ? (
+                  <a className="provisioning-java-license" href={javaPlan.licenseUrl}>
+                    {t("provisioning.wizard.javaLicense")}
+                  </a>
+                ) : null}
                 <label className="checkbox-row">
                   <input
                     aria-label={t("provisioning.wizard.javaConsent")}
@@ -648,42 +827,75 @@ export function CreateServerWizard({
                 <Button disabled={!javaConsent || busy} onClick={installManagedJava}>
                   {t("provisioning.wizard.installJava", { version: javaPlan.majorVersion })}
                 </Button>
-              </>
+              </div>
             ) : null}
           </div>
         ) : null}
 
         {step === 3 ? (
-          <div className="form-grid provisioning-configuration-step">
-            <label><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} value={name} onChange={(event) => setName(event.target.value)} /></label>
-            <label><span>{t("profileSettings.serverFolder")}</span><TextField aria-label={t("profileSettings.serverFolder")} value={rootDir} onChange={(event) => setRootDir(event.target.value)} /></label>
-            <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
-            <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
-            <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
-            <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
-            <label><span>{t("provisioning.config.motd")}</span><TextField aria-label={t("provisioning.config.motd")} value={configuration.motd} onChange={(event) => setConfiguration((current) => ({ ...current, motd: event.target.value }))} /></label>
-            <label><span>{t("provisioning.config.gameMode")}</span><select aria-label={t("provisioning.config.gameMode")} className="field-control" value={configuration.gameMode} onChange={(event) => setConfiguration((current) => ({ ...current, gameMode: event.target.value }))}><option value="survival">{t("provisioning.config.gameMode.survival")}</option><option value="creative">{t("provisioning.config.gameMode.creative")}</option><option value="adventure">{t("provisioning.config.gameMode.adventure")}</option><option value="spectator">{t("provisioning.config.gameMode.spectator")}</option></select></label>
-            <label><span>{t("provisioning.config.difficulty")}</span><select aria-label={t("provisioning.config.difficulty")} className="field-control" value={configuration.difficulty} onChange={(event) => setConfiguration((current) => ({ ...current, difficulty: event.target.value }))}><option value="peaceful">{t("provisioning.config.difficulty.peaceful")}</option><option value="easy">{t("provisioning.config.difficulty.easy")}</option><option value="normal">{t("provisioning.config.difficulty.normal")}</option><option value="hard">{t("provisioning.config.difficulty.hard")}</option></select></label>
-            <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
-            <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
-            <BooleanField label={t("provisioning.config.onlineMode")} checked={configuration.onlineMode !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, onlineMode: checked }))} />
-            <BooleanField label={t("provisioning.config.pvp")} checked={configuration.pvp !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, pvp: checked }))} />
-            <BooleanField label={t("provisioning.config.whiteList")} checked={configuration.whiteList === true} onChange={(checked) => setConfiguration((current) => ({ ...current, whiteList: checked }))} />
-            <BooleanField label={t("provisioning.config.restart")} checked={restartEnabled} onChange={setRestartEnabled} />
-            <BooleanField label={t("provisioning.config.autoStart")} checked={autoStart} onChange={setAutoStart} />
+          <div className="provisioning-configuration-step">
+            <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
+              <label className="field-span-2"><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} value={name} onChange={(event) => setName(event.target.value)} /></label>
+              <label className="field-span-2"><span>{t("profileSettings.serverFolder")}</span><TextField aria-label={t("profileSettings.serverFolder")} value={rootDir} onChange={(event) => setRootDir(event.target.value)} /></label>
+            </ConfigSection>
+
+            <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
+              <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
+              <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
+              <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
+              <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
+              <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
+              <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
+            </ConfigSection>
+
+            <ConfigSection icon={Gamepad2} title={t("provisioning.config.section.gameplay")}>
+              <label className="field-span-2"><span>{t("provisioning.config.motd")}</span><TextField aria-label={t("provisioning.config.motd")} value={configuration.motd} onChange={(event) => setConfiguration((current) => ({ ...current, motd: event.target.value }))} /></label>
+              <label><span>{t("provisioning.config.gameMode")}</span><select aria-label={t("provisioning.config.gameMode")} className="field-control" value={configuration.gameMode} onChange={(event) => setConfiguration((current) => ({ ...current, gameMode: event.target.value }))}><option value="survival">{t("provisioning.config.gameMode.survival")}</option><option value="creative">{t("provisioning.config.gameMode.creative")}</option><option value="adventure">{t("provisioning.config.gameMode.adventure")}</option><option value="spectator">{t("provisioning.config.gameMode.spectator")}</option></select></label>
+              <label><span>{t("provisioning.config.difficulty")}</span><select aria-label={t("provisioning.config.difficulty")} className="field-control" value={configuration.difficulty} onChange={(event) => setConfiguration((current) => ({ ...current, difficulty: event.target.value }))}><option value="peaceful">{t("provisioning.config.difficulty.peaceful")}</option><option value="easy">{t("provisioning.config.difficulty.easy")}</option><option value="normal">{t("provisioning.config.difficulty.normal")}</option><option value="hard">{t("provisioning.config.difficulty.hard")}</option></select></label>
+              <BooleanField label={t("provisioning.config.onlineMode")} checked={configuration.onlineMode !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, onlineMode: checked }))} />
+              <BooleanField label={t("provisioning.config.pvp")} checked={configuration.pvp !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, pvp: checked }))} />
+              <BooleanField label={t("provisioning.config.whiteList")} checked={configuration.whiteList === true} onChange={(checked) => setConfiguration((current) => ({ ...current, whiteList: checked }))} />
+            </ConfigSection>
+
+            <ConfigSection icon={RefreshCw} title={t("provisioning.config.section.lifecycle")}>
+              <BooleanField label={t("provisioning.config.restart")} checked={restartEnabled} onChange={setRestartEnabled} />
+              <BooleanField label={t("provisioning.config.autoStart")} checked={autoStart} onChange={setAutoStart} />
+            </ConfigSection>
           </div>
+        ) : null}
+        {step === 3 && !configurationReady ? (
+          <p className="provisioning-step-hint" role="status">
+            {t("provisioning.wizard.configurationHint")}
+          </p>
         ) : null}
 
         {step === 4 && sourcePlan ? (
           <div className="wizard-review-step">
             <h3>{t("provisioning.wizard.reviewTitle")}</h3>
-            <dl className="wizard-review-fields">
-              <div><dt>{t("profileSettings.name")}</dt><dd>{name}</dd></div>
-              <div><dt>{t("profileSettings.loader")}</dt><dd>{loaderType} {loaderVersion}</dd></div>
-              <div><dt>{t("profileSettings.minecraftVersion")}</dt><dd>{minecraftVersion}</dd></div>
-              <div><dt>{t("profileSettings.serverFolder")}</dt><dd>{rootDir}</dd></div>
-              <div><dt>{t("profileSettings.maxMemoryMb")}</dt><dd>{configuration.maxMemoryMb} MB</dd></div>
-            </dl>
+            <div className="wizard-review-groups">
+              <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
+                <dl className="wizard-review-fields">
+                  <div><dt>{t("profileSettings.name")}</dt><dd>{name}</dd></div>
+                  <div><dt>{t("profileSettings.loader")}</dt><dd>{loaderType} {loaderVersion}</dd></div>
+                  <div><dt>{t("profileSettings.minecraftVersion")}</dt><dd>{minecraftVersion}</dd></div>
+                </dl>
+              </ConfigSection>
+              <ConfigSection icon={HardDrive} title={t("provisioning.config.section.location")}>
+                <dl className="wizard-review-fields">
+                  <div><dt>{t("profileSettings.serverFolder")}</dt><dd><code>{rootDir}</code></dd></div>
+                  {javaRuntime ? (
+                    <div><dt>{t("provisioning.wizard.detectedJava")}</dt><dd><code>{javaRuntime.path}</code></dd></div>
+                  ) : null}
+                </dl>
+              </ConfigSection>
+              <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
+                <dl className="wizard-review-fields">
+                  <div><dt>{t("profileSettings.maxMemoryMb")}</dt><dd>{configuration.maxMemoryMb} MB</dd></div>
+                  <div><dt>{t("profileSettings.port")}</dt><dd>{configuration.serverPort}</dd></div>
+                  <div><dt>{t("provisioning.config.maxPlayers")}</dt><dd>{configuration.maxPlayers || 20}</dd></div>
+                </dl>
+              </ConfigSection>
+            </div>
             <label className="provisioning-eula checkbox-row">
               <input
                 aria-label={t("provisioning.wizard.eulaAccept")}
@@ -700,15 +912,26 @@ export function CreateServerWizard({
         ) : null}
 
         {step === 5 && job ? (
-          <ProvisioningProgress
-            busy={busy}
-            job={job}
-            onCancel={cancelJob}
-            onRetry={retryJob}
-          />
+          <>
+            <ProvisioningProgress
+              busy={busy}
+              job={job}
+              onCancel={cancelJob}
+              onRetry={retryJob}
+            />
+            {isRecoveredJob && !busy && job.stage !== "ready" ? (
+              <Button variant="ghost" onClick={startFreshDraft}>
+                {t("provisioning.wizard.startFresh")}
+              </Button>
+            ) : null}
+          </>
         ) : null}
 
-        {error ? <div className="form-error" role="alert">{error}</div> : null}
+        {/* ProvisioningProgress already reports a failed job, so the wizard-level
+            error would repeat the same sentence directly beneath it. */}
+        {error && !job?.error ? (
+          <div className="form-error" role="alert">{error}</div>
+        ) : null}
       </div>
 
       {step === 0 && sourceView === "marketplace" ? null : (
@@ -719,12 +942,32 @@ export function CreateServerWizard({
             <Button variant="ghost" onClick={() => setSourceView("choices")}>{t("wizard.nav.back")}</Button>
           ) : null}
           <div className="wizard-nav-spacer" />
-          {step === 1 ? <Button disabled={!compatibilityReady} onClick={() => setStep(2)}>{t("wizard.nav.next")}</Button> : null}
-          {step === 2 ? <Button disabled={!javaRuntime || busy} onClick={() => setStep(3)}>{t("wizard.nav.next")}</Button> : null}
-          {step === 3 ? <Button disabled={!configurationReady} onClick={() => setStep(4)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 1 ? <Button disabled={!compatibilityReady} onClick={() => goToStep(2)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 2 ? <Button disabled={!javaRuntime || busy} onClick={() => goToStep(3)}>{t("wizard.nav.next")}</Button> : null}
+          {step === 3 ? <Button disabled={!configurationReady} onClick={() => goToStep(4)}>{t("wizard.nav.next")}</Button> : null}
           {step === 4 ? <Button disabled={!eulaAccepted || busy} onClick={installServer}>{t("provisioning.wizard.install")}</Button> : null}
         </div>
       )}
+    </section>
+  );
+}
+
+function ConfigSection({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="wizard-form-section">
+      <h4>
+        <Icon aria-hidden="true" size={14} />
+        {title}
+      </h4>
+      <div className="form-grid">{children}</div>
     </section>
   );
 }

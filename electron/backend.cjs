@@ -3547,7 +3547,22 @@ async function downloadRemoteFile(
     redirect: "follow",
   });
   if (!response.ok) {
-    throw new Error(`file download failed: ${response.status}`);
+    // A bare status code is undiagnosable: the URL is what identifies which
+    // artifact and which version segment the upstream API rejected.
+    let detail = "";
+    try {
+      detail = (await response.text()).trim().slice(0, 300);
+    } catch {
+      detail = "";
+    }
+    throw Object.assign(
+      new Error(
+        `file download failed: ${response.status} ${response.statusText} for ${url}${
+          detail ? ` -- ${detail}` : ""
+        }`,
+      ),
+      { code: "FILE_DOWNLOAD_FAILED", status: response.status, url },
+    );
   }
   if (typeof validateFinalUrl === "function") {
     validateFinalUrl(response.url || url);

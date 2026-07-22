@@ -3,9 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { finished } from "node:stream/promises";
 import yazl from "yazl";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_ARCHIVE_LIMITS,
+  extractZipArchive,
   extractZipLayers,
   inspectZip,
   readJsonEntry,
@@ -126,5 +127,68 @@ describe("provisioning ZIP archive safety", () => {
     await expect(
       inspectZip(archive, { ...DEFAULT_ARCHIVE_LIMITS, maxCompressionRatio: 2 }),
     ).rejects.toMatchObject({ code: "ARCHIVE_SUSPICIOUS_RATIO" });
+  });
+
+  it("extracts an entry that antivirus briefly denies", async () => {
+    const archive = await zipFixture([
+      { name: "bin/ucrtbase.dll", content: "runtime-library" },
+    ]);
+    const destination = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-extract-"));
+    const realCreate = fs.createWriteStream.bind(fs);
+    let attempts = 0;
+    const create = vi
+      .spyOn(fs, "createWriteStream")
+      .mockImplementation((...args) => {
+        attempts += 1;
+        if (attempts <= 2) {
+          throw Object.assign(new Error("EPERM: operation not permitted"), {
+            code: "EPERM",
+            path: args[0],
+          });
+        }
+        return realCreate(...args);
+      });
+
+    try {
+      await extractZipArchive(archive, destination);
+      expect(attempts).toBe(3);
+      expect(
+        fs.readFileSync(path.join(destination, "bin", "ucrtbase.dll"), "utf8"),
+      ).toBe("runtime-library");
+    } finally {
+      create.mockRestore();
+      fs.rmSync(destination, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a blocked extraction when the denial never clears", async () => {
+    const archive = await zipFixture([
+      { name: "bin/ucrtbase.dll", content: "runtime-library" },
+    ]);
+    const destination = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-extract-"));
+    const previousBudget = process.env.MCSM_FS_RETRY_MS;
+    process.env.MCSM_FS_RETRY_MS = "120";
+    const create = vi
+      .spyOn(fs, "createWriteStream")
+      .mockImplementation((target) => {
+        throw Object.assign(new Error("EPERM: operation not permitted"), {
+          code: "EPERM",
+          path: target,
+        });
+      });
+
+    try {
+      await expect(
+        extractZipArchive(archive, destination),
+      ).rejects.toMatchObject({ code: "ARCHIVE_WRITE_BLOCKED" });
+    } finally {
+      create.mockRestore();
+      if (previousBudget === undefined) {
+        delete process.env.MCSM_FS_RETRY_MS;
+      } else {
+        process.env.MCSM_FS_RETRY_MS = previousBudget;
+      }
+      fs.rmSync(destination, { recursive: true, force: true });
+    }
   });
 });

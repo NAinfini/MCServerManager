@@ -186,6 +186,102 @@ describe("managed Temurin runtimes", () => {
     expect(leftovers).toEqual([]);
   });
 
+  function lockableManager(root) {
+    const archive = Buffer.from("trusted-runtime");
+    const checksum = createHash("sha256").update(archive).digest("hex");
+    return createRuntimeManagerForArchive(root, archive, checksum);
+  }
+
+  function createRuntimeManagerForArchive(root, archive, checksum) {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    return createRuntimeManager({
+      userDataDir: root,
+      platform: "win32",
+      arch: "x64",
+      fetchJson: vi.fn(async () => [
+        {
+          version: { semver: "21.0.8+9" },
+          binary: {
+            package: {
+              link: "https://github.com/adoptium/runtime.zip",
+              name: "runtime.zip",
+              checksum,
+              size: archive.length,
+            },
+          },
+        },
+      ]),
+      download: vi.fn(async (_url, target) => fs.writeFileSync(target, archive)),
+      extractArchive: vi.fn(async (_archivePath, target) => {
+        const executable = path.join(target, "jdk-21", "bin", "java.exe");
+        fs.mkdirSync(path.dirname(executable), { recursive: true });
+        fs.writeFileSync(executable, "java");
+      }),
+      inspectJava: vi.fn((javaPath) => ({
+        path: javaPath,
+        version: "21.0.8",
+        majorVersion: 21,
+        vendor: "Eclipse Temurin",
+        architecture: "x64",
+      })),
+    });
+  }
+
+  it("commits the runtime after a transient EPERM on the staging rename", async () => {
+    const root = tempRoot();
+    const manager = lockableManager(root);
+    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+
+    const realRename = fs.renameSync.bind(fs);
+    let attempts = 0;
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation((...args) => {
+      attempts += 1;
+      if (attempts <= 2) {
+        throw Object.assign(new Error("EPERM: operation not permitted"), {
+          code: "EPERM",
+          path: path.join(args[0], "bin", "ucrtbase.dll"),
+        });
+      }
+      return realRename(...args);
+    });
+
+    try {
+      const runtime = await manager.install(plan, { consent: true });
+      expect(attempts).toBe(3);
+      expect(fs.existsSync(runtime.path)).toBe(true);
+    } finally {
+      rename.mockRestore();
+    }
+  });
+
+  it("reports a locked target when the rename never clears", async () => {
+    const root = tempRoot();
+    const manager = lockableManager(root);
+    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+
+    const previousBudget = process.env.MCSM_FS_RETRY_MS;
+    process.env.MCSM_FS_RETRY_MS = "120";
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw Object.assign(new Error("EPERM: operation not permitted"), {
+        code: "EPERM",
+        path: path.join(plan.targetDir, "bin", "ucrtbase.dll"),
+      });
+    });
+
+    try {
+      await expect(
+        manager.install(plan, { consent: true }),
+      ).rejects.toMatchObject({ code: "JAVA_TARGET_LOCKED" });
+    } finally {
+      rename.mockRestore();
+      if (previousBudget === undefined) {
+        delete process.env.MCSM_FS_RETRY_MS;
+      } else {
+        process.env.MCSM_FS_RETRY_MS = previousBudget;
+      }
+    }
+  });
+
   it("blocks a renderer-supplied managed Java download outside trusted hosts", async () => {
     const { createRuntimeManager } = require("./runtimes.cjs");
     const root = tempRoot();

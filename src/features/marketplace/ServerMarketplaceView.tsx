@@ -492,6 +492,9 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
       {versionsQuery.error ? (
         <div className="inline-error">{versionsQuery.error.message}</div>
       ) : null}
+      {projectQuery.error ? (
+        <div className="inline-error">{projectQuery.error.message}</div>
+      ) : null}
       {manualMutation.error ? (
         <div className="inline-error">{manualMutation.error.message}</div>
       ) : null}
@@ -520,12 +523,20 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
           {contentType !== "plugins" && searchQuery.isFetching ? (
             <LoadingState message={t("marketplace.searchingModrinth")} />
           ) : null}
+          {contentType !== "plugins" && bbsmcQueryResult.isFetching ? (
+            <LoadingState
+              message={t("marketplace.searching", { provider: "BBSMC" })}
+            />
+          ) : null}
           {contentType === "plugins" && hangarQueryResult.isFetching ? (
             <LoadingState message={t("marketplace.searchingHangar")} />
           ) : null}
           {contentType !== "plugins" &&
+          (submittedQuery.trim() !== "" || submittedBbsmcQuery.trim() !== "") &&
           !searchQuery.isFetching &&
-          (searchQuery.data?.length ?? 0) === 0 ? (
+          !bbsmcQueryResult.isFetching &&
+          (searchQuery.data?.length ?? 0) === 0 &&
+          (bbsmcQueryResult.data?.length ?? 0) === 0 ? (
             <EmptyState
               illustration="/illustrations/no-results.png"
               title={t("marketplace.empty.results.title")}
@@ -533,6 +544,7 @@ export function ServerMarketplaceView({ server }: ServerMarketplaceViewProps) {
             />
           ) : null}
           {contentType === "plugins" &&
+          submittedHangarQuery.trim() !== "" &&
           !hangarQueryResult.isFetching &&
           (hangarQueryResult.data?.length ?? 0) === 0 ? (
             <EmptyState

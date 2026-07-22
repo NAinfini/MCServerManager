@@ -149,9 +149,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
       "Source",
       "Compatibility",
       "Java",
-      "Server configuration",
-      "Review and EULA",
-      "Install and start",
+      "Configure",
+      "Review",
+      "Install",
     ]);
 
     unmount();
@@ -286,6 +286,50 @@ describe("CreateServerWizard unified provisioning flow", () => {
       loaderVersion: "0.16.10",
       prepareInstall: true,
     });
+  });
+
+  it("never submits a loader version that belongs to another loader or Minecraft version", async () => {
+    vi.mocked(listLoaderMinecraftVersions).mockResolvedValue([
+      { value: "26.1.1", label: "26.1.1", stable: true },
+      { value: "1.21.4", label: "1.21.4", stable: true },
+    ]);
+    vi.mocked(listLoaderVersions).mockImplementation(async (loaderType) =>
+      loaderType === "paper"
+        ? [{ value: "1.1", label: "1.1", stable: true }]
+        : [{ value: "0.19.3", label: "0.19.3", stable: true }],
+    );
+
+    renderWizard();
+    await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
+    await userEvent.type(screen.getByLabelText("Name"), "Fabric Realm");
+    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
+    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
+    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "1.1");
+
+    // Switching the loader invalidates the Paper build number that is still
+    // selected. Analyze must fall back to disabled — the stale "1.1" cannot
+    // survive (jsdom masks the blank <select>, so the disabled gate is the
+    // assertion that actually catches the bug).
+    await userEvent.selectOptions(screen.getByLabelText("Loader"), "fabric");
+    expect(screen.getByRole("button", { name: "Analyze source" })).toBeDisabled();
+
+    // The only path forward is re-picking Minecraft and a real Fabric version.
+    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "26.1.1");
+    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("fabric", "26.1.1"));
+    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.19.3");
+    await userEvent.click(screen.getByRole("button", { name: "Analyze source" }));
+
+    expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
+      source: { kind: "blank" },
+      name: "Fabric Realm",
+      loaderType: "fabric",
+      minecraftVersion: "26.1.1",
+      loaderVersion: "0.19.3",
+      prepareInstall: true,
+    });
+    expect(provisioningApi.planServerProvisioning).not.toHaveBeenCalledWith(
+      expect.objectContaining({ loaderVersion: "1.1" }),
+    );
   });
 
   it("routes existing folders and marketplace packs through the same planner", async () => {

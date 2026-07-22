@@ -3,6 +3,10 @@ const path = require("node:path");
 const { pipeline } = require("node:stream/promises");
 const yauzl = require("yauzl");
 const { provisioningError } = require("./contracts.cjs");
+const {
+  isTransientFsError,
+  retryTransientFsOperation,
+} = require("./fs-retry.cjs");
 
 const DEFAULT_ARCHIVE_LIMITS = Object.freeze({
   maxEntries: 25_000,
@@ -232,16 +236,26 @@ async function extractLayer(archivePath, destination, layer, limits) {
         continue;
       }
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      const input = await zip.openReadStreamPromise(entry);
-      const output = fs.createWriteStream(target, { flags: "w" });
-      try {
-        await pipeline(input, output);
-      } catch (error) {
-        fs.rmSync(target, { force: true });
-        throw error;
-      }
+      // The read stream is single-use, so each attempt opens its own.
+      await retryTransientFsOperation(async () => {
+        const input = await zip.openReadStreamPromise(entry);
+        const output = fs.createWriteStream(target, { flags: "w" });
+        try {
+          await pipeline(input, output);
+        } catch (error) {
+          fs.rmSync(target, { force: true });
+          throw error;
+        }
+      }, `write archive entry ${relativePath}`);
     }
   } catch (error) {
+    if (isTransientFsError(error)) {
+      throw provisioningError(
+        "ARCHIVE_WRITE_BLOCKED",
+        `Extraction was denied by the operating system: ${error.code} on ${error.path || destination}. Another process is holding the file open -- antivirus real-time scanning is the usual cause. Exclude the application data directory and retry.`,
+        { cause: error },
+      );
+    }
     throw mapYauzlError(error);
   } finally {
     zip.close();

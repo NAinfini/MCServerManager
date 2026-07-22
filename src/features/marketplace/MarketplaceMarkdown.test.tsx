@@ -45,6 +45,45 @@ describe("MarketplaceMarkdown", () => {
     );
   });
 
+  it("marks a broken direct body image so it collapses instead of leaking alt text", async () => {
+    render(
+      <MarketplaceMarkdown source="![Banner](https://cdn.modrinth.com/data/pack/banner.png)" />,
+    );
+
+    const image = screen.getByAltText("Banner") as HTMLImageElement;
+    // jsdom never loads the remote src, so a fresh error event will not fire;
+    // the effect must reconcile the already-broken image on its own.
+    expect(image).not.toHaveAttribute("data-marketplace-image-error");
+
+    // Simulate the natural <img> error the renderer would emit for a dead host.
+    image.dispatchEvent(new Event("error", { bubbles: false }));
+
+    await waitFor(() =>
+      expect(image).toHaveAttribute("data-marketplace-image-error", "true"),
+    );
+    // A direct image must never be routed through the BBSMC proxy command.
+    expect(invokeDesktopCommand).not.toHaveBeenCalled();
+  });
+
+  it("converts markdown images and headings embedded in HTML sources", () => {
+    const source = [
+      "<details><summary>Info</summary><p>body</p></details>",
+      "# My Modpack",
+      "![Badge](https://img.shields.io/badge/test-green)",
+      "[Homepage](https://example.com)",
+    ].join("\n");
+    render(<MarketplaceMarkdown source={source} />);
+
+    expect(screen.getByText("My Modpack").tagName).toBe("H1");
+    expect(screen.getByAltText("Badge")).toBeInTheDocument();
+    expect(screen.getByAltText("Badge").tagName).toBe("IMG");
+    expect(screen.getByText("Homepage").tagName).toBe("A");
+    expect(screen.getByText("Homepage")).toHaveAttribute(
+      "href",
+      "https://example.com/",
+    );
+  });
+
   it("loads BBSMC markdown images through the desktop backend", async () => {
     render(
       <MarketplaceMarkdown

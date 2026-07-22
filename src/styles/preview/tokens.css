@@ -2,12 +2,12 @@
   --preview-sidebar-width: 248px;
   --preview-sidebar-collapsed-width: 72px;
   --preview-control-height: 40px;
-  --preview-button-height: 36px;
-  --preview-content-gap: 20px;
-  --preview-radius-panel: 12px;
-  --preview-shadow-panel: 0 1px 0 rgba(255, 255, 255, 0.025);
+  --preview-button-height: var(--button-height-md);
+  --preview-content-gap: var(--space-5);
+  --preview-radius-panel: var(--radius-panel);
+  --preview-shadow-panel: none;
 }
 
 [data-theme="light"] {
-  --preview-shadow-panel: 0 1px 2px rgba(31, 45, 38, 0.07);
+  --preview-shadow-panel: none;
 }

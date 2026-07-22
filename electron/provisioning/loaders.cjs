@@ -281,6 +281,21 @@ function createLoaderRegistry(dependencies = {}) {
           installers.find((installer) => installer.stable)?.version ||
           installers[0]?.version;
         if (!installerVersion) throw new Error("Fabric installer version not found");
+        /* Fabric meta answers an unparseable loader version with a bare 400, so a
+           value the pack supplied but Fabric never published is checked here where
+           we can still name it and list what is actually available. */
+        const published = await deps.fetchJson(
+          `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}`,
+        );
+        const known = published.map((entry) => entry.loader?.version).filter(Boolean);
+        if (!known.includes(input.loaderVersion)) {
+          throw Object.assign(
+            new Error(
+              `Fabric loader ${input.loaderVersion} is not published for Minecraft ${input.minecraftVersion}. Available: ${known.slice(0, 5).join(", ") || "none"}.`,
+            ),
+            { code: "LOADER_VERSION_UNAVAILABLE" },
+          );
+        }
         const url = `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}/${encodeURIComponent(input.loaderVersion)}/${encodeURIComponent(installerVersion)}/server/jar`;
         return basePlan("fabric", input, {
           artifacts: [{ url, destination: "server.jar", hashes: {}, size: 0 }],

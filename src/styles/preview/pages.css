@@ -1,13 +1,8 @@
-.dashboard-page-header h1 {
-  font-size: clamp(26px, 2vw, 30px);
-  line-height: 1.15;
-}
-
 .dashboard-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: var(--preview-content-gap);
+  gap: var(--space-3);
   min-width: 0;
 }
 
@@ -18,24 +13,15 @@
 
 .dashboard-primary {
   display: grid;
-  gap: 16px;
+  gap: var(--space-3);
 }
 
 .dashboard-status-rail .summary-strip {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
   margin: 0;
-  overflow: hidden;
 }
 
 .dashboard-status-rail .summary-strip > div {
-  min-height: 68px;
-  border-right: 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.dashboard-status-rail .summary-strip > div:last-child {
-  border-bottom: 0;
+  min-height: 48px;
 }
 
 .marketplace-card-grid {
@@ -47,7 +33,8 @@
 .marketplace-card-grid .marketplace-pack-card,
 .marketplace-card-grid .marketplace-result {
   grid-template-columns: 96px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-content: start;
   min-height: 128px;
 }
 
@@ -64,20 +51,25 @@
   grid-row: 1;
 }
 
+/* The whole card is the button, so this reads as an affordance hint rather
+   than a second control competing for the click. */
 .marketplace-pack-card-action {
   grid-column: 2;
   grid-row: 2;
   justify-self: start;
-  align-self: center;
-  margin: 0 16px 14px 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border-subtle));
-  border-radius: 8px;
-  padding: 9px 13px;
+  align-self: start;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--accent);
-  background: var(--accent-soft);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--text-compact);
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
+}
+
+.marketplace-pack-card:hover .marketplace-pack-card-action {
+  text-decoration: underline;
 }
 
 @media (max-width: 1500px) {
@@ -88,7 +80,7 @@
 
 .server-detail-workspace {
   display: grid;
-  grid-template-columns: 176px minmax(0, 1fr);
+  grid-template-columns: 156px minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
 }
@@ -96,25 +88,30 @@
 .server-detail-menu.detail-tabs {
   display: grid;
   align-content: start;
-  gap: 4px;
+  gap: 2px;
   height: auto;
   overflow: visible;
   border-right: 1px solid var(--border-subtle);
   border-bottom: 0;
-  padding: 12px;
-  background: var(--bg-panel-muted);
+  padding: 8px;
+  background: var(--bg-sidebar);
 }
 
 .server-detail-menu.detail-tabs button {
   justify-content: flex-start;
   width: 100%;
-  min-height: 38px;
-  border-radius: 7px;
+  min-height: 34px;
+  border-radius: var(--radius-sm);
   padding: 0 12px;
 }
 
 .server-detail-menu.detail-tabs button[aria-selected="true"] {
   box-shadow: inset 3px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
+}
+
+.server-detail-menu.detail-tabs button:not([aria-selected="true"]):hover {
+  background: color-mix(in srgb, var(--text-main) 5%, transparent);
 }
 
 .server-detail-workspace > .detail-tab-content {
@@ -124,11 +121,11 @@
 }
 
 .app-log-workspace {
-  grid-template-columns: 148px minmax(300px, 3fr) minmax(320px, 2fr);
+  grid-template-columns: 136px minmax(300px, 3fr) minmax(320px, 2fr);
 }
 
 .app-log-workspace-empty {
-  grid-template-columns: 148px minmax(0, 1fr);
+  grid-template-columns: 136px minmax(0, 1fr);
 }
 
 .app-log-list > .empty-state {
@@ -137,22 +134,23 @@
 
 .logger-filter-rail {
   min-width: 0;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--preview-radius-panel);
-  padding: 8px;
-  background: var(--bg-panel);
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  padding: var(--space-2);
+  background: var(--bg-sidebar);
 }
 
 .logger-filter-rail .severity-filter {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .logger-filter-rail .severity-filter-item {
   justify-content: flex-start;
   width: 100%;
-  min-height: 36px;
-  border-radius: 7px;
+  min-height: 30px;
+  border-radius: var(--radius-sm);
 }
 
 .java-page,
@@ -179,7 +177,7 @@
 }
 
 .settings-layout {
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: 180px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -229,29 +227,15 @@
   }
 
   .app-log-workspace {
-    grid-template-columns: 132px minmax(0, 1fr);
+    grid-template-columns: 120px minmax(0, 1fr);
   }
 
   .app-log-detail-pane {
     grid-column: 1 / -1;
   }
 
-  .dashboard-workbench {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dashboard-status-rail {
-    order: -1;
-  }
-
-  .dashboard-status-rail .summary-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .dashboard-status-rail .summary-strip > div {
-    min-height: 60px;
-    border-right: 1px solid var(--border-subtle);
-    border-bottom: 0;
+    min-height: 44px;
   }
 }
 

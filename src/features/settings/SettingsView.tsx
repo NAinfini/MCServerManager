@@ -229,6 +229,52 @@ function toPositiveInt(value: string, fallback: number) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function SettingsNumberField({
+  ariaLabel,
+  min,
+  value,
+  onCommit,
+}: {
+  ariaLabel: string;
+  min: number;
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [editing, setEditing] = useState(false);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [editing, value]);
+
+  return (
+    <TextField
+      aria-label={ariaLabel}
+      className="settings-number-input"
+      min={min}
+      type="number"
+      value={draft}
+      onBlur={() => {
+        setEditing(false);
+        if (draft !== value) {
+          onCommit(draft);
+        }
+      }}
+      onChange={(event) => {
+        setEditing(true);
+        setDraft(event.currentTarget.value);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.currentTarget.blur();
+        }
+      }}
+    />
+  );
+}
+
 function AppearanceSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
   const { t } = useAppSettings();
   const appearance = preferences.appearance;
@@ -347,17 +393,15 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
         <div className="settings-row-label">
           <strong>{t("settings.logging.retentionDays")}</strong>
         </div>
-        <TextField
-          aria-label={t("settings.logging.retentionDays")}
-          className="settings-number-input"
+        <SettingsNumberField
+          ariaLabel={t("settings.logging.retentionDays")}
           min={1}
-          type="number"
           value={numberValue(logging.retentionDays, 14)}
-          onChange={(event) =>
+          onCommit={(value) =>
             void onUpdate({
               logging: {
                 ...logging,
-                retentionDays: toPositiveInt(event.currentTarget.value, 14),
+                retentionDays: toPositiveInt(value, 14),
               },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
@@ -367,17 +411,15 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
         <div className="settings-row-label">
           <strong>{t("settings.logging.maxSizeMb")}</strong>
         </div>
-        <TextField
-          aria-label={t("settings.logging.maxSizeMb")}
-          className="settings-number-input"
+        <SettingsNumberField
+          ariaLabel={t("settings.logging.maxSizeMb")}
           min={1}
-          type="number"
           value={numberValue(logging.maxSizeMb, 25)}
-          onChange={(event) =>
+          onCommit={(value) =>
             void onUpdate({
               logging: {
                 ...logging,
-                maxSizeMb: toPositiveInt(event.currentTarget.value, 25),
+                maxSizeMb: toPositiveInt(value, 25),
               },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
@@ -464,32 +506,28 @@ function ServerDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
           <span>{t("settings.serverDefaults.memoryRangeNote")}</span>
         </div>
         <div className="settings-inline-fields">
-          <TextField
-            aria-label={t("settings.serverDefaults.minMemory")}
-            className="settings-number-input"
+          <SettingsNumberField
+            ariaLabel={t("settings.serverDefaults.minMemory")}
             min={512}
-            type="number"
             value={numberValue(defaults.minMemoryMb, 1024)}
-            onChange={(event) =>
+            onCommit={(value) =>
               void onUpdate({
                 serverDefaults: {
                   ...defaults,
-                  minMemoryMb: toPositiveInt(event.currentTarget.value, 1024),
+                  minMemoryMb: toPositiveInt(value, 1024),
                 },
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
           />
-          <TextField
-            aria-label={t("settings.serverDefaults.maxMemory")}
-            className="settings-number-input"
+          <SettingsNumberField
+            ariaLabel={t("settings.serverDefaults.maxMemory")}
             min={512}
-            type="number"
             value={numberValue(defaults.maxMemoryMb, 4096)}
-            onChange={(event) =>
+            onCommit={(value) =>
               void onUpdate({
                 serverDefaults: {
                   ...defaults,
-                  maxMemoryMb: toPositiveInt(event.currentTarget.value, 4096),
+                  maxMemoryMb: toPositiveInt(value, 4096),
                 },
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
@@ -578,17 +616,15 @@ function BackupDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
         <div className="settings-row-label">
           <strong>{t("settings.backupDefaults.retentionDays")}</strong>
         </div>
-        <TextField
-          aria-label={t("settings.backupDefaults.retentionDays")}
-          className="settings-number-input"
+        <SettingsNumberField
+          ariaLabel={t("settings.backupDefaults.retentionDays")}
           min={1}
-          type="number"
           value={numberValue(defaults.retentionDays, 14)}
-          onChange={(event) =>
+          onCommit={(value) =>
             void onUpdate({
               backupDefaults: {
                 ...defaults,
-                retentionDays: toPositiveInt(event.currentTarget.value, 14),
+                retentionDays: toPositiveInt(value, 14),
               },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
@@ -672,17 +708,15 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
           {cacheCleared ? <span>{t("settings.paths.cacheCleared")}</span> : null}
         </div>
         <div className="settings-action-group">
-          <TextField
-            aria-label={t("settings.marketplace.cacheSizeMb")}
-            className="settings-number-input"
+          <SettingsNumberField
+            ariaLabel={t("settings.marketplace.cacheSizeMb")}
             min={1}
-            type="number"
             value={numberValue(marketplace.cacheSizeMb, 1024)}
-            onChange={(event) =>
+            onCommit={(value) =>
               void onUpdate({
                 marketplace: {
                   ...marketplace,
-                  cacheSizeMb: toPositiveInt(event.currentTarget.value, 1024),
+                  cacheSizeMb: toPositiveInt(value, 1024),
                 },
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
@@ -843,6 +877,9 @@ function DataManagementSection({
 }: SettingsSectionProps) {
   const { t } = useAppSettings();
   const [resetOpen, setResetOpen] = useState(false);
+  const [pendingImportPath, setPendingImportPath] = useState<string | null>(
+    null,
+  );
   const [status, setStatus] = useState<string | null>(null);
 
   const exportSettings = async () => {
@@ -872,13 +909,23 @@ function DataManagementSection({
       if (!result.path) {
         return;
       }
+      setPendingImportPath(result.path);
+    } catch (error) {
+      onError(errorMessage(error));
+    }
+  };
+
+  const applyImportSettings = async (path: string) => {
+    try {
       const importedPreferences = await invokeDesktopCommand<AppPreferences>(
         "import_app_settings",
-        { input: { path: result.path } },
+        { input: { path } },
       );
       await onUpdate(importedPreferences);
+      setPendingImportPath(null);
       setStatus(t("settings.data.imported"));
     } catch (error) {
+      setPendingImportPath(null);
       onError(errorMessage(error));
     }
   };
@@ -945,6 +992,20 @@ function DataManagementSection({
         confirmLabel={t("settings.data.reset")}
         onCancel={() => setResetOpen(false)}
         onConfirm={() => void resetSettings()}
+      />
+      <ConfirmDangerDialog
+        isOpen={pendingImportPath !== null}
+        title={t("settings.data.import")}
+        description={t("settings.data.importConfirm", {
+          path: pendingImportPath ?? "",
+        })}
+        confirmLabel={t("settings.data.import")}
+        onCancel={() => setPendingImportPath(null)}
+        onConfirm={() => {
+          if (pendingImportPath) {
+            void applyImportSettings(pendingImportPath);
+          }
+        }}
       />
     </div>
   );

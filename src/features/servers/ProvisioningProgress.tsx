@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
 import type { ProvisioningJob, ProvisioningStage } from "./provisioningApi";
@@ -57,6 +57,46 @@ export function ProvisioningProgress({
         max={100}
         value={progressValue(job)}
       />
+      {/* Install is the longest step in the wizard and used to show a single
+          line of text. The checklist names what is done, what is running, and
+          what is still ahead. */}
+      <ol className="provisioning-stage-list">
+        {activeStages.map((stage) => {
+          const index = activeStages.indexOf(stage);
+          const currentIndex = activeStages.indexOf(
+            displayedStage as ProvisioningStage,
+          );
+          const done =
+            job.stage === "ready" ||
+            job.progress.completedStages?.includes(stage) === true ||
+            (currentIndex >= 0 && index < currentIndex);
+          const current = index === currentIndex && job.stage !== "ready";
+          return (
+            <li
+              className="provisioning-stage-item"
+              data-state={
+                current
+                  ? job.stage === "failed"
+                    ? "failed"
+                    : "current"
+                  : done
+                    ? "done"
+                    : "pending"
+              }
+              key={stage}
+            >
+              {done ? (
+                <CheckCircle2 aria-hidden="true" size={14} />
+              ) : current && job.stage === "failed" ? (
+                <AlertTriangle aria-hidden="true" size={14} />
+              ) : (
+                <Circle aria-hidden="true" size={14} />
+              )}
+              <span>{t(`provisioning.stage.${stage}`)}</span>
+            </li>
+          );
+        })}
+      </ol>
       {job.error ? (
         <div className="form-error" role="alert">
           <AlertTriangle aria-hidden="true" size={16} />

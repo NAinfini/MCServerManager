@@ -99,7 +99,7 @@ function projectGallery(project: MarketplaceProject | null) {
 }
 
 function isReadableMinecraftVersion(value: string) {
-  return /^\d+(?:\.\d+){1,2}(?:[-+][0-9A-Za-z.-]+)?$/.test(value);
+  return /^1\.\d+(?:\.\d+)?(?:[-+][0-9A-Za-z.-]+)?$/.test(value);
 }
 
 function readableVersionLabels(
@@ -260,7 +260,7 @@ function marketplaceSelectionMetadata(
     version.gameVersions.find(isReadableMinecraftVersion) ??
     project.gameVersions.find(isReadableMinecraftVersion) ??
     null;
-  const loaderVersion = versionLabel(version) || version.name || null;
+  const loaderVersion = null;
 
   return { loaderType, minecraftVersion, loaderVersion };
 }
@@ -597,7 +597,18 @@ export function CreateServerMarketplaceBrowser({
             className="marketplace-detail-view"
           >
             {versionsQuery.isFetching || selectedDetailsQuery.isFetching ? (
-              <LoadingState message={t("marketplace.loadingDetails")} />
+              <div className="marketplace-version-stack">
+                <Button
+                  className="marketplace-detail-back"
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setSelectedProjectId(null)}
+                >
+                  <ChevronLeft aria-hidden="true" size={14} />
+                  {t("wizard.nav.back")}
+                </Button>
+                <LoadingState message={t("marketplace.loadingDetails")} />
+              </div>
             ) : (
               <div className="marketplace-version-stack">
                 <Button
@@ -784,7 +795,10 @@ export function CreateServerMarketplaceBrowser({
                           >
                             <span>
                               <strong>{versionLabel(version)}</strong>
-                              <small>{version.name}</small>
+                              {version.name &&
+                              version.name !== versionLabel(version) ? (
+                                <small>{version.name}</small>
+                              ) : null}
                               {minecraftLabels.length > 0 ? (
                                 <small className="meta-badge meta-badge-version marketplace-version-minecraft">
                                   {t("marketplace.minecraftVersion", {
@@ -792,7 +806,13 @@ export function CreateServerMarketplaceBrowser({
                                   })}
                                 </small>
                               ) : null}
-                              <small className="meta-badge meta-badge-provider">
+                              <small
+                                className={`meta-badge ${
+                                  versionHasServerPack(version)
+                                    ? "meta-badge-serverpack"
+                                    : "meta-badge-unverified"
+                                }`}
+                              >
                                 {versionHasServerPack(version)
                                   ? t("marketplace.serverPackBadge")
                                   : t("marketplace.unverifiedArchiveBadge")}
