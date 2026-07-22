@@ -188,5 +188,44 @@ describe("ServerDetail", () => {
     expect(within(checklist).getByText("Read the Minecraft EULA, then set eula=true yourself if you accept it.")).toBeInTheDocument();
     expect(within(checklist).getByText("Create a backup before changing jars, mods, configs, or worlds.")).toBeInTheDocument();
   });
+
+  it("renders the server name as the page heading in its merged header", () => {
+    renderDetail();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Review Server" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows a back button that calls onBack when provided", async () => {
+    const onBack = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+        },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AppSettingsProvider>
+          <ServerDetail server={server} onBack={onBack} />
+        </AppSettingsProvider>
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("omits the back button when no onBack handler is provided", () => {
+    renderDetail();
+
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
+  });
 });
 

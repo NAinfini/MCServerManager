@@ -3847,16 +3847,17 @@ button {
   height: 3px;
   border-radius: var(--radius-pill);
   background: var(--border-strong);
-  margin: 0 8px;
-  align-self: center;
-  margin-bottom: 18px;
+  /* Center on the step circle regardless of label height:
+     item padding-top + circle half (14px) - connector half (1.5px). */
+  align-self: flex-start;
+  margin: 16.5px 8px 0;
   transition: background-color 160ms ease;
 }
 
 .create-server-wizard-header .wizard-step-connector {
   width: clamp(18px, 3vw, 36px);
   margin-inline: 4px;
-  margin-bottom: 20px;
+  margin-top: 14.5px;
 }
 
 @media (max-width: 1000px) {

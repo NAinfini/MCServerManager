@@ -34,7 +34,7 @@ async function waitFor(webContents, expression, label, timeoutMs = 10_000) {
 async function buttonCenter(webContents, label) {
   const point = await webContents.executeJavaScript(`(() => {
     const matches = [...document.querySelectorAll("button")].filter(
-      (button) => button.textContent.trim() === ${JSON.stringify(label)},
+      (button) => button.textContent.includes(${JSON.stringify(label)}),
     );
     if (matches.length !== 1) return { count: matches.length };
     matches[0].scrollIntoView({ block: "center", inline: "center" });
@@ -288,7 +288,6 @@ async function run() {
   }
   const inlineShellState = await window.webContents.executeJavaScript(`({
     hasSidebar: Boolean(document.querySelector(".sidebar")),
-    hasRuntimeBar: Boolean(document.querySelector(".runtime-bar")),
     hasStatusBar: Boolean(document.querySelector(".status-bar")),
     hasTitlebar: Boolean(document.querySelector(".window-titlebar")),
     hasLoadedBrandImages: [...document.querySelectorAll(
@@ -299,7 +298,6 @@ async function run() {
   })`);
   if (
     !inlineShellState.hasSidebar ||
-    !inlineShellState.hasRuntimeBar ||
     !inlineShellState.hasStatusBar ||
     !inlineShellState.hasTitlebar ||
     !inlineShellState.hasLoadedBrandImages ||
@@ -330,7 +328,7 @@ async function run() {
   await delay(100);
   const pointerFocusVisible = await window.webContents.executeJavaScript(`(() => {
     const button = [...document.querySelectorAll("button")].find(
-      (item) => item.textContent.trim() === "Open modpack file",
+      (item) => item.textContent.includes("Open modpack file"),
     );
     button.focus();
     return button.matches(":focus-visible");

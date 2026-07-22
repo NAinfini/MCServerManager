@@ -10,6 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ServerProfile } from "../../features/servers/types";
+import { getServerProcessStatus } from "../../features/process/api";
 import { useSidebarStore } from "./sidebarStore";
 import { Sidebar } from "./Sidebar";
 
@@ -279,5 +280,44 @@ describe("Sidebar server organization", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /^servers$/i }));
     expect(outsideMenu).not.toBeInTheDocument();
+  });
+});
+
+describe("Sidebar status badges", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    useSidebarStore.getState().resetServerLayout();
+    vi.mocked(getServerProcessStatus).mockImplementation(
+      async (serverId: string) => ({
+        id: `process-${serverId}`,
+        serverId,
+        command: "java -jar server.jar",
+        status: "stopped",
+        pid: null,
+      }),
+    );
+  });
+
+  it("shows a badge only for servers that need attention", async () => {
+    vi.mocked(getServerProcessStatus).mockImplementation(
+      async (serverId: string) => ({
+        id: `process-${serverId}`,
+        serverId,
+        command: "java -jar server.jar",
+        status: serverId === "forge" ? "crashed" : "stopped",
+        pid: null,
+      }),
+    );
+
+    renderSidebar();
+
+    const crashedRow = screen.getByRole("button", { name: /modded forge/i });
+    await waitFor(() =>
+      expect(within(crashedRow).getByText("Crashed")).toBeInTheDocument(),
+    );
+
+    const stoppedRow = screen.getByRole("button", { name: /survival smp/i });
+    expect(within(stoppedRow).queryByText("Stopped")).not.toBeInTheDocument();
   });
 });
