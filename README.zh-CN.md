@@ -61,11 +61,19 @@ pnpm exec electron-builder --win --publish never --config.directories.output=$ou
 
 GitHub Actions 会从 tag release 发布按平台区分的 Electron 产物：
 
-- Windows：已签名的 NSIS 安装器，以及 `latest.yml` 更新元数据。
+- Windows：NSIS 安装器，以及 `latest.yml` 更新元数据。
 - Linux：AppImage 和 `.deb` 包。
-- macOS：已签名并完成公证的 `.dmg` 和 `.zip` 包。
+- macOS：`.dmg` 和 `.zip` 包。
 
-稳定版发布采用失败关闭策略：Windows 必须配置 `WINDOWS_CSC_LINK` 和 `WINDOWS_CSC_KEY_PASSWORD`；macOS 必须配置 `MACOS_CSC_LINK`、`MACOS_CSC_KEY_PASSWORD`、`APPLE_ID`、`APPLE_APP_SPECIFIC_PASSWORD` 与 `APPLE_TEAM_ID`。本地开发构建仍可在没有这些 GitHub secrets 的情况下运行 `pnpm electron:build`。
+### 发布产物未签名
+
+本项目没有任何平台的代码签名证书，因此所有产物均未签名。这会带来以下影响：
+
+- **Windows**：首次运行安装器时 SmartScreen 会提示"无法识别的应用"。请选择**更多信息 → 仍要运行**。
+- **macOS**：Gatekeeper 会阻止双击打开。请右键点击应用并选择**打开**，然后确认一次。
+- **macOS 无法自动更新**。`electron-updater` 在 macOS 上安装更新需要有效签名，因此 mac 用户必须手动下载每个新版本。应用内的更新检查仍会提示有新版本。Windows 和 Linux 自动更新不受影响。
+
+若要启用签名：把证书 secrets 加入仓库，在 `.github/workflows/release.yml` 对应的发布步骤上设置 `CSC_LINK` 与 `CSC_KEY_PASSWORD`，并在 `package.json` 中设置 `build.mac.identity`。
 
 ## 隐私
 

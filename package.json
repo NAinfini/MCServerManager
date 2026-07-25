@@ -36,7 +36,8 @@
     "preview": "vite preview"
   },
   "comments": {
-    "dependencies": "Only what the main process require()s at runtime. electron-builder packs every production dependency into the asar verbatim, so a renderer package listed here ships twice: once as its original source tree and again inside the Vite bundle. Renderer packages therefore belong in devDependencies, and electron/packaged-dependencies.test.mjs enforces that."
+    "dependencies": "Only what the main process require()s at runtime. electron-builder packs every production dependency into the asar verbatim, so a renderer package listed here ships twice: once as its original source tree and again inside the Vite bundle. Renderer packages therefore belong in devDependencies, and electron/packaged-dependencies.test.mjs enforces that.",
+    "build.mac.identity": "null because this project holds no Apple Developer certificate. Without it electron-builder searches the keychain and fails when it finds nothing. Set it to the certificate name to start signing. See the release workflow comment for what shipping unsigned costs users."
   },
   "dependencies": {
     "electron-updater": "^6.8.9",
@@ -114,6 +115,7 @@
     },
     "mac": {
       "artifactName": "MC-Server-Manager-${version}-${arch}.${ext}",
+      "identity": null,
       "category": "public.app-category.utilities",
       "target": [
         "dmg",

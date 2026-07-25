@@ -73,18 +73,19 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("pnpm vitest run --testTimeout 15000");
   });
 
-  it("requires signing and notarization credentials for stable desktop releases", () => {
+  it("publishes unsigned artifacts without demanding certificates it does not have", () => {
     const release = readWorkspaceFile(".github/workflows/release.yml");
-    const windowsPublish = workflowStep(
-      release,
-      "Publish Windows Electron release",
-    );
-    const linuxPublish = workflowStep(
-      release,
-      "Publish Linux Electron release",
-    );
-    const macPublish = workflowStep(release, "Publish macOS Electron release");
-    const requiredSecrets = [
+    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+    const publishSteps = [
+      workflowStep(release, "Publish Windows Electron release"),
+      workflowStep(release, "Publish Linux Electron release"),
+      workflowStep(release, "Publish macOS Electron release"),
+    ];
+
+    // The workflow used to hard-fail when these were unset, so a tag push could
+    // never produce a release. This project has no certificates, so every
+    // reference is gone rather than left to fail at publish time.
+    for (const secret of [
       "WINDOWS_CSC_LINK",
       "WINDOWS_CSC_KEY_PASSWORD",
       "MACOS_CSC_LINK",
@@ -92,32 +93,20 @@ describe("Electron CI and release workflows", () => {
       "APPLE_ID",
       "APPLE_APP_SPECIFIC_PASSWORD",
       "APPLE_TEAM_ID",
-    ];
-
-    for (const secret of requiredSecrets) {
-      expect(release).toContain(`secrets.${secret}`);
-      expect(release).toContain(`$env:${secret}`);
+    ]) {
+      expect(release, `${secret} is not available to this repository`).not.toContain(
+        secret,
+      );
     }
-    expect(windowsPublish).toContain(
-      "CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}",
-    );
-    expect(windowsPublish).toContain(
-      "CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}",
-    );
-    expect(linuxPublish).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
-    expect(linuxPublish).not.toMatch(/CSC_LINK|CSC_KEY_PASSWORD|APPLE_/);
-    expect(macPublish).toContain("CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}");
-    expect(macPublish).toContain(
-      "CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}",
-    );
-    expect(macPublish).toContain("APPLE_ID: ${{ secrets.APPLE_ID }}");
-    expect(macPublish).toContain(
-      "APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}",
-    );
-    expect(macPublish).toContain("APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}");
-    expect(release).not.toMatch(
-      /(?:Write-Host|Write-Output|echo).*\$env:(?:WINDOWS_CSC|MACOS_CSC|APPLE_)/i,
-    );
+
+    // Without this electron-builder searches the runner keychain for an identity
+    // and fails the build when it finds none.
+    for (const step of publishSteps) {
+      expect(step).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
+      expect(step).toContain("GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}");
+    }
+    expect(manifest.build.mac.identity).toBeNull();
+
     expect(release).not.toContain("toJson(secrets)");
   });
 

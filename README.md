@@ -61,11 +61,19 @@ pnpm exec electron-builder --win --publish never --config.directories.output=$ou
 
 GitHub Actions publishes platform-specific Electron artifacts from tagged releases:
 
-- Windows: signed NSIS installer, plus `latest.yml` update metadata.
+- Windows: NSIS installer, plus `latest.yml` update metadata.
 - Linux: AppImage and `.deb` packages.
-- macOS: signed and notarized `.dmg` and `.zip` packages.
+- macOS: `.dmg` and `.zip` packages.
 
-Stable release publishing fails closed unless the repository provides `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` for Windows, plus `MACOS_CSC_LINK`, `MACOS_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and `APPLE_TEAM_ID` for macOS. Local `pnpm electron:build` remains available without these GitHub secrets for development builds.
+### Releases are unsigned
+
+This project holds no code-signing certificate for either platform, so every artifact ships unsigned. What that costs you:
+
+- **Windows**: SmartScreen shows an "unrecognized app" warning the first time the installer runs. Choose **More info → Run anyway**.
+- **macOS**: Gatekeeper refuses to open the app on a double-click. Right-click the app and choose **Open**, then confirm once.
+- **macOS auto-update does not work.** `electron-updater` requires a valid signature to install an update on macOS, so mac users must download each new release manually. The in-app update check still tells you when one exists. Windows and Linux auto-update normally.
+
+To start signing, add the certificate secrets to the repository and set `CSC_LINK` and `CSC_KEY_PASSWORD` on the matching publish step in `.github/workflows/release.yml`, and set `build.mac.identity` in `package.json`.
 
 ## Privacy
 
