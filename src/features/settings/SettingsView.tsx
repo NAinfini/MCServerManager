@@ -916,7 +916,7 @@ function AboutSection() {
         <div className="settings-row-label">
           <strong>{t("settings.about.version")}</strong>
         </div>
-        <span>0.1.0-dev</span>
+        <span>{__APP_VERSION__}</span>
       </div>
       <div className="settings-row">
         <div className="settings-row-label">

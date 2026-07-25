@@ -1,5 +1,13 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+import { createRequire } from "node:module";
+
+// The renderer used to print "v0.1.0" as a literal in two places, so every
+// release would have shipped a version label that disagreed with the binary.
+// electron-builder takes the packaged version from this same field, so reading
+// it here keeps the label and the artifact in step by construction.
+const appVersion = createRequire(import.meta.url)("./package.json")
+  .version as string;
 
 // The renderer displays marketplace descriptions from Modrinth, BBSMC, and
 // Hangar. MarketplaceMarkdown sanitizes that HTML, but a sanitizer is one
@@ -52,6 +60,9 @@ const host = process.env.ELECTRON_RENDERER_HOST;
 export default defineConfig(async () => ({
   base: "./",
   plugins: [react(), contentSecurityPolicyPlugin()],
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
 
   // Keep the renderer dev server predictable for the Electron shell.
   clearScreen: false,

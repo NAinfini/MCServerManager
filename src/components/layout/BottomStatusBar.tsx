@@ -83,7 +83,7 @@ export function BottomStatusBar({
         <NotificationCenter onOpenSettings={onOpenNotifications} />
         <span className="status-bar-item">
           <Info aria-hidden="true" size={12} />
-          <span className="status-bar-copy">v0.1.0</span>
+          <span className="status-bar-copy">v{__APP_VERSION__}</span>
         </span>
       </div>
     </footer>

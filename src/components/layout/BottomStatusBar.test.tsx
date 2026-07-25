@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BottomStatusBar } from "./BottomStatusBar";
+import appManifest from "../../../package.json";
 
 const selectedServer = {
   javaPath: "C:/runtimes/temurin-21/bin/java.exe",
@@ -20,7 +21,10 @@ describe("BottomStatusBar", () => {
 
     expect(screen.getByText("Java: not set")).toBeInTheDocument();
     expect(screen.getAllByText("unset").length).toBeGreaterThan(0);
-    expect(screen.getByText("v0.1.0")).toBeInTheDocument();
+    // Read from the manifest rather than repeating a literal: the label used to
+    // be hardcoded, so a release would have shipped a version that disagreed
+    // with the binary. Comparing against package.json is what catches that.
+    expect(screen.getByText(`v${appManifest.version}`)).toBeInTheDocument();
   });
 
   it("opens Java Runtimes when the unset Java segment is clicked", async () => {
