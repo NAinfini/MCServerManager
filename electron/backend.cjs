@@ -290,6 +290,10 @@ CREATE INDEX IF NOT EXISTS idx_backups_server_created_at ON backups(server_id, c
 CREATE INDEX IF NOT EXISTS idx_installed_content_server ON installed_content(server_id, installed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_server ON scheduled_tasks(server_id, enabled);
 CREATE INDEX IF NOT EXISTS idx_provisioning_jobs_stage ON provisioning_jobs(stage, updated_at DESC);
+-- Both telemetry tables are trimmed by age across every server, which the
+-- server-scoped indexes above cannot serve.
+CREATE INDEX IF NOT EXISTS idx_server_metric_samples_sampled_at ON server_metric_samples(sampled_at);
+CREATE INDEX IF NOT EXISTS idx_process_events_created_at ON process_events(created_at);
 `;
 
 function createBackend(app) {
@@ -480,6 +484,7 @@ function createCommandHandlers(context) {
     delete_scheduled_task: (args) =>
       deleteScheduledTask(db, args?.taskId || args?.input?.taskId),
     run_due_scheduled_tasks: () => runDueScheduledTasks(db),
+    prune_telemetry: (args) => pruneTelemetry(db, args?.input),
     get_performance_history: (args) =>
       getPerformanceHistory(db, args?.serverId),
     sample_server_metrics: (args) => sampleServerMetrics(db, args?.serverId),
@@ -1315,6 +1320,42 @@ function emitServerEvent(db, event) {
       // Event consumers must never interrupt process supervision.
     }
   }
+}
+
+// A running server writes one metric sample every 5 seconds and one process
+// event per console line, and nothing ever deleted either, so the database grew
+// without bound for the lifetime of the install. Trim by age on a slow cadence
+// instead of on every insert. Raise the retention constants to keep more
+// history; the numbers, not the mechanism, are the knob.
+const METRIC_SAMPLE_RETENTION_DAYS = 14;
+const PROCESS_EVENT_RETENTION_DAYS = 30;
+const TELEMETRY_PRUNE_INTERVAL_MS = 10 * 60 * 1000;
+const lastTelemetryPruneAt = new WeakMap();
+
+function pruneTelemetry(db, input) {
+  if (closedDatabases.has(db)) {
+    return { metricSamplesDeleted: 0, processEventsDeleted: 0, skipped: true };
+  }
+  const now = Date.now();
+  if (
+    !input?.force &&
+    now - (lastTelemetryPruneAt.get(db) ?? 0) < TELEMETRY_PRUNE_INTERVAL_MS
+  ) {
+    return { metricSamplesDeleted: 0, processEventsDeleted: 0, skipped: true };
+  }
+  lastTelemetryPruneAt.set(db, now);
+  const cutoff = (days) => new Date(now - days * 86_400_000).toISOString();
+  const samples = db
+    .prepare("DELETE FROM server_metric_samples WHERE sampled_at < ?")
+    .run(cutoff(METRIC_SAMPLE_RETENTION_DAYS));
+  const events = db
+    .prepare("DELETE FROM process_events WHERE created_at < ?")
+    .run(cutoff(PROCESS_EVENT_RETENTION_DAYS));
+  return {
+    metricSamplesDeleted: Number(samples.changes || 0),
+    processEventsDeleted: Number(events.changes || 0),
+    skipped: false,
+  };
 }
 
 function addProcessEvent(db, serverId, level, message) {
@@ -3464,14 +3505,31 @@ function restoreWorldBackup(db, input) {
     throw new Error("restore target must not overlap backup storage");
   }
   const { target } = safeServerPath(db, backup.server_id, targetWorldDir);
-  fs.rmSync(target, {
-    recursive: true,
-    force: true,
-  });
-  fs.cpSync(sourceWorld, target, {
-    recursive: true,
-    force: true,
-  });
+  // Copy first, swap second. Deleting the world and then copying into place
+  // leaves nothing to fall back on if the copy fails half way, which is the
+  // one failure a server owner can never recover from.
+  const stamp = Date.now();
+  const staged = `${target}.restoring-${stamp}`;
+  const replaced = `${target}.replaced-${stamp}`;
+  fs.rmSync(staged, { recursive: true, force: true });
+  fs.cpSync(sourceWorld, staged, { recursive: true, force: true });
+
+  let movedExistingWorld = false;
+  try {
+    if (fs.existsSync(target)) {
+      fs.renameSync(target, replaced);
+      movedExistingWorld = true;
+    }
+    fs.renameSync(staged, target);
+  } catch (error) {
+    // Put the original world back before surfacing the failure.
+    if (movedExistingWorld && !fs.existsSync(target)) {
+      fs.renameSync(replaced, target);
+    }
+    fs.rmSync(staged, { recursive: true, force: true });
+    throw error;
+  }
+  fs.rmSync(replaced, { recursive: true, force: true });
   return null;
 }
 
@@ -4634,6 +4692,9 @@ function deleteScheduledTask(db, taskId) {
 }
 
 async function runDueScheduledTasks(db) {
+  // The 60-second tick is the only thing that runs when no server is up, so it
+  // also carries telemetry retention. pruneTelemetry rate-limits itself.
+  pruneTelemetry(db);
   const now = nowIso();
   const tasks = db
     .prepare(
@@ -4833,6 +4894,7 @@ async function sampleServerMetrics(db, serverId) {
     JSON.stringify({ reasons: unavailableReasons, tps: sample.tps }),
     sample.sampledAt,
   );
+  pruneTelemetry(db);
   emitServerEvent(db, {
     serverId: profile.id,
     kind: "metrics",

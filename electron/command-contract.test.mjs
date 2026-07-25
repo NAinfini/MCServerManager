@@ -12,6 +12,9 @@ const internalBackendCommands = new Set([
   "get_server_eula_acceptance",
   "get_server_source",
   "list_provisioning_jobs",
+  // Retention is driven by the metric writer and the scheduled-task tick, so
+  // the renderer has no reason to be able to delete history.
+  "prune_telemetry",
 ]);
 
 const mainProcessCommands = [

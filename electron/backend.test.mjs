@@ -1839,6 +1839,118 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("keeps the existing world when a restore cannot finish", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));
+    tempDirs.push(serverRoot);
+    fs.mkdirSync(path.join(serverRoot, "world"), { recursive: true });
+    fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "live");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const backup = backend.handle("create_world_backup", {
+        input: { serverId: server.id },
+      });
+      // The restore stages a copy before touching the live world, so losing the
+      // source has to fail before anything is deleted.
+      fs.rmSync(path.join(backup.archivePath, "world"), {
+        recursive: true,
+        force: true,
+      });
+
+      expect(() =>
+        backend.handle("restore_world_backup", {
+          input: {
+            backupId: backup.id,
+            targetWorldDir: "world",
+            confirm: true,
+          },
+        }),
+      ).toThrow(/backup world folder does not exist/);
+      expect(
+        fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"),
+      ).toBe("live");
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("leaves no staging directories behind after a restore", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));
+    tempDirs.push(serverRoot);
+    fs.mkdirSync(path.join(serverRoot, "world"), { recursive: true });
+    fs.writeFileSync(path.join(serverRoot, "world", "level.dat"), "live");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const backup = backend.handle("create_world_backup", {
+        input: { serverId: server.id },
+      });
+      backend.handle("restore_world_backup", {
+        input: { backupId: backup.id, targetWorldDir: "world", confirm: true },
+      });
+
+      const leftovers = fs
+        .readdirSync(serverRoot)
+        .filter((entry) => /\.(restoring|replaced)-/.test(entry));
+      expect(leftovers).toEqual([]);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("trims telemetry past its retention window and keeps recent rows", () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-prune-"));
+    tempDirs.push(serverRoot);
+    const databasePath = path.join(appDataDir, "mc-server-manager.sqlite");
+    const isoDaysAgo = (days) =>
+      new Date(Date.now() - days * 86_400_000).toISOString();
+
+    try {
+      const server = createServer(backend, serverRoot);
+      const seed = new DatabaseSync(databasePath);
+      try {
+        const insertSample = seed.prepare(
+          `INSERT INTO server_metric_samples
+             (id, server_id, cpu_percent, memory_mb, disk_free_mb,
+              uptime_seconds, restart_count, player_count, unavailable_reason,
+              sampled_at)
+           VALUES (?, ?, 1, 1, 1, 1, 0, 0, NULL, ?)`,
+        );
+        insertSample.run("stale-sample", server.id, isoDaysAgo(30));
+        insertSample.run("fresh-sample", server.id, isoDaysAgo(1));
+        seed
+          .prepare(
+            "INSERT INTO process_events (id, server_id, level, message, created_at) VALUES (?, ?, 'info', 'old', ?)",
+          )
+          .run("stale-event", server.id, isoDaysAgo(90));
+      } finally {
+        seed.close();
+      }
+
+      expect(
+        backend.handle("prune_telemetry", { input: { force: true } }),
+      ).toMatchObject({
+        metricSamplesDeleted: 1,
+        processEventsDeleted: 1,
+        skipped: false,
+      });
+      // Without force the rate limiter must keep a second call from running.
+      expect(backend.handle("prune_telemetry")).toMatchObject({ skipped: true });
+
+      const remaining = backend.handle("get_performance_history", {
+        serverId: server.id,
+      });
+      expect(remaining.samples.map((sample) => sample.id)).toEqual([
+        "fresh-sample",
+      ]);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("rejects world restore while the server is running", async () => {
     const child = createFakeChild(7124);
     const backend = createTestBackend({ spawn: vi.fn(() => child) });
