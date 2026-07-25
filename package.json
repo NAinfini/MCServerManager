@@ -35,9 +35,18 @@
     "test:electron-ui-smoke": "electron electron/ui-smoke.cjs",
     "preview": "vite preview"
   },
+  "comments": {
+    "dependencies": "Only what the main process require()s at runtime. electron-builder packs every production dependency into the asar verbatim, so a renderer package listed here ships twice: once as its original source tree and again inside the Vite bundle. Renderer packages therefore belong in devDependencies, and electron/packaged-dependencies.test.mjs enforces that."
+  },
   "dependencies": {
+    "electron-updater": "^6.8.9",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@hookform/resolvers": "^5.4.0",
     "@monaco-editor/react": "^4.7.0",
+    "@playwright/test": "^1.61.1",
     "@radix-ui/react-checkbox": "1.3.3",
     "@radix-ui/react-dialog": "1.1.17",
     "@radix-ui/react-progress": "^1.1.11",
@@ -49,38 +58,32 @@
     "@radix-ui/react-toolbar": "^1.1.14",
     "@radix-ui/react-tooltip": "1.2.10",
     "@tanstack/react-query": "^5.101.2",
-    "@xterm/xterm": "^6.0.0",
-    "clsx": "^2.1.1",
-    "electron-updater": "^6.8.9",
-    "lucide-react": "^1.22.0",
-    "monaco-editor": "0.55.1",
-    "motion": "12.42.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-hook-form": "^7.80.0",
-    "yauzl": "^3.4.0",
-    "zod": "^4.4.3",
-    "zustand": "5.0.14"
-  },
-  "devDependencies": {
-    "@axe-core/playwright": "^4.12.1",
-    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "@xterm/xterm": "^6.0.0",
+    "clsx": "^2.1.1",
     "concurrently": "^9.2.1",
     "electron": "^39.2.7",
     "electron-builder": "^26.0.12",
     "jsdom": "^29.1.1",
+    "lucide-react": "^1.22.0",
+    "monaco-editor": "0.55.1",
+    "motion": "12.42.1",
     "prettier": "^3.9.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-hook-form": "^7.80.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "^4.1.9",
     "wait-on": "^9.0.3",
-    "yazl": "^3.3.1"
+    "yazl": "^3.3.1",
+    "zod": "^4.4.3",
+    "zustand": "5.0.14"
   },
   "build": {
     "appId": "com.mcservermanager.desktop",
