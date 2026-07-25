@@ -615,9 +615,49 @@ app.on("window-all-closed", () => {
   }
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
   clearPendingCloseTimer();
   stopScheduledTaskRunner();
-  backend?.close();
+  // A quit that did not come through request_app_quit (application menu,
+  // Cmd+Q, session logout) would otherwise hit the hide-versus-quit prompt in
+  // the window close handler and never finish.
+  isQuitting = true;
+  if (!backend) {
+    return;
+  }
+  // Quitting must not terminate a running Minecraft server outright: the world
+  // is only written when the server handles its own `stop`. Hold the quit back
+  // until the backend has stopped every child, then quit for real. The window
+  // goes away immediately so the wait does not look like a hang.
+  const closing = backend;
   backend = null;
+  const running = closing.runningServerCount();
+  if (running > 0) {
+    event.preventDefault();
+    writeMainLog(
+      "info",
+      "main.shutdown",
+      `Waiting for ${running} running server(s) to stop before quitting.`,
+    );
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.hide();
+      }
+    }
+    void closing
+      .shutdown()
+      .catch((error) => {
+        writeMainLog(
+          "error",
+          "main.shutdown",
+          "Backend shutdown failed.",
+          error instanceof Error ? error.stack || error.message : String(error),
+        );
+      })
+      .finally(() => {
+        app.quit();
+      });
+    return;
+  }
+  closing.close();
 });

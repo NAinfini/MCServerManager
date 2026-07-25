@@ -5,6 +5,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const { createServer: createNetServer, isIP } = require("node:net");
 const { DatabaseSync } = require("node:sqlite");
+const { pipeline } = require("node:stream/promises");
 const zlib = require("node:zlib");
 const { createCommandRegistry } = require("./backend/command-registry.cjs");
 const { createBackendContext } = require("./backend/context.cjs");
@@ -318,28 +319,37 @@ function createBackend(app) {
   ensureNotificationPreferences(db);
   const commands = createCommandRegistry(createCommandHandlers(context));
 
-  return {
-    close: () => {
-      closedDatabases.add(db);
-      context.runtimeState.startingServers.clear();
-      context.runtimeState.metricBaselines.clear();
-      for (const [serverId, managed] of managedChildren.entries()) {
-        if (managed.db === db) {
-          clearRestartState(serverId);
-          clearRestartCountdown(serverId);
-          clearInterval(managed.metricTimer);
-          managed.stopRequested = true;
-          managed.child.kill();
-          managedChildren.delete(serverId);
-        }
+  const close = () => {
+    closedDatabases.add(db);
+    context.runtimeState.startingServers.clear();
+    context.runtimeState.metricBaselines.clear();
+    for (const [serverId, managed] of managedChildren.entries()) {
+      if (managed.db === db) {
+        clearRestartState(serverId);
+        clearRestartCountdown(serverId);
+        clearInterval(managed.metricTimer);
+        managed.stopRequested = true;
+        managed.child.kill();
+        managedChildren.delete(serverId);
       }
-      db.prepare(
-        `UPDATE managed_processes
+    }
+    db.prepare(
+      `UPDATE managed_processes
          SET status = 'stopped', exited_at = COALESCE(exited_at, ?)
          WHERE status IN ('running', 'external_running')`,
-      ).run(nowIso());
-      db.close();
+    ).run(nowIso());
+    db.close();
+  };
+
+  return {
+    close,
+    shutdown: async (options) => {
+      await stopManagedChildrenGracefully(db, options);
+      close();
     },
+    runningServerCount: () =>
+      [...managedChildren.values()].filter((managed) => managed.db === db)
+        .length,
     commandNames: commands.names,
     supports: (command) => commands.has(command),
     handle: (command, args) => commands.execute(command, args),
@@ -1354,24 +1364,45 @@ function detectServerVersion(rootDir) {
   };
 }
 
-function directorySizeBytes(target) {
-  if (!fs.existsSync(target)) {
-    return 0;
+// Worlds, backups and server jars are large enough that the synchronous fs
+// calls froze the whole window while they ran — and scheduled backups run them
+// without the user asking. Everything below hands the work to the libuv thread
+// pool so the main process keeps answering IPC.
+async function copyTree(source, destination) {
+  await fs.promises.cp(source, destination, { recursive: true, force: true });
+}
+
+async function removeTree(target) {
+  await fs.promises.rm(target, { recursive: true, force: true });
+}
+
+async function directorySizeBytes(target) {
+  let stat;
+  try {
+    stat = await fs.promises.stat(target);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return 0;
+    }
+    throw error;
   }
-  const stat = fs.statSync(target);
   if (stat.isFile()) {
     return stat.size;
   }
-  return fs
-    .readdirSync(target)
-    .reduce(
-      (total, name) => total + directorySizeBytes(path.join(target, name)),
-      0,
-    );
+  const names = await fs.promises.readdir(target);
+  let total = 0;
+  for (const name of names) {
+    total += await directorySizeBytes(path.join(target, name));
+  }
+  return total;
 }
 
-function sha256File(filePath) {
-  return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+async function sha256File(filePath) {
+  const hash = createHash("sha256");
+  // Streaming rather than readFileSync: a modpack server jar is hundreds of
+  // megabytes, and reading it whole blocks the main process and spikes memory.
+  await pipeline(fs.createReadStream(filePath), hash);
+  return hash.digest("hex");
 }
 
 function processEventKind(message) {
@@ -1800,9 +1831,7 @@ function updateServerProfile(db, input) {
   }
   const existing = getServerProfile(db, input.id);
   const name =
-    input.name === undefined
-      ? existing.name
-      : validatedServerName(input.name);
+    input.name === undefined ? existing.name : validatedServerName(input.name);
   const rootDir =
     input.rootDir === undefined
       ? existing.rootDir
@@ -2597,7 +2626,8 @@ function pathJavaCandidates() {
     const dir = entry.trim().replace(/^"|"$/g, "");
     if (!dir) continue;
     const target = path.join(dir, executableName);
-    if (fs.existsSync(target)) candidates.push({ path: target, source: "PATH" });
+    if (fs.existsSync(target))
+      candidates.push({ path: target, source: "PATH" });
   }
   return candidates;
 }
@@ -3257,6 +3287,71 @@ function stopServer(db, serverId) {
   return null;
 }
 
+// Killing a Minecraft server is not the same as stopping it: the world only
+// reaches disk when the server handles its own `stop`. Quitting used to
+// terminate every child outright, which throws away whatever was still in
+// memory. Ask each server to stop, wait, and only force the issue after that.
+const DEFAULT_SHUTDOWN_GRACE_MS = 30_000;
+
+function shutdownGraceMs() {
+  const override = Number(process.env.MCSM_SHUTDOWN_GRACE_MS);
+  return Number.isFinite(override) && override >= 0
+    ? override
+    : DEFAULT_SHUTDOWN_GRACE_MS;
+}
+
+function stopManagedChildGracefully(serverId, managed, graceMs) {
+  clearRestartState(serverId);
+  clearRestartCountdown(serverId);
+  clearInterval(managed.metricTimer);
+  managed.stopRequested = true;
+  return new Promise((resolve) => {
+    // A live child reports null for both; a finished one reports a number or a
+    // signal name. Anything else means the child never ran, and waiting on an
+    // exit event that will not arrive would burn the whole grace period.
+    if (
+      typeof managed.child.exitCode === "number" ||
+      typeof managed.child.signalCode === "string"
+    ) {
+      resolve();
+      return;
+    }
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      managed.child.removeListener("exit", onExit);
+      // The server ignored `stop` for the whole grace period, so a hung process
+      // is now the bigger risk than the unsaved chunks.
+      managed.child.kill();
+      resolve();
+    }, graceMs);
+    timer.unref?.();
+    managed.child.once("exit", onExit);
+    try {
+      managed.child.stdin?.write("stop\n");
+    } catch {
+      // A closed stdin means the process is already on its way out; the exit
+      // listener above still settles this wait.
+    }
+  });
+}
+
+async function stopManagedChildrenGracefully(db, options = {}) {
+  const graceMs = Number.isFinite(options.graceMs)
+    ? options.graceMs
+    : shutdownGraceMs();
+  const owned = [...managedChildren.entries()].filter(
+    ([, managed]) => managed.db === db,
+  );
+  await Promise.all(
+    owned.map(([serverId, managed]) =>
+      stopManagedChildGracefully(serverId, managed, graceMs),
+    ),
+  );
+}
+
 function sendServerCommand(db, serverId, command) {
   const id = requireServerId(serverId);
   const value = trimRequired(command, "server command is required");
@@ -3534,7 +3629,7 @@ function listServerBackups(db, serverId) {
     .map(mapBackup);
 }
 
-function createBackupRecord(
+async function createBackupRecord(
   db,
   serverId,
   profileId = null,
@@ -3557,10 +3652,7 @@ function createBackupRecord(
         const destinationRelative = path
           .relative(path.resolve(profile.rootDir), source)
           .replace(/\\/g, "/");
-        fs.cpSync(source, path.join(backupRoot, destinationRelative), {
-          recursive: true,
-          force: true,
-        });
+        await copyTree(source, path.join(backupRoot, destinationRelative));
       }
     }
   } finally {
@@ -3568,34 +3660,34 @@ function createBackupRecord(
       sendServerCommand(db, profile.id, "save-on");
     }
   }
-  const sizeBytes = directorySizeBytes(backupRoot);
+  const sizeBytes = await directorySizeBytes(backupRoot);
   db.prepare(
     `INSERT INTO backups
       (id, server_id, profile_id, kind, archive_path, world_name, size_bytes, status, created_at)
      VALUES (?, ?, ?, 'world', ?, 'world', ?, 'completed', ?)`,
   ).run(id, profile.id, profileId, backupRoot, sizeBytes, createdAt);
   if (profileId) {
-    pruneBackupProfileRecords(db, profileId);
+    await pruneBackupProfileRecords(db, profileId);
   }
   return mapBackup(db.prepare("SELECT * FROM backups WHERE id = ?").get(id));
 }
 
-function createWorldBackup(db, input) {
+async function createWorldBackup(db, input) {
   return createBackupRecord(db, input?.serverId);
 }
 
-function deleteServerBackup(db, backupId) {
+async function deleteServerBackup(db, backupId) {
   const id = trimRequired(backupId, "backup id is required");
   const backup = db.prepare("SELECT * FROM backups WHERE id = ?").get(id);
   if (!backup) {
     throw codedError("BACKUP_NOT_FOUND", "backup not found");
   }
-  fs.rmSync(backup.archive_path, { recursive: true, force: true });
+  await removeTree(backup.archive_path);
   db.prepare("DELETE FROM backups WHERE id = ?").run(id);
   return null;
 }
 
-function exportServerBackup(db, input) {
+async function exportServerBackup(db, input) {
   const id = trimRequired(input?.backupId, "backup id is required");
   const destinationRoot = path.resolve(
     trimRequired(input?.targetDir, "target directory is required"),
@@ -3618,14 +3710,11 @@ function exportServerBackup(db, input) {
       `backup-${backup.id}`,
     ),
   );
-  fs.cpSync(backup.archive_path, exportedPath, {
-    recursive: true,
-    force: true,
-  });
+  await copyTree(backup.archive_path, exportedPath);
   return { exportedPath };
 }
 
-function pruneBackupProfileRecords(db, profileId) {
+async function pruneBackupProfileRecords(db, profileId) {
   const profile = db
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(profileId);
@@ -3641,7 +3730,7 @@ function pruneBackupProfileRecords(db, profileId) {
     )
     .all(profileId, profile.retention_count);
   for (const backup of oldBackups) {
-    deleteServerBackup(db, backup.id);
+    await deleteServerBackup(db, backup.id);
   }
 }
 
@@ -3749,7 +3838,7 @@ function deleteBackupProfile(db, profileId) {
   return null;
 }
 
-function createProfileBackup(db, input) {
+async function createProfileBackup(db, input) {
   const profile = db
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(input?.profileId);
@@ -3764,7 +3853,7 @@ function createProfileBackup(db, input) {
   );
 }
 
-function restoreWorldBackup(db, input) {
+async function restoreWorldBackup(db, input) {
   if (!input?.confirm) {
     throw codedError(
       "RESTORE_NEEDS_CONFIRMATION",
@@ -3829,12 +3918,14 @@ function restoreWorldBackup(db, input) {
   const stamp = Date.now();
   const staged = `${target}.restoring-${stamp}`;
   const replaced = `${target}.replaced-${stamp}`;
-  fs.rmSync(staged, { recursive: true, force: true });
-  fs.cpSync(sourceWorld, staged, { recursive: true, force: true });
+  await removeTree(staged);
+  await copyTree(sourceWorld, staged);
 
   let movedExistingWorld = false;
   try {
     if (fs.existsSync(target)) {
+      // The swap itself stays synchronous: two renames must not interleave with
+      // anything else, or a failure could leave the server with no world folder.
       fs.renameSync(target, replaced);
       movedExistingWorld = true;
     }
@@ -3844,10 +3935,10 @@ function restoreWorldBackup(db, input) {
     if (movedExistingWorld && !fs.existsSync(target)) {
       fs.renameSync(replaced, target);
     }
-    fs.rmSync(staged, { recursive: true, force: true });
+    await removeTree(staged);
     throw error;
   }
-  fs.rmSync(replaced, { recursive: true, force: true });
+  await removeTree(replaced);
   return null;
 }
 
@@ -4283,6 +4374,7 @@ async function installRemoteContent(db, input) {
   );
   await downloadRemoteFile(downloadUrl, targetPath, input?.headers || {});
   const id = randomUUID();
+  const checksum = await sha256File(targetPath);
   db.prepare(
     `INSERT INTO installed_content
       (id, server_id, content_id, name, version, loader, environment, source_path,
@@ -4298,7 +4390,7 @@ async function installRemoteContent(db, input) {
     input?.environment ?? null,
     downloadUrl,
     targetPath,
-    sha256File(targetPath),
+    checksum,
     JSON.stringify(input?.warnings || []),
     nowIso(),
   );
@@ -4307,7 +4399,7 @@ async function installRemoteContent(db, input) {
   );
 }
 
-function importLocalContent(db, input) {
+async function importLocalContent(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
   const sourcePath = trimRequired(
     input?.sourcePath || input?.filePath,
@@ -4322,8 +4414,9 @@ function importLocalContent(db, input) {
   const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
   fs.mkdirSync(targetDir, { recursive: true });
   const targetPath = path.join(targetDir, path.basename(sourcePath));
-  fs.copyFileSync(sourcePath, targetPath);
+  await fs.promises.copyFile(sourcePath, targetPath);
   const id = randomUUID();
+  const checksum = await sha256File(targetPath);
   db.prepare(
     `INSERT INTO installed_content
       (id, server_id, content_id, name, version, loader, environment, source_path,
@@ -4339,7 +4432,7 @@ function importLocalContent(db, input) {
     input?.environment ?? null,
     sourcePath,
     targetPath,
-    sha256File(targetPath),
+    checksum,
     "[]",
     nowIso(),
   );
@@ -4709,6 +4802,7 @@ async function installResolvedContentUpdate(db, content, update) {
     fs.renameSync(content.installed_path, backupPath);
   }
   const now = nowIso();
+  const checksum = await sha256File(targetPath);
   db.prepare(
     `UPDATE installed_content
         SET content_id = ?,
@@ -4724,7 +4818,7 @@ async function installResolvedContentUpdate(db, content, update) {
     update.latestVersion,
     update.downloadUrl,
     targetPath,
-    sha256File(targetPath),
+    checksum,
     JSON.stringify(update.warnings || []),
     now,
     content.id,
@@ -5867,9 +5961,19 @@ function removeProvisioningScripts(rootDir) {
 function provisioningLoaderRegistry(db) {
   return createLoaderRegistry({
     fetchJson: (url) =>
-      fetchJson(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+      fetchJson(
+        url,
+        {},
+        "Loader metadata lookup failed",
+        "LOADER_METADATA_REQUEST_FAILED",
+      ),
     fetchText: (url) =>
-      fetchText(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+      fetchText(
+        url,
+        {},
+        "Loader metadata lookup failed",
+        "LOADER_METADATA_REQUEST_FAILED",
+      ),
     fileExists: fs.existsSync,
     download: async (url, target, hashes) => {
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -5953,7 +6057,7 @@ async function downloadProvisioningFiles(job) {
 
 async function extractProvisioningSource(job) {
   if (job.plan.useExistingTarget) {
-    fs.cpSync(job.targetDir, job.stagingDir, { recursive: true });
+    await fs.promises.cp(job.targetDir, job.stagingDir, { recursive: true });
     return;
   }
   const packPath = job.plan.resolvedPackPath || job.plan.source?.path;
@@ -6085,9 +6189,19 @@ async function importModpack(db, input) {
 function loaderRegistry() {
   return createLoaderRegistry({
     fetchJson: (url) =>
-      fetchJson(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+      fetchJson(
+        url,
+        {},
+        "Loader metadata lookup failed",
+        "LOADER_METADATA_REQUEST_FAILED",
+      ),
     fetchText: (url) =>
-      fetchText(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+      fetchText(
+        url,
+        {},
+        "Loader metadata lookup failed",
+        "LOADER_METADATA_REQUEST_FAILED",
+      ),
   });
 }
 
@@ -7110,8 +7224,8 @@ async function installBbsmcPublicFile(db, input) {
   });
 }
 
-function importCurseForgeManual(db, input) {
-  const content = importLocalContent(db, {
+async function importCurseForgeManual(db, input) {
+  const content = await importLocalContent(db, {
     serverId: input?.serverId,
     sourcePath: input?.filePath,
     name: input?.name,
@@ -7161,7 +7275,7 @@ function checkServerUpdate(db, input) {
   return result;
 }
 
-function installServerUpdate(db, input) {
+async function installServerUpdate(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
   if (!input?.confirm) {
     throw codedError(
@@ -7179,7 +7293,7 @@ function installServerUpdate(db, input) {
       `downloaded server jar does not exist: ${sourceJar}`,
     );
   }
-  const actualSha256 = sha256File(sourceJar);
+  const actualSha256 = await sha256File(sourceJar);
   const expectedSha256 = String(input?.serverJarSha256 || "").trim();
   if (
     expectedSha256 &&

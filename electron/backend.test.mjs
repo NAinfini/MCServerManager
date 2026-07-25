@@ -85,11 +85,12 @@ describe("Electron backend marketplace image loading", () => {
 
   it("loads trusted BBSMC CDN images through the desktop backend", async () => {
     const backend = createTestBackend();
-    globalThis.fetch = vi.fn(async () =>
-      new Response(Uint8Array.from([1, 2, 3]), {
-        status: 200,
-        headers: { "content-type": "image/webp" },
-      }),
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(Uint8Array.from([1, 2, 3]), {
+          status: 200,
+          headers: { "content-type": "image/webp" },
+        }),
     );
 
     try {
@@ -1585,7 +1586,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("deletes backup archives and prunes backup profile retention", () => {
+  it("deletes backup archives and prunes backup profile retention", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     tempDirs.push(serverRoot);
@@ -1594,12 +1595,12 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const backup = backend.handle("create_world_backup", {
+      const backup = await backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
       expect(fs.existsSync(backup.archivePath)).toBe(true);
 
-      backend.handle("delete_server_backup", { backupId: backup.id });
+      await backend.handle("delete_server_backup", { backupId: backup.id });
 
       expect(fs.existsSync(backup.archivePath)).toBe(false);
       expect(
@@ -1616,10 +1617,10 @@ describe("Electron backend resource lifecycle management", () => {
           retentionCount: 1,
         },
       });
-      const first = backend.handle("create_profile_backup", {
+      const first = await backend.handle("create_profile_backup", {
         input: { profileId: profile.id },
       });
-      const second = backend.handle("create_profile_backup", {
+      const second = await backend.handle("create_profile_backup", {
         input: { profileId: profile.id },
       });
 
@@ -1713,7 +1714,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("marks jar, EULA, and backup setup checks ready when the user completed them", () => {
+  it("marks jar, EULA, and backup setup checks ready when the user completed them", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     tempDirs.push(serverRoot);
@@ -1724,7 +1725,9 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      backend.handle("create_world_backup", { input: { serverId: server.id } });
+      await backend.handle("create_world_backup", {
+        input: { serverId: server.id },
+      });
       const status = backend.handle("get_server_setup_status", {
         serverId: server.id,
       });
@@ -1792,7 +1795,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("exports backup folders and keeps restore targets inside the server root", () => {
+  it("exports backup folders and keeps restore targets inside the server root", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     const exportRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-export-"));
@@ -1802,10 +1805,10 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const backup = backend.handle("create_world_backup", {
+      const backup = await backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
-      const exported = backend.handle("export_server_backup", {
+      const exported = await backend.handle("export_server_backup", {
         input: { backupId: backup.id, targetDir: exportRoot },
       });
 
@@ -1813,7 +1816,7 @@ describe("Electron backend resource lifecycle management", () => {
         fs.existsSync(path.join(exported.exportedPath, "world", "level.dat")),
       ).toBe(true);
       fs.writeFileSync(path.join(serverRoot, "world", "stale.dat"), "stale");
-      backend.handle("restore_world_backup", {
+      await backend.handle("restore_world_backup", {
         input: {
           backupId: backup.id,
           targetWorldDir: "world",
@@ -1827,7 +1830,7 @@ describe("Electron backend resource lifecycle management", () => {
       expect(fs.existsSync(path.join(serverRoot, "world", "stale.dat"))).toBe(
         false,
       );
-      expect(() =>
+      await expect(
         backend.handle("restore_world_backup", {
           input: {
             backupId: backup.id,
@@ -1835,8 +1838,8 @@ describe("Electron backend resource lifecycle management", () => {
             confirm: true,
           },
         }),
-      ).toThrow(/path escapes server root/);
-      expect(() =>
+      ).rejects.toThrow(/path escapes server root/);
+      await expect(
         backend.handle("restore_world_backup", {
           input: {
             backupId: backup.id,
@@ -1844,12 +1847,12 @@ describe("Electron backend resource lifecycle management", () => {
             confirm: true,
           },
         }),
-      ).toThrow(/restore target must be a world folder/);
+      ).rejects.toThrow(/restore target must be a world folder/);
       expect(fs.existsSync(path.join(serverRoot, "world", "level.dat"))).toBe(
         true,
       );
       expect(fs.existsSync(path.join(backup.archivePath, "world"))).toBe(true);
-      expect(() =>
+      await expect(
         backend.handle("restore_world_backup", {
           input: {
             backupId: backup.id,
@@ -1857,7 +1860,7 @@ describe("Electron backend resource lifecycle management", () => {
             confirm: true,
           },
         }),
-      ).toThrow(/restore target must not overlap backup storage/);
+      ).rejects.toThrow(/restore target must not overlap backup storage/);
     } finally {
       backend.close();
     }
@@ -1895,7 +1898,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("keeps the existing world when a restore cannot finish", () => {
+  it("keeps the existing world when a restore cannot finish", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));
     tempDirs.push(serverRoot);
@@ -1904,7 +1907,7 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const backup = backend.handle("create_world_backup", {
+      const backup = await backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
       // The restore stages a copy before touching the live world, so losing the
@@ -1914,7 +1917,7 @@ describe("Electron backend resource lifecycle management", () => {
         force: true,
       });
 
-      expect(() =>
+      await expect(
         backend.handle("restore_world_backup", {
           input: {
             backupId: backup.id,
@@ -1922,7 +1925,7 @@ describe("Electron backend resource lifecycle management", () => {
             confirm: true,
           },
         }),
-      ).toThrow(/backup world folder does not exist/);
+      ).rejects.toThrow(/backup world folder does not exist/);
       expect(
         fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"),
       ).toBe("live");
@@ -1931,7 +1934,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("leaves no staging directories behind after a restore", () => {
+  it("leaves no staging directories behind after a restore", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));
     tempDirs.push(serverRoot);
@@ -1940,10 +1943,10 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const backup = backend.handle("create_world_backup", {
+      const backup = await backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
-      backend.handle("restore_world_backup", {
+      await backend.handle("restore_world_backup", {
         input: { backupId: backup.id, targetWorldDir: "world", confirm: true },
       });
 
@@ -1994,7 +1997,9 @@ describe("Electron backend resource lifecycle management", () => {
         skipped: false,
       });
       // Without force the rate limiter must keep a second call from running.
-      expect(backend.handle("prune_telemetry")).toMatchObject({ skipped: true });
+      expect(backend.handle("prune_telemetry")).toMatchObject({
+        skipped: true,
+      });
 
       const remaining = backend.handle("get_performance_history", {
         serverId: server.id,
@@ -2023,7 +2028,7 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const backup = backend.handle("create_world_backup", {
+      const backup = await backend.handle("create_world_backup", {
         input: { serverId: server.id },
       });
       fs.writeFileSync(
@@ -2032,7 +2037,7 @@ describe("Electron backend resource lifecycle management", () => {
       );
       await backend.handle("start_server", { serverId: server.id });
 
-      expect(() =>
+      await expect(
         backend.handle("restore_world_backup", {
           input: {
             backupId: backup.id,
@@ -2040,7 +2045,9 @@ describe("Electron backend resource lifecycle management", () => {
             confirm: true,
           },
         }),
-      ).toThrow(expect.objectContaining({ code: "SERVER_MUST_BE_STOPPED" }));
+      ).rejects.toThrow(
+        expect.objectContaining({ code: "SERVER_MUST_BE_STOPPED" }),
+      );
       expect(
         fs.readFileSync(path.join(serverRoot, "world", "level.dat"), "utf8"),
       ).toBe("live-state");
@@ -2380,6 +2387,59 @@ describe("Electron backend resource lifecycle management", () => {
       } finally {
         reopened.close();
       }
+    });
+
+    it("asks a running server to stop instead of killing it when the app quits", async () => {
+      // A killed server never writes its world: every chunk still in memory is
+      // lost. Quitting the app must go through the same `stop` the stop button
+      // uses, and must wait for the process to finish writing.
+      const child = createFakeChild(18991);
+      child.exitCode = null;
+      child.signalCode = null;
+      child.stdin.write = (value) => {
+        child.stdin.writes.push(value);
+        if (value === "stop\n") {
+          setImmediate(() => {
+            child.exitCode = 0;
+            child.emit("exit", 0);
+          });
+        }
+      };
+      const backend = createTestBackend({ spawn: vi.fn(() => child) });
+      const serverRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-graceful-quit-"),
+      );
+      tempDirs.push(serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+      const server = createServer(backend, serverRoot);
+      await backend.handle("start_server", { serverId: server.id });
+      expect(backend.runningServerCount()).toBe(1);
+
+      await backend.shutdown();
+
+      expect(child.stdin.writes).toContain("stop\n");
+      expect(child.kill).not.toHaveBeenCalled();
+    });
+
+    it("kills a server that ignores the stop command for the whole grace period", async () => {
+      const child = createFakeChild(18992);
+      child.exitCode = null;
+      child.signalCode = null;
+      const backend = createTestBackend({ spawn: vi.fn(() => child) });
+      const serverRoot = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-stubborn-quit-"),
+      );
+      tempDirs.push(serverRoot);
+      fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+      const server = createServer(backend, serverRoot);
+      await backend.handle("start_server", { serverId: server.id });
+
+      await backend.shutdown({ graceMs: 20 });
+
+      expect(child.stdin.writes).toContain("stop\n");
+      expect(child.kill).toHaveBeenCalled();
     });
 
     it("rejects start when the operating-system port probe reports a conflict", async () => {
@@ -2747,7 +2807,9 @@ describe("Electron backend resource lifecycle management", () => {
           expect.objectContaining({
             serverId: server.id,
             kind: "console",
-            payload: expect.objectContaining({ message: expect.stringContaining("Ready") }),
+            payload: expect.objectContaining({
+              message: expect.stringContaining("Ready"),
+            }),
           }),
           expect.objectContaining({
             serverId: server.id,
@@ -2770,7 +2832,9 @@ describe("Electron backend resource lifecycle management", () => {
   it("aggregates crashed, update, and overdue backup attention items", async () => {
     const child = createFakeChild(18150);
     const backend = createTestBackend({ spawn: vi.fn(() => child) });
-    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-attention-"));
+    const serverRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-attention-"),
+    );
     tempDirs.push(serverRoot);
     fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
 
@@ -2948,7 +3012,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("installs a local server jar and records rollback history", () => {
+  it("installs a local server jar and records rollback history", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     const downloadDir = fs.mkdtempSync(
@@ -2963,7 +3027,7 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot);
-      const history = backend.handle("install_server_update", {
+      const history = await backend.handle("install_server_update", {
         input: {
           serverId: server.id,
           targetVersion: "1.21.5",
@@ -2991,7 +3055,7 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
-  it("reenables disabled installed content", () => {
+  it("reenables disabled installed content", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     const sourceDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-content-"));
@@ -3001,7 +3065,7 @@ describe("Electron backend resource lifecycle management", () => {
 
     try {
       const server = createServer(backend, serverRoot, "fabric");
-      const content = backend.handle("import_local_content", {
+      const content = await backend.handle("import_local_content", {
         input: { serverId: server.id, sourcePath },
       });
 
@@ -3702,7 +3766,10 @@ describe("Electron backend marketplace installation", () => {
       expect(JSON.parse(requestedUrl.searchParams.get("facets"))).toEqual([
         ["project_type:modpack"],
       ]);
-      expect(projects.map((project) => project.id)).toEqual(["pack-1", "pack-2"]);
+      expect(projects.map((project) => project.id)).toEqual([
+        "pack-1",
+        "pack-2",
+      ]);
     } finally {
       backend.close();
     }
@@ -4164,7 +4231,8 @@ describe("Electron backend player whitelist state", () => {
       const server = createServer(backend, rootDir);
 
       expect(
-        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+        backend.handle("list_players", { serverId: server.id })
+          .whitelistEnabled,
       ).toBe(false);
 
       fs.writeFileSync(
@@ -4173,7 +4241,8 @@ describe("Electron backend player whitelist state", () => {
         "utf8",
       );
       expect(
-        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+        backend.handle("list_players", { serverId: server.id })
+          .whitelistEnabled,
       ).toBe(true);
 
       fs.writeFileSync(
@@ -4182,7 +4251,8 @@ describe("Electron backend player whitelist state", () => {
         "utf8",
       );
       expect(
-        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+        backend.handle("list_players", { serverId: server.id })
+          .whitelistEnabled,
       ).toBe(false);
     } finally {
       backend.close();
