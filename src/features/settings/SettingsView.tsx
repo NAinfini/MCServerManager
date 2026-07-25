@@ -944,6 +944,12 @@ function AboutSection() {
       </div>
       <div className="settings-row">
         <div className="settings-row-label">
+          <strong>{t("settings.about.disclaimerTitle")}</strong>
+          <span>{t("settings.about.disclaimer")}</span>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div className="settings-row-label">
           <strong>{t("settings.about.system")}</strong>
         </div>
       </div>

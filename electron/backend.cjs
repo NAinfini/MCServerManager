@@ -1188,9 +1188,35 @@ function managedServerRoot(db, name, isExistingFolderImport) {
   return candidate;
 }
 
+// A prefix check on the resolved string is not enough on its own: a symbolic
+// link inside the server folder (one an imported modpack could carry) resolves
+// to somewhere else entirely while still looking like a child. Resolve links
+// before comparing. The target often does not exist yet, so resolve the deepest
+// existing ancestor and re-attach the rest.
+function resolveThroughLinks(target) {
+  const pending = [];
+  let current = target;
+  for (;;) {
+    try {
+      const real = fs.realpathSync(current);
+      return pending.length === 0 ? real : path.join(real, ...pending);
+    } catch (error) {
+      if (error?.code !== "ENOENT") {
+        throw error;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        return target;
+      }
+      pending.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
 function safeServerPath(db, serverId, relativePath = "") {
-  const root = path.resolve(serverRoot(db, serverId));
-  const target = path.resolve(root, relativePath || ".");
+  const root = resolveThroughLinks(path.resolve(serverRoot(db, serverId)));
+  const target = resolveThroughLinks(path.resolve(root, relativePath || "."));
   if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
     throw codedError("PATH_ESCAPES_SERVER_ROOT", "path escapes server root");
   }

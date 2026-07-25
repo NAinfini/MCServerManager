@@ -1839,6 +1839,38 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("refuses to follow a symbolic link out of the server folder", () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-link-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-outside-"));
+    tempDirs.push(serverRoot, outside);
+    fs.writeFileSync(path.join(outside, "secret.txt"), "not yours");
+
+    let linked = false;
+    try {
+      // An imported modpack could carry a link like this; on Windows creating
+      // one needs privileges the test may not have, so skip rather than fail.
+      fs.symlinkSync(outside, path.join(serverRoot, "escape"), "junction");
+      linked = true;
+    } catch {
+      linked = false;
+    }
+
+    try {
+      if (!linked) return;
+      const server = createServer(backend, serverRoot);
+
+      expect(() =>
+        backend.handle("read_server_text_file", {
+          serverId: server.id,
+          relativePath: "escape/secret.txt",
+        }),
+      ).toThrow(/path escapes server root/);
+    } finally {
+      backend.close();
+    }
+  });
+
   it("keeps the existing world when a restore cannot finish", () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));

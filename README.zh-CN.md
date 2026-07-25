@@ -93,3 +93,7 @@ MC Server Manager 不包含遥测。应用会把本地数据库和服务器元�
 - 无静默自动内容安装。
 - 无停机期间错过任务的自动补跑。
 - 诊断只报告问题，不会自动修改设置。
+
+## 商标声明
+
+MC Server Manager 与 Mojang Studios 及 Microsoft 无隶属、认可或关联关系。Minecraft 是 Mojang Studios 的商标。本项目是独立的非官方工具，仅用于管理你自己拥有的 Minecraft 服务器。

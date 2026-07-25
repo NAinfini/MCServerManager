@@ -1326,6 +1326,8 @@
   "settings.about.license": "License: MIT",
   "settings.about.noTelemetry": "This app does not collect telemetry or usage data.",
   "settings.about.github": "GitHub Repository",
+  "settings.about.disclaimerTitle": "Not an official Minecraft product",
+  "settings.about.disclaimer": "MC Server Manager is not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios.",
   "settings.about.system": "System Information",
   "settings.about.electron": "Electron",
   "settings.about.platform": "Platform",

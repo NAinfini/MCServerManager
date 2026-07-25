@@ -91,7 +91,7 @@
     "files": [
       "dist/**",
       "electron/**",
-      "!electron/*.test.mjs",
+      "!electron/**/*.test.mjs",
       "!electron/ui-smoke.cjs",
       "public/app-icon.ico",
       "package.json"

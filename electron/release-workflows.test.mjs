@@ -177,7 +177,9 @@ describe("Electron CI and release workflows", () => {
   it("does not package Electron test files into release artifacts", () => {
     const manifest = JSON.parse(readWorkspaceFile("package.json"));
 
-    expect(manifest.build.files).toContain("!electron/*.test.mjs");
+    // Recursive: electron/backend/ and electron/provisioning/ hold test files
+    // that a single-level glob shipped to users.
+    expect(manifest.build.files).toContain("!electron/**/*.test.mjs");
     expect(manifest.build.files).toContain("!electron/ui-smoke.cjs");
   });
 });

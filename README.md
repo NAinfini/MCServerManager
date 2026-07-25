@@ -93,3 +93,7 @@ Backups are world-only by default. Backup profiles can broaden scope only when t
 - No silent automatic content installation.
 - No automatic missed-task replay after downtime.
 - Diagnostics report findings and do not mutate settings automatically.
+
+## Trademark Notice
+
+MC Server Manager is not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft. Minecraft is a trademark of Mojang Studios. This project is an independent, unofficial tool for managing Minecraft servers you already own.

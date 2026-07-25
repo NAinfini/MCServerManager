@@ -1209,6 +1209,8 @@
   "settings.about.license": "许可证: MIT",
   "settings.about.noTelemetry": "本应用不收集遥测或使用数据。",
   "settings.about.github": "GitHub 仓库",
+  "settings.about.disclaimerTitle": "非官方 Minecraft 产品",
+  "settings.about.disclaimer": "MC Server Manager 与 Mojang Studios 及 Microsoft 无隶属、认可或关联关系。Minecraft 是 Mojang Studios 的商标。",
   "settings.about.system": "系统信息",
   "settings.about.electron": "Electron",
   "settings.about.platform": "平台",
