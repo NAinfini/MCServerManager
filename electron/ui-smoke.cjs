@@ -7,7 +7,9 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const rootDir = path.resolve(__dirname, "..");
 const rendererPath = path.join(rootDir, "dist", "index.html");
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-ui-smoke-"));
-const smokeTimeoutMs = 55_000;
+// Mounting the bundled Monaco chunk for the first time costs several seconds on
+// a cold renderer, so the run needs more headroom than the UI checks alone.
+const smokeTimeoutMs = 120_000;
 const wizardHeaderViewports = [
   { width: 960, height: 720 },
   { width: 1280, height: 900 },
@@ -39,11 +41,19 @@ function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitFor(webContents, expression, label, timeoutMs = 10_000) {
+// Each poll runs on the renderer's main thread, so a tight interval starves
+// heavy work such as parsing the Monaco chunk. Slow waits pass a larger one.
+async function waitFor(
+  webContents,
+  expression,
+  label,
+  timeoutMs = 10_000,
+  pollIntervalMs = 50,
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (await webContents.executeJavaScript(`Boolean(${expression})`)) return;
-    await delay(50);
+    await delay(pollIntervalMs);
   }
   const bodyText = await webContents.executeJavaScript(
     "document.body?.innerText?.slice(0, 800) || '<empty body>'",
@@ -63,6 +73,24 @@ async function buttonCenter(webContents, label) {
   })()`);
   if (point.count !== 1) {
     throw new Error(`Expected one ${label} button, found ${point.count}.`);
+  }
+  return point;
+}
+
+// "Files" is also a substring of "Files & backups", so some labels can only be
+// resolved by an exact match.
+async function exactButtonCenter(webContents, label) {
+  const point = await webContents.executeJavaScript(`(() => {
+    const matches = [...document.querySelectorAll("button")].filter(
+      (button) => button.textContent.trim() === ${JSON.stringify(label)},
+    );
+    if (matches.length !== 1) return { count: matches.length };
+    matches[0].scrollIntoView({ block: "center", inline: "center" });
+    const rect = matches[0].getBoundingClientRect();
+    return { count: 1, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  if (point.count !== 1) {
+    throw new Error(`Expected one exact "${label}" button, found ${point.count}.`);
   }
   return point;
 }
@@ -221,6 +249,10 @@ async function verifyWizardHeaderGeometry(window, viewport) {
   }
 }
 
+// Collected at module scope so a failure anywhere in the run can report what
+// the renderer actually complained about, not just which wait timed out.
+const rendererErrors = [];
+
 function registerSmokeIpc() {
   ipcMain.handle("app-command", (_event, command) => {
     switch (command) {
@@ -296,6 +328,30 @@ function registerSmokeIpc() {
             createdAt: "2026-07-23T14:58:00.000Z",
           },
         ];
+      // JSON on purpose: it is the one editable file type that starts a Monaco
+      // language worker, which is what the packaged file:// renderer has to
+      // prove it can do.
+      case "list_server_files":
+        return [
+          {
+            name: "smoke-config.json",
+            relativePath: "smoke-config.json",
+            kind: "file",
+            sizeBytes: 48,
+            modifiedAt: "2026-07-23T15:00:00.000Z",
+            editable: true,
+          },
+        ];
+      case "read_server_text_file":
+        return {
+          relativePath: "smoke-config.json",
+          // The trailing comma is deliberate: only the JSON language worker can
+          // flag it, so an error squiggle proves the worker really started.
+          content: '{\n  "motd": "never from a CDN",\n}\n',
+          sizeBytes: 48,
+          readOnly: false,
+          warning: null,
+        };
       case "list_java_runtimes":
         return {
           runtimes: [
@@ -395,7 +451,6 @@ async function run() {
       sandbox: true,
     },
   });
-  const rendererErrors = [];
   window.webContents.on("console-message", (details) => {
     if (details.level === "error") rendererErrors.push(details.message);
   });
@@ -443,8 +498,8 @@ async function run() {
     window.webContents,
     await elementCenter(
       window.webContents,
-      ".server-table .table-link-button",
-      "server table link",
+      ".server-card-grid .server-card-open",
+      "server card link",
     ),
   );
   await waitFor(
@@ -595,6 +650,62 @@ async function run() {
     );
     process.stdout.write(`Electron UI smoke: ${label} server route verified.\n`);
   }
+
+  // Monaco is bundled rather than fetched from a CDN, and its workers have to
+  // start from the file:// origin the packaged app runs on. Neither survives a
+  // config mistake, and neither shows up anywhere except a real editor mount.
+  process.stdout.write("Electron UI smoke: checking the bundled file editor.\n");
+  await setRendererViewport(window, { width: 1280, height: 900 });
+  await clickAt(
+    window.webContents,
+    await buttonCenter(window.webContents, "Files & backups"),
+  );
+  await waitFor(
+    window.webContents,
+    '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Files")',
+    "the Files workspace view",
+  );
+  await clickAt(
+    window.webContents,
+    await exactButtonCenter(window.webContents, "Files"),
+  );
+  await waitFor(
+    window.webContents,
+    '[...document.querySelectorAll("button")].some((button) => button.textContent.trim().includes("smoke-config.json"))',
+    "the server file list",
+  );
+  await clickAt(
+    window.webContents,
+    await buttonCenter(window.webContents, "smoke-config.json"),
+  );
+  // Monaco's first mount parses a multi-megabyte chunk. Polling through it only
+  // starves the renderer, so let it settle before asserting.
+  await delay(8_000);
+  await waitFor(
+    window.webContents,
+    `(() => {
+      const editor = document.querySelector(".files-editor .monaco-editor");
+      if (!editor) return false;
+      const rect = editor.getBoundingClientRect();
+      // Monaco renders spaces as non-breaking, so compare without whitespace.
+      return rect.width > 0 && rect.height > 0 &&
+        editor.textContent.replace(/\\s/g, "").includes("neverfromaCDN");
+    })()`,
+    "the bundled Monaco editor",
+    45_000,
+    500,
+  );
+  // Monaco runs JSON validation in a web worker. The packaged renderer loads
+  // from file://, where worker startup is the part most likely to break, so
+  // assert the squiggle rather than trusting that the editor merely rendered.
+  await waitFor(
+    window.webContents,
+    'Boolean(document.querySelector(".files-editor .monaco-editor .squiggly-error"))',
+    "a JSON diagnostic from the Monaco language worker",
+    20_000,
+    500,
+  );
+  process.stdout.write("Electron UI smoke: bundled file editor verified.\n");
 
   await setRendererViewport(window, { width: 960, height: 720 });
   await window.webContents.executeJavaScript(
@@ -760,5 +871,10 @@ app
   .catch((error) => {
     clearTimeout(hardTimeout);
     process.stderr.write(`Electron UI smoke failed: ${error.stack || error.message}\n`);
+    if (rendererErrors.length > 0) {
+      process.stderr.write(
+        `Renderer errors during the run:\n  ${rendererErrors.join("\n  ")}\n`,
+      );
+    }
     cleanupAndExit(1);
   });

@@ -5,6 +5,9 @@ on: [push, pull_request]
 jobs:
   test:
     strategy:
+      # Without this a failure on one OS cancels the other, which hid a broken
+      # Windows smoke test behind an unrelated Linux failure for weeks.
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
@@ -18,6 +21,15 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Electron ships chrome-sandbox without the SUID bit and GitHub runners
+      # disable unprivileged user namespaces, so Electron aborts instead of
+      # starting. Restore the helper rather than passing --no-sandbox: the smoke
+      # test exists to prove the sandboxed renderer actually works.
+      - name: Enable the Electron SUID sandbox helper
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - run: pnpm build
       - name: Install Playwright Chromium
         if: runner.os == 'Linux'

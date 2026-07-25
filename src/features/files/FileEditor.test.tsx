@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileEditor } from "./FileEditor";
 import type { ServerTextFile } from "./fileApi";
 
+// Importing Monaco for real pulls in browser-only setup jsdom cannot run.
+vi.mock("./monacoSetup", () => ({}));
+
 vi.mock("@monaco-editor/react", () => ({
   default: ({
     onChange,

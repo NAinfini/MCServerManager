@@ -42,6 +42,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Electron ships chrome-sandbox without the SUID bit and GitHub runners
+      # disable unprivileged user namespaces, so Electron aborts instead of
+      # starting. Restore the helper rather than passing --no-sandbox: the smoke
+      # test exists to prove the sandboxed renderer actually works.
+      - name: Enable the Electron SUID sandbox helper
+        if: matrix.platform == 'linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+
       - name: Verify release version
         shell: pwsh
         run: |

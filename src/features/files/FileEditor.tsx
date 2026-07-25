@@ -10,6 +10,9 @@ import {
   hasStructuredFileEditor,
   StructuredFileEditor,
 } from "./StructuredFileEditor";
+// Points Monaco at the bundled copy instead of a CDN. Imported for its side
+// effect, and must run before the editor mounts.
+import "./monacoSetup";
 
 interface FileEditorProps {
   file: ServerTextFile | null;

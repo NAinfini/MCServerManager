@@ -10,6 +10,28 @@ describe("Electron window security", () => {
     expect(main).toMatch(/sandbox:\s*true/);
   });
 
+  it("refuses to run two instances against one database", () => {
+    const main = fs.readFileSync("electron/main.cjs", "utf8");
+
+    expect(main).toContain("app.requestSingleInstanceLock()");
+    expect(main).toContain('app.on("second-instance"');
+  });
+
+  it("reports main-process and renderer failures instead of dying quietly", () => {
+    const main = fs.readFileSync("electron/main.cjs", "utf8");
+
+    expect(main).toContain('process.on("uncaughtException"');
+    expect(main).toContain('process.on("unhandledRejection"');
+    expect(main).toContain('"render-process-gone"');
+  });
+
+  it("never traps the user behind a window a dead renderer cannot close", () => {
+    const main = fs.readFileSync("electron/main.cjs", "utf8");
+
+    expect(main).toContain("CLOSE_RESPONSE_TIMEOUT_MS");
+    expect(main).toMatch(/rendererGone \|\| mainWindow\?\.webContents\.isCrashed\(\)/);
+  });
+
   it("rejects unsupported preload commands before IPC dispatch", () => {
     const preload = fs.readFileSync("electron/preload.cjs", "utf8");
 

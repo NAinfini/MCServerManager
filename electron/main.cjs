@@ -10,6 +10,16 @@ let isQuitting = false;
 let backend = null;
 let applicationUpdater = null;
 let scheduledTaskTimer = null;
+let rendererGone = false;
+let pendingCloseTimer = null;
+let reportedFatalError = false;
+
+// The renderer decides whether the close button hides the window or quits the
+// app. A crashed or wedged renderer must never leave a window the user cannot
+// close, so the request is bounded: if nothing answers in time, the close runs.
+// Raise this value to give a slow renderer longer, or set it to 0 to disable
+// the fallback and always wait for the renderer.
+const CLOSE_RESPONSE_TIMEOUT_MS = 5_000;
 const originalConsole = {
   info: console.info.bind(console),
   warn: console.warn.bind(console),
@@ -48,6 +58,40 @@ function writeMainLog(level, source, message, details) {
     });
   } catch {
     // Logging must not break the app or recurse into console logging.
+  }
+}
+
+function clearPendingCloseTimer() {
+  if (pendingCloseTimer) {
+    clearTimeout(pendingCloseTimer);
+    pendingCloseTimer = null;
+  }
+}
+
+function reportFatalMainError(scope, error) {
+  const details =
+    error instanceof Error ? error.stack || error.message : String(error);
+  originalConsole.error(`[${scope}]`, details);
+  writeMainLog(
+    "error",
+    scope,
+    "Unhandled main-process failure.",
+    details,
+  );
+  // Surfaced once per session so a background failure cannot leave the app
+  // silently half-working. Every later occurrence still reaches the app log.
+  if (reportedFatalError) {
+    return;
+  }
+  reportedFatalError = true;
+  try {
+    dialog.showErrorBox(
+      "MC Server Manager hit an unexpected error",
+      `${details}\n\nThe app may be in an unreliable state. Open Settings > Logs for details and restart if anything misbehaves.`,
+    );
+  } catch {
+    // The dialog module is unavailable before the app is ready; the log above
+    // is the record that matters.
   }
 }
 
@@ -163,16 +207,58 @@ function createWindow() {
     },
   });
 
+  // A fresh window means a fresh renderer, so any earlier crash no longer applies.
+  rendererGone = false;
+  clearPendingCloseTimer();
+
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
+  });
+
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    rendererGone = true;
+    clearPendingCloseTimer();
+    originalConsole.error("renderer process gone", details);
+    writeMainLog(
+      "error",
+      "main.renderer",
+      "Renderer process gone.",
+      `reason=${details?.reason} exitCode=${details?.exitCode}`,
+    );
   });
 
   mainWindow.on("close", (event) => {
     if (isQuitting) {
       return;
     }
+    if (rendererGone || mainWindow?.webContents.isCrashed()) {
+      // There is nobody left to ask about hide-versus-quit, so let the close
+      // through rather than trapping the user with an unclosable window.
+      writeMainLog(
+        "warning",
+        "main.window",
+        "Closing without a renderer answer: the renderer process is gone.",
+      );
+      return;
+    }
     event.preventDefault();
     mainWindow?.webContents.send("close-behavior-requested");
+    clearPendingCloseTimer();
+    if (CLOSE_RESPONSE_TIMEOUT_MS > 0) {
+      pendingCloseTimer = setTimeout(() => {
+        pendingCloseTimer = null;
+        if (isQuitting || !mainWindow || mainWindow.isDestroyed()) {
+          return;
+        }
+        writeMainLog(
+          "error",
+          "main.window",
+          `Renderer did not answer close-behavior-requested within ${CLOSE_RESPONSE_TIMEOUT_MS}ms; closing anyway.`,
+        );
+        isQuitting = true;
+        mainWindow.close();
+      }, CLOSE_RESPONSE_TIMEOUT_MS);
+    }
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -330,6 +416,9 @@ function stopScheduledTaskRunner() {
 }
 
 ipcMain.handle("window-action", async (event, action) => {
+  // The renderer is alive and acting on the close request, so the deadlock
+  // fallback is no longer needed.
+  clearPendingCloseTimer();
   const window = BrowserWindow.fromWebContents(event.sender);
   if (!window) {
     throw new Error("Electron window is unavailable.");
@@ -365,6 +454,7 @@ ipcMain.handle("open-external-url", async (_event, url) => {
 ipcMain.handle("app-command", async (_event, command, args) => {
   try {
     if (command === "request_app_quit") {
+      clearPendingCloseTimer();
       isQuitting = true;
       app.quit();
       return null;
@@ -428,24 +518,62 @@ ipcMain.handle("app-command", async (_event, command, args) => {
   }
 });
 
-app.whenReady().then(() => {
-  backend = createBackend(app);
-  backend.onServerEvent((event) => {
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("server-event", event);
-    }
-  });
-  applyLaunchAtLoginPreference(backend.handle("get_app_preferences"));
-  installMainConsoleLogger();
-  startScheduledTaskRunner();
-  createWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
+process.on("uncaughtException", (error) => {
+  reportFatalMainError("main.uncaughtException", error);
 });
+
+process.on("unhandledRejection", (reason) => {
+  reportFatalMainError("main.unhandledRejection", reason);
+});
+
+app.on("child-process-gone", (_event, details) => {
+  writeMainLog(
+    "error",
+    "main.childProcess",
+    `Electron child process gone: ${details?.type}`,
+    `reason=${details?.reason} exitCode=${details?.exitCode}`,
+  );
+});
+
+// A second launch would open its own connection to the same SQLite file while
+// running a second scheduled-task loop and a second process table, duplicating
+// backups and auto-starts and overwriting each other's server state.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+      return;
+    }
+    if (mainWindow.isMinimized()) {
+      mainWindow.restore();
+    }
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    mainWindow.focus();
+  });
+
+  app.whenReady().then(() => {
+    backend = createBackend(app);
+    backend.onServerEvent((event) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("server-event", event);
+      }
+    });
+    applyLaunchAtLoginPreference(backend.handle("get_app_preferences"));
+    installMainConsoleLogger();
+    startScheduledTaskRunner();
+    createWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -454,6 +582,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  clearPendingCloseTimer();
   stopScheduledTaskRunner();
   backend?.close();
   backend = null;
