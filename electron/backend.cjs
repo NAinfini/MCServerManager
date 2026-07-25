@@ -2777,10 +2777,17 @@ function runtimeManagerFor(db) {
 
 async function planJavaRuntime(db, input) {
   const majorVersion = Number(input?.majorVersion);
-  const scan = listJavaRuntimes(db);
+  // The scan reads the host machine, so a test that pins platform and arch is
+  // still answered by whatever Java the runner happens to have installed. This
+  // seam lets such a test state the machine it is describing; production always
+  // takes the real scan.
+  const configured = contextFor(db).dependencies.runtimeDependencies;
+  const installedRuntimes = configured.scanInstalledRuntimes
+    ? configured.scanInstalledRuntimes()
+    : listJavaRuntimes(db).runtimes;
   return runtimeManagerFor(db).plan({
     majorVersion,
-    installedRuntimes: scan.runtimes,
+    installedRuntimes,
   });
 }
 

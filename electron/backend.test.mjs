@@ -838,7 +838,13 @@ describe("Electron backend provisioning plan contract", () => {
       json: async () => ({}),
     }));
     const backend = createTestBackend({
-      runtimeDependencies: { platform: "win32", arch: "x64" },
+      // A runner with Java 21 already installed would be planned a reuse and
+      // never reach the lookup this test is about.
+      runtimeDependencies: {
+        platform: "win32",
+        arch: "x64",
+        scanInstalledRuntimes: () => [],
+      },
     });
 
     try {
@@ -861,6 +867,7 @@ describe("Electron backend provisioning plan contract", () => {
       runtimeDependencies: {
         platform: "win32",
         arch: "x64",
+        scanInstalledRuntimes: () => [],
         fetchJson: vi.fn(async () => [
           {
             version: { semver: "21.0.8+9" },
