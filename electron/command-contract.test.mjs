@@ -60,4 +60,18 @@ describe("Electron command contract", () => {
       fs.rmSync(appDataDir, { force: true, recursive: true });
     }
   });
+
+  // A command the fake does not answer throws "Unhandled fake desktop command"
+  // the moment a test reaches it, which is why the create-server flow had no
+  // end-to-end coverage past its first step for so long.
+  it("lets the e2e fake answer every command the renderer may send", () => {
+    const fake = fs.readFileSync("e2e/support/fakeDesktopBackend.ts", "utf8");
+    const covered = new Set(
+      [...fake.matchAll(/case "([a-z0-9_]+)":/g)].map((match) => match[1]),
+    );
+
+    expect(rendererCommands().filter((command) => !covered.has(command))).toEqual(
+      [],
+    );
+  });
 });

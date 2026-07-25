@@ -826,6 +826,30 @@ describe("Electron backend provisioning plan contract", () => {
     }
   });
 
+  it("reports a failed Temurin lookup as a Java error, not a marketplace one", async () => {
+    // The default fetchJson wiring is only reached when no fetchJson is
+    // injected, and it used to inherit MARKETPLACE_REQUEST_FAILED — telling a
+    // user installing Java that the marketplace was down.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+    }));
+    const backend = createTestBackend({
+      runtimeDependencies: { platform: "win32", arch: "x64" },
+    });
+
+    try {
+      await expect(
+        backend.handle("plan_java_runtime", { input: { majorVersion: 21 } }),
+      ).rejects.toMatchObject({ code: "JAVA_METADATA_REQUEST_FAILED" });
+    } finally {
+      backend.close();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("plans and installs managed Temurin only after explicit consent", async () => {
     const archive = Buffer.from("managed-java");
     const checksum = createHash("sha256").update(archive).digest("hex");

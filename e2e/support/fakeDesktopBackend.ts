@@ -11,6 +11,9 @@ export interface FakeDesktopState {
   backups: Array<Record<string, any>>;
   scheduledTasks: Array<Record<string, any>>;
   playerLists: Record<string, Array<Record<string, any>>>;
+  /* The provisioning job is the one command group that carries state between
+     calls: create → run → get has to report the same job advancing. */
+  provisioningJob: Record<string, any> | null;
 }
 
 const now = "2026-07-23T15:00:00.000Z";
@@ -111,6 +114,7 @@ export function createFakeDesktopState(): FakeDesktopState {
       bannedPlayers: [],
       bannedIps: [],
     },
+    provisioningJob: null,
   };
 }
 
@@ -764,12 +768,21 @@ export async function handleFakeDesktopCommand(
           },
         ],
       };
+    // `action` is what the wizard branches on; without it the Java step renders
+    // neither the ready banner nor the install form, and Next never unlocks.
     case "plan_java_runtime":
       return {
+        action: "reuse",
         majorVersion: input.majorVersion ?? 21,
-        vendor: "Eclipse Temurin",
-        architecture: "x64",
-        downloadUrl: "https://example.test/temurin.zip",
+        runtime: {
+          path: "C:\\Java\\bin\\java.exe",
+          version: "21",
+          majorVersion: 21,
+          vendor: "Eclipse Temurin",
+          architecture: "x64",
+          source: "managed",
+          managed: true,
+        },
       };
     case "install_java_runtime":
       return {
@@ -873,12 +886,157 @@ export async function handleFakeDesktopCommand(
       };
     case "install_app_update":
       return { installed: false };
+    // ---- provisioning, the path from the wizard's step 2 to a created server.
+    case "plan_server_provisioning":
+      return {
+        source: input.source ?? { kind: "blank" },
+        minecraftVersion: input.minecraftVersion ?? "1.21.1",
+        loaderType: input.loaderType ?? "fabric",
+        loaderVersion: input.loaderVersion ?? "0.16.10",
+        requiredJavaMajor: 21,
+        warnings: [],
+        launchSpec: {
+          javaPath: "C:\\Java\\bin\\java.exe",
+          workingDir: `C:\\Servers\\${input.name ?? "New server"}`,
+          args: ["-jar", "server.jar", "nogui"],
+        },
+      };
+    case "create_provisioning_job":
+      state.provisioningJob = {
+        id: "job-1",
+        serverId: null,
+        stage: "planned",
+        plan: clone(input.plan ?? input),
+        progress: { completedStages: [], resumeStage: null, committed: false },
+        stagingDir: "C:\\AppData\\MCServerManager\\staging\\job-1",
+        targetDir: input.plan?.targetDir ?? "C:\\Servers\\New server",
+        error: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      return clone(state.provisioningJob);
+    case "get_provisioning_job":
+      return state.provisioningJob ? clone(state.provisioningJob) : null;
+    case "run_provisioning_job":
+      if (!state.provisioningJob) return null;
+      state.provisioningJob = {
+        ...state.provisioningJob,
+        serverId: server.id,
+        stage: "ready",
+        progress: {
+          completedStages: ["planned", "downloading", "committing"],
+          resumeStage: null,
+          committed: true,
+        },
+        error: null,
+      };
+      return clone(state.provisioningJob);
+    case "retry_provisioning_job":
+      if (!state.provisioningJob) return null;
+      state.provisioningJob = {
+        ...state.provisioningJob,
+        stage: "planned",
+        error: null,
+      };
+      return clone(state.provisioningJob);
+    case "cancel_provisioning_job":
+      if (!state.provisioningJob) return null;
+      // Mirrors cancelJob in provisioning/jobs.cjs: cancelling is a terminal
+      // failure carrying JOB_CANCELLED, not a silent no-op.
+      state.provisioningJob = {
+        ...state.provisioningJob,
+        stage: "failed",
+        error: {
+          code: "JOB_CANCELLED",
+          stage: state.provisioningJob.stage,
+          message: "Provisioning was cancelled.",
+          detail: null,
+          retryable: false,
+          cleanupRequired: false,
+        },
+      };
+      return clone(state.provisioningJob);
+    case "preview_modpack_import_command":
+      return {
+        manifest: {
+          format: "modrinth",
+          name: "Fabric Essentials",
+          minecraftVersion: "1.21.1",
+          loader: "fabric",
+          warnings: [],
+        },
+        plan: {
+          pack: { format: "modrinth", name: "Fabric Essentials" },
+          minecraftVersion: "1.21.1",
+          loaderType: "fabric",
+          loaderVersion: "0.16.10",
+          warnings: [],
+        },
+        createNewProfile: true,
+        rollbackRequired: false,
+        warnings: [],
+      };
+    case "import_modpack":
+      return {
+        profile: { id: server.id, name: input.name ?? "Fabric Essentials" },
+        rollbackPath: null,
+        warnings: [],
+      };
+    case "import_curseforge_manual":
+      return {
+        content: {
+          id: "content-manual-1",
+          serverId: input.serverId ?? server.id,
+          name: input.name ?? "Manual import",
+          version: input.version ?? "1.0.0",
+          source: "curseforge",
+          enabled: true,
+        },
+        dependencyResolution: "none",
+      };
+    case "fetch_marketplace_image":
+      return {
+        contentType: "image/png",
+        // A 1x1 transparent PNG: enough for an <img> to load without a network.
+        dataUrl:
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      };
+    case "get_local_network_addresses":
+      return [{ address: "192.168.1.20", interfaceName: "Ethernet" }];
+    case "get_tunnel_provider":
+      return {
+        id: input.providerId ?? "tunnel-1",
+        name: "Custom tunnel",
+        kind: "custom",
+        command: "ngrok tcp 25565",
+        createdAt: now,
+        updatedAt: now,
+      };
+    case "get_app_data_folder":
+      return { path: "C:\\AppData\\MCServerManager" };
+    case "get_app_logs_folder":
+      return { path: "C:\\AppData\\MCServerManager\\logs" };
+    case "run_due_scheduled_tasks":
+      return [];
+    case "create_notification_event":
+      return {
+        id: "notification-1",
+        serverId: input.serverId ?? null,
+        kind: input.kind ?? "info",
+        message: input.message ?? "",
+        createdAt: now,
+        readAt: null,
+      };
+    // The backend returns LoaderVersionOption ({ value, label, stable }); an
+    // id/name shape leaves every <option> valueless and silently unselectable.
     case "list_loader_minecraft_versions":
-      return [{ id: "1.21.1", name: "1.21.1", stable: true }];
+      return [{ value: "1.21.1", label: "1.21.1", stable: true }];
     case "list_loader_versions":
-      return [{ id: "0.16.10", name: "0.16.10", stable: true }];
+      return [{ value: "0.16.10", label: "0.16.10", stable: true }];
     case "get_default_server_root":
       return { path: "C:\\Servers" };
+    case "suggest_server_port":
+      return { port: 25565, taken: [] };
     case "detect_server_version":
       return {
         sourceType: "folder",

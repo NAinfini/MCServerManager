@@ -7,7 +7,12 @@ import {
   invokeDesktopCommand,
   isDesktopRuntimeAvailable,
 } from "../../lib/desktop-runtime";
-import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
+import {
+  getDefaultServerRoot,
+  listLoaderMinecraftVersions,
+  listLoaderVersions,
+  suggestServerPort,
+} from "./api";
 import * as provisioningApi from "./provisioningApi";
 import {
   CreateServerWizard,
@@ -22,6 +27,7 @@ vi.mock("./api", () => ({
   getDefaultServerRoot: vi.fn(),
   listLoaderMinecraftVersions: vi.fn(),
   listLoaderVersions: vi.fn(),
+  suggestServerPort: vi.fn(),
 }));
 vi.mock("./provisioningApi", async () => {
   const actual = await vi.importActual<typeof import("./provisioningApi")>(
@@ -122,6 +128,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
     vi.mocked(listLoaderVersions).mockResolvedValue([
       { value: "0.16.10", label: "0.16.10", stable: true },
     ]);
+    vi.mocked(suggestServerPort).mockResolvedValue({ port: 25565, taken: [] });
     vi.mocked(provisioningApi.planServerProvisioning).mockResolvedValue(sourcePlan);
     vi.mocked(provisioningApi.planJavaRuntime).mockResolvedValue({
       action: "reuse",
@@ -294,7 +301,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
     await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
     await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
     await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.16.10");
-    await userEvent.click(screen.getByRole("button", { name: "Analyze source" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
       source: { kind: "blank" },
@@ -326,17 +333,19 @@ describe("CreateServerWizard unified provisioning flow", () => {
     await userEvent.selectOptions(screen.getByLabelText("Loader version"), "1.1");
 
     // Switching the loader invalidates the Paper build number that is still
-    // selected. Analyze must fall back to disabled — the stale "1.1" cannot
-    // survive (jsdom masks the blank <select>, so the disabled gate is the
-    // assertion that actually catches the bug).
+    // selected. It must not survive: the refetched Fabric list replaces it with
+    // that list's recommended build, so the value itself is the assertion that
+    // catches the bug.
     await userEvent.selectOptions(screen.getByLabelText("Loader"), "fabric");
-    expect(screen.getByRole("button", { name: "Analyze source" })).toBeDisabled();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Loader version")).toHaveValue("0.19.3"),
+    );
 
     // The only path forward is re-picking Minecraft and a real Fabric version.
     await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "26.1.1");
     await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("fabric", "26.1.1"));
     await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.19.3");
-    await userEvent.click(screen.getByRole("button", { name: "Analyze source" }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
       source: { kind: "blank" },

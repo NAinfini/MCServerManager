@@ -37,6 +37,15 @@ export async function getDefaultServerRoot(name: string) {
   return result.path;
 }
 
+/* `taken` is every port an existing profile already claims, which is what lets
+   the wizard warn about a collision the user typed rather than one it chose. */
+export function suggestServerPort() {
+  return invokeDesktopCommandWithErrorHandling<{
+    port: number;
+    taken: number[];
+  }>("suggest_server_port");
+}
+
 export function updateServerProfile(input: UpdateServerProfileInput) {
   return invokeDesktopCommandWithErrorHandling<ServerProfile>(
     "update_server_profile",

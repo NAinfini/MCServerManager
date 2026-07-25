@@ -123,6 +123,7 @@ const allowedAppCommands = new Set([
   "show_save_dialog",
   "start_server",
   "stop_server",
+  "suggest_server_port",
   "unbind_tunnel_from_server",
   "uninstall_installed_content",
   "update_backup_profile",

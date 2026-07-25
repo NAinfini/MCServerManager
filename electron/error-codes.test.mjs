@@ -44,12 +44,34 @@ function requiredFieldCodes(source) {
   return codes;
 }
 
+// fetchJson and fetchText take the code their caller wants to raise, so the
+// literal lives at the call site or in the default parameter rather than inside
+// codedError(). It still reaches `desktop.error.<CODE>`, so it still has to be
+// checked for a translation. Deliberately narrow: `code:` object properties are
+// not matched, because provisioning uses that shape for internal job and
+// warning codes that are never resolved against a locale.
+const CODE_AS_DEFAULT_PARAMETER = new RegExp(
+  String.raw`\bcode\s*=\s*"([A-Z][A-Z0-9_]*)"`,
+  "g",
+);
+const CODE_AS_FETCH_ARGUMENT = new RegExp(
+  // The trailing comma is optional: a multi-line call gets one from the formatter.
+  String.raw`\bfetch(?:Json|Text)\([^;]*?,\s*"([A-Z][A-Z0-9_]*)"\s*,?\s*\)`,
+  "g",
+);
+
 function backendErrorCodes() {
   const codes = new Set();
   for (const filePath of collectCjsFiles("electron")) {
     const source = fs.readFileSync(filePath, "utf8");
-    for (const match of source.matchAll(CODED_ERROR)) {
-      codes.add(match[1]);
+    for (const pattern of [
+      CODED_ERROR,
+      CODE_AS_DEFAULT_PARAMETER,
+      CODE_AS_FETCH_ARGUMENT,
+    ]) {
+      for (const match of source.matchAll(pattern)) {
+        codes.add(match[1]);
+      }
     }
     for (const code of requiredFieldCodes(source)) {
       codes.add(code);

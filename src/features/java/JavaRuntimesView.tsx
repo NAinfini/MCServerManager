@@ -13,6 +13,7 @@ import {
   installJavaRuntime,
   listJavaRuntimes,
   planJavaRuntime,
+  type JavaScanFailure,
   type ManagedJavaPlan,
 } from "./javaApi";
 
@@ -42,10 +43,22 @@ function runtimeSourceLabel(
     managed: "java.source.managed",
     "Managed by MC Server Manager": "java.source.managed",
     "Server profile": "java.source.serverProfile",
+    "Installed on this machine": "java.source.systemInstall",
+    PATH: "java.source.path",
     JAVA_HOME: "java.source.javaHome",
   };
   const key = keyBySource[source];
   return key ? t(key) : source;
+}
+
+/* Scan failures arrive as data, so the English message is the fallback rather
+   than the value: a code means the same locale entry the thrown errors use. */
+function failureMessage(
+  failure: JavaScanFailure,
+  t: (key: string, values?: Record<string, string | number>) => string,
+) {
+  if (!failure.code) return failure.error;
+  return t(`desktop.error.${failure.code}`, { detail: failure.detail ?? "" });
 }
 
 function compatibilityMessage(
@@ -316,7 +329,7 @@ export function JavaRuntimesView() {
                   >
                     <strong>{runtimeSourceLabel(failure.source, t)}</strong>
                     <span>{failure.path}</span>
-                    <small>{failure.error}</small>
+                    <small>{failureMessage(failure, t)}</small>
                   </div>
                 ))}
               </div>

@@ -54,6 +54,39 @@ test.describe("marketplace and server creation", () => {
     await expect(projects).toBeVisible();
   });
 
+  test("creates a blank server through every wizard step", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    await page.getByRole("button", { name: "Create Server" }).click();
+    await page.getByRole("button", { name: "New blank server" }).click();
+    await page.getByRole("button", { name: "Vanilla", exact: true }).click();
+
+    // The version lists preselect their recommended entry, so the only field
+    // left before Continue is the name.
+    await expect(page.getByLabel("Minecraft version")).toHaveValue("1.21.1");
+    await page.getByLabel("Name").fill("Walkthrough");
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+
+    await expect(
+      page.getByRole("heading", { name: /compatibility/i }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next" }).click();
+    await page.getByRole("button", { name: "Next" }).click();
+
+    await page.getByLabel("I accept the Minecraft EULA").check();
+    await page.getByRole("button", { name: "Install and start" }).click();
+
+    await expect(
+      page.getByRole("region", { name: "Server setup complete" }),
+    ).toBeVisible();
+    const commands = fakeDesktop.calls.map((call) => call.command);
+    expect(commands).toContain("plan_server_provisioning");
+    expect(commands).toContain("create_provisioning_job");
+    expect(commands).toContain("run_provisioning_job");
+  });
+
   test("uses responsive layouts without document-level horizontal overflow", async ({
     appPage: page,
   }) => {

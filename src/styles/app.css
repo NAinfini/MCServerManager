@@ -3631,12 +3631,23 @@ select.field-control {
 }
 
 .wizard-step-content > .form-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   margin: 0 var(--space-6) var(--space-4);
   border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border-subtle));
   border-radius: var(--radius-md);
   padding: var(--space-3);
   background: var(--danger-soft);
   overflow-wrap: anywhere;
+}
+
+/* The retry action must stay legible against the danger tint rather than
+   inherit the red the surrounding message uses. */
+.wizard-step-content > .form-error > .button {
+  flex: none;
+  color: var(--text-main);
 }
 
 .wizard-form-step .checkbox-row {
@@ -9740,6 +9751,17 @@ textarea:hover,
   border: 0;
   border-radius: var(--radius-md);
   background: var(--bg-raised);
+}
+
+/* The warning has to sit under the field it belongs to, not beside it, or the
+   grid stretches the number input to make room for the sentence. */
+.provisioning-port-field {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.provisioning-port-field > small {
+  color: var(--warning);
 }
 
 .provisioning-advanced-settings {

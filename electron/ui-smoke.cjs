@@ -388,6 +388,8 @@ function registerSmokeIpc() {
       case "list_notification_events":
       case "get_attention_items":
         return [];
+      case "suggest_server_port":
+        return { port: 25565, taken: [] };
       case "show_open_dialog":
         return { path: null };
       case "write_app_log":

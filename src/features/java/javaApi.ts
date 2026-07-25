@@ -29,6 +29,10 @@ export type JavaRuntimePlan = ManagedJavaPlan;
 export interface JavaScanFailure {
   path: string;
   source: string;
+  /* The backend reports these inside a payload rather than by throwing, so the
+     IPC error tagging never sees them and the view translates the code here. */
+  code?: string | null;
+  detail?: string;
   error: string;
 }
 

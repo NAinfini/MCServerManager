@@ -49,35 +49,44 @@ export function BottomStatusBar({
             {t("runtime.crashed", { count: crashedCount })}
           </span>
         )}
-        {!javaVersion && onOpenJava ? (
-          <button
-            className="status-bar-item status-bar-action"
-            type="button"
-            onClick={onOpenJava}
-          >
-            <Coffee aria-hidden="true" size={12} />
-            <span className="status-bar-copy">{javaCopy}</span>
-          </button>
-        ) : (
-          <span className="status-bar-item">
-            <Coffee aria-hidden="true" size={12} />
-            <span className="status-bar-copy">{javaCopy}</span>
-          </span>
-        )}
-        <span className="status-bar-item">
-          <HardDrive aria-hidden="true" size={12} />
-          <span className="status-bar-copy status-bar-mono">
-            {memory ? `${memory} MB` : t("server.meta.unset")}
-          </span>
-        </span>
+        {/* All three chips describe the selected server. With none selected they
+            used to read "Java: not set / unset / unset" on first launch, which
+            an empty dashboard has no way to act on and reads as a broken install. */}
+        {selectedServer ? (
+          <>
+            {!javaVersion && onOpenJava ? (
+              <button
+                className="status-bar-item status-bar-action"
+                type="button"
+                onClick={onOpenJava}
+              >
+                <Coffee aria-hidden="true" size={12} />
+                <span className="status-bar-copy">{javaCopy}</span>
+              </button>
+            ) : (
+              <span className="status-bar-item">
+                <Coffee aria-hidden="true" size={12} />
+                <span className="status-bar-copy">{javaCopy}</span>
+              </span>
+            )}
+            <span className="status-bar-item">
+              <HardDrive aria-hidden="true" size={12} />
+              <span className="status-bar-copy status-bar-mono">
+                {memory ? `${memory} MB` : t("server.meta.unset")}
+              </span>
+            </span>
+          </>
+        ) : null}
       </div>
       <div className="status-bar-center">
-        <span className="status-bar-item">
-          <Globe aria-hidden="true" size={12} />
-          <span className="status-bar-copy status-bar-mono">
-            {port ? t("server.meta.port", { port }) : t("server.meta.unset")}
+        {selectedServer ? (
+          <span className="status-bar-item">
+            <Globe aria-hidden="true" size={12} />
+            <span className="status-bar-copy status-bar-mono">
+              {port ? t("server.meta.port", { port }) : t("server.meta.unset")}
+            </span>
           </span>
-        </span>
+        ) : null}
       </div>
       <div className="status-bar-right">
         <NotificationCenter onOpenSettings={onOpenNotifications} />

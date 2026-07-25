@@ -109,7 +109,20 @@ function findExecutable(root, executableName, maxEntries = 10_000) {
 
 async function defaultDownload(url, target) {
   const validatedUrl = validateTemurinDownloadUrl(url);
-  const response = await fetch(validatedUrl, { redirect: "follow" });
+  let response;
+  try {
+    response = await fetch(validatedUrl, { redirect: "follow" });
+  } catch (error) {
+    // fetch() rejects with a bare TypeError ("fetch failed") when the request
+    // never reaches the server: offline, DNS failure, blocking proxy, TLS
+    // error. Without a code that reaches the UI as untranslated English on the
+    // one step the wizard cannot be finished without.
+    const cause = error?.cause?.code || error?.code || error?.name;
+    throw provisioningError(
+      "NETWORK_UNREACHABLE",
+      `Managed Java download failed: ${cause ? `${cause} ` : ""}${error?.message || error}`,
+    );
+  }
   if (!response.ok) {
     throw provisioningError(
       "JAVA_DOWNLOAD_FAILED",

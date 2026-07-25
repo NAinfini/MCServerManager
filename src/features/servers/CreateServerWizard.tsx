@@ -27,7 +27,13 @@ import {
 } from "../../lib/desktop-runtime";
 import { useAppSettings } from "../../i18n";
 import { errorMessage } from "../../lib/error-message";
-import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
+import {
+  getDefaultServerRoot,
+  listLoaderMinecraftVersions,
+  listLoaderVersions,
+  suggestServerPort,
+  type LoaderVersionOption,
+} from "./api";
 import {
   CreateServerMarketplaceBrowser,
   type MarketplaceCreateSelection,
@@ -95,6 +101,11 @@ const loaders: LoaderType[] = [
   "quilt",
 ];
 
+/* Mirrors MAX_SERVER_NAME_LENGTH in electron/backend.cjs, which rejects longer
+   names rather than letting them reach mkdir. Capping the input means the user
+   is stopped while typing instead of at the end of a six-step wizard. */
+const MAX_SERVER_NAME_LENGTH = 100;
+
 const initialConfiguration: GuidedServerConfiguration = {
   serverPort: 25565,
   minMemoryMb: 1024,
@@ -151,8 +162,11 @@ export function CreateServerWizard({
   const [serverIntent, setServerIntent] = useState<ServerIntent | null>(null);
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [loaderVersion, setLoaderVersion] = useState("");
-  const [minecraftOptions, setMinecraftOptions] = useState<string[]>([]);
-  const [loaderOptions, setLoaderOptions] = useState<string[]>([]);
+  /* Kept as the full options rather than bare strings so the newest stable
+     release can be preselected and marked: the list runs back to 1.0 and a
+     beginner has no basis for picking one out of a hundred. */
+  const [minecraftOptions, setMinecraftOptions] = useState<LoaderVersionOption[]>([]);
+  const [loaderOptions, setLoaderOptions] = useState<LoaderVersionOption[]>([]);
   const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<string[]>([]);
   const [javaPlan, setJavaPlan] = useState<JavaRuntimePlan | null>(null);
   const [javaRuntime, setJavaRuntime] = useState<ValidatedJavaRuntime | null>(null);
@@ -166,6 +180,22 @@ export function CreateServerWizard({
   const [isRecoveredJob, setIsRecoveredJob] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* Bumping this reruns the version lookups; the flag is what turns the error
+     into something the user can act on rather than a dead end. */
+  const [metadataAttempt, setMetadataAttempt] = useState(0);
+  const [metadataFailed, setMetadataFailed] = useState(false);
+  /* Ports already claimed by another profile. Two servers may legitimately
+     share one as long as they never run together, so this warns rather than
+     blocks; what it prevents is silently proposing a colliding default. */
+  const [takenPorts, setTakenPorts] = useState<number[]>([]);
+  /* Both lists arrive newest first, so the first stable entry is the one worth
+     marking. -1 when a list holds no stable release, which marks nothing. */
+  const recommendedMinecraftIndex = minecraftOptions.findIndex(
+    (option) => option.stable,
+  );
+  const recommendedLoaderIndex = loaderOptions.findIndex(
+    (option) => option.stable,
+  );
   const plannedInitialPath = useRef<string | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
@@ -197,16 +227,31 @@ export function CreateServerWizard({
     [],
   );
 
+  /* The source step spans three full screens, so the counter alone sat at
+     "Step 1 of 6" while the user made three decisions and read as no progress
+     at all. Naming the current screen is what makes the movement visible. */
+  const sourceStepDetail =
+    sourceView === "marketplace"
+      ? t("provisioning.wizard.step.sourceMarketplace")
+      : sourceView === "blank"
+        ? serverIntent === null
+          ? t("provisioning.wizard.step.sourceIntent")
+          : t("provisioning.wizard.step.sourceVersions")
+        : t("provisioning.wizard.step.sourceChoice");
+
   const steps = useMemo(
     () => [
-      { label: t("provisioning.wizard.step.source") },
+      {
+        label: t("provisioning.wizard.step.source"),
+        description: sourceStepDetail,
+      },
       { label: t("provisioning.wizard.step.compatibility") },
       { label: t("provisioning.wizard.step.java") },
       { label: t("provisioning.wizard.step.configuration") },
       { label: t("provisioning.wizard.step.review") },
       { label: t("provisioning.wizard.step.install") },
     ],
-    [t],
+    [sourceStepDetail, t],
   );
 
   useEffect(() => {
@@ -273,15 +318,50 @@ export function CreateServerWizard({
   const needsBlankMetadata = sourceView === "blank" && serverIntent !== null;
 
   useEffect(() => {
-    if (!needsBlankMetadata && !needsRuntimeMetadata) return;
     let active = true;
-    listLoaderMinecraftVersions(loaderType)
-      .then((options) => active && setMinecraftOptions(options.map((item) => item.value)))
+    suggestServerPort()
+      .then((suggestion) => {
+        if (!active) return;
+        setTakenPorts(suggestion.taken);
+        setConfiguration((current) => ({
+          ...current,
+          serverPort: suggestion.port,
+        }));
+      })
       .catch((caught) => active && setError(errorMessage(caught)));
     return () => {
       active = false;
     };
-  }, [loaderType, needsBlankMetadata, needsRuntimeMetadata]);
+  }, []);
+
+  useEffect(() => {
+    if (!needsBlankMetadata && !needsRuntimeMetadata) return;
+    let active = true;
+    listLoaderMinecraftVersions(loaderType)
+      .then((options) => {
+        if (!active) return;
+        setMinecraftOptions(options);
+        /* The list arrives newest first, so the first stable entry is the
+           latest release. Preselecting it means the common case needs no
+           decision at all instead of a choice out of a hundred versions. */
+        const recommended = options.find((item) => item.stable);
+        if (recommended) {
+          setMinecraftVersion((current) => current || recommended.value);
+        }
+        setMetadataFailed(false);
+      })
+      .catch((caught) => {
+        if (!active) return;
+        setError(errorMessage(caught));
+        /* Without this the version lists stay empty with no way forward: the
+           lookup only reruns when the loader changes, which the user has no
+           reason to do after a dropped connection. */
+        setMetadataFailed(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [loaderType, needsBlankMetadata, needsRuntimeMetadata, metadataAttempt]);
 
   useEffect(() => {
     if ((!needsBlankMetadata && !needsRuntimeMetadata) || !minecraftVersion) return;
@@ -290,19 +370,34 @@ export function CreateServerWizard({
       .then((options) => {
         if (!active) return;
         const values = options.map((item) => item.value);
-        setLoaderOptions(values);
+        setLoaderOptions(options);
         /* A loader version selected for a different loader/Minecraft pair has
            no matching <option>, so the select renders blank while the stale
            value is still submitted. Drop it instead of shipping a mismatch. */
         setLoaderVersion((current) =>
           current && !values.includes(current) ? "" : current,
         );
+        const recommended = options.find((item) => item.stable);
+        if (recommended) {
+          setLoaderVersion((current) => current || recommended.value);
+        }
+        setMetadataFailed(false);
       })
-      .catch((caught) => active && setError(errorMessage(caught)));
+      .catch((caught) => {
+        if (!active) return;
+        setError(errorMessage(caught));
+        setMetadataFailed(true);
+      });
     return () => {
       active = false;
     };
-  }, [loaderType, minecraftVersion, needsBlankMetadata, needsRuntimeMetadata]);
+  }, [
+    loaderType,
+    minecraftVersion,
+    needsBlankMetadata,
+    needsRuntimeMetadata,
+    metadataAttempt,
+  ]);
 
   useEffect(() => {
     if (step !== 2 || !sourcePlan || javaRuntime || javaPlan) return;
@@ -784,6 +879,7 @@ export function CreateServerWizard({
                   <span>{t("profileSettings.name")}</span>
                   <TextField
                     aria-label={t("profileSettings.name")}
+                    maxLength={MAX_SERVER_NAME_LENGTH}
                     name="server-name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
@@ -801,14 +897,14 @@ export function CreateServerWizard({
                   <span>{t("profileSettings.minecraftVersion")}</span>
                   <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" name="minecraft-version" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((version) => <option key={version}>{version}</option>)}
+                    {minecraftOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedMinecraftIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
                   </select>
                 </label>
                 <label>
                   <span>{t("profileSettings.loaderVersion")}</span>
                   <select aria-label={t("profileSettings.loaderVersion")} className="field-control" name="loader-version" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {loaderOptions.map((version) => <option key={version}>{version}</option>)}
+                    {loaderOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedLoaderIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
                   </select>
                 </label>
                 <Button
@@ -846,14 +942,14 @@ export function CreateServerWizard({
                   <span>{t("profileSettings.minecraftVersion")}</span>
                   <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((version) => <option key={version}>{version}</option>)}
+                    {minecraftOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedMinecraftIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
                   </select>
                 </label>
                 <label>
                   <span>{t("profileSettings.loaderVersion")}</span>
                   <select aria-label={t("profileSettings.loaderVersion")} className="field-control" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
                     <option value="">{t("provisioning.wizard.autoSelectLoader")}</option>
-                    {loaderOptions.map((version) => <option key={version}>{version}</option>)}
+                    {loaderOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedLoaderIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
                   </select>
                 </label>
                 <Button disabled={busy || !minecraftVersion} onClick={prepareUnverifiedRuntime}>
@@ -981,6 +1077,14 @@ export function CreateServerWizard({
                 <Button disabled={!javaConsent || busy} onClick={installManagedJava}>
                   {t("provisioning.wizard.installJava", { version: javaPlan.majorVersion })}
                 </Button>
+                {/* Both this button and Next start disabled, and nothing else on
+                    the step says which action unlocks which. Without this the
+                    user reads it as the wizard being broken. */}
+                <p className="provisioning-step-hint">
+                  {javaConsent
+                    ? t("provisioning.wizard.javaInstallHint")
+                    : t("provisioning.wizard.javaConsentHint")}
+                </p>
               </div>
             ) : null}
           </div>
@@ -989,7 +1093,7 @@ export function CreateServerWizard({
         {step === 3 ? (
           <div className="provisioning-configuration-step">
             <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
-              <label className="field-span-2"><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} value={name} onChange={(event) => setName(event.target.value)} /></label>
+              <label className="field-span-2"><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} maxLength={MAX_SERVER_NAME_LENGTH} value={name} onChange={(event) => setName(event.target.value)} /></label>
             </ConfigSection>
             <ConfigSection icon={Gamepad2} title={t("provisioning.config.section.gameplay")}>
               <label><span>{t("provisioning.config.difficulty")}</span><select aria-label={t("provisioning.config.difficulty")} className="field-control" value={configuration.difficulty} onChange={(event) => setConfiguration((current) => ({ ...current, difficulty: event.target.value }))}><option value="peaceful">{t("provisioning.config.difficulty.peaceful")}</option><option value="easy">{t("provisioning.config.difficulty.easy")}</option><option value="normal">{t("provisioning.config.difficulty.normal")}</option><option value="hard">{t("provisioning.config.difficulty.hard")}</option></select></label>
@@ -1005,7 +1109,12 @@ export function CreateServerWizard({
               <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
                 <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
                 <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
-                <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
+                <label className="field-span-2 provisioning-port-field">
+                  <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
+                  {takenPorts.includes(configuration.serverPort) ? (
+                    <small role="status">{t("provisioning.config.portTaken")}</small>
+                  ) : null}
+                </label>
                 <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
                 <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
                 <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
@@ -1119,7 +1228,21 @@ export function CreateServerWizard({
         {/* ProvisioningProgress already reports a failed job, so the wizard-level
             error would repeat the same sentence directly beneath it. */}
         {error && !job?.error ? (
-          <div className="form-error" role="alert">{error}</div>
+          <div className="form-error" role="alert">
+            <span>{error}</span>
+            {metadataFailed ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setError(null);
+                  setMetadataFailed(false);
+                  setMetadataAttempt((attempt) => attempt + 1);
+                }}
+              >
+                {t("common.retry")}
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

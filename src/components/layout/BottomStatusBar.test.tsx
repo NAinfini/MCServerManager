@@ -16,20 +16,27 @@ describe("BottomStatusBar", () => {
     cleanup();
   });
 
-  it("shows unset placeholders when no server is selected", () => {
+  it("hides the per-server chips when no server is selected", () => {
     render(<BottomStatusBar />);
 
-    expect(screen.getByText("Java: not set")).toBeInTheDocument();
-    expect(screen.getAllByText("unset").length).toBeGreaterThan(0);
+    // "Java: not set / unset / unset" on an empty dashboard describes nothing
+    // the user can act on and reads as a broken install.
+    expect(screen.queryByText("Java: not set")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("unset")).toHaveLength(0);
     // Read from the manifest rather than repeating a literal: the label used to
     // be hardcoded, so a release would have shipped a version that disagreed
     // with the binary. Comparing against package.json is what catches that.
     expect(screen.getByText(`v${appManifest.version}`)).toBeInTheDocument();
   });
 
-  it("opens Java Runtimes when the unset Java segment is clicked", async () => {
+  it("opens Java Runtimes when the selected server has no Java configured", async () => {
     const onOpenJava = vi.fn();
-    render(<BottomStatusBar onOpenJava={onOpenJava} />);
+    render(
+      <BottomStatusBar
+        selectedServer={{ ...selectedServer, javaPath: null }}
+        onOpenJava={onOpenJava}
+      />,
+    );
 
     await userEvent.click(screen.getByRole("button", { name: /Java: not set/ }));
 

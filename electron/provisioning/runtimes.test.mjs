@@ -282,6 +282,55 @@ describe("managed Temurin runtimes", () => {
     }
   });
 
+  it("codes a dropped connection during the default download", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const root = tempRoot();
+    // Every other test injects `download`, so the built-in one — the only one
+    // production uses — never runs. Its bare fetch() rejection used to reach
+    // the UI as the untranslated string "fetch failed".
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () => {
+      const error = new TypeError("fetch failed");
+      error.cause = { code: "ENOTFOUND" };
+      throw error;
+    });
+    try {
+      const manager = createRuntimeManager({
+        userDataDir: root,
+        platform: "win32",
+        arch: "x64",
+        fetchJson: vi.fn(),
+        extractArchive: vi.fn(),
+        inspectJava: vi.fn(),
+      });
+
+      await expect(
+        manager.install(
+          {
+            action: "install",
+            majorVersion: 21,
+            url: "https://github.com/adoptium/runtime.zip",
+            filename: "runtime.zip",
+            checksum: "0".repeat(64),
+            targetDir: path.join(
+              root,
+              "runtimes",
+              "temurin",
+              "21",
+              "windows-x64",
+            ),
+          },
+          { consent: true },
+        ),
+      ).rejects.toMatchObject({
+        code: "NETWORK_UNREACHABLE",
+        message: expect.stringContaining("ENOTFOUND"),
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("blocks a renderer-supplied managed Java download outside trusted hosts", async () => {
     const { createRuntimeManager } = require("./runtimes.cjs");
     const root = tempRoot();

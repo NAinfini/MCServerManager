@@ -457,10 +457,19 @@ export function AppShell({ processSummary }: AppShellProps) {
                       </h1>
                       <p>
                         {createServerProgress
-                          ? t("wizard.progress.counter", {
-                              current: createServerProgress.currentStep + 1,
-                              total: createServerProgress.steps.length,
-                            })
+                          ? [
+                              t("wizard.progress.counter", {
+                                current: createServerProgress.currentStep + 1,
+                                total: createServerProgress.steps.length,
+                              }),
+                              /* A step made of several screens leaves the
+                                 counter frozen, so name the current one. */
+                              createServerProgress.steps[
+                                createServerProgress.currentStep
+                              ]?.description,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
                           : t("servers.create.description")}
                       </p>
                     </div>

@@ -381,6 +381,7 @@ function createCommandHandlers(context) {
     get_default_server_root: (args) => ({
       path: managedServerRoot(db, args?.input?.name || "server", false),
     }),
+    suggest_server_port: () => suggestServerPort(db),
     detect_server_version: (args) =>
       detectServerVersion(args?.rootDir || args?.input?.rootDir),
     update_server_profile: (args) => updateServerProfile(db, args?.input),
@@ -670,6 +671,23 @@ function requireServerId(serverId) {
 
 function serverRoot(db, serverId) {
   return getServerProfile(db, requireServerId(serverId)).rootDir;
+}
+
+// Filesystems cap a single path component at 255 characters, so a longer name
+// used to reach mkdir and come back as a raw untranslated ENOENT quoting the
+// full absolute path. 100 leaves room for the "-2" de-duplication suffix and is
+// far beyond any name a server actually needs.
+const MAX_SERVER_NAME_LENGTH = 100;
+
+function validatedServerName(value) {
+  const name = trimRequired(value, "server name is required");
+  if (name.length > MAX_SERVER_NAME_LENGTH) {
+    throw codedError(
+      "SERVER_NAME_TOO_LONG",
+      `server name must be at most ${MAX_SERVER_NAME_LENGTH} characters`,
+    );
+  }
+  return name;
 }
 
 function safeFolderName(value, fallback = "server") {
@@ -1712,7 +1730,7 @@ function createServerProfile(db, input) {
       "server profile input is required",
     );
   }
-  const name = trimRequired(input.name, "server name is required");
+  const name = validatedServerName(input.name);
   const isExistingFolderImport = input.source?.kind === "existingFolder";
   const rootDir = input.rootDir?.trim()
     ? input.rootDir.trim()
@@ -1784,7 +1802,7 @@ function updateServerProfile(db, input) {
   const name =
     input.name === undefined
       ? existing.name
-      : trimRequired(input.name, "server name is required");
+      : validatedServerName(input.name);
   const rootDir =
     input.rootDir === undefined
       ? existing.rootDir
@@ -2360,9 +2378,11 @@ function javaCandidateExists(javaPath) {
 
 function inspectJavaRuntime(candidate) {
   if (!javaCandidateExists(candidate.path)) {
+    // Distinct from JAVA_EXECUTABLE_MISSING, which means a downloaded runtime
+    // archive held no java program. Here a path we were given simply is gone.
     throw codedError(
-      "JAVA_EXECUTABLE_MISSING",
-      "Java executable does not exist",
+      "JAVA_PATH_NOT_FOUND",
+      `Java executable does not exist: ${candidate.path}`,
     );
   }
 
@@ -2375,13 +2395,32 @@ function inspectJavaRuntime(candidate) {
   if (result.error) {
     throw result.error;
   }
-  if (result.status !== 0 && output.trim() === "") {
+  // A non-zero exit means the probe failed even when it printed something.
+  // Scanning PATH surfaces vendor stubs such as Oracle's javapath shim, which
+  // exits 2 with "Error: opening registry key ..." and used to be listed as an
+  // installed runtime of version "Unknown".
+  // trim() again per line: on Windows the split leaves the CR of a CRLF behind,
+  // which would show up as a stray break inside the translated message.
+  const firstLine = output.trim().split("\n")[0].trim();
+  if (result.status !== 0) {
+    const detail = firstLine || `status ${result.status}`;
     throw codedError(
       "JAVA_VERSION_PROBE_FAILED",
-      `java -version exited with status ${result.status}`,
+      `java -version exited with status ${result.status}: ${detail}`,
+      { detail },
     );
   }
   const parsed = parseJavaVersionOutput(output);
+  if (parsed.majorVersion === null) {
+    // Without a major version the runtime can never be matched against a
+    // server's requirement, so reporting it as installed would be a false
+    // positive. Surface what it printed instead.
+    throw codedError(
+      "JAVA_VERSION_UNRECOGNIZED",
+      `java -version output was not recognized: ${firstLine || "(no output)"}`,
+      { detail: firstLine || "" },
+    );
+  }
   return {
     path: candidate.path,
     source: candidate.source,
@@ -2502,10 +2541,116 @@ function createJavaCompatibility(profile, runtimes) {
   };
 }
 
+function javaExecutableName() {
+  return process.platform === "win32" ? "java.exe" : "java";
+}
+
+// Scan failures are reported as data rather than thrown, so the code has to
+// travel on the row: the IPC tagging in main.cjs only sees thrown errors.
+function javaScanFailure(candidatePath, source, error) {
+  return {
+    path: candidatePath,
+    source,
+    code: error.mcsmCode || null,
+    detail: error.detail || "",
+    error: error.message,
+  };
+}
+
+// Directories every mainstream JDK vendor installs into. Scanning them is what
+// lets a machine that already has Java report it on first run: JAVA_HOME is
+// frequently unset, and the profile paths below are circular before the first
+// server exists.
+function javaInstallRoots() {
+  if (process.platform === "win32") {
+    const bases = [
+      process.env.ProgramFiles,
+      process.env["ProgramFiles(x86)"],
+      process.env.ProgramW6432,
+    ].filter(Boolean);
+    const vendors = [
+      "Java",
+      "Eclipse Adoptium",
+      "Eclipse Foundation",
+      "Microsoft",
+      "Amazon Corretto",
+      "Zulu",
+      "BellSoft",
+      "AdoptOpenJDK",
+    ];
+    return bases.flatMap((base) =>
+      vendors.map((vendor) => path.join(base, vendor)),
+    );
+  }
+  if (process.platform === "darwin") {
+    return ["/Library/Java/JavaVirtualMachines"];
+  }
+  return ["/usr/lib/jvm", "/usr/java", "/opt/java"];
+}
+
+// Every entry of PATH that actually holds a java executable. This is the source
+// a user means when they say "I already installed Java".
+function pathJavaCandidates() {
+  const executableName = javaExecutableName();
+  const candidates = [];
+  for (const entry of String(process.env.PATH || "").split(path.delimiter)) {
+    const dir = entry.trim().replace(/^"|"$/g, "");
+    if (!dir) continue;
+    const target = path.join(dir, executableName);
+    if (fs.existsSync(target)) candidates.push({ path: target, source: "PATH" });
+  }
+  return candidates;
+}
+
+function installedJavaCandidates(failures) {
+  const executableName = javaExecutableName();
+  // macOS buries the executable one level deeper than every other platform.
+  const binSuffixes =
+    process.platform === "darwin"
+      ? [path.join("Contents", "Home", "bin"), "bin"]
+      : ["bin"];
+  const candidates = [];
+
+  for (const root of javaInstallRoots()) {
+    let entries;
+    try {
+      entries = fs.readdirSync(root, { withFileTypes: true });
+    } catch (error) {
+      // A vendor directory that does not exist is the normal case and says
+      // nothing. Anything else (permissions, an unreadable mount) is reported
+      // instead of swallowed, so a machine that hides its JDKs says why.
+      if (error.code === "ENOENT" || error.code === "ENOTDIR") continue;
+      failures.push(
+        javaScanFailure(
+          root,
+          "Installed on this machine",
+          codedError("JAVA_INSTALL_DIR_UNREADABLE", error.message, {
+            detail: error.message,
+          }),
+        ),
+      );
+      continue;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      for (const suffix of binSuffixes) {
+        const target = path.join(root, entry.name, suffix, executableName);
+        if (fs.existsSync(target)) {
+          candidates.push({
+            path: target,
+            source: "Installed on this machine",
+          });
+        }
+      }
+    }
+  }
+  return candidates;
+}
+
 function managedJavaCandidates(db) {
   const root = path.join(appDataDirFor(db), "runtimes", "temurin");
   if (!fs.existsSync(root)) return [];
-  const executableName = process.platform === "win32" ? "java.exe" : "java";
+  const executableName = javaExecutableName();
   const pending = [root];
   const candidates = [];
   let visited = 0;
@@ -2528,43 +2673,43 @@ function managedJavaCandidates(db) {
 
 function listJavaRuntimes(db) {
   const profiles = listServerProfiles(db);
-  const candidates = [
-    process.env.JAVA_HOME &&
-      path.join(process.env.JAVA_HOME, "bin", "java.exe"),
-    process.env.JAVA_HOME && path.join(process.env.JAVA_HOME, "bin", "java"),
-    ...profiles.map((profile) => profile.javaPath).filter(Boolean),
-    ...managedJavaCandidates(db),
-  ]
-    .filter(Boolean)
-    .map((candidate) => ({
-      path: typeof candidate === "string" ? candidate : candidate.path,
-      source:
-        typeof candidate !== "string"
-          ? candidate.source
-          : process.env.JAVA_HOME && candidate.startsWith(process.env.JAVA_HOME)
-            ? "JAVA_HOME"
-            : "Server profile",
-    }));
-  const uniqueCandidates = Array.from(
-    new Map(
-      candidates.map((candidate) => [
-        normalizeJavaPath(candidate.path),
-        candidate,
-      ]),
-    ).values(),
-  );
   const failures = [];
+  // Only the executable this platform can actually run. Offering both java and
+  // java.exe meant every Windows machine with JAVA_HOME set reported a
+  // permanent "Java executable does not exist" failure next to a working Java.
+  const javaHomeCandidate = process.env.JAVA_HOME
+    ? [
+        {
+          path: path.join(process.env.JAVA_HOME, "bin", javaExecutableName()),
+          source: "JAVA_HOME",
+        },
+      ]
+    : [];
+  const candidates = [
+    ...javaHomeCandidate,
+    ...profiles
+      .map((profile) => profile.javaPath)
+      .filter(Boolean)
+      .map((javaPath) => ({ path: javaPath, source: "Server profile" })),
+    ...pathJavaCandidates(),
+    ...installedJavaCandidates(failures),
+    ...managedJavaCandidates(db),
+  ];
+  // The order above is the order of preference, so the first source to claim a
+  // path keeps the label. A Map built from the list would keep the last.
+  const seen = new Map();
+  for (const candidate of candidates) {
+    const key = normalizeJavaPath(candidate.path);
+    if (!seen.has(key)) seen.set(key, candidate);
+  }
+  const uniqueCandidates = [...seen.values()];
   const runtimes = [];
 
   for (const candidate of uniqueCandidates) {
     try {
       runtimes.push(inspectJavaRuntime(candidate));
     } catch (error) {
-      failures.push({
-        path: candidate.path,
-        source: candidate.source,
-        error: error.message,
-      });
+      failures.push(javaScanFailure(candidate.path, candidate.source, error));
     }
   }
 
@@ -2585,7 +2730,15 @@ function runtimeManagerFor(db) {
     arch: configured.arch,
     fetchJson:
       configured.fetchJson ||
-      ((url) => fetchJson(url, {}, "Temurin runtime lookup failed")),
+      /* Without its own code this falls back to MARKETPLACE_REQUEST_FAILED,
+         which tells a user installing Java that the marketplace is down. */
+      ((url) =>
+        fetchJson(
+          url,
+          {},
+          "Temurin runtime lookup failed",
+          "JAVA_METADATA_REQUEST_FAILED",
+        )),
     download: configured.download,
     extractArchive: configured.extractArchive,
     inspectJava: configured.inspectJava,
@@ -2881,8 +3034,44 @@ function checkPortAvailable(port) {
   });
 }
 
+const DEFAULT_SERVER_PORT = 25565;
+// One Minecraft port per server, so a handful of neighbours is plenty; stopping
+// rather than scanning to 65535 keeps a hostile environment from stalling the
+// wizard while it probes thousands of sockets.
+const PORT_SUGGESTION_RANGE = 64;
+
+// The wizard used to offer 25565 unconditionally, so a second server was created
+// on a port the first already owned and the collision only surfaced at start.
+async function suggestServerPort(db) {
+  const takenPorts = new Set(
+    db
+      .prepare(`SELECT server_port FROM servers WHERE server_port IS NOT NULL`)
+      .all()
+      .map((row) => Number(row.server_port)),
+  );
+  const isPortFree = contextFor(db).dependencies.portChecker;
+
+  for (
+    let port = DEFAULT_SERVER_PORT;
+    port < DEFAULT_SERVER_PORT + PORT_SUGGESTION_RANGE && port <= 65535;
+    port += 1
+  ) {
+    if (takenPorts.has(port)) continue;
+    if (await isPortFree(port)) {
+      return { port, taken: [...takenPorts].sort((a, b) => a - b) };
+    }
+  }
+
+  // Every candidate was busy. Returning the default with the occupied list is
+  // honest: the user still gets a value and can see why it is not a free one.
+  return {
+    port: DEFAULT_SERVER_PORT,
+    taken: [...takenPorts].sort((a, b) => a - b),
+  };
+}
+
 async function assertServerPortAvailable(db, profile) {
-  const port = Number(profile.serverPort || 25565);
+  const port = Number(profile.serverPort || DEFAULT_SERVER_PORT);
   const conflictingProfile = db
     .prepare(
       `SELECT s.name
@@ -3976,23 +4165,44 @@ function requestHeaders(headers = {}) {
   };
 }
 
+// fetch() rejects with a bare TypeError whose message is "fetch failed" when
+// the request never reaches the server: offline, DNS failure, a blocking proxy,
+// a TLS error. That error carries no mcsmCode, so it used to arrive in the UI
+// as the untranslated English string "fetch failed" with no way to act on it.
+// The underlying cause code (ENOTFOUND, ECONNREFUSED, ...) is the diagnostic
+// worth keeping, so it becomes the detail the locale entry interpolates.
+async function fetchOrNetworkError(url, init, context) {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (error?.mcsmCode) throw error;
+    const cause = error?.cause?.code || error?.code || error?.name;
+    throw codedError(
+      "NETWORK_UNREACHABLE",
+      `${context}: ${cause ? `${cause} ` : ""}${error?.message || error}`,
+    );
+  }
+}
+
 async function fetchJson(
   url,
   options = {},
   message = "Marketplace request failed",
+  code = "MARKETPLACE_REQUEST_FAILED",
 ) {
-  const response = await fetch(url, {
-    ...options,
-    headers: requestHeaders({
-      Accept: "application/json",
-      ...(options.headers || {}),
-    }),
-  });
+  const response = await fetchOrNetworkError(
+    url,
+    {
+      ...options,
+      headers: requestHeaders({
+        Accept: "application/json",
+        ...(options.headers || {}),
+      }),
+    },
+    message,
+  );
   if (!response.ok) {
-    throw codedError(
-      "MARKETPLACE_REQUEST_FAILED",
-      `${message}: ${response.status}`,
-    );
+    throw codedError(code, `${message}: ${response.status}`);
   }
   return response.json();
 }
@@ -4001,19 +4211,21 @@ async function fetchText(
   url,
   options = {},
   message = "Remote metadata request failed",
+  code = "REMOTE_METADATA_REQUEST_FAILED",
 ) {
-  const response = await fetch(url, {
-    ...options,
-    headers: requestHeaders({
-      Accept: "text/plain, application/xml, text/xml",
-      ...(options.headers || {}),
-    }),
-  });
+  const response = await fetchOrNetworkError(
+    url,
+    {
+      ...options,
+      headers: requestHeaders({
+        Accept: "text/plain, application/xml, text/xml",
+        ...(options.headers || {}),
+      }),
+    },
+    message,
+  );
   if (!response.ok) {
-    throw codedError(
-      "REMOTE_METADATA_REQUEST_FAILED",
-      `${message}: ${response.status}`,
-    );
+    throw codedError(code, `${message}: ${response.status}`);
   }
   return response.text();
 }
@@ -4024,10 +4236,14 @@ async function downloadRemoteFile(
   headers = {},
   validateFinalUrl = null,
 ) {
-  const response = await fetch(url, {
-    headers: requestHeaders(headers),
-    redirect: "follow",
-  });
+  const response = await fetchOrNetworkError(
+    url,
+    {
+      headers: requestHeaders(headers),
+      redirect: "follow",
+    },
+    "Download failed",
+  );
   if (!response.ok) {
     // A bare status code is undiagnosable: the URL is what identifies which
     // artifact and which version segment the upstream API rejected.
@@ -5650,8 +5866,10 @@ function removeProvisioningScripts(rootDir) {
 
 function provisioningLoaderRegistry(db) {
   return createLoaderRegistry({
-    fetchJson: (url) => fetchJson(url, {}, "Loader metadata lookup failed"),
-    fetchText: (url) => fetchText(url, {}, "Loader metadata lookup failed"),
+    fetchJson: (url) =>
+      fetchJson(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+    fetchText: (url) =>
+      fetchText(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
     fileExists: fs.existsSync,
     download: async (url, target, hashes) => {
       fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -5866,8 +6084,10 @@ async function importModpack(db, input) {
 
 function loaderRegistry() {
   return createLoaderRegistry({
-    fetchJson: (url) => fetchJson(url, {}, "Loader metadata lookup failed"),
-    fetchText: (url) => fetchText(url, {}, "Loader metadata lookup failed"),
+    fetchJson: (url) =>
+      fetchJson(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
+    fetchText: (url) =>
+      fetchText(url, {}, "Loader metadata lookup failed", "LOADER_METADATA_REQUEST_FAILED"),
   });
 }
 
@@ -6676,10 +6896,14 @@ async function fetchMarketplaceImage(input) {
     );
   }
 
-  const response = await fetch(url, {
-    headers: { "User-Agent": "MCServerManager/0.1" },
-    signal: AbortSignal.timeout(20_000),
-  });
+  const response = await fetchOrNetworkError(
+    url,
+    {
+      headers: { "User-Agent": "MCServerManager/0.1" },
+      signal: AbortSignal.timeout(20_000),
+    },
+    "Marketplace image request failed",
+  );
   if (!response.ok) {
     throw marketplaceImageError(
       `BBSMC image request failed (${response.status}).`,

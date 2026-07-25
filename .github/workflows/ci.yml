@@ -21,6 +21,11 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Formatting is identical on both runners, so checking it twice only
+      # doubles the noise when it fails.
+      - name: Check formatting
+        if: runner.os == 'Linux'
+        run: pnpm exec prettier --check .
       # Electron ships chrome-sandbox without the SUID bit and GitHub runners
       # disable unprivileged user namespaces, so Electron aborts instead of
       # starting. Restore the helper rather than passing --no-sandbox: the smoke
