@@ -129,6 +129,9 @@ async function clickAt(webContents, point) {
   });
 }
 
+const nextFrame =
+  "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))";
+
 async function setRendererViewport(window, viewport) {
   let requestedWidth = viewport.width;
   let requestedHeight = viewport.height;
@@ -136,9 +139,7 @@ async function setRendererViewport(window, viewport) {
 
   for (let attempt = 0; attempt < 4; attempt += 1) {
     window.setContentSize(requestedWidth, requestedHeight);
-    await window.webContents.executeJavaScript(
-      "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
-    );
+    await window.webContents.executeJavaScript(nextFrame);
     actualViewport = await window.webContents.executeJavaScript(
       "({ width: window.innerWidth, height: window.innerHeight })",
     );
@@ -146,7 +147,22 @@ async function setRendererViewport(window, viewport) {
       actualViewport.width === viewport.width &&
       actualViewport.height === viewport.height
     ) {
-      return;
+      // innerWidth reporting the target is not the same as the renderer having
+      // laid out at it. macOS resizes the window asynchronously, so a caller
+      // that measured immediately here read the pre-resize layout and saw the
+      // wide navigation at a width whose media query calls for the compact one.
+      // Take another frame and confirm the size held before handing back.
+      await window.webContents.executeJavaScript(nextFrame);
+      const settled = await window.webContents.executeJavaScript(
+        "({ width: window.innerWidth, height: window.innerHeight })",
+      );
+      if (
+        settled.width === viewport.width &&
+        settled.height === viewport.height
+      ) {
+        return;
+      }
+      actualViewport = settled;
     }
     requestedWidth += viewport.width - actualViewport.width;
     requestedHeight += viewport.height - actualViewport.height;
@@ -593,6 +609,12 @@ async function run() {
     return {
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
       compactNavigation: navigationRect.width <= 60 && itemRect.width <= 44,
+      // Reported so a failure says whether the layout is wrong or the viewport
+      // never reached the breakpoint, instead of leaving both open.
+      viewportWidth: window.innerWidth,
+      compactBreakpointMatches: window.matchMedia("(max-width: 1100px)").matches,
+      navigationWidth: navigationRect.width,
+      itemWidth: itemRect.width,
     };
   })()`);
   if (
