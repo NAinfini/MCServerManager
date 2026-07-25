@@ -1,5 +1,49 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
+
+// The renderer displays marketplace descriptions from Modrinth, BBSMC, and
+// Hangar. MarketplaceMarkdown sanitizes that HTML, but a sanitizer is one
+// mistake away from being the only defence, so the packaged renderer also runs
+// under a policy that cannot execute injected script at all.
+//
+// Build only: Vite's dev server needs an inline HMR script and a websocket.
+// Everything the app actually loads is local; the remote allowances are images
+// (player heads and marketplace thumbnails) and nothing else. All network calls
+// go through the Electron backend, never from the renderer.
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self'",
+  // Monaco, xterm, and motion all write inline styles at runtime.
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  "font-src 'self' data:",
+  "worker-src 'self' blob:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  // No frame-ancestors: it is ignored in a <meta> policy, and the renderer is a
+  // standalone Electron window that denies every window-open request anyway.
+].join("; ");
+
+function contentSecurityPolicyPlugin(): Plugin {
+  return {
+    name: "mcsm-content-security-policy",
+    apply: "build",
+    transformIndexHtml() {
+      return [
+        {
+          tag: "meta",
+          attrs: {
+            "http-equiv": "Content-Security-Policy",
+            content: contentSecurityPolicy,
+          },
+          injectTo: "head-prepend",
+        },
+      ];
+    },
+  };
+}
 
 // @ts-expect-error process is a nodejs global
 const host = process.env.ELECTRON_RENDERER_HOST;
@@ -7,7 +51,7 @@ const host = process.env.ELECTRON_RENDERER_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   base: "./",
-  plugins: [react()],
+  plugins: [react(), contentSecurityPolicyPlugin()],
 
   // Keep the renderer dev server predictable for the Electron shell.
   clearScreen: false,

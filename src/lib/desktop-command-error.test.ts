@@ -32,6 +32,35 @@ describe("normalizeDesktopCommandError", () => {
     expect(error.message).toContain("Restart MC Server Manager");
   });
 
+  it("translates coded backend errors instead of showing raw English", () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+
+    const error = normalizeDesktopCommandError(
+      new Error(
+        "[MCSM:SERVER_MUST_BE_STOPPED] Stop the server before restoring a world backup.",
+      ),
+    );
+
+    expect(error.message).toBe("请先停止服务器，再还原世界备份。");
+  });
+
+  it("keeps the backend's own detail inside the translated message", () => {
+    const error = normalizeDesktopCommandError(
+      new Error("[MCSM:SERVER_PORT_IN_USE] Port 25565 is already in use."),
+    );
+
+    expect(error.message).toContain("That port is already in use");
+    expect(error.message).toContain("Port 25565 is already in use.");
+  });
+
+  it("falls back to the backend message when a code has no translation", () => {
+    const error = normalizeDesktopCommandError(
+      new Error("[MCSM:NOT_A_REAL_CODE] Something specific went wrong."),
+    );
+
+    expect(error.message).toBe("Something specific went wrong.");
+  });
+
   it("localizes desktop runtime guidance in the selected language", () => {
     localStorage.setItem("mcsm.language", "zh-CN");
 

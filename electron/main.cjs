@@ -61,6 +61,21 @@ function writeMainLog(level, source, message, details) {
   }
 }
 
+// IPC drops custom Error properties, so a coded backend error would reach the
+// renderer as bare English text with no way to translate it. Carry the code in
+// the message; src/lib/desktop-command-error.ts strips and resolves it.
+function taggedForRenderer(error) {
+  if (
+    !(error instanceof Error) ||
+    typeof error.mcsmCode !== "string" ||
+    !/^[A-Z][A-Z0-9_]*$/.test(error.mcsmCode) ||
+    error.message.startsWith("[MCSM:")
+  ) {
+    return error;
+  }
+  return new Error(`[MCSM:${error.mcsmCode}] ${error.message}`);
+}
+
 function clearPendingCloseTimer() {
   if (pendingCloseTimer) {
     clearTimeout(pendingCloseTimer);
@@ -514,7 +529,7 @@ ipcMain.handle("app-command", async (_event, command, args) => {
         error instanceof Error ? error.stack || error.message : String(error),
       );
     }
-    throw error;
+    throw taggedForRenderer(error);
   }
 });
 

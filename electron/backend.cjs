@@ -18,7 +18,10 @@ const {
   requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
 } = require("./provisioning/runtimes.cjs");
 const { createJobExecutor } = require("./provisioning/jobs.cjs");
-const { provisioningError } = require("./provisioning/contracts.cjs");
+const {
+  codedError,
+  provisioningError,
+} = require("./provisioning/contracts.cjs");
 const {
   extractZipArchive,
   extractZipLayers,
@@ -1189,7 +1192,7 @@ function safeServerPath(db, serverId, relativePath = "") {
   const root = path.resolve(serverRoot(db, serverId));
   const target = path.resolve(root, relativePath || ".");
   if (target !== root && !target.startsWith(`${root}${path.sep}`)) {
-    throw new Error("path escapes server root");
+    throw codedError("PATH_ESCAPES_SERVER_ROOT", "path escapes server root");
   }
   return { root, target };
 }
@@ -1850,7 +1853,8 @@ function deletableServerRoot(db, rootDir) {
       pathContains(canonicalRoot, protectedPath),
     )
   ) {
-    throw new Error(
+    throw codedError(
+      "PROTECTED_DIRECTORY",
       "Refusing to delete a protected directory. Choose the exact server folder instead.",
     );
   }
@@ -3285,7 +3289,7 @@ function deleteServerBackup(db, backupId) {
   const id = trimRequired(backupId, "backup id is required");
   const backup = db.prepare("SELECT * FROM backups WHERE id = ?").get(id);
   if (!backup) {
-    throw new Error("backup not found");
+    throw codedError("BACKUP_NOT_FOUND", "backup not found");
   }
   fs.rmSync(backup.archive_path, { recursive: true, force: true });
   db.prepare("DELETE FROM backups WHERE id = ?").run(id);
@@ -3299,7 +3303,7 @@ function exportServerBackup(db, input) {
   );
   const backup = db.prepare("SELECT * FROM backups WHERE id = ?").get(id);
   if (!backup) {
-    throw new Error("backup not found");
+    throw codedError("BACKUP_NOT_FOUND", "backup not found");
   }
   if (!fs.existsSync(backup.archive_path)) {
     throw new Error("backup archive folder does not exist");
@@ -3460,13 +3464,16 @@ function createProfileBackup(db, input) {
 
 function restoreWorldBackup(db, input) {
   if (!input?.confirm) {
-    throw new Error("restore requires explicit confirmation");
+    throw codedError(
+      "RESTORE_NEEDS_CONFIRMATION",
+      "restore requires explicit confirmation",
+    );
   }
   const backup = db
     .prepare("SELECT * FROM backups WHERE id = ?")
     .get(input?.backupId);
   if (!backup) {
-    throw new Error("backup not found");
+    throw codedError("BACKUP_NOT_FOUND", "backup not found");
   }
   const managed = managedChildren.get(backup.server_id);
   const persistedActiveProcess = db
@@ -3484,14 +3491,17 @@ function restoreWorldBackup(db, input) {
   }
   const sourceWorld = path.join(backup.archive_path, "world");
   if (!fs.existsSync(sourceWorld)) {
-    throw new Error("backup world folder does not exist");
+    throw codedError(
+      "BACKUP_WORLD_MISSING",
+      "backup world folder does not exist",
+    );
   }
   const targetWorldDir = trimRequired(
     input.targetWorldDir,
     "target world directory is required",
   );
   if (path.isAbsolute(targetWorldDir)) {
-    throw new Error("path escapes server root");
+    throw codedError("PATH_ESCAPES_SERVER_ROOT", "path escapes server root");
   }
   if (
     targetWorldDir === "." ||
@@ -3499,10 +3509,16 @@ function restoreWorldBackup(db, input) {
     targetWorldDir.includes("/") ||
     targetWorldDir.includes("\\")
   ) {
-    throw new Error("restore target must be a world folder name");
+    throw codedError(
+      "RESTORE_TARGET_INVALID",
+      "restore target must be a world folder name",
+    );
   }
   if (targetWorldDir.toLowerCase() === "backups") {
-    throw new Error("restore target must not overlap backup storage");
+    throw codedError(
+      "RESTORE_TARGET_IS_BACKUP_STORAGE",
+      "restore target must not overlap backup storage",
+    );
   }
   const { target } = safeServerPath(db, backup.server_id, targetWorldDir);
   // Copy first, swap second. Deleting the world and then copying into place
@@ -6027,7 +6043,8 @@ async function installHangarVersion(db, input) {
 function curseForgeApiKey() {
   const key = process.env.CURSEFORGE_API_KEY;
   if (!key) {
-    throw new Error(
+    throw codedError(
+      "CURSEFORGE_KEY_MISSING",
       "CURSEFORGE_API_KEY is required for official CurseForge API downloads.",
     );
   }

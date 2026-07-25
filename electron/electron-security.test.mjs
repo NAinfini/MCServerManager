@@ -10,6 +10,22 @@ describe("Electron window security", () => {
     expect(main).toMatch(/sandbox:\s*true/);
   });
 
+  it("ships a Content Security Policy that cannot execute injected script", () => {
+    const config = fs.readFileSync("vite.config.ts", "utf8");
+
+    expect(config).toContain("Content-Security-Policy");
+    for (const directive of [
+      "default-src 'self'",
+      "script-src 'self'",
+      "object-src 'none'",
+      "base-uri 'none'",
+    ]) {
+      expect(config).toContain(directive);
+    }
+    // Ignored in a meta policy, and Chromium logs an error for it.
+    expect(config).not.toContain("frame-ancestors 'none'\",");
+  });
+
   it("refuses to run two instances against one database", () => {
     const main = fs.readFileSync("electron/main.cjs", "utf8");
 
