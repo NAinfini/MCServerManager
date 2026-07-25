@@ -9,8 +9,8 @@ import {
 } from "../../test/render";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
-import { ServerPropertiesEditor } from "./ServerPropertiesEditor";
-import type { ServerProfile } from "../servers/types";
+import { filterPropertyGroups, serverPropertiesDefaultValues, ServerPropertiesEditor } from "./ServerPropertiesEditor";
+import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
@@ -46,22 +46,39 @@ function renderEditor() {
     },
   });
   return {
-    queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
         <ServerPropertiesEditor server={server} />
       </QueryClientProvider>,
     ),
+    queryClient,
   };
 }
 
 describe("ServerPropertiesEditor", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    vi.spyOn(window, "confirm").mockReturnValue(false);
   });
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("lets users retry when properties fail to load", async () => {
+    vi.mocked(invoke).mockRejectedValue(new Error("properties unavailable"));
+
+    renderEditor();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(invoke).mock.calls.filter(
+          ([command]) => command === "read_server_properties",
+        ),
+      ).toHaveLength(2);
+    });
   });
 
   it("renders common server properties", async () => {
@@ -87,11 +104,49 @@ describe("ServerPropertiesEditor", () => {
 
     expect(await screen.findByDisplayValue("Hello")).toBeInTheDocument();
     expect(screen.getByDisplayValue("25565")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("survival")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("hard")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: "gamemode" })).toHaveTextContent("survival");
+      expect(screen.getByRole("combobox", { name: "difficulty" })).toHaveTextContent("hard");
+    });
     expect(screen.getByDisplayValue("20")).toBeInTheDocument();
     expect(screen.getByDisplayValue("12")).toBeInTheDocument();
     expect(screen.getByDisplayValue("8")).toBeInTheDocument();
+    expect(screen.getByText("Basic gameplay")).toBeInTheDocument();
+    expect(screen.getByText("Network & remote access")).toBeInTheDocument();
+  });
+
+  it("filters property groups by a property key", () => {
+    expect(filterPropertyGroups("rcon")).toEqual([
+      expect.objectContaining({
+        group: "network",
+        definitions: expect.arrayContaining([
+          expect.objectContaining({ key: "enable-rcon" }),
+          expect.objectContaining({ key: "rcon.port" }),
+        ]),
+      }),
+    ]);
+  });
+
+  it("maps known document entries into typed form values", () => {
+    expect(
+      serverPropertiesDefaultValues([
+        { key: "gamemode", value: "survival", known: true },
+        { key: "difficulty", value: "hard", known: true },
+      ]),
+    ).toMatchObject({ gamemode: "survival", difficulty: "hard" });
+  });
+
+  it("does not treat a missing properties file as an error", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      serverId: server.id,
+      raw: "",
+      entries: [],
+    });
+
+    renderEditor();
+
+    expect(await screen.findByText("No server.properties file yet")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("saves edited properties for the selected server", async () => {
@@ -161,6 +216,23 @@ describe("ServerPropertiesEditor", () => {
     });
 
     expect(screen.getByDisplayValue("Unsaved")).toBeInTheDocument();
+  });
+
+  it("validates ports before saving", async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      serverId: server.id,
+      raw: "server-port=25565",
+      entries: [{ key: "server-port", value: "25565", known: true }],
+    });
+
+    renderEditor();
+    fireEvent.change(await screen.findByDisplayValue("25565"), {
+      target: { value: "70000" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save properties/i }));
+
+    expect(await screen.findByText("Enter a port from 1 to 65535")).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith("save_server_properties", expect.anything());
   });
 });
 

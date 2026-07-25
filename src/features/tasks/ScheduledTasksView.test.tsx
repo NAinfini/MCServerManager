@@ -10,7 +10,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { ScheduledTasksView } from "./ScheduledTasksView";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
@@ -63,6 +63,7 @@ async function chooseAction(optionName: string) {
 describe("ScheduledTasksView", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -197,6 +198,51 @@ describe("ScheduledTasksView", () => {
         taskId: "task-1",
       });
     });
+  });
+
+  it("shows retryable query errors without a contradictory empty state", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_scheduled_tasks") {
+        throw new Error("Task list unavailable");
+      }
+      if (command === "list_scheduled_task_runs") {
+        return [];
+      }
+      return null;
+    });
+
+    renderTasks();
+
+    expect(await screen.findByText("Task list unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("No scheduled tasks")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("reports recent-run failures and localizes their status", async () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_scheduled_tasks") {
+        return [];
+      }
+      if (command === "list_scheduled_task_runs") {
+        return [
+          {
+            id: "run-1",
+            taskId: "task-1",
+            status: "failed",
+            message: "Backup failed",
+            scheduledFor: "2026-07-01T00:00:00Z",
+            startedAt: "2026-07-01T00:00:00Z",
+          },
+        ];
+      }
+      return null;
+    });
+
+    renderTasks();
+
+    expect(await screen.findByText("失败")).toBeInTheDocument();
+    expect(screen.queryByText("failed")).not.toBeInTheDocument();
   });
 });
 

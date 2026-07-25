@@ -484,6 +484,77 @@ function createFakeChild(pid) {
   return child;
 }
 
+describe("Electron backend server profile deletion", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("keeps the server folder when only the profile is deleted", () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const serverRoot = path.join(appDataDir, "servers", "profile-only");
+    fs.mkdirSync(serverRoot, { recursive: true });
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "test");
+    const server = createServer(backend, serverRoot);
+
+    try {
+      backend.handle("delete_server_profile", {
+        id: server.id,
+        deleteFromDisk: false,
+      });
+
+      expect(fs.existsSync(serverRoot)).toBe(true);
+      expect(backend.handle("list_server_profiles")).toEqual([]);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("deletes the exact server folder when explicitly requested", () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const serverRoot = path.join(appDataDir, "servers", "delete-files");
+    fs.mkdirSync(path.join(serverRoot, "world", "region"), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      path.join(serverRoot, "world", "region", "r.0.0.mca"),
+      "test",
+    );
+    const server = createServer(backend, serverRoot);
+
+    try {
+      backend.handle("delete_server_profile", {
+        id: server.id,
+        deleteFromDisk: true,
+      });
+
+      expect(fs.existsSync(serverRoot)).toBe(false);
+      expect(backend.handle("list_server_profiles")).toEqual([]);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("refuses to recursively delete the application data directory", () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const server = createServer(backend, appDataDir);
+
+    try {
+      expect(() =>
+        backend.handle("delete_server_profile", {
+          id: server.id,
+          deleteFromDisk: true,
+        }),
+      ).toThrow(/protected directory/i);
+      expect(backend.handle("list_server_profiles")).toHaveLength(1);
+      expect(fs.existsSync(appDataDir)).toBe(true);
+    } finally {
+      backend.close();
+    }
+  });
+});
+
 async function createProvisionedServer(
   backend,
   targetDir,
@@ -1256,6 +1327,7 @@ describe("Electron backend resource lifecycle management", () => {
       const saved = backend.handle("save_app_preferences", {
         input: {
           closeBehavior: "quit",
+          launchAtLogin: true,
           defaultServerDir: "D:/ManagedServers",
           logging: { level: "debug", retentionDays: 30 },
           serverDefaults: { javaStrategy: "latest-lts", maxMemoryMb: 8192 },
@@ -1267,6 +1339,7 @@ describe("Electron backend resource lifecycle management", () => {
       });
 
       expect(saved.closeBehavior).toBe("quit");
+      expect(saved.launchAtLogin).toBe(true);
       expect(saved.defaultServerDir).toBe("D:/ManagedServers");
       expect(saved.logging).toMatchObject({
         level: "debug",
@@ -1292,6 +1365,7 @@ describe("Electron backend resource lifecycle management", () => {
 
       expect(backend.handle("get_app_preferences")).toMatchObject({
         closeBehavior: "quit",
+        launchAtLogin: true,
         defaultServerDir: "D:/ManagedServers",
         providers: expect.objectContaining({ bbsmc: false }),
       });
@@ -1923,22 +1997,29 @@ describe("Electron backend resource lifecycle management", () => {
     },
   );
 
-  it("maps whitelist player actions to fixed server commands", () => {
+  it("applies player access changes through list files while stopped", () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     tempDirs.push(serverRoot);
 
     try {
       const server = createServer(backend, serverRoot);
-      expect(() =>
-        backend.handle("apply_player_action", {
+      fs.writeFileSync(
+        path.join(serverRoot, "usercache.json"),
+        JSON.stringify([{ name: "Alex", uuid: "uuid-alex" }]),
+      );
+      expect(
+        backend.handle("apply_player_change", {
           input: {
             serverId: server.id,
             player: "Alex",
             action: "whitelistAdd",
           },
         }),
-      ).toThrow(/server process is not running/);
+      ).toEqual({ method: "file", listType: "whitelist" });
+      expect(
+        JSON.parse(fs.readFileSync(path.join(serverRoot, "whitelist.json"))),
+      ).toEqual([{ name: "Alex", uuid: "uuid-alex" }]);
     } finally {
       backend.close();
     }
@@ -2466,6 +2547,100 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("publishes process and metric events to renderer subscribers", async () => {
+    vi.useFakeTimers();
+    const child = createFakeChild(18100);
+    const backend = createTestBackend({
+      spawn: vi.fn(() => child),
+      collectProcessMetrics: vi.fn(() => ({
+        cpuPercent: 12,
+        memoryMb: 512,
+        tps: 20,
+      })),
+    });
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-events-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+    const received = [];
+    const unsubscribe = backend.onServerEvent((event) => received.push(event));
+
+    try {
+      const server = createServer(backend, serverRoot);
+      await backend.handle("start_server", { serverId: server.id });
+      child.stdout.emit("data", "[Server thread/INFO]: Ready\n");
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      expect(received).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "lifecycle",
+          }),
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "console",
+            payload: expect.objectContaining({ message: expect.stringContaining("Ready") }),
+          }),
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "metrics",
+            payload: expect.objectContaining({ memoryMb: 512 }),
+          }),
+        ]),
+      );
+
+      unsubscribe();
+      const eventCount = received.length;
+      child.stdout.emit("data", "[Server thread/INFO]: After unsubscribe\n");
+      expect(received).toHaveLength(eventCount);
+    } finally {
+      vi.useRealTimers();
+      backend.close();
+    }
+  });
+
+  it("aggregates crashed, update, and overdue backup attention items", async () => {
+    const child = createFakeChild(18150);
+    const backend = createTestBackend({ spawn: vi.fn(() => child) });
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-attention-"));
+    tempDirs.push(serverRoot);
+    fs.writeFileSync(path.join(serverRoot, "server.jar"), "jar");
+
+    try {
+      const server = createServer(backend, serverRoot);
+      await backend.handle("start_server", { serverId: server.id });
+      child.emit("exit", 1);
+      backend.handle("check_server_update", {
+        input: {
+          serverId: server.id,
+          targetMinecraftVersion: "1.21.5",
+        },
+      });
+
+      expect(backend.handle("get_attention_items")).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "crash",
+            severity: "error",
+          }),
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "update",
+            severity: "info",
+          }),
+          expect.objectContaining({
+            serverId: server.id,
+            kind: "backup",
+            severity: "warning",
+          }),
+        ]),
+      );
+    } finally {
+      backend.close();
+    }
+  });
+
   it("auto restarts a managed server when crash output appears but the process stays open", async () => {
     vi.useFakeTimers();
     const children = [];
@@ -2923,6 +3098,14 @@ describe("Electron backend resource lifecycle management", () => {
       expect(backend.handle("get_process_summary")).toEqual({
         runningCount: 0,
         crashedCount: 1,
+        statuses: {
+          [serverA.id]: "crashed",
+          [serverB.id]: "stopped",
+        },
+        lastBackups: {
+          [serverA.id]: null,
+          [serverB.id]: null,
+        },
       });
     } finally {
       backend.close();
@@ -3791,6 +3974,48 @@ describe("Electron backend server pack metadata", () => {
           requiresAcknowledgement: true,
         }),
       );
+    } finally {
+      backend.close();
+    }
+  });
+});
+
+describe("Electron backend player whitelist state", () => {
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      fs.rmSync(tempDirs.pop(), { force: true, recursive: true });
+    }
+  });
+
+  it("reports whether server.properties enforces the whitelist", () => {
+    const backend = createTestBackend();
+    const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-whitelist-"));
+    tempDirs.push(rootDir);
+
+    try {
+      const server = createServer(backend, rootDir);
+
+      expect(
+        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+      ).toBe(false);
+
+      fs.writeFileSync(
+        path.join(rootDir, "server.properties"),
+        "white-list=true\n",
+        "utf8",
+      );
+      expect(
+        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+      ).toBe(true);
+
+      fs.writeFileSync(
+        path.join(rootDir, "server.properties"),
+        "white-list=false\n",
+        "utf8",
+      );
+      expect(
+        backend.handle("list_players", { serverId: server.id }).whitelistEnabled,
+      ).toBe(false);
     } finally {
       backend.close();
     }

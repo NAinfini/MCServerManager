@@ -9,7 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 import { BackupProfilesView } from "./BackupProfilesView";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -103,6 +103,50 @@ describe("BackupProfilesView", () => {
     });
   });
 
+  it("builds include and exclude paths as editable lists", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_backup_profiles") {
+        return [];
+      }
+      return {};
+    });
+
+    renderProfiles();
+    await userEvent.type(
+      await screen.findByLabelText(/profile name/i),
+      "Custom files",
+    );
+    await userEvent.click(
+      screen.getByRole("combobox", { name: /backup profile mode/i }),
+    );
+    await userEvent.click(screen.getByRole("option", { name: "Custom" }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /new include path/i }),
+      "world",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add include path/i }));
+    await userEvent.type(
+      screen.getByRole("textbox", { name: /new exclude path/i }),
+      "logs",
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add exclude path/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add profile/i }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("create_backup_profile", {
+        input: {
+          serverId: server.id,
+          name: "Custom files",
+          mode: "custom",
+          includePaths: ["world"],
+          excludePaths: ["logs"],
+          retentionCount: 5,
+          confirmFullServer: false,
+        },
+      });
+    });
+  });
+
   it("runs a selected backup profile", async () => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === "list_backup_profiles") {
@@ -168,6 +212,27 @@ describe("BackupProfilesView", () => {
         profileId: "profile-1",
       });
     });
+  });
+
+  it("offers retry when backup profiles fail to load", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke)
+      .mockRejectedValueOnce(new Error("profiles unavailable"))
+      .mockResolvedValueOnce([]);
+
+    renderProfiles();
+
+    expect(
+      await screen.findByRole("alert", {
+        name: /could not load backup profiles/i,
+      }),
+    ).toHaveTextContent("profiles unavailable");
+    expect(screen.queryByText("No backup profiles yet.")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("No backup profiles yet.")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
 

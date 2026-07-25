@@ -1,7 +1,8 @@
 import { useState } from "react";
-import * as Dialog from "@radix-ui/react-dialog";
+import type { ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "./button";
+import { DialogSurface } from "./dialog-surface";
 import { useAppSettings } from "../../i18n";
 
 interface ConfirmDangerDialogProps {
@@ -13,6 +14,7 @@ interface ConfirmDangerDialogProps {
   error?: string | null;
   consequences?: string[];
   requireTypedConfirmation?: string;
+  children?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -26,6 +28,7 @@ export function ConfirmDangerDialog({
   error = null,
   consequences,
   requireTypedConfirmation,
+  children,
   onCancel,
   onConfirm,
 }: ConfirmDangerDialogProps) {
@@ -36,39 +39,44 @@ export function ConfirmDangerDialog({
     typedValue.trim() === requireTypedConfirmation;
 
   return (
-    <Dialog.Root
+    <DialogSurface
       open={isOpen}
+      className="confirm-danger-dialog"
+      description={description}
+      footer={
+        <>
+          <Button disabled={isConfirming} variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={isConfirming || !isTypedMatch}
+            variant="danger"
+            onClick={onConfirm}
+          >
+            {confirmLabel}
+          </Button>
+        </>
+      }
+      role="alertdialog"
+      title={title}
       onOpenChange={(open) => {
         if (!open) {
           setTypedValue("");
           onCancel();
         }
       }}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-backdrop" />
-        <Dialog.Content
-          className="confirm-danger-dialog modal-dialog"
-          role="alertdialog"
-          aria-describedby="confirm-danger-description"
-        >
-          <div className="confirm-danger-header">
-            <div className="confirm-danger-icon">
-              <AlertTriangle aria-hidden="true" size={20} />
-            </div>
-            <div>
-              <Dialog.Title className="confirm-danger-title">
-                {title}
-              </Dialog.Title>
-              <Dialog.Description
-                id="confirm-danger-description"
-                className="confirm-danger-description"
-              >
-                {description}
-              </Dialog.Description>
-            </div>
+      header={({ description, title }) => (
+        <div className="confirm-danger-header">
+          <div className="confirm-danger-icon">
+            <AlertTriangle aria-hidden="true" size={20} />
           </div>
-
+          <div>
+            <div className="confirm-danger-title">{title}</div>
+            <div className="confirm-danger-description">{description}</div>
+          </div>
+        </div>
+      )}
+    >
           {consequences && consequences.length > 0 ? (
             <ul className="confirm-danger-consequences">
               {consequences.map((item, index) => (
@@ -76,6 +84,8 @@ export function ConfirmDangerDialog({
               ))}
             </ul>
           ) : null}
+
+          {children}
 
           {requireTypedConfirmation ? (
             <label className="confirm-danger-typed">
@@ -99,22 +109,6 @@ export function ConfirmDangerDialog({
             </div>
           ) : null}
 
-          <div className="dialog-actions">
-            <Dialog.Close asChild>
-              <Button disabled={isConfirming} variant="ghost">
-                {t("common.cancel")}
-              </Button>
-            </Dialog.Close>
-            <Button
-              disabled={isConfirming || !isTypedMatch}
-              variant="danger"
-              onClick={onConfirm}
-            >
-              {confirmLabel}
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogSurface>
   );
 }

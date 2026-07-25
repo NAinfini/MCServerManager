@@ -1,5 +1,5 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { Button } from "../../components/ui/button";
+import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
 import type { PlayerAction, PlayerSummary } from "./api";
 
@@ -21,6 +21,8 @@ const actionLabelKeys: Record<PlayerAction, string> = {
   kick: "players.dialog.kick",
   whitelistAdd: "players.dialog.whitelistAdd",
   whitelistRemove: "players.dialog.whitelistRemove",
+  banIp: "players.dialog.banIp",
+  pardonIp: "players.dialog.pardonIp",
 };
 
 function actionCopy(
@@ -47,42 +49,35 @@ export function PlayerActionDialog({
   const { t } = useAppSettings();
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onCancel()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-backdrop" />
-        <Dialog.Content
-          className="inline-dialog modal-dialog"
-          aria-describedby="player-action-description"
-        >
-          <div>
-            <Dialog.Title>{t(actionLabelKeys[action])}</Dialog.Title>
-            <Dialog.Description id="player-action-description">
-              {actionCopy(action, player, serverName, t)}
-            </Dialog.Description>
-          </div>
-          {error ? (
-            <div className="inline-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-          <div className="dialog-actions">
-            <Dialog.Close asChild>
-              <Button disabled={isSubmitting} variant="ghost">
-                {t("common.cancel")}
-              </Button>
-            </Dialog.Close>
-            <Button
-              disabled={isSubmitting}
-              variant={
-                action === "ban" || action === "kick" ? "danger" : "primary"
-              }
-              onClick={onConfirm}
-            >
-              {isSubmitting ? t("players.dialog.sending") : t(actionLabelKeys[action])}
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <DialogSurface
+      open
+      title={t(actionLabelKeys[action])}
+      description={actionCopy(action, player, serverName, t)}
+      onOpenChange={(open) => !open && onCancel()}
+      footer={
+        <>
+          <Button disabled={isSubmitting} variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={isSubmitting}
+            variant={
+              action === "ban" || action === "banIp" || action === "kick"
+                ? "danger"
+                : "primary"
+            }
+            onClick={onConfirm}
+          >
+            {isSubmitting ? t("players.dialog.sending") : t(actionLabelKeys[action])}
+          </Button>
+        </>
+      }
+    >
+      {error ? (
+        <div className="inline-error" role="alert">
+          {error}
+        </div>
+      ) : null}
+    </DialogSurface>
   );
 }

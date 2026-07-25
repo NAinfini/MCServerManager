@@ -1,4 +1,4 @@
-﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Play, RefreshCw, Square } from "lucide-react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { Button } from "../../components/ui/button";
@@ -7,16 +7,19 @@ import { StatusBadge } from "../../components/ui/status-badge";
 import { useAppSettings } from "../../i18n";
 import { useState } from "react";
 import {
-  getServerProcessStatus,
   restartServerWithCountdown,
   startServer,
   stopServer,
 } from "../process/api";
+import { processKeys } from "../process/queries";
 import type { ServerProfile } from "./types";
+import type { ManagedProcessStatus } from "../process/api";
+import { useServerRuntime } from "./ServerRuntimeContext";
 
 interface ServerActionsProps {
   server: ServerProfile;
   compact?: boolean;
+  processStatus?: ManagedProcessStatus;
 }
 
 function ActionTooltip({
@@ -69,30 +72,33 @@ function startFailureGuide(error: Error | null): StartFailureGuide | null {
   return null;
 }
 
-export function ServerActions({ server, compact = false }: ServerActionsProps) {
+export function ServerActions({
+  server,
+  compact = false,
+  processStatus,
+}: ServerActionsProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
+  const runtime = useServerRuntime();
   const [pendingDangerAction, setPendingDangerAction] = useState<
     "stop" | "restart" | null
   >(null);
-  const processQuery = useQuery({
-    queryKey: ["serverProcessStatus", server.id],
-    queryFn: () => getServerProcessStatus(server.id),
-    refetchInterval: 1500,
-  });
-  const process = processQuery.data;
-  const isRunning = process?.status === "running";
-  const isExternalRunning = process?.status === "externalRunning";
-  const isCrashed = process?.status === "crashed";
-  const isProcessStatusLoading = processQuery.isLoading;
+  const resolvedStatus = processStatus ?? runtime.status;
+  const isRunning = resolvedStatus === "running";
+  const isExternalRunning = resolvedStatus === "externalRunning";
+  const isCrashed = resolvedStatus === "crashed";
+  const isProcessStatusLoading =
+    processStatus === undefined && runtime.isLoading;
 
   const refreshRuntimeState = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
-        queryKey: ["serverProcessStatus", server.id],
+        queryKey: processKeys.status(server.id),
       }),
-      queryClient.invalidateQueries({ queryKey: ["processEvents", server.id] }),
-      queryClient.invalidateQueries({ queryKey: ["processSummary"] }),
+      queryClient.invalidateQueries({
+        queryKey: processKeys.events(server.id),
+      }),
+      queryClient.invalidateQueries({ queryKey: processKeys.summary }),
     ]);
   };
 
@@ -133,7 +139,10 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
         <Button
           aria-label={t("servers.actions.startAria", { server: server.name })}
           disabled={
-            isRunning || isExternalRunning || isPending || isProcessStatusLoading
+            isRunning ||
+            isExternalRunning ||
+            isPending ||
+            isProcessStatusLoading
           }
           variant={compact ? "ghost" : "primary"}
           onClick={() => {
@@ -175,8 +184,8 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
           {compact ? null : t("servers.actions.restart")}
         </Button>
       </ActionTooltip>
-      {processQuery.error ? (
-        <span className="inline-error">{processQuery.error.message}</span>
+      {processStatus === undefined && runtime.error ? (
+        <span className="inline-error">{runtime.error.message}</span>
       ) : null}
       {actionError ? (
         <span className="inline-error">{actionError.message}</span>
@@ -227,16 +236,12 @@ export function ServerActions({ server, compact = false }: ServerActionsProps) {
   );
 }
 
-export function ServerProcessStatusBadge({ serverId }: { serverId: string }) {
-  const processQuery = useQuery({
-    queryKey: ["serverProcessStatus", serverId],
-    queryFn: () => getServerProcessStatus(serverId),
-    refetchInterval: 1500,
-  });
+export function ServerProcessStatusBadge() {
+  const runtime = useServerRuntime();
 
-  if (processQuery.error) {
-    return <span className="inline-error">{processQuery.error.message}</span>;
+  if (runtime.error) {
+    return <span className="inline-error">{runtime.error.message}</span>;
   }
 
-  return <StatusBadge status={processQuery.data?.status ?? "stopped"} />;
+  return <StatusBadge status={runtime.status} />;
 }

@@ -9,7 +9,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 import { ProfileImportExport } from "./ProfileImportExport";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -63,6 +63,21 @@ function renderProfileIo() {
   );
 }
 
+async function chooseProfileDocument() {
+  const profileFile = new File(
+    [JSON.stringify(document)],
+    "survival-profile.json",
+    { type: "application/json" },
+  );
+  Object.defineProperty(profileFile, "text", {
+    value: async () => JSON.stringify(document),
+  });
+  fireEvent.change(screen.getByLabelText(/choose profile json file/i), {
+    target: { files: [profileFile] },
+  });
+  expect(await screen.findByText("survival-profile.json")).toBeInTheDocument();
+}
+
 describe("ProfileImportExport", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
@@ -80,9 +95,11 @@ describe("ProfileImportExport", () => {
       screen.getByRole("button", { name: /export selected profile/i }),
     );
 
+    expect(await screen.findByText("Survival")).toBeInTheDocument();
     expect(
-      await screen.findByDisplayValue(/"formatVersion": 1/),
+      screen.getByRole("button", { name: /copy exported profile/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /profile json/i })).not.toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("export_server_profile", {
       input: {
         serverId: server.id,
@@ -102,9 +119,7 @@ describe("ProfileImportExport", () => {
     });
 
     renderProfileIo();
-    fireEvent.change(screen.getByLabelText(/profile json/i), {
-      target: { value: JSON.stringify(document) },
-    });
+    await chooseProfileDocument();
     await userEvent.type(screen.getByLabelText(/import name/i), "Imported");
     await userEvent.type(
       screen.getByLabelText(/target server folder/i),
@@ -136,9 +151,7 @@ describe("ProfileImportExport", () => {
     });
 
     renderProfileIo();
-    fireEvent.change(screen.getByLabelText(/profile json/i), {
-      target: { value: JSON.stringify(document) },
-    });
+    await chooseProfileDocument();
     await userEvent.type(screen.getByLabelText(/import name/i), "Imported");
     await userEvent.type(
       screen.getByLabelText(/target server folder/i),
@@ -167,6 +180,38 @@ describe("ProfileImportExport", () => {
         },
       });
     });
+  });
+
+  it("fills import paths from native pickers", async () => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command !== "show_open_dialog") {
+        return document;
+      }
+      return (args as { kind?: string })?.kind === "folder"
+        ? { path: "C:/servers/picked" }
+        : { path: "C:/java/bin/java.exe" };
+    });
+
+    renderProfileIo();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Choose destination folder" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Choose Java executable" }),
+    );
+
+    expect(screen.getByLabelText("Target server folder")).toHaveValue(
+      "C:/servers/picked",
+    );
+    expect(screen.getByLabelText("Java runtime")).toHaveValue(
+      "C:/java/bin/java.exe",
+    );
+    expect(invoke).toHaveBeenCalledWith("show_open_dialog", { kind: "folder" });
+    expect(invoke).toHaveBeenCalledWith(
+      "show_open_dialog",
+      expect.objectContaining({ kind: "file" }),
+    );
   });
 });
 

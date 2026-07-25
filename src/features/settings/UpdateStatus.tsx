@@ -6,6 +6,7 @@ import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { formatDateTime } from "../../lib/date-format";
+import { queryKeys } from "../../lib/query-keys";
 
 interface AppUpdateStatus {
   currentVersion: string;
@@ -27,19 +28,27 @@ async function invokeUpdateCommand<T>(command: string) {
   });
 }
 
-function formatCheckedAt(value: string | undefined, notCheckedLabel: string) {
+function formatCheckedAt(
+  value: string | undefined,
+  notCheckedLabel: string,
+  locale: string,
+) {
   if (!value) {
     return notCheckedLabel;
   }
 
-  return formatDateTime(value);
+  return formatDateTime(value, locale);
+}
+
+function channelLabel(channel: string, stableLabel: string) {
+  return channel.toLowerCase() === "stable" ? stableLabel : channel;
 }
 
 export function UpdateStatus() {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const [isInstallConfirmOpen, setIsInstallConfirmOpen] = useState(false);
   const updateQuery = useQuery({
-    queryKey: ["appUpdateStatus"],
+    queryKey: queryKeys.updates.app,
     queryFn: () => invokeUpdateCommand<AppUpdateStatus>("check_app_update"),
   });
   const installMutation = useMutation({
@@ -70,9 +79,21 @@ export function UpdateStatus() {
       </div>
 
       {updateQuery.error ? (
-        <div className="list-state list-state-error">
+        <div
+          aria-label={t("settings.updates.error.title")}
+          className="list-state list-state-error"
+          role="alert"
+        >
           <strong>{t("settings.updates.error.title")}</strong>
           <span>{updateQuery.error.message}</span>
+          <Button
+            disabled={updateQuery.isFetching}
+            variant="secondary"
+            onClick={() => updateQuery.refetch()}
+          >
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("common.retry")}
+          </Button>
         </div>
       ) : null}
 
@@ -84,7 +105,12 @@ export function UpdateStatus() {
           </div>
           <div>
             <span>{t("settings.updates.channel")}</span>
-            <strong>{status.channel}</strong>
+            <strong>
+              {channelLabel(
+                status.channel,
+                t("settings.updates.channel.stable"),
+              )}
+            </strong>
           </div>
           <div>
             <span>{t("settings.updates.lastCheck")}</span>
@@ -92,6 +118,7 @@ export function UpdateStatus() {
               {formatCheckedAt(
                 status.checkedAt,
                 t("settings.updates.notChecked"),
+                language,
               )}
             </strong>
           </div>
@@ -116,11 +143,11 @@ export function UpdateStatus() {
                 {formatCheckedAt(
                   status.releaseDate,
                   t("settings.updates.notChecked"),
+                  language,
                 )}
               </strong>
             </div>
           ) : null}
-          <p>{status.message}</p>
           {status.releaseNotes ? <p>{status.releaseNotes}</p> : null}
           {status.installBlockedByRunningServers ? (
             <p className="danger-text">
@@ -130,7 +157,9 @@ export function UpdateStatus() {
             </p>
           ) : null}
           {installMutation.error ? (
-            <p className="danger-text">{installMutation.error.message}</p>
+            <p className="danger-text" role="alert">
+              {installMutation.error.message}
+            </p>
           ) : null}
           <Button
             disabled={installDisabled}

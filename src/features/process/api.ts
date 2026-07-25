@@ -25,6 +25,8 @@ export interface ProcessEvent {
 export interface ProcessSummary {
   runningCount: number;
   crashedCount: number;
+  statuses?: Record<string, ManagedProcessStatus>;
+  lastBackups?: Record<string, string | null>;
 }
 
 export interface RestartCountdownResult {

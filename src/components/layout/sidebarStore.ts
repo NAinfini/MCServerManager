@@ -23,6 +23,7 @@ interface SidebarState {
   disbandGroup: (groupId: string) => void;
   moveServerAfter: (serverId: string, targetServerId: string) => void;
   moveServerBefore: (serverId: string, targetServerId: string) => void;
+  moveServerByOffset: (serverId: string, offset: -1 | 1) => void;
   moveServerToTop: (serverId: string) => void;
   renameGroup: (groupId: string, name: string) => void;
   resetServerLayout: () => void;
@@ -247,6 +248,43 @@ export const useSidebarStore = create<SidebarState>()(
               targetIndex === -1 ? 0 : targetIndex,
             ),
           };
+        }),
+      moveServerByOffset: (serverId, offset) =>
+        set((state) => {
+          const group = state.groups.find((candidate) =>
+            candidate.serverIds.includes(serverId),
+          );
+          if (group) {
+            const currentIndex = group.serverIds.indexOf(serverId);
+            const nextIndex = currentIndex + offset;
+            if (nextIndex < 0 || nextIndex >= group.serverIds.length) return state;
+            const serverIds = group.serverIds.slice();
+            [serverIds[currentIndex], serverIds[nextIndex]] = [
+              serverIds[nextIndex],
+              serverIds[currentIndex],
+            ];
+            return {
+              groups: state.groups.map((candidate) =>
+                candidate.id === group.id ? { ...candidate, serverIds } : candidate,
+              ),
+            };
+          }
+
+          const currentIndex = findServerRootIndex(state.rootItems, serverId);
+          const nextIndex = currentIndex + offset;
+          if (
+            currentIndex < 0 ||
+            nextIndex < 0 ||
+            nextIndex >= state.rootItems.length
+          ) {
+            return state;
+          }
+          const rootItems = state.rootItems.slice();
+          [rootItems[currentIndex], rootItems[nextIndex]] = [
+            rootItems[nextIndex],
+            rootItems[currentIndex],
+          ];
+          return { rootItems };
         }),
       moveServerToTop: (serverId) =>
         set((state) => {

@@ -46,9 +46,10 @@ export function updateServerProfile(input: UpdateServerProfileInput) {
   );
 }
 
-export function deleteServerProfile(id: string) {
+export function deleteServerProfile(id: string, deleteFromDisk = false) {
   return invokeDesktopCommandWithErrorHandling<void>("delete_server_profile", {
     id,
+    deleteFromDisk,
   });
 }
 

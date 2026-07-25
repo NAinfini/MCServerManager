@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   ScrollText,
   MoveUp,
+  MoveDown,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -23,13 +24,15 @@ import {
   type MouseEvent,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useQueries } from "@tanstack/react-query";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useAppSettings } from "../../i18n";
 import { StatusBadge } from "../ui/status-badge";
+import { Button } from "../ui/button";
+import { DialogSurface } from "../ui/dialog-surface";
+import { TextField } from "../ui/text-field";
 import { ServerCover } from "../ui/server-cover";
-import type { ServerProfile } from "../../features/servers/types";
-import { getServerProcessStatus } from "../../features/process/api";
+import type { ServerProfile } from "../../domain/server";
+import type { ManagedProcessStatus } from "../../features/process/api";
 import { LoaderPill } from "../../features/loaders/LoaderIdentity";
 import {
   type SidebarServerGroup,
@@ -82,12 +85,13 @@ interface SidebarProps {
   servers: ServerProfile[];
   activePage: PrimaryPage;
   selectedServerId?: string;
+  serverStatuses?: Record<string, ManagedProcessStatus>;
   onSelectPage: (page: PrimaryPage) => void;
   onSelectServer?: (serverId: string) => void;
 }
 
 interface ServerDropZoneProps {
-  label: string;
+  testId: string;
   onDropServer: (serverId: string) => void;
 }
 
@@ -98,16 +102,14 @@ function readDraggedServerId(event: DragEvent<HTMLElement>) {
   );
 }
 
-function ServerDropZone({ label, onDropServer }: ServerDropZoneProps) {
+function ServerDropZone({ testId, onDropServer }: ServerDropZoneProps) {
   const [active, setActive] = useState(false);
 
   return (
     <div
-      aria-label={label}
-      aria-orientation="horizontal"
+      aria-hidden="true"
       className={active ? "server-drop-zone server-drop-zone-active" : "server-drop-zone"}
-      role="separator"
-      tabIndex={-1}
+      data-testid={testId}
       onDragEnter={(event) => {
         event.preventDefault();
         setActive(true);
@@ -134,6 +136,7 @@ export function Sidebar({
   servers,
   activePage,
   selectedServerId,
+  serverStatuses = {},
   onSelectPage,
   onSelectServer,
 }: SidebarProps) {
@@ -148,6 +151,7 @@ export function Sidebar({
   const moveServerAfter = useSidebarStore((s) => s.moveServerAfter);
   const moveServerBefore = useSidebarStore((s) => s.moveServerBefore);
   const moveServerToTop = useSidebarStore((s) => s.moveServerToTop);
+  const moveServerByOffset = useSidebarStore((s) => s.moveServerByOffset);
   const renameGroup = useSidebarStore((s) => s.renameGroup);
   const syncServerLayout = useSidebarStore((s) => s.syncServerLayout);
   const toggleCollapsed = useSidebarStore((s) => s.toggleCollapsed);
@@ -156,6 +160,8 @@ export function Sidebar({
   const reduceMotion = useReducedMotion();
   const [draggingServerId, setDraggingServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SidebarServerGroup | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const sidebarRef = useRef<HTMLElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement | null>(null);
@@ -163,17 +169,6 @@ export function Sidebar({
     Omit<ContextMenuState, "x" | "y"> | null
   >(null);
   const restoreContextMenuFocusRef = useRef(false);
-  const statusQueries = useQueries({
-    queries: servers.map((server) => ({
-      queryKey: ["serverProcessStatus", server.id],
-      queryFn: () => getServerProcessStatus(server.id),
-      refetchInterval: 1500,
-    })),
-  });
-  const statusSnapshot = statusQueries.map(
-    (query) => query.data?.status ?? "stopped",
-  );
-  const statusSnapshotKey = statusSnapshot.join("|");
   const serverIds = useMemo(() => servers.map((server) => server.id), [servers]);
   const serverIdKey = serverIds.join("|");
   const serverById = useMemo(
@@ -191,12 +186,12 @@ export function Sidebar({
   const statusByServerId = useMemo(
     () =>
       new Map(
-        servers.map((server, index) => [
+        servers.map((server) => [
           server.id,
-          statusSnapshot[index] ?? "stopped",
+          serverStatuses[server.id] ?? "stopped",
         ]),
       ),
-    [servers, statusSnapshotKey],
+    [servers, serverStatuses],
   );
   const visibleRootItems = useMemo(
     () =>
@@ -382,18 +377,12 @@ export function Sidebar({
     [addServerToGroup],
   );
 
-  const promptRenameGroup = useCallback(
+  const openRenameGroup = useCallback(
     (group: SidebarServerGroup) => {
-      const name = window.prompt(
-        t("nav.serverGroup.renamePrompt"),
-        group.name || t("nav.serverGroup.default"),
-      );
-      const trimmedName = name?.trim();
-      if (trimmedName) {
-        renameGroup(group.id, trimmedName);
-      }
+      setRenameTarget(group);
+      setRenameValue(group.name || t("nav.serverGroup.default"));
     },
-    [renameGroup, t],
+    [t],
   );
 
   const renderServerRow = useCallback(
@@ -423,6 +412,7 @@ export function Sidebar({
         >
           <NavTooltip enabled={collapsed} label={server.name}>
             <button
+              aria-label={server.name}
               aria-current={isActive ? "page" : undefined}
               aria-expanded={
                 contextMenu?.type === "server" && contextMenu.id === server.id
@@ -514,12 +504,12 @@ export function Sidebar({
     (server: ServerProfile, options: { grouped?: boolean } = {}) => (
       <motion.div key={`entry-${server.id}`} className="server-nav-entry" layout>
         <ServerDropZone
-          label={t("nav.drop.before", { server: server.name })}
+          testId={`drop-before-${server.id}`}
           onDropServer={(serverId) => moveServerBefore(serverId, server.id)}
         />
         {renderServerRow(server, options)}
         <ServerDropZone
-          label={t("nav.drop.after", { server: server.name })}
+          testId={`drop-after-${server.id}`}
           onDropServer={(serverId) => moveServerAfter(serverId, server.id)}
         />
       </motion.div>
@@ -546,6 +536,7 @@ export function Sidebar({
           role="group"
         >
           <button
+            aria-label={groupName}
             aria-expanded={!group.collapsed}
             aria-haspopup="menu"
             data-context-menu-trigger={`group:${group.id}`}
@@ -583,9 +574,9 @@ export function Sidebar({
             {!group.collapsed && (
               <motion.div
                 className="server-nav-group-list"
-                initial={reduceMotion ? false : { opacity: 0, height: 0 }}
-                animate={reduceMotion ? { opacity: 1 } : { opacity: 1, height: "auto" }}
-                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+                initial={reduceMotion ? false : { opacity: 0, y: -3 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -3 }}
                 transition={{ duration: reduceMotion ? 0 : 0.16 }}
               >
                 {groupServers.map((server) =>
@@ -632,7 +623,7 @@ export function Sidebar({
           onClick={() => onSelectPage("servers")}
         >
           <span className="app-mark">
-            <img alt="" aria-hidden="true" src="./app-icon.png" />
+            <img alt="" aria-hidden="true" height="28" src="./app-icon.png" width="28" />
           </span>
           {!collapsed && (
             <div className="sidebar-brand-copy">
@@ -664,6 +655,7 @@ export function Sidebar({
       <nav className="sidebar-top-nav">
         <NavTooltip enabled={collapsed} label={t("nav.dashboard")}>
           <button
+            aria-label={t("nav.dashboard")}
             className={
               activePage === "servers" && !selectedServerId
                 ? "nav-item nav-item-active"
@@ -703,6 +695,7 @@ export function Sidebar({
             label={t(item.labelKey)}
           >
             <button
+              aria-label={t(item.labelKey)}
               className={
                 activePage === item.id ? "nav-item nav-item-active" : "nav-item"
               }
@@ -760,6 +753,48 @@ export function Sidebar({
             <MoveUp aria-hidden="true" size={15} />
             <span>{t("nav.serverContext.moveTop")}</span>
           </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              moveServerByOffset(menuServer.id, -1);
+              closeContextMenu(true);
+            }}
+          >
+            <MoveUp aria-hidden="true" size={15} />
+            <span>{t("nav.serverContext.moveUp")}</span>
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              moveServerByOffset(menuServer.id, 1);
+              closeContextMenu(true);
+            }}
+          >
+            <MoveDown aria-hidden="true" size={15} />
+            <span>{t("nav.serverContext.moveDown")}</span>
+          </button>
+          {groups
+            .filter((group) => !group.serverIds.includes(menuServer.id))
+            .map((group) => (
+              <button
+                key={group.id}
+                role="menuitem"
+                type="button"
+                onClick={() => {
+                  addServerToGroup(menuServer.id, group.id);
+                  closeContextMenu(true);
+                }}
+              >
+                <FolderPlus aria-hidden="true" size={15} />
+                <span>
+                  {t("nav.serverContext.moveToGroup", {
+                    group: group.name || t("nav.serverGroup.default"),
+                  })}
+                </span>
+              </button>
+            ))}
           {menuServerGrouped && (
             <button
               role="menuitem"
@@ -805,7 +840,7 @@ export function Sidebar({
             role="menuitem"
             type="button"
             onClick={() => {
-              promptRenameGroup(menuGroup);
+              openRenameGroup(menuGroup);
               closeContextMenu(true);
             }}
           >
@@ -825,6 +860,43 @@ export function Sidebar({
           </button>
         </div>
       )}
+      <DialogSurface
+        open={Boolean(renameTarget)}
+        title={t("nav.serverGroup.rename")}
+        description={t("nav.serverGroup.renamePrompt")}
+        onOpenChange={(open) => {
+          if (!open) setRenameTarget(null);
+        }}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRenameTarget(null)}>
+              {t("common.cancel")}
+            </Button>
+            <Button
+              disabled={!renameValue.trim()}
+              onClick={() => {
+                if (!renameTarget || !renameValue.trim()) return;
+                renameGroup(renameTarget.id, renameValue.trim());
+                setRenameTarget(null);
+              }}
+            >
+              {t("common.save")}
+            </Button>
+          </>
+        }
+      >
+        <TextField
+          aria-label={t("nav.serverGroup.renamePrompt")}
+          autoFocus
+          value={renameValue}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !renameTarget || !renameValue.trim()) return;
+            renameGroup(renameTarget.id, renameValue.trim());
+            setRenameTarget(null);
+          }}
+        />
+      </DialogSurface>
     </aside>
   );
 }

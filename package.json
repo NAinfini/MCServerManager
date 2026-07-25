@@ -2,7 +2,7 @@
   "name": "mc-server-manager",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@11.17.0",
   "description": "Desktop Minecraft server manager.",
   "license": "MIT",
   "author": {
@@ -16,13 +16,8 @@
     "url": "https://github.com/NAinfini/MCServerManager.git"
   },
   "engines": {
-    "node": ">=22.12",
-    "pnpm": ">=9"
-  },
-  "pnpm": {
-    "overrides": {
-      "dompurify": "3.4.11"
-    }
+    "node": ">=24",
+    "pnpm": ">=11 <12"
   },
   "scripts": {
     "dev": "concurrently -k \"pnpm dev:renderer\" \"wait-on http://localhost:1420 && electron .\"",
@@ -31,6 +26,11 @@
     "build": "tsc && vite build",
     "electron:dev": "pnpm dev",
     "electron:build": "pnpm build && electron-builder",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "pnpm build && playwright test",
+    "test:e2e:headed": "pnpm build && playwright test --headed",
+    "test:all": "pnpm test:unit && pnpm test:e2e",
     "test:electron-smoke": "vitest run electron/provisioning-smoke.test.mjs",
     "test:electron-ui-smoke": "electron electron/ui-smoke.cjs",
     "preview": "vite preview"
@@ -57,12 +57,13 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.80.0",
-    "tailwind-merge": "^3.6.0",
     "yauzl": "^3.4.0",
     "zod": "^4.4.3",
     "zustand": "5.0.14"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",

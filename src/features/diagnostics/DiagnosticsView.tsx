@@ -3,7 +3,9 @@ import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command
 import { Activity, Stethoscope } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
-import type { ServerProfile } from "../servers/types";
+import { queryKeys } from "../../lib/query-keys";
+import { formatDateTime } from "../../lib/date-format";
+import type { ServerProfile } from "../../domain/server";
 
 interface DiagnosticCheck {
   name: string;
@@ -23,18 +25,18 @@ interface DiagnosticsViewProps {
   server: ServerProfile;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+function diagnosticStatusLabel(
+  status: DiagnosticRun["status"] | DiagnosticCheck["status"],
+  t: (key: string) => string,
+) {
+  return t(`diagnostics.status.${status}`);
 }
 
 export function DiagnosticsView({ server }: DiagnosticsViewProps) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const historyQuery = useQuery({
-    queryKey: ["diagnosticRuns", server.id],
+    queryKey: queryKeys.diagnostics.runs(server.id),
     queryFn: () =>
       invokeDesktopCommandWithErrorHandling<DiagnosticRun[]>("list_diagnostic_runs", {
         serverId: server.id,
@@ -47,7 +49,7 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["diagnosticRuns", server.id],
+        queryKey: queryKeys.diagnostics.runs(server.id),
       });
     },
   });
@@ -67,39 +69,51 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
         </Button>
       </div>
       {historyQuery.error ? (
-        <p className="danger-text">{historyQuery.error.message}</p>
+        <div className="list-state list-state-error" role="alert">
+          <strong>{t("diagnostics.loadError")}</strong>
+          <span>{historyQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => historyQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
       ) : null}
       {runMutation.error ? (
-        <p className="danger-text">{runMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {runMutation.error.message}
+        </p>
       ) : null}
-      {latest ? (
+      {!historyQuery.error && latest ? (
         <>
           <div className="update-status-grid">
             <div>
               <span>{t("diagnostics.status")}</span>
-              <strong>{latest.status}</strong>
+              <strong className={`diagnostic-status diagnostic-status-${latest.status}`}>
+                {diagnosticStatusLabel(latest.status, t)}
+              </strong>
             </div>
             <div>
               <span>{t("diagnostics.runAt")}</span>
-              <strong>{formatDate(latest.createdAt)}</strong>
+              <strong>{formatDateTime(latest.createdAt, language)}</strong>
             </div>
           </div>
           <div className="compatibility-list">
             {latest.results.map((result) => (
-              <div key={result.name}>
-                <strong>{result.status}</strong>
+              <div className="diagnostic-result" key={result.name}>
+                <strong className={`diagnostic-status diagnostic-status-${result.status}`}>
+                  {diagnosticStatusLabel(result.status, t)}
+                </strong>
                 <span>{result.message}</span>
               </div>
             ))}
           </div>
         </>
-      ) : (
+      ) : !historyQuery.error ? (
         <div className="list-state">
           <Activity aria-hidden="true" size={18} />
           <strong>{t("diagnostics.empty.title")}</strong>
           <span>{t("diagnostics.empty.description")}</span>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

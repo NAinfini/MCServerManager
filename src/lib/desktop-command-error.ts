@@ -1,9 +1,5 @@
 import { invokeDesktopCommand } from "./desktop-runtime";
-
-const runtimeUnavailableMessage =
-  "Desktop runtime is unavailable. Open MC Server Manager from the desktop app instead of a web browser.";
-const staleRuntimeMessage =
-  "Desktop runtime is out of date. Restart MC Server Manager so the Electron backend reloads the latest commands.";
+import { readStoredLanguage, translate } from "../i18n";
 
 export function normalizeDesktopCommandError(error: unknown): Error {
   const message =
@@ -13,10 +9,12 @@ export function normalizeDesktopCommandError(error: unknown): Error {
         ? error
         : "";
   if (isDesktopRuntimeUnavailable(message)) {
-    return new Error(runtimeUnavailableMessage);
+    return new Error(
+      translate(readStoredLanguage(), "desktop.error.runtimeUnavailable"),
+    );
   }
   if (isStaleDesktopRuntime(message)) {
-    return new Error(staleRuntimeMessage);
+    return new Error(translate(readStoredLanguage(), "desktop.error.staleRuntime"));
   }
   if (error instanceof Error) {
     return error;
@@ -25,7 +23,7 @@ export function normalizeDesktopCommandError(error: unknown): Error {
     return new Error(error);
   }
 
-  return new Error("Unknown desktop command failure");
+  return new Error(translate(readStoredLanguage(), "desktop.error.unknown"));
 }
 
 function isDesktopRuntimeUnavailable(message: string) {

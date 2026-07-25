@@ -8,6 +8,7 @@ import {
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
+import { ServerRuntimeProvider } from "../servers/ServerRuntimeContext";
 import { ConsoleView } from "./ConsoleView";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -33,7 +34,9 @@ function renderConsole() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ConsoleView serverId="server-1" />
+      <ServerRuntimeProvider serverId="server-1">
+        <ConsoleView serverId="server-1" />
+      </ServerRuntimeProvider>
     </QueryClientProvider>,
   );
 }

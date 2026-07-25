@@ -26,6 +26,12 @@ export default defineConfig(async () => ({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    include: [
+      "src/**/*.test.{ts,tsx,mjs}",
+      "electron/**/*.test.mjs",
+      "e2e/support/**/*.test.ts",
+      "*.test.mjs",
+    ],
   },
   build: {
     rollupOptions: {

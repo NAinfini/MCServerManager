@@ -102,10 +102,37 @@ vi.mock("../../lib/desktop-runtime", () => ({
     if (command === "get_app_preferences") {
       return {
         closeBehavior: "minimize",
+        launchAtLogin: false,
         defaultServerDir: "C:/MCServers",
         defaultBackupDir: "C:/MCServers/backups",
         cacheDir: "C:/Users/Test/AppData/Roaming/mc-server-manager/cache",
         appDataDir: "C:/Users/Test/AppData/Roaming/mc-server-manager",
+        logging: {
+          retentionDays: 14,
+          maxSizeMb: 25,
+          level: "info",
+        },
+        serverDefaults: {
+          javaStrategy: "auto",
+          minMemoryMb: 1024,
+          maxMemoryMb: 4096,
+        },
+        backupDefaults: {
+          compression: "zip",
+          retentionDays: 14,
+          frequency: "daily",
+        },
+        marketplace: {
+          defaultProvider: "modrinth",
+          showIncompatible: false,
+          autoInstallDependencies: true,
+          cacheSizeMb: 1024,
+        },
+        appearance: {
+          compactMode: false,
+          motion: "full",
+          fontSize: "medium",
+        },
         providers: {
           modrinth: true,
           hangar: true,
@@ -132,7 +159,11 @@ vi.mock("../../lib/desktop-runtime", () => ({
   }),
 }));
 
-function renderShell() {
+function renderShell(processSummary: {
+  runningCount: number;
+  crashedCount: number;
+} | null = { runningCount: 1, crashedCount: 0 }, hash = "#/dashboard") {
+  window.history.replaceState(null, "", hash);
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -144,7 +175,7 @@ function renderShell() {
   return render(
     <QueryClientProvider client={queryClient}>
       <AppSettingsProvider>
-        <AppShell />
+        <AppShell processSummary={processSummary} />
       </AppSettingsProvider>
     </QueryClientProvider>,
   );
@@ -179,19 +210,36 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /^settings$/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /java runtimes/i }),
+    ).toHaveAttribute("aria-label", "Java Runtimes");
+    expect(
+      screen.getByRole("button", { name: /^logger$/i }),
+    ).toHaveAttribute("aria-label", "Logger");
   });
 
-  it("renders the overview as a flat dashboard flow", async () => {
+  it("renders the overview as a native server workbench", async () => {
     const { container } = renderShell();
 
     expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
     expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(0);
     expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
-    expect(container.querySelector(".summary-strip")).not.toBeNull();
+    expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
+    expect(container.querySelector(".server-table-panel")).not.toBeNull();
+    expect(container.querySelector(".summary-strip")).toBeNull();
+    expect(container.querySelector(".server-card-grid")).toBeNull();
+    expect(container.querySelector(".server-view-toggle")).toBeNull();
     expect(container.querySelector(".batch-actions")).toBeNull();
     expect(container.querySelector(".dashboard-workbench")).toBeNull();
     expect(container.querySelector(".dashboard-primary")).toBeNull();
-    expect(container.querySelector(".dashboard-status-rail")).toBeNull();
+  });
+
+  it("elevates crashed servers into a single incident notice", async () => {
+    renderShell({ runningCount: 0, crashedCount: 1 });
+
+    expect(
+      await screen.findByRole("status", { name: "Server incidents" }),
+    ).toHaveTextContent("1 crashed server needs attention");
   });
 
   it("keeps Servers navigation on the global overview and opens detail from a server row", async () => {
@@ -209,7 +257,9 @@ describe("AppShell", () => {
     expect(
       await screen.findByRole("heading", { name: "Survival SMP" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Console" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Console" }),
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /^servers$/i }));
 
@@ -275,19 +325,37 @@ describe("AppShell", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("names both server view controls", async () => {
+  it("uses one list presentation instead of card and table modes", async () => {
     renderShell();
 
     await screen.findByRole("heading", { name: "Servers" });
 
-    expect(screen.getByRole("button", { name: "Card view" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    expect(
+      await screen.findByRole("table", { name: "Server overview" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Card view" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Table view" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("restores a deep-linked server workspace and child view", async () => {
+    renderShell(
+      { runningCount: 1, crashedCount: 0 },
+      "#/servers/server-1/players?view=whitelist",
     );
-    expect(screen.getByRole("button", { name: "Table view" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Survival SMP" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Players" }),
+    ).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("button", { name: "Whitelist" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   it("renders the create wizard progress inside the main content header", async () => {
@@ -335,8 +403,8 @@ describe("AppShell", () => {
       await within(main).findByRole("button", { name: /lazy survival/i }),
     );
 
-    const details = await within(main).findByRole("article", {
-      name: /lazy survival/i,
+    await within(main).findByRole("region", {
+      name: /project details/i,
     });
     expect(
       main.querySelector(".create-server-wizard-header"),
@@ -346,7 +414,7 @@ describe("AppShell", () => {
     ).not.toBeInTheDocument();
 
     await userEvent.click(
-      within(details).getByRole("button", { name: "Back" }),
+      within(main).getByRole("button", { name: "Back" }),
     );
 
     expect(
@@ -370,7 +438,7 @@ describe("AppShell", () => {
       within(main).getByRole("button", { name: /browse marketplace/i }),
     );
     const providerSelect = await within(main).findByRole("combobox", {
-      name: /providers/i,
+      name: /^source$/i,
     });
 
     await userEvent.click(providerSelect);

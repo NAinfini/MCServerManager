@@ -5,6 +5,8 @@ interface MarketplaceMarkdownProps {
   source: string;
 }
 
+const marketplaceImageConcurrency = 3;
+
 const allowedHtmlTags = new Set([
   "A",
   "B",
@@ -145,8 +147,11 @@ function sanitizeHtml(html: string) {
           node.setAttribute("src", safeSrc);
         }
         node.setAttribute("alt", alt);
+        node.setAttribute("decoding", "async");
+        node.setAttribute("height", "540");
         node.setAttribute("loading", "lazy");
         node.setAttribute("referrerpolicy", "no-referrer");
+        node.setAttribute("width", "960");
       } else {
         node.remove();
       }
@@ -178,7 +183,7 @@ function renderInlineMarkdown(value: string) {
           ? `data-marketplace-image-src="${escapeHtml(src)}"`
           : `src="${escapeHtml(src || "")}"`;
       return src
-        ? `<img ${sourceAttribute} alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer">`
+        ? `<img ${sourceAttribute} alt="${escapeHtml(alt)}" decoding="async" height="540" loading="lazy" referrerpolicy="no-referrer" width="960">`
         : "";
     },
   );
@@ -243,7 +248,7 @@ function convertMarkdownInHtml(source: string) {
       const sourceAttribute = isProxiedMarketplaceImage(src)
         ? `data-marketplace-image-src="${escapeHtml(src)}"`
         : `src="${escapeHtml(src)}"`;
-      return `<img ${sourceAttribute} alt="${escapeHtml(alt)}" loading="lazy" referrerpolicy="no-referrer">`;
+      return `<img ${sourceAttribute} alt="${escapeHtml(alt)}" decoding="async" height="540" loading="lazy" referrerpolicy="no-referrer" width="960">`;
     },
   );
 
@@ -412,34 +417,52 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let activeRequests = 0;
     const images = Array.from(
       rootRef.current?.querySelectorAll<HTMLImageElement>(
         "img[data-marketplace-image-src]",
       ) ?? [],
     );
 
-    for (const image of images) {
-      const remoteSrc = image.dataset.marketplaceImageSrc;
-      if (!remoteSrc) continue;
+    const loadNext = () => {
+      while (
+        !cancelled &&
+        activeRequests < marketplaceImageConcurrency &&
+        images.length > 0
+      ) {
+        const image = images.shift();
+        if (!image) break;
+        const remoteSrc = image.dataset.marketplaceImageSrc;
+        if (!remoteSrc) continue;
+        activeRequests += 1;
+        void fetchMarketplaceImage(remoteSrc)
+          .then(({ dataUrl }) => {
+            if (cancelled || !image.isConnected) return;
+            image.src = dataUrl;
+            image.removeAttribute("data-marketplace-image-src");
+          })
+          .catch((error) => {
+            console.error("Failed to load BBSMC marketplace image", error);
+            if (cancelled || !image.isConnected) return;
+            image.dataset.marketplaceImageError = "true";
+            image.removeAttribute("data-marketplace-image-src");
+            image.title =
+              error instanceof Error
+                ? error.message
+                : "BBSMC image load failed";
+          })
+          .finally(() => {
+            activeRequests -= 1;
+            loadNext();
+          });
+      }
+    };
 
-      void fetchMarketplaceImage(remoteSrc)
-        .then(({ dataUrl }) => {
-          if (cancelled || !image.isConnected) return;
-          image.src = dataUrl;
-          image.removeAttribute("data-marketplace-image-src");
-        })
-        .catch((error) => {
-          console.error("Failed to load BBSMC marketplace image", error);
-          if (cancelled || !image.isConnected) return;
-          image.dataset.marketplaceImageError = "true";
-          image.removeAttribute("data-marketplace-image-src");
-          image.title =
-            error instanceof Error ? error.message : "BBSMC image load failed";
-        });
-    }
+    loadNext();
 
     return () => {
       cancelled = true;
+      images.length = 0;
     };
   }, [html]);
 
@@ -472,8 +495,9 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
     // Images that already resolved to a broken state before this effect ran
     // never fire a fresh `error` event, so reconcile them directly.
     for (const image of Array.from(root.querySelectorAll("img"))) {
+      const remoteSrc = image.dataset.marketplaceImageSrc;
       if (
-        !image.hasAttribute("data-marketplace-image-src") &&
+        !remoteSrc &&
         image.complete &&
         image.naturalWidth === 0
       ) {

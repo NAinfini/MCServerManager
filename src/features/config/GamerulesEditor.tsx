@@ -6,10 +6,10 @@ import { Select } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { sendServerCommand } from "../process/api";
-import type { ServerProfile } from "../servers/types";
+import { processKeys } from "../process/queries";
 
 interface GamerulesEditorProps {
-  server: ServerProfile;
+  serverId: string;
 }
 
 const gameruleOptions = [
@@ -35,7 +35,7 @@ const numericRules = new Set([
   "spawnRadius",
 ]);
 
-export function GamerulesEditor({ server }: GamerulesEditorProps) {
+export function GamerulesEditor({ serverId }: GamerulesEditorProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const [rule, setRule] = useState<GameruleKey>(gameruleOptions[0].value);
@@ -43,10 +43,10 @@ export function GamerulesEditor({ server }: GamerulesEditorProps) {
   const isNumericRule = numericRules.has(rule);
   const command = `gamerule ${rule} ${value.trim()}`;
   const mutation = useMutation({
-    mutationFn: () => sendServerCommand(server.id, command),
+    mutationFn: () => sendServerCommand(serverId, command),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["processEvents", server.id],
+        queryKey: processKeys.events(serverId),
       });
     },
   });
@@ -108,7 +108,9 @@ export function GamerulesEditor({ server }: GamerulesEditorProps) {
       </div>
       <code className="command-preview">{command}</code>
       {mutation.error ? (
-        <p className="danger-text">{mutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {mutation.error.message}
+        </p>
       ) : null}
     </section>
   );

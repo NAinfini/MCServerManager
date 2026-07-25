@@ -3,7 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppSettingsProvider } from "../../i18n";
-import { invokeDesktopCommand } from "../../lib/desktop-runtime";
+import {
+  invokeDesktopCommand,
+  isDesktopRuntimeAvailable,
+} from "../../lib/desktop-runtime";
 import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
 import * as provisioningApi from "./provisioningApi";
 import {
@@ -11,7 +14,10 @@ import {
   type CreateServerWizardProgress,
 } from "./CreateServerWizard";
 
-vi.mock("../../lib/desktop-runtime", () => ({ invokeDesktopCommand: vi.fn() }));
+vi.mock("../../lib/desktop-runtime", () => ({
+  invokeDesktopCommand: vi.fn(),
+  isDesktopRuntimeAvailable: vi.fn(() => true),
+}));
 vi.mock("./api", () => ({
   getDefaultServerRoot: vi.fn(),
   listLoaderMinecraftVersions: vi.fn(),
@@ -108,6 +114,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(invokeDesktopCommand).mockReset();
+    vi.mocked(isDesktopRuntimeAvailable).mockReturnValue(true);
     vi.mocked(getDefaultServerRoot).mockResolvedValue("C:/Servers/Server Pack");
     vi.mocked(listLoaderMinecraftVersions).mockResolvedValue([
       { value: "1.21.4", label: "1.21.4", stable: true },
@@ -127,6 +134,14 @@ describe("CreateServerWizard unified provisioning flow", () => {
   });
 
   afterEach(cleanup);
+
+  it("does not show a desktop recovery error in the browser preview", () => {
+    vi.mocked(isDesktopRuntimeAvailable).mockReturnValue(false);
+    renderWizard();
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(provisioningApi.listRecoverableProvisioningJobs).not.toHaveBeenCalled();
+  });
 
   it("publishes the initial wizard progress to its host", async () => {
     const onProgressChange = vi.fn();
@@ -182,10 +197,10 @@ describe("CreateServerWizard unified provisioning flow", () => {
     await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
 
     await waitFor(() => {
-      const progress = onProgressChange.mock.calls
+      const progressValues = onProgressChange.mock.calls
         .map(([value]) => value as CreateServerWizardProgress | null)
-        .filter((value): value is CreateServerWizardProgress => value !== null)
-        .at(-1);
+        .filter((value): value is CreateServerWizardProgress => value !== null);
+      const progress = progressValues[progressValues.length - 1];
       expect(progress?.currentStep).toBe(1);
     });
   });
@@ -272,6 +287,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
   it("passes the user-entered name through the blank-server planning path", async () => {
     renderWizard();
     await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
+    expect(screen.getByRole("heading", { name: "What are you building?" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Loader")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Plugins" }));
     await userEvent.type(screen.getByLabelText("Name"), "Quilt Realm");
     await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
     await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
@@ -301,6 +319,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
     renderWizard();
     await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
+    await userEvent.click(screen.getByRole("button", { name: /advanced/i }));
     await userEvent.type(screen.getByLabelText("Name"), "Fabric Realm");
     await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
     await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
@@ -464,5 +483,20 @@ describe("CreateServerWizard unified provisioning flow", () => {
       expect(onLifecycleChange).toHaveBeenLastCalledWith("complete"),
     );
     expect(provisioningApi.createProvisioningJob).not.toHaveBeenCalled();
+  });
+
+  it("keeps the completed installation in place and exposes four next steps", async () => {
+    const onCompletionAction = vi.fn();
+    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([
+      job("ready"),
+    ]);
+    renderWizard({ onCompletionAction });
+
+    expect(await screen.findByRole("heading", { name: "Your server is ready" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start and open server" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Invite friends" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Browse content" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Invite friends" }));
+    expect(onCompletionAction).toHaveBeenCalledWith("server-1", "invite");
   });
 });

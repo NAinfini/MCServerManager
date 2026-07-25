@@ -1,23 +1,17 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
-import { forwardRef } from "react";
+import type { InputHTMLAttributes } from "react";
+import { forwardRef, useId } from "react";
 import { cn } from "../../lib/cn";
 
 export const TextField = forwardRef<
   HTMLInputElement,
   InputHTMLAttributes<HTMLInputElement>
->(function TextField({ className, ...props }, ref) {
+>(function TextField({ autoComplete = "off", className, id, ...props }, ref) {
+  const generatedId = useId();
   return (
-    <input className={cn("field-control", className)} ref={ref} {...props} />
-  );
-});
-
-export const TextArea = forwardRef<
-  HTMLTextAreaElement,
-  TextareaHTMLAttributes<HTMLTextAreaElement>
->(function TextArea({ className, ...props }, ref) {
-  return (
-    <textarea
-      className={cn("field-control field-textarea", className)}
+    <input
+      autoComplete={autoComplete}
+      className={cn("field-control", className)}
+      id={id ?? generatedId}
       ref={ref}
       {...props}
     />

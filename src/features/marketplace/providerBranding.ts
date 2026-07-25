@@ -1,3 +1,23 @@
+import { publicAssetUrl } from "../../lib/public-asset";
+
+export const marketplaceProviders = ["Modrinth", "BBSMC", "Hangar"] as const;
+export type MarketplaceProvider = (typeof marketplaceProviders)[number];
+
+export const serverPackMarketplaceProviders = [
+  "Modrinth",
+  "BBSMC",
+] as const satisfies readonly MarketplaceProvider[];
+export type ServerPackMarketplaceProvider =
+  (typeof serverPackMarketplaceProviders)[number];
+
+export const marketplaceDiscoveryQueries: Record<
+  ServerPackMarketplaceProvider,
+  string
+> = {
+  Modrinth: "server",
+  BBSMC: "",
+};
+
 const providerBrandingByName: Record<
   string,
   { iconAlt: string; iconSrc: string }
@@ -9,7 +29,13 @@ const providerBrandingByName: Record<
 };
 
 export function getMarketplaceProviderBranding(provider: string) {
-  return providerBrandingByName[provider] ?? null;
+  const branding = providerBrandingByName[provider];
+  return branding
+    ? {
+        ...branding,
+        iconSrc: publicAssetUrl(branding.iconSrc),
+      }
+    : null;
 }
 
 export function marketplaceProviderOption(provider: string) {

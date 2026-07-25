@@ -10,6 +10,7 @@ vi.mock("../../lib/desktop-runtime", () => ({
 
 const preferences = {
   closeBehavior: "minimize",
+  launchAtLogin: false,
   defaultServerDir: "C:/MCServers",
   defaultBackupDir: "C:/MCServers/backups",
   cacheDir: "C:/Users/Test/AppData/Roaming/mc-server-manager/cache",
@@ -88,10 +89,23 @@ describe("SettingsView", () => {
     cleanup();
   });
 
-  it("updates path settings through folder pickers and clears cache", async () => {
-    render(<SettingsView embedded />);
+  it("keeps the single settings tab layer scannable and scrollable", async () => {
+    const { container } = render(<SettingsView />);
 
-    await userEvent.click(screen.getByRole("button", { name: /paths/i }));
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      container.querySelectorAll(".settings-nav-item[data-nav-group-start]")
+        .length,
+    ).toBeGreaterThanOrEqual(2);
+    expect(container.querySelectorAll(".settings-nav-item")).toHaveLength(8);
+  });
+
+  it("updates path settings through folder pickers and clears cache", async () => {
+    render(<SettingsView />);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /storage & logs/i }),
+    );
     expect(await screen.findByText("C:/MCServers")).toBeInTheDocument();
 
     const browseButtons = screen.getAllByRole("button", { name: /browse/i });
@@ -110,12 +124,21 @@ describe("SettingsView", () => {
     await userEvent.click(screen.getByRole("button", { name: /clear cache/i }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("clear_app_cache");
+      expect(invoke).toHaveBeenCalledWith("clear_app_cache", undefined);
     });
   });
 
   it("persists general and provider controls", async () => {
-    render(<SettingsView embedded />);
+    render(<SettingsView />);
+
+    await userEvent.click(
+      await screen.findByRole("switch", { name: /launch at login/i }),
+    );
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("save_app_preferences", {
+        input: { launchAtLogin: true },
+      });
+    });
 
     await userEvent.click(
       await screen.findByRole("combobox", {
@@ -132,7 +155,9 @@ describe("SettingsView", () => {
       });
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /providers/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /marketplace & sources/i }),
+    );
     expect(await screen.findByText(/manual import only/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/curseforge/i)).not.toBeInTheDocument();
     await userEvent.click(await screen.findByLabelText(/bbsmc/i));
@@ -145,16 +170,18 @@ describe("SettingsView", () => {
   });
 
   it("keeps server runtime choices as new-server defaults", async () => {
-    render(<SettingsView embedded />);
+    render(<SettingsView />);
 
     await userEvent.click(
-      screen.getByRole("button", { name: /server defaults/i }),
+      screen.getByRole("button", { name: /^defaults$/i }),
     );
     expect(
       await screen.findByText(/used only when creating new servers/i),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /browse/i }));
+    await userEvent.click(
+      screen.getAllByRole("button", { name: /browse/i })[0],
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_app_preferences", {
@@ -180,10 +207,10 @@ describe("SettingsView", () => {
   });
 
   it("persists backup and marketplace defaults without touching server profiles", async () => {
-    render(<SettingsView embedded />);
+    render(<SettingsView />);
 
     await userEvent.click(
-      screen.getByRole("button", { name: /backup defaults/i }),
+      screen.getByRole("button", { name: /^defaults$/i }),
     );
     await userEvent.click(
       screen.getByRole("combobox", { name: /compression format/i }),
@@ -201,7 +228,9 @@ describe("SettingsView", () => {
       });
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /marketplace/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /marketplace & sources/i }),
+    );
     await userEvent.click(
       screen.getByRole("combobox", { name: /default provider/i }),
     );
@@ -225,9 +254,11 @@ describe("SettingsView", () => {
   });
 
   it("exposes diagnostics and data management actions", async () => {
-    render(<SettingsView embedded />);
+    render(<SettingsView />);
 
-    await userEvent.click(screen.getByRole("button", { name: /logging/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /storage & logs/i }),
+    );
     await userEvent.click(
       screen.getByRole("button", { name: /open log folder/i }),
     );
@@ -246,7 +277,6 @@ describe("SettingsView", () => {
       });
     });
 
-    await userEvent.click(screen.getByRole("button", { name: /data/i }));
     await userEvent.click(
       screen.getByRole("button", { name: /open app data/i }),
     );
@@ -257,7 +287,7 @@ describe("SettingsView", () => {
   });
 
   it("offers visual system, light, and dark theme choices", async () => {
-    render(<SettingsView embedded />);
+    render(<SettingsView />);
 
     await userEvent.click(screen.getByRole("button", { name: /appearance/i }));
 
@@ -278,5 +308,37 @@ describe("SettingsView", () => {
       within(themeChoices).getByRole("radio", { name: /^light$/i }),
     );
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
+  });
+
+  it("does not expose default settings when loading fails and retries safely", async () => {
+    let attempts = 0;
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "get_app_preferences") {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("settings unavailable");
+        }
+        return preferences;
+      }
+      return null;
+    });
+
+    render(<SettingsView />);
+
+    expect(
+      await screen.findByRole("alert"),
+    ).toHaveTextContent("settings unavailable");
+    expect(
+      screen.queryByRole("combobox", { name: /close button behavior/i }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(
+      await screen.findByRole("combobox", {
+        name: /close button behavior/i,
+      }),
+    ).toBeInTheDocument();
+    expect(attempts).toBe(2);
   });
 });

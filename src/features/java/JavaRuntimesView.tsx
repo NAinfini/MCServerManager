@@ -6,6 +6,9 @@ import { Checkbox } from "../../components/ui/checkbox";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
+import { queryKeys } from "../../lib/query-keys";
+import { publicAssetUrl } from "../../lib/public-asset";
+import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
 import {
   installJavaRuntime,
   listJavaRuntimes,
@@ -31,16 +34,46 @@ function javaDownloadUrl(majorVersion: number) {
   return `https://adoptium.net/temurin/releases/?version=${majorVersion}`;
 }
 
-interface JavaRuntimesViewProps {
-  embedded?: boolean;
+function runtimeSourceLabel(
+  source: string,
+  t: (key: string) => string,
+) {
+  const keyBySource: Record<string, string> = {
+    managed: "java.source.managed",
+    "Managed by MC Server Manager": "java.source.managed",
+    "Server profile": "java.source.serverProfile",
+    JAVA_HOME: "java.source.javaHome",
+  };
+  const key = keyBySource[source];
+  return key ? t(key) : source;
 }
 
-export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
+function compatibilityMessage(
+  status: string,
+  requiredMajorVersion: number | null,
+  fallback: string,
+  t: (key: string, values?: Record<string, string | number>) => string,
+) {
+  if (status === "compatible") {
+    return t("java.compatibility.status.compatible");
+  }
+  if (requiredMajorVersion !== null) {
+    return t("java.compatibility.status.requires", {
+      version: requiredMajorVersion,
+    });
+  }
+  if (status === "warning") {
+    return t("java.compatibility.status.warning");
+  }
+  return fallback;
+}
+
+export function JavaRuntimesView() {
   const { t } = useAppSettings();
   const [managedPlan, setManagedPlan] = useState<ManagedJavaPlan | null>(null);
   const [managedConsent, setManagedConsent] = useState(false);
   const javaQuery = useQuery({
-    queryKey: ["javaRuntimes"],
+    queryKey: queryKeys.java.runtimes,
     queryFn: listJavaRuntimes,
   });
   const managedMajorVersion = Math.max(
@@ -64,24 +97,24 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
       await javaQuery.refetch();
     },
   });
+  const runtimeColumns: DataTableColumn<NonNullable<typeof javaQuery.data>["runtimes"][number]>[] = [
+    { id: "version", header: t("java.table.version"), rowHeader: true, cell: (runtime) => <span className="java-runtime-identity">{isAdoptiumRuntime(runtime.vendor) ? <img alt="" aria-hidden="true" className="provider-icon" height="17" src={publicAssetUrl("/brand/adoptium-logo.svg")} width="17" /> : <span className="java-runtime-icon"><Coffee aria-hidden="true" size={14} /></span>}<span>Java {runtime.majorVersion}</span></span> },
+    { id: "vendor", header: t("java.table.vendor"), cell: (runtime) => runtime.vendor ?? t("common.unknown") },
+    { id: "architecture", header: t("java.table.architecture"), cell: (runtime) => runtime.architecture ?? t("common.unknown") },
+    { id: "source", header: t("java.table.source"), cell: (runtime) => <span className="java-source-chip">{runtimeSourceLabel(runtime.source, t)}</span> },
+    { id: "path", header: t("java.table.path"), cellClassName: "path-cell", cell: (runtime) => runtime.path },
+  ];
 
   return (
     <section
-      aria-label={embedded ? t("java.title") : undefined}
-      aria-labelledby={embedded ? undefined : "java-runtimes-title"}
-      className={embedded ? "java-page java-page-embedded" : "java-page"}
+      aria-labelledby="java-runtimes-title"
+      className="java-page"
     >
       <div className="page-header">
-        {!embedded ? (
-          <div>
-            <p className="eyebrow">{t("java.eyebrow")}</p>
-            <h1 id="java-runtimes-title">{t("java.title")}</h1>
-          </div>
-        ) : (
-          <div>
-            <p className="eyebrow">{t("java.eyebrow")}</p>
-          </div>
-        )}
+        <div>
+          <p className="eyebrow">{t("java.eyebrow")}</p>
+          <h1 id="java-runtimes-title" tabIndex={-1}>{t("java.title")}</h1>
+        </div>
         <div className="page-header-actions">
           <Button
             disabled={javaQuery.isFetching}
@@ -99,9 +132,12 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
       ) : null}
 
       {javaQuery.error ? (
-        <div className="list-state list-state-error">
+        <div className="list-state list-state-error" role="alert">
           <strong>{t("java.scanError.title")}</strong>
           <span>{javaQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => javaQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
         </div>
       ) : null}
 
@@ -202,48 +238,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
               />
             ) : (
               <div className="java-table-scroll">
-                <table className="java-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">{t("java.table.version")}</th>
-                      <th scope="col">{t("java.table.vendor")}</th>
-                      <th scope="col">{t("java.table.architecture")}</th>
-                      <th scope="col">{t("java.table.source")}</th>
-                      <th scope="col">{t("java.table.path")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {javaQuery.data.runtimes.map((runtime) => (
-                      <tr key={`${runtime.path}-${runtime.version}`}>
-                        <th scope="row">
-                          <span className="java-runtime-identity">
-                            {isAdoptiumRuntime(runtime.vendor) ? (
-                              <img
-                                alt=""
-                                aria-hidden="true"
-                                className="provider-icon"
-                                src="/brand/adoptium-logo.svg"
-                              />
-                            ) : (
-                              <span className="java-runtime-icon">
-                                <Coffee aria-hidden="true" size={14} />
-                              </span>
-                            )}
-                            <span>Java {runtime.majorVersion}</span>
-                          </span>
-                        </th>
-                        <td>{runtime.vendor ?? t("common.unknown")}</td>
-                        <td>{runtime.architecture ?? t("common.unknown")}</td>
-                        <td>
-                          <span className="java-source-chip">
-                            {runtime.source}
-                          </span>
-                        </td>
-                        <td className="path-cell">{runtime.path}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <DataTable caption={t("java.title")} className="java-table" columns={runtimeColumns} getRowKey={(runtime) => `${runtime.path}-${runtime.version}`} rows={javaQuery.data.runtimes} />
               </div>
             )}
           </section>
@@ -270,7 +265,14 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
                     />
                     <div>
                       <strong>{item.serverName}</strong>
-                      <span>{item.message}</span>
+                      <span>
+                        {compatibilityMessage(
+                          item.status,
+                          requiredMajorVersion,
+                          item.message,
+                          t,
+                        )}
+                      </span>
                     </div>
                     {requiredMajorVersion !== null ? (
                       <div className="java-recommendation">
@@ -312,7 +314,7 @@ export function JavaRuntimesView({ embedded = false }: JavaRuntimesViewProps) {
                     className="failure-row"
                     key={`${failure.path}-${failure.source}`}
                   >
-                    <strong>{failure.source}</strong>
+                    <strong>{runtimeSourceLabel(failure.source, t)}</strong>
                     <span>{failure.path}</span>
                     <small>{failure.error}</small>
                   </div>

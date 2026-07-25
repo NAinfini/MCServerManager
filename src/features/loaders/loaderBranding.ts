@@ -1,3 +1,5 @@
+import { publicAssetUrl } from "../../lib/public-asset";
+
 export interface LoaderBranding {
   iconAlt: string;
   iconSrc?: string;
@@ -46,7 +48,11 @@ const loaderBrandingByType: Record<string, LoaderBranding> = {
 
 export function getLoaderBranding(loaderType?: string | null): LoaderBranding {
   if (loaderType && loaderBrandingByType[loaderType]) {
-    return loaderBrandingByType[loaderType];
+    const branding = loaderBrandingByType[loaderType];
+    return {
+      ...branding,
+      iconSrc: branding.iconSrc ? publicAssetUrl(branding.iconSrc) : undefined,
+    };
   }
 
   return {

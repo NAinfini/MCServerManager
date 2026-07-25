@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Archive,
+  Boxes,
   Cpu,
   FileArchive,
   FolderOpen,
@@ -10,15 +12,21 @@ import {
   Info,
   Package,
   RefreshCw,
+  Rocket,
   Server,
   ShieldCheck,
   Upload,
+  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { TextField } from "../../components/ui/text-field";
-import { invokeDesktopCommand } from "../../lib/desktop-runtime";
+import {
+  invokeDesktopCommand,
+  isDesktopRuntimeAvailable,
+} from "../../lib/desktop-runtime";
 import { useAppSettings } from "../../i18n";
+import { errorMessage } from "../../lib/error-message";
 import { getDefaultServerRoot, listLoaderMinecraftVersions, listLoaderVersions } from "./api";
 import {
   CreateServerMarketplaceBrowser,
@@ -41,9 +49,13 @@ import {
   type SourceProvisioningPlan,
 } from "./provisioningApi";
 import type { GuidedServerConfiguration, LoaderType, ValidatedJavaRuntime } from "./types";
+import { serverKeys } from "./queries";
+import { createWorldBackup } from "../backups/backupApi";
+import { startServer } from "../process/api";
 
 type WizardStep = 0 | 1 | 2 | 3 | 4 | 5;
 type SourceView = "choices" | "blank" | "marketplace";
+type ServerIntent = "vanilla" | "plugins" | "mods" | "advanced";
 export type CreateServerWizardLifecycle = "draft" | "running" | "complete";
 
 export interface CreateServerWizardProgress {
@@ -51,14 +63,27 @@ export interface CreateServerWizardProgress {
   currentStep: number;
 }
 
+export type CreateServerCompletionAction =
+  | "overview"
+  | "invite"
+  | "content"
+  | "backup";
+
 interface CreateServerWizardProps {
   onCreated?: () => void;
   onLifecycleChange?: (lifecycle: CreateServerWizardLifecycle) => void;
   onHeaderBackChange?: (handler: (() => void) | null) => void;
   onHeaderHiddenChange?: (hidden: boolean) => void;
   onProgressChange?: (progress: CreateServerWizardProgress | null) => void;
+  onRouteStateChange?: (state: { step: WizardStep; jobId?: string | null }) => void;
+  onCompletionAction?: (
+    serverId: string,
+    action: CreateServerCompletionAction,
+  ) => void;
   showHeading?: boolean;
   initialSourcePath?: string | null;
+  initialStep?: number;
+  initialJobId?: string | null;
 }
 
 const loaders: LoaderType[] = [
@@ -103,18 +128,17 @@ async function pick(kind: "file" | "folder") {
   return result?.path || null;
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
 export function CreateServerWizard({
   onCreated,
   onLifecycleChange,
   onHeaderBackChange,
   onHeaderHiddenChange,
   onProgressChange,
+  onRouteStateChange,
+  onCompletionAction,
   showHeading = true,
   initialSourcePath = null,
+  initialJobId = null,
 }: CreateServerWizardProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
@@ -124,6 +148,7 @@ export function CreateServerWizard({
   const [name, setName] = useState("");
   const [rootDir, setRootDir] = useState("");
   const [loaderType, setLoaderType] = useState<LoaderType>("paper");
+  const [serverIntent, setServerIntent] = useState<ServerIntent | null>(null);
   const [minecraftVersion, setMinecraftVersion] = useState("");
   const [loaderVersion, setLoaderVersion] = useState("");
   const [minecraftOptions, setMinecraftOptions] = useState<string[]>([]);
@@ -135,7 +160,7 @@ export function CreateServerWizard({
   const [configuration, setConfiguration] =
     useState<GuidedServerConfiguration>(initialConfiguration);
   const [restartEnabled, setRestartEnabled] = useState(true);
-  const [autoStart, setAutoStart] = useState(true);
+  const [autoStart, setAutoStart] = useState(false);
   const [eulaAccepted, setEulaAccepted] = useState(false);
   const [job, setJob] = useState<ProvisioningJob | null>(null);
   const [isRecoveredJob, setIsRecoveredJob] = useState(false);
@@ -144,6 +169,7 @@ export function CreateServerWizard({
   const plannedInitialPath = useRef<string | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
+  const recoveredJobIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -187,6 +213,13 @@ export function CreateServerWizard({
     onProgressChange?.({ steps, currentStep: step });
   }, [onProgressChange, step, steps]);
 
+  useEffect(() => {
+    onRouteStateChange?.({
+      step,
+      ...(step === 5 && job?.id ? { jobId: job.id } : {}),
+    });
+  }, [job?.id, onRouteStateChange, step]);
+
   useEffect(
     () => () => {
       onProgressChange?.(null);
@@ -195,21 +228,33 @@ export function CreateServerWizard({
   );
 
   useEffect(() => {
+    if (!isDesktopRuntimeAvailable()) return;
     let active = true;
-    listRecoverableProvisioningJobs()
+    const loadJob = initialJobId
+      ? getProvisioningJob(initialJobId).then((saved) =>
+          saved ? [saved] : listRecoverableProvisioningJobs(),
+        )
+      : listRecoverableProvisioningJobs();
+    loadJob
       .then((jobs) => {
-        if (active && jobs[0]) {
-          setJob(jobs[0]);
+        const recovered = jobs[0];
+        if (
+          active &&
+          recovered &&
+          recoveredJobIdRef.current !== recovered.id
+        ) {
+          recoveredJobIdRef.current = recovered.id;
+          setJob(recovered);
           setIsRecoveredJob(true);
           setStep(5);
-          publishLifecycle(jobs[0].stage === "ready" ? "complete" : "running");
+          publishLifecycle(recovered.stage === "ready" ? "complete" : "running");
         }
       })
       .catch((caught) => active && setError(errorMessage(caught)));
     return () => {
       active = false;
     };
-  }, [publishLifecycle]);
+  }, [initialJobId, publishLifecycle]);
 
   useEffect(() => {
     onHeaderHiddenChange?.(false);
@@ -225,9 +270,10 @@ export function CreateServerWizard({
   }, [onHeaderBackChange, sourceView]);
 
   const needsRuntimeMetadata = Boolean(sourcePlan && !sourcePlan.launchSpec);
+  const needsBlankMetadata = sourceView === "blank" && serverIntent !== null;
 
   useEffect(() => {
-    if (sourceView !== "blank" && !needsRuntimeMetadata) return;
+    if (!needsBlankMetadata && !needsRuntimeMetadata) return;
     let active = true;
     listLoaderMinecraftVersions(loaderType)
       .then((options) => active && setMinecraftOptions(options.map((item) => item.value)))
@@ -235,10 +281,10 @@ export function CreateServerWizard({
     return () => {
       active = false;
     };
-  }, [loaderType, needsRuntimeMetadata, sourceView]);
+  }, [loaderType, needsBlankMetadata, needsRuntimeMetadata]);
 
   useEffect(() => {
-    if ((sourceView !== "blank" && !needsRuntimeMetadata) || !minecraftVersion) return;
+    if ((!needsBlankMetadata && !needsRuntimeMetadata) || !minecraftVersion) return;
     let active = true;
     listLoaderVersions(loaderType, minecraftVersion)
       .then((options) => {
@@ -256,7 +302,7 @@ export function CreateServerWizard({
     return () => {
       active = false;
     };
-  }, [loaderType, minecraftVersion, needsRuntimeMetadata, sourceView]);
+  }, [loaderType, minecraftVersion, needsBlankMetadata, needsRuntimeMetadata]);
 
   useEffect(() => {
     if (step !== 2 || !sourcePlan || javaRuntime || javaPlan) return;
@@ -434,7 +480,7 @@ export function CreateServerWizard({
       setJob(completed);
       if (completed.stage === "ready") {
         publishLifecycle("complete");
-        await queryClient.invalidateQueries({ queryKey: ["serverProfiles"] });
+        await queryClient.invalidateQueries({ queryKey: serverKeys.profiles });
         onCreated?.();
       }
     } catch (caught) {
@@ -536,11 +582,45 @@ export function CreateServerWizard({
 
   const startFreshDraft = () => {
     setJob(null);
+    recoveredJobIdRef.current = null;
     setIsRecoveredJob(false);
     setError(null);
     setStep(0);
     setSourceView("choices");
+    setServerIntent(null);
     publishLifecycle("draft");
+  };
+
+  const runCompletionAction = async (action: CreateServerCompletionAction) => {
+    const serverId = job?.serverId;
+    if (!serverId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      if (action === "overview") {
+        await startServer(serverId);
+      }
+      if (action === "backup") {
+        await createWorldBackup({ serverId });
+      }
+      onCompletionAction?.(serverId, action);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseServerIntent = (intent: ServerIntent) => {
+    const recommendedLoader: Partial<Record<ServerIntent, LoaderType>> = {
+      vanilla: "vanilla",
+      plugins: "paper",
+      mods: "fabric",
+    };
+    setServerIntent(intent);
+    setLoaderType(recommendedLoader[intent] ?? "paper");
+    setMinecraftVersion("");
+    setLoaderVersion("");
   };
 
   return (
@@ -578,7 +658,10 @@ export function CreateServerWizard({
                   icon: Server,
                   label: t("createServer.newBlank"),
                   description: t("createServer.newBlank.description"),
-                  onClick: () => setSourceView("blank"),
+                  onClick: () => {
+                    setServerIntent(null);
+                    setSourceView("blank");
+                  },
                 },
                 {
                   key: "folder",
@@ -634,46 +717,117 @@ export function CreateServerWizard({
         ) : null}
 
         {step === 0 && sourceView === "blank" ? (
-          <div className="form-grid provisioning-source-form">
-            <label>
-              <span>{t("profileSettings.name")}</span>
-              <TextField aria-label={t("profileSettings.name")} value={name} onChange={(event) => setName(event.target.value)} />
-            </label>
-            <label>
-              <span>{t("profileSettings.loader")}</span>
-              <select aria-label={t("profileSettings.loader")} className="field-control" value={loaderType} onChange={(event) => { setLoaderType(event.target.value as LoaderType); setMinecraftVersion(""); setLoaderVersion(""); }}>
-                {loaders.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>{t("profileSettings.minecraftVersion")}</span>
-              <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
-                <option value="">{t("provisioning.wizard.select")}</option>
-                {minecraftOptions.map((version) => <option key={version}>{version}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>{t("profileSettings.loaderVersion")}</span>
-              <select aria-label={t("profileSettings.loaderVersion")} className="field-control" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
-                <option value="">{t("provisioning.wizard.select")}</option>
-                {loaderOptions.map((version) => <option key={version}>{version}</option>)}
-              </select>
-            </label>
-            <Button
-              disabled={busy || !name || !minecraftVersion || !loaderVersion}
-              onClick={() =>
-                planSource({
-                  source: { kind: "blank" },
-                  name,
-                  loaderType,
-                  minecraftVersion,
-                  loaderVersion,
-                })
-              }
-            >
-              {t("provisioning.wizard.analyze")}
-            </Button>
-          </div>
+          serverIntent === null ? (
+            <div className="wizard-intent-picker">
+              <div className="wizard-intent-heading">
+                <h2>{t("createServer.intent.title")}</h2>
+                <p>{t("createServer.intent.description")}</p>
+              </div>
+              <div className="wizard-intent-options">
+                {[
+                  {
+                    key: "vanilla" as const,
+                    icon: Gamepad2,
+                    label: t("createServer.intent.vanilla"),
+                    description: t("createServer.intent.vanilla.description"),
+                  },
+                  {
+                    key: "plugins" as const,
+                    icon: Package,
+                    label: t("createServer.intent.plugins"),
+                    description: t("createServer.intent.plugins.description"),
+                    badge: t("createServer.intent.recommended"),
+                  },
+                  {
+                    key: "mods" as const,
+                    icon: Cpu,
+                    label: t("createServer.intent.mods"),
+                    description: t("createServer.intent.mods.description"),
+                  },
+                  {
+                    key: "advanced" as const,
+                    icon: ShieldCheck,
+                    label: t("createServer.intent.advanced"),
+                    description: t("createServer.intent.advanced.description"),
+                  },
+                ].map((intent) => (
+                  <button
+                    aria-label={intent.label}
+                    className="wizard-intent-option"
+                    key={intent.key}
+                    type="button"
+                    onClick={() => chooseServerIntent(intent.key)}
+                  >
+                    <intent.icon aria-hidden="true" size={19} />
+                    <span className="wizard-intent-title">
+                      <strong>{intent.label}</strong>
+                      {intent.badge ? <em>{intent.badge}</em> : null}
+                    </span>
+                    <span>{intent.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="provisioning-source-shell">
+              <div className="wizard-intent-summary">
+                <div>
+                  <span>{t("createServer.intent.selected")}</span>
+                  <strong>{t(`createServer.intent.${serverIntent}`)}</strong>
+                </div>
+                <Button variant="ghost" onClick={() => setServerIntent(null)}>
+                  {t("createServer.intent.change")}
+                </Button>
+              </div>
+              <div className="form-grid provisioning-source-form">
+                <label>
+                  <span>{t("profileSettings.name")}</span>
+                  <TextField
+                    aria-label={t("profileSettings.name")}
+                    name="server-name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                {serverIntent === "advanced" ? (
+                  <label>
+                    <span>{t("profileSettings.loader")}</span>
+                    <select aria-label={t("profileSettings.loader")} className="field-control" name="server-loader" value={loaderType} onChange={(event) => { setLoaderType(event.target.value as LoaderType); setMinecraftVersion(""); setLoaderVersion(""); }}>
+                      {loaders.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
+                    </select>
+                  </label>
+                ) : null}
+                <label>
+                  <span>{t("profileSettings.minecraftVersion")}</span>
+                  <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" name="minecraft-version" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
+                    <option value="">{t("provisioning.wizard.select")}</option>
+                    {minecraftOptions.map((version) => <option key={version}>{version}</option>)}
+                  </select>
+                </label>
+                <label>
+                  <span>{t("profileSettings.loaderVersion")}</span>
+                  <select aria-label={t("profileSettings.loaderVersion")} className="field-control" name="loader-version" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
+                    <option value="">{t("provisioning.wizard.select")}</option>
+                    {loaderOptions.map((version) => <option key={version}>{version}</option>)}
+                  </select>
+                </label>
+                <Button
+                  disabled={busy || !name || !minecraftVersion || !loaderVersion}
+                  onClick={() =>
+                    planSource({
+                      source: { kind: "blank" },
+                      name,
+                      loaderType,
+                      minecraftVersion,
+                      loaderVersion,
+                    })
+                  }
+                >
+                  {t("provisioning.wizard.analyze")}
+                </Button>
+              </div>
+            </div>
+          )
         ) : null}
 
         {step === 1 && sourcePlan ? (
@@ -836,31 +990,37 @@ export function CreateServerWizard({
           <div className="provisioning-configuration-step">
             <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
               <label className="field-span-2"><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} value={name} onChange={(event) => setName(event.target.value)} /></label>
-              <label className="field-span-2"><span>{t("profileSettings.serverFolder")}</span><TextField aria-label={t("profileSettings.serverFolder")} value={rootDir} onChange={(event) => setRootDir(event.target.value)} /></label>
             </ConfigSection>
-
-            <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
-              <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
-              <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
-              <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
-              <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
-              <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
-              <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
-            </ConfigSection>
-
             <ConfigSection icon={Gamepad2} title={t("provisioning.config.section.gameplay")}>
-              <label className="field-span-2"><span>{t("provisioning.config.motd")}</span><TextField aria-label={t("provisioning.config.motd")} value={configuration.motd} onChange={(event) => setConfiguration((current) => ({ ...current, motd: event.target.value }))} /></label>
-              <label><span>{t("provisioning.config.gameMode")}</span><select aria-label={t("provisioning.config.gameMode")} className="field-control" value={configuration.gameMode} onChange={(event) => setConfiguration((current) => ({ ...current, gameMode: event.target.value }))}><option value="survival">{t("provisioning.config.gameMode.survival")}</option><option value="creative">{t("provisioning.config.gameMode.creative")}</option><option value="adventure">{t("provisioning.config.gameMode.adventure")}</option><option value="spectator">{t("provisioning.config.gameMode.spectator")}</option></select></label>
               <label><span>{t("provisioning.config.difficulty")}</span><select aria-label={t("provisioning.config.difficulty")} className="field-control" value={configuration.difficulty} onChange={(event) => setConfiguration((current) => ({ ...current, difficulty: event.target.value }))}><option value="peaceful">{t("provisioning.config.difficulty.peaceful")}</option><option value="easy">{t("provisioning.config.difficulty.easy")}</option><option value="normal">{t("provisioning.config.difficulty.normal")}</option><option value="hard">{t("provisioning.config.difficulty.hard")}</option></select></label>
-              <BooleanField label={t("provisioning.config.onlineMode")} checked={configuration.onlineMode !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, onlineMode: checked }))} />
-              <BooleanField label={t("provisioning.config.pvp")} checked={configuration.pvp !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, pvp: checked }))} />
               <BooleanField label={t("provisioning.config.whiteList")} checked={configuration.whiteList === true} onChange={(checked) => setConfiguration((current) => ({ ...current, whiteList: checked }))} />
             </ConfigSection>
 
-            <ConfigSection icon={RefreshCw} title={t("provisioning.config.section.lifecycle")}>
-              <BooleanField label={t("provisioning.config.restart")} checked={restartEnabled} onChange={setRestartEnabled} />
-              <BooleanField label={t("provisioning.config.autoStart")} checked={autoStart} onChange={setAutoStart} />
-            </ConfigSection>
+            <details className="provisioning-advanced-settings">
+              <summary>{t("provisioning.config.advanced")}</summary>
+              <p>{t("provisioning.config.advancedDescription")}</p>
+              <ConfigSection icon={HardDrive} title={t("provisioning.config.section.location")}>
+                <label className="field-span-2"><span>{t("profileSettings.serverFolder")}</span><TextField aria-label={t("profileSettings.serverFolder")} value={rootDir} onChange={(event) => setRootDir(event.target.value)} /></label>
+              </ConfigSection>
+              <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
+                <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
+                <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
+                <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
+                <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
+                <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
+                <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
+              </ConfigSection>
+              <ConfigSection icon={Gamepad2} title={t("provisioning.config.advancedGameplay")}>
+                <label className="field-span-2"><span>{t("provisioning.config.motd")}</span><TextField aria-label={t("provisioning.config.motd")} value={configuration.motd} onChange={(event) => setConfiguration((current) => ({ ...current, motd: event.target.value }))} /></label>
+                <label><span>{t("provisioning.config.gameMode")}</span><select aria-label={t("provisioning.config.gameMode")} className="field-control" value={configuration.gameMode} onChange={(event) => setConfiguration((current) => ({ ...current, gameMode: event.target.value }))}><option value="survival">{t("provisioning.config.gameMode.survival")}</option><option value="creative">{t("provisioning.config.gameMode.creative")}</option><option value="adventure">{t("provisioning.config.gameMode.adventure")}</option><option value="spectator">{t("provisioning.config.gameMode.spectator")}</option></select></label>
+                <BooleanField label={t("provisioning.config.onlineMode")} checked={configuration.onlineMode !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, onlineMode: checked }))} />
+                <BooleanField label={t("provisioning.config.pvp")} checked={configuration.pvp !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, pvp: checked }))} />
+              </ConfigSection>
+              <ConfigSection icon={RefreshCw} title={t("provisioning.config.section.lifecycle")}>
+                <BooleanField label={t("provisioning.config.restart")} checked={restartEnabled} onChange={setRestartEnabled} />
+                <BooleanField label={t("provisioning.config.autoStart")} checked={autoStart} onChange={setAutoStart} />
+              </ConfigSection>
+            </details>
           </div>
         ) : null}
         {step === 3 && !configurationReady ? (
@@ -923,6 +1083,35 @@ export function CreateServerWizard({
               <Button variant="ghost" onClick={startFreshDraft}>
                 {t("provisioning.wizard.startFresh")}
               </Button>
+            ) : null}
+            {job.stage === "ready" && job.serverId ? (
+              <section
+                aria-label={t("provisioning.complete.aria")}
+                className="provisioning-complete-actions"
+              >
+                <div>
+                  <h3>{t("provisioning.complete.title")}</h3>
+                  <p>{t("provisioning.complete.description")}</p>
+                </div>
+                <div className="provisioning-complete-action-grid">
+                  <Button disabled={busy} onClick={() => void runCompletionAction("overview")}>
+                    <Rocket aria-hidden="true" size={15} />
+                    {t("provisioning.complete.start")}
+                  </Button>
+                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("invite")}>
+                    <UsersRound aria-hidden="true" size={15} />
+                    {t("provisioning.complete.invite")}
+                  </Button>
+                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("content")}>
+                    <Boxes aria-hidden="true" size={15} />
+                    {t("provisioning.complete.content")}
+                  </Button>
+                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("backup")}>
+                    <Archive aria-hidden="true" size={15} />
+                    {t("provisioning.complete.backup")}
+                  </Button>
+                </div>
+              </section>
             ) : null}
           </>
         ) : null}

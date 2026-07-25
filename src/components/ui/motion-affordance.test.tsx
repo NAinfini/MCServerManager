@@ -1,11 +1,19 @@
-import { fireEvent, render, screen, within } from "../../test/render";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, within } from "../../test/render";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Button } from "./button";
 import { Checkbox } from "./checkbox";
 import { Select } from "./select";
 import { Switch } from "./switch";
 
 describe("motion affordance classes", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
   it("marks buttons with shared press motion classes", () => {
     render(<Button>Save changes</Button>);
 
@@ -36,6 +44,22 @@ describe("motion affordance classes", () => {
     expect(screen.getByRole("combobox", { name: "Loader" })).toHaveClass(
       "motion-control",
       "motion-press",
+    );
+  });
+
+  it("localizes the default select placeholder", () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+    render(
+      <Select
+        ariaLabel="Loader"
+        onValueChange={vi.fn()}
+        options={[{ label: "Paper", value: "paper" }]}
+        value=""
+      />,
+    );
+
+    expect(screen.getByRole("combobox", { name: "Loader" })).toHaveTextContent(
+      "请选择…",
     );
   });
 

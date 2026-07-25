@@ -16,7 +16,7 @@ export function WindowTitlebar() {
     <div className="window-titlebar">
       <div className="window-titlebar-brand">
         <span className="window-titlebar-mark">
-          <img alt="" aria-hidden="true" src="./app-icon.png" />
+          <img alt="" aria-hidden="true" height="16" src="./app-icon.png" width="16" />
         </span>
         <span>MC Server Manager</span>
       </div>

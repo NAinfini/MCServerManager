@@ -10,16 +10,21 @@ export interface JavaRuntime {
   managed?: boolean;
 }
 
+export type ManagedJavaRuntime = Pick<JavaRuntime, "path" | "majorVersion"> &
+  Partial<Omit<JavaRuntime, "path" | "majorVersion">>;
+
 export interface ManagedJavaPlan {
   action: "reuse" | "install";
   majorVersion: number;
-  runtime?: JavaRuntime;
+  runtime?: ManagedJavaRuntime;
   vendor?: string;
   version?: string;
   licenseUrl?: string;
   managed?: boolean;
   [key: string]: unknown;
 }
+
+export type JavaRuntimePlan = ManagedJavaPlan;
 
 export interface JavaScanFailure {
   path: string;
@@ -55,7 +60,7 @@ export function planJavaRuntime(majorVersion: number) {
 }
 
 export function installJavaRuntime(plan: ManagedJavaPlan, consent: boolean) {
-  return invokeDesktopCommandWithErrorHandling<JavaRuntime>(
+  return invokeDesktopCommandWithErrorHandling<ManagedJavaRuntime>(
     "install_java_runtime",
     { input: { plan, consent } },
   );

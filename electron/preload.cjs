@@ -1,7 +1,6 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 const allowedAppCommands = new Set([
-  "apply_player_action",
   "bind_tunnel_to_server",
   "check_app_update",
   "check_content_updates",
@@ -24,6 +23,7 @@ const allowedAppCommands = new Set([
   "delete_tunnel_provider",
   "detect_server_version",
   "disable_installed_content",
+  "apply_player_change",
   "enable_installed_content",
   "export_app_settings",
   "export_diagnostic_package",
@@ -33,6 +33,8 @@ const allowedAppCommands = new Set([
   "get_app_data_folder",
   "get_app_logs_folder",
   "get_app_preferences",
+  "get_attention_items",
+  "get_local_network_addresses",
   "get_bbsmc_project",
   "get_content_update_policy",
   "get_curseforge_project",
@@ -151,5 +153,10 @@ contextBridge.exposeInMainWorld("mcServerManager", {
     ipcRenderer.on("close-behavior-requested", listener);
     return () =>
       ipcRenderer.removeListener("close-behavior-requested", listener);
+  },
+  onServerEvent(callback) {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("server-event", listener);
+    return () => ipcRenderer.removeListener("server-event", listener);
   },
 });

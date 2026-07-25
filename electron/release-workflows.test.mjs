@@ -24,9 +24,15 @@ describe("Electron CI and release workflows", () => {
     const ci = readWorkspaceFile(".github/workflows/ci.yml");
     const release = readWorkspaceFile(".github/workflows/release.yml");
 
-    expect(manifest.packageManager).toBe("pnpm@9.15.9");
-    expect(ci).toContain("version: 9.15.9");
-    expect(release).toContain("version: 9.15.9");
+    expect(manifest.packageManager).toBe("pnpm@11.17.0");
+    expect(manifest.engines).toEqual({
+      node: ">=24",
+      pnpm: ">=11 <12",
+    });
+    expect(ci).toContain("version: 11.17.0");
+    expect(ci).toContain("node-version: 24");
+    expect(release).toContain("version: 11.17.0");
+    expect(release).toContain("node-version: 24");
     expect(npmrc).toContain("node-linker=hoisted");
     expect(npmrc).not.toMatch(/store-dir|package-import-method/);
   });
@@ -55,7 +61,7 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("windows-latest");
     expect(release).toContain("ubuntu-latest");
     expect(release).toContain("macos-latest");
-    expect(release).toContain("version: 9.15.9");
+    expect(release).toContain("version: 11.17.0");
     expect(release).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
   });
 
@@ -154,9 +160,9 @@ describe("Electron CI and release workflows", () => {
   });
 
   it("keeps pnpm overrides where release CI reads them", () => {
-    const manifest = JSON.parse(readWorkspaceFile("package.json"));
+    const workspace = readWorkspaceFile("pnpm-workspace.yaml");
 
-    expect(manifest.pnpm?.overrides?.dompurify).toBe("3.4.11");
+    expect(workspace).toMatch(/overrides:\s+dompurify: 3\.4\.11/);
   });
 
   it("defines package maintainer metadata required by Linux deb builds", () => {

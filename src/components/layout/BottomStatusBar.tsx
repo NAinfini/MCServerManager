@@ -1,5 +1,6 @@
 import { CircleDot, Coffee, HardDrive, Globe, Info } from "lucide-react";
 import { useAppSettings } from "../../i18n";
+import { NotificationCenter } from "./NotificationCenter";
 
 interface BottomStatusBarProps {
   runningCount?: number;
@@ -11,6 +12,7 @@ interface BottomStatusBarProps {
     serverPort?: number | null;
   } | null;
   onOpenJava?: () => void;
+  onOpenNotifications?: () => void;
 }
 
 function extractJavaVersion(javaPath?: string | null): string | null {
@@ -24,6 +26,7 @@ export function BottomStatusBar({
   crashedCount = 0,
   selectedServer,
   onOpenJava,
+  onOpenNotifications = () => undefined,
 }: BottomStatusBarProps) {
   const { t } = useAppSettings();
   const javaVersion = extractJavaVersion(selectedServer?.javaPath);
@@ -77,6 +80,7 @@ export function BottomStatusBar({
         </span>
       </div>
       <div className="status-bar-right">
+        <NotificationCenter onOpenSettings={onOpenNotifications} />
         <span className="status-bar-item">
           <Info aria-hidden="true" size={12} />
           <span className="status-bar-copy">v0.1.0</span>

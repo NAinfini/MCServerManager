@@ -1,5 +1,4 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import {
   Clock,
   Cpu,
@@ -13,35 +12,18 @@ import {
 import * as Progress from "@radix-ui/react-progress";
 import * as Separator from "@radix-ui/react-separator";
 import { Button } from "../../components/ui/button";
+import { Sparkline } from "../../components/data/Sparkline";
 import { EmptyState } from "../../components/ui/empty-state";
+import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
-import type { ServerProfile } from "../servers/types";
-
-interface ServerMetricSample {
-  id: string;
-  cpuPercent: number | null;
-  memoryMb: number | null;
-  diskFreeMb: number | null;
-  uptimeSeconds: number | null;
-  restartCount: number | null;
-  playerCount: number | null;
-  tps: number | null;
-  unavailableReasons?: Record<string, string>;
-  unavailableReason: string | null;
-  sampledAt: string;
-}
-
-interface MetricEventOverlay {
-  level: string;
-  message: string;
-  createdAt: string;
-}
-
-interface PerformanceHistory {
-  serverId: string;
-  samples: ServerMetricSample[];
-  events: MetricEventOverlay[];
-}
+import { formatDateTime } from "../../lib/date-format";
+import type { ServerProfile } from "../../domain/server";
+import {
+  getPerformanceHistory,
+  performanceKeys,
+  sampleServerMetrics,
+  type ServerMetricSample,
+} from "./performanceApi";
 
 interface PerformanceHistoryViewProps {
   server: ServerProfile;
@@ -62,13 +44,6 @@ function unavailableReason(
     : sample.unavailableReason;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function severityBorderColor(level: string): string {
   switch (level.toLowerCase()) {
     case "error":
@@ -84,38 +59,35 @@ function severityBorderColor(level: string): string {
   }
 }
 
+function severityLabel(level: string, t: (key: string) => string) {
+  const normalized = level.toLowerCase();
+  if (["critical", "error", "warning", "warn", "info"].includes(normalized)) {
+    return t(
+      `performance.level.${normalized === "warn" ? "warning" : normalized}`,
+    );
+  }
+  return level;
+}
+
 export function PerformanceHistoryView({
   server,
 }: PerformanceHistoryViewProps) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const historyQuery = useQuery({
-    queryKey: ["performanceHistory", server.id],
-    queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<PerformanceHistory>(
-        "get_performance_history",
-        {
-          serverId: server.id,
-        },
-      ),
-    refetchInterval: 5000,
+    queryKey: performanceKeys.history(server.id),
+    queryFn: () => getPerformanceHistory(server.id),
   });
   const sampleMutation = useMutation({
-    mutationFn: () =>
-      invokeDesktopCommandWithErrorHandling<ServerMetricSample>(
-        "sample_server_metrics",
-        {
-          serverId: server.id,
-        },
-      ),
+    mutationFn: () => sampleServerMetrics(server.id),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["performanceHistory", server.id],
+        queryKey: performanceKeys.history(server.id),
       });
     },
   });
   const history = historyQuery.data;
-  const latest = history?.samples[0] ?? null;
+  const latest = history?.samples?.[0] ?? null;
   const memoryCapacityMb = Math.max(
     server.maxMemoryMb || 0,
     latest?.memoryMb || 0,
@@ -135,14 +107,88 @@ export function PerformanceHistoryView({
           {t("performance.sample")}
         </Button>
       </div>
-      {historyQuery.error ? (
-        <p className="danger-text">{historyQuery.error.message}</p>
-      ) : null}
       {sampleMutation.error ? (
-        <p className="danger-text">{sampleMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {sampleMutation.error.message}
+        </p>
       ) : null}
-      {latest ? (
+      {historyQuery.isLoading ? (
+        <LoadingState message={t("performance.loading")} />
+      ) : historyQuery.error ? (
+        <div
+          aria-label={t("performance.loadError")}
+          className="list-state list-state-error"
+          role="alert"
+        >
+          <strong>{t("performance.loadError")}</strong>
+          <span>{historyQuery.error.message}</span>
+          <Button
+            disabled={historyQuery.isFetching}
+            variant="secondary"
+            onClick={() => historyQuery.refetch()}
+          >
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : latest ? (
         <>
+          <div
+            aria-label={t("performance.history.title")}
+            className="performance-history-grid"
+          >
+            <article>
+              <div>
+                <span>{t("performance.cpu")}</span>
+                <strong>
+                  {displayMetric(
+                    latest.cpuPercent,
+                    t("performance.unavailable"),
+                    "%",
+                  )}
+                </strong>
+              </div>
+              <Sparkline
+                label={t("performance.history.cpu")}
+                values={[...(history?.samples ?? [])]
+                  .reverse()
+                  .map((sample) => sample.cpuPercent)}
+              />
+            </article>
+            <article>
+              <div>
+                <span>{t("performance.memory")}</span>
+                <strong>
+                  {displayMetric(
+                    latest.memoryMb,
+                    t("performance.unavailable"),
+                    " MB",
+                  )}
+                </strong>
+              </div>
+              <Sparkline
+                label={t("performance.history.memory")}
+                values={[...(history?.samples ?? [])]
+                  .reverse()
+                  .map((sample) => sample.memoryMb)}
+              />
+            </article>
+            <article>
+              <div>
+                <span>{t("performance.tps")}</span>
+                <strong>
+                  {displayMetric(latest.tps, t("performance.unavailable"))}
+                </strong>
+              </div>
+              <Sparkline
+                label={t("performance.history.tps")}
+                threshold={15}
+                values={[...(history?.samples ?? [])]
+                  .reverse()
+                  .map((sample) => sample.tps)}
+              />
+            </article>
+          </div>
           <div className="metrics-grid">
             <div className="metric-card">
               <div className="metric-card-icon">
@@ -159,7 +205,9 @@ export function PerformanceHistoryView({
                 >
                   <Progress.Indicator
                     className="metric-progress-indicator"
-                    style={{ width: `${latest.cpuPercent}%` }}
+                    style={{
+                      transform: `scaleX(${latest.cpuPercent / 100})`,
+                    }}
                   />
                 </Progress.Root>
               )}
@@ -179,7 +227,12 @@ export function PerformanceHistoryView({
                 >
                   <Progress.Indicator
                     className="metric-progress-indicator"
-                    style={{ width: `${Math.min((latest.memoryMb / memoryCapacityMb) * 100, 100)}%` }}
+                    style={{
+                      transform: `scaleX(${Math.min(
+                        latest.memoryMb / memoryCapacityMb,
+                        1,
+                      )})`,
+                    }}
                   />
                 </Progress.Root>
               )}
@@ -238,9 +291,9 @@ export function PerformanceHistoryView({
                       borderLeftColor: severityBorderColor(event.level),
                     }}
                   >
-                    <strong>{event.level}</strong>
+                    <strong>{severityLabel(event.level, t)}</strong>
                     <span>{event.message}</span>
-                    <span>{formatDate(event.createdAt)}</span>
+                    <span>{formatDateTime(event.createdAt, language)}</span>
                   </div>
                 ))}
               </div>

@@ -2,7 +2,7 @@ import { Unlink } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 import type { TunnelBinding, TunnelProvider } from "./TunnelProvidersView";
 
 interface TunnelBindingEditorProps {
@@ -35,7 +35,10 @@ export function TunnelBindingEditor({
   }
 
   return (
-    <section className="settings-panel" aria-labelledby="tunnel-bindings-title">
+    <section
+      className="tunnel-workbench-section"
+      aria-labelledby="tunnel-bindings-title"
+    >
       <div className="section-heading">
         <h2 id="tunnel-bindings-title">{t("tunnels.bindings.title")}</h2>
         <span>{t("tunnels.bindings.description")}</span>

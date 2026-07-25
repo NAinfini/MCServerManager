@@ -1,10 +1,15 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
 const { spawn, spawnSync } = require("node:child_process");
 const { createServer: createNetServer, isIP } = require("node:net");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
+const {
+  createCommandRegistry,
+} = require("./backend/command-registry.cjs");
+const { createBackendContext } = require("./backend/context.cjs");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
 const { createLoaderRegistry } = require("./provisioning/loaders.cjs");
@@ -21,13 +26,7 @@ const {
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
-const databaseAppDataDirs = new WeakMap();
-const databaseProcessSpawners = new WeakMap();
-const databaseMetricCollectors = new WeakMap();
-const databaseMetricBaselines = new WeakMap();
-const databaseRuntimeDependencies = new WeakMap();
-const databasePortCheckers = new WeakMap();
-const databaseStartingServers = new WeakMap();
+const databaseContexts = new WeakMap();
 const restartRuntimeState = new Map();
 const restartCountdownTimers = new Map();
 const currentSchemaVersion = 2;
@@ -299,30 +298,31 @@ function createBackend(app) {
   const db = new DatabaseSync(
     path.join(appDataDir, "mc-server-manager.sqlite"),
   );
-  databaseAppDataDirs.set(db, appDataDir);
-  databaseProcessSpawners.set(db, app.spawn || spawn);
-  databaseMetricCollectors.set(
+  const context = createBackendContext({
     db,
-    app.collectProcessMetrics || collectProcessMetrics,
-  );
-  databaseMetricBaselines.set(db, new Map());
-  databaseRuntimeDependencies.set(db, app.runtimeDependencies || {});
-  databasePortCheckers.set(db, app.checkPortAvailable || checkPortAvailable);
-  databaseStartingServers.set(db, new Set());
+    appDataDir,
+    processSpawner: app.spawn || spawn,
+    metricCollector: app.collectProcessMetrics || collectProcessMetrics,
+    runtimeDependencies: app.runtimeDependencies || {},
+    portChecker: app.checkPortAvailable || checkPortAvailable,
+  });
+  databaseContexts.set(db, context);
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
   migrateDatabase(db);
   ensureNotificationPreferences(db);
+  const commands = createCommandRegistry(createCommandHandlers(context));
 
   return {
     close: () => {
       closedDatabases.add(db);
-      databaseStartingServers.get(db)?.clear();
-      databaseMetricBaselines.get(db)?.clear();
+      context.runtimeState.startingServers.clear();
+      context.runtimeState.metricBaselines.clear();
       for (const [serverId, managed] of managedChildren.entries()) {
         if (managed.db === db) {
           clearRestartState(serverId);
           clearRestartCountdown(serverId);
+          clearInterval(managed.metricTimer);
           managed.stopRequested = true;
           managed.child.kill();
           managedChildren.delete(serverId);
@@ -335,288 +335,211 @@ function createBackend(app) {
       ).run(nowIso());
       db.close();
     },
-    handle: (command, args) => handleCommand(db, command, args),
+    commandNames: commands.names,
+    supports: (command) => commands.has(command),
+    handle: (command, args) => commands.execute(command, args),
+    onServerEvent: (listener) => {
+      if (typeof listener !== "function") {
+        throw new TypeError("server event listener must be a function");
+      }
+      context.runtimeState.serverEventListeners.add(listener);
+      return () => context.runtimeState.serverEventListeners.delete(listener);
+    },
   };
 }
 
-function handleCommand(db, command, args) {
-  switch (command) {
-    case "get_app_preferences":
-      return getAppPreferences(db);
-    case "save_app_preferences":
-      return saveAppPreferences(db, args?.input);
-    case "reset_app_preferences":
-      return resetAppPreferences(db);
-    case "export_app_settings":
-      return exportAppSettings(db, args?.input);
-    case "import_app_settings":
-      return importAppSettings(db, args?.input);
-    case "clear_app_cache":
-      return clearAppCache(db);
-    case "get_app_data_folder":
-      return getAppDataFolder(db);
-    case "get_app_logs_folder":
-      return getAppLogsFolder(db);
-    case "export_diagnostic_package":
-      return exportDiagnosticPackage(db, args?.input);
-    case "write_app_log":
-      return writeAppLog(db, args?.input);
-    case "list_app_logs":
-      return listAppLogs(db, args?.input);
-    case "clear_app_logs":
-      return clearAppLogs(db);
-    case "get_database_schema_version":
-      return { version: databaseSchemaVersion(db) };
-    case "list_server_profiles":
-      return listServerProfiles(db);
-    case "get_server_eula_acceptance":
-      return getServerEulaAcceptance(
+function createCommandHandlers(context) {
+  const { db } = context;
+  return {
+    get_app_preferences: () => getAppPreferences(db),
+    save_app_preferences: (args) => saveAppPreferences(db, args?.input),
+    reset_app_preferences: () => resetAppPreferences(db),
+    export_app_settings: (args) => exportAppSettings(db, args?.input),
+    import_app_settings: (args) => importAppSettings(db, args?.input),
+    clear_app_cache: () => clearAppCache(db),
+    get_app_data_folder: () => getAppDataFolder(db),
+    get_app_logs_folder: () => getAppLogsFolder(db),
+    export_diagnostic_package: (args) =>
+      exportDiagnosticPackage(db, args?.input),
+    write_app_log: (args) => writeAppLog(db, args?.input),
+    list_app_logs: (args) => listAppLogs(db, args?.input),
+    clear_app_logs: () => clearAppLogs(db),
+    get_database_schema_version: () => ({ version: databaseSchemaVersion(db) }),
+    get_local_network_addresses: () => getLocalNetworkAddresses(),
+    list_server_profiles: () => listServerProfiles(db),
+    get_server_eula_acceptance: (args) =>
+      getServerEulaAcceptance(db, args?.input?.serverId || args?.serverId),
+    get_server_source: (args) =>
+      getServerSource(db, args?.input?.serverId || args?.serverId),
+    create_server_profile: (args) => createServerProfile(db, args?.input),
+    get_server_setup_status: (args) =>
+      getServerSetupStatus(db, args?.serverId),
+    get_default_server_root: (args) => ({
+      path: managedServerRoot(db, args?.input?.name || "server", false),
+    }),
+    detect_server_version: (args) =>
+      detectServerVersion(args?.rootDir || args?.input?.rootDir),
+    update_server_profile: (args) => updateServerProfile(db, args?.input),
+    delete_server_profile: (args) =>
+      deleteServerProfile(
         db,
-        args?.input?.serverId || args?.serverId,
-      );
-    case "get_server_source":
-      return getServerSource(db, args?.input?.serverId || args?.serverId);
-    case "create_server_profile":
-      return createServerProfile(db, args?.input);
-    case "get_server_setup_status":
-      return getServerSetupStatus(db, args?.serverId);
-    case "get_default_server_root":
-      return {
-        path: managedServerRoot(db, args?.input?.name || "server", false),
-      };
-    case "detect_server_version":
-      return detectServerVersion(args?.rootDir || args?.input?.rootDir);
-    case "update_server_profile":
-      return updateServerProfile(db, args?.input);
-    case "delete_server_profile":
-      return deleteServerProfile(db, args?.id);
-    case "get_process_summary":
-      return getProcessSummary(db);
-    case "get_server_process_status":
-      return getServerProcessStatus(db, args?.serverId);
-    case "list_process_events":
-      return listProcessEvents(db, args?.serverId);
-    case "list_server_logs":
-      return listServerLogs(db, args?.serverId);
-    case "read_server_log":
-      return readServerLog(db, args?.serverId, args?.relativePath);
-    case "list_notification_events":
-      return listNotificationEvents(db);
-    case "get_notification_preferences":
-      return getNotificationPreferences(db);
-    case "save_notification_preferences":
-      return saveNotificationPreferences(db, args?.input);
-    case "list_java_runtimes":
-      return listJavaRuntimes(db);
-    case "plan_java_runtime":
-      return planJavaRuntime(db, args?.input);
-    case "install_java_runtime":
-      return installJavaRuntime(db, args?.input);
-    case "start_server":
-      return startServer(db, args?.serverId);
-    case "stop_server":
-      return stopServer(db, args?.serverId);
-    case "restart_server":
-      return restartServer(db, args?.serverId);
-    case "restart_server_with_countdown":
-      return restartServerWithCountdown(db, args?.input);
-    case "send_server_command":
-      return sendServerCommand(db, args?.serverId, args?.command);
-    case "list_server_files":
-      return listServerFiles(db, args?.serverId, args?.relativePath || "");
-    case "read_server_text_file":
-      return readServerTextFile(db, args?.serverId, args?.relativePath);
-    case "write_server_text_file":
-      return writeServerTextFile(
+        args?.id || args?.input?.id,
+        args?.deleteFromDisk === true || args?.input?.deleteFromDisk === true,
+      ),
+    get_process_summary: () => getProcessSummary(db),
+    get_attention_items: () => getAttentionItems(db),
+    get_server_process_status: (args) =>
+      getServerProcessStatus(db, args?.serverId),
+    list_process_events: (args) => listProcessEvents(db, args?.serverId),
+    list_server_logs: (args) => listServerLogs(db, args?.serverId),
+    read_server_log: (args) =>
+      readServerLog(db, args?.serverId, args?.relativePath),
+    list_notification_events: () => listNotificationEvents(db),
+    get_notification_preferences: () => getNotificationPreferences(db),
+    save_notification_preferences: (args) =>
+      saveNotificationPreferences(db, args?.input),
+    list_java_runtimes: () => listJavaRuntimes(db),
+    plan_java_runtime: (args) => planJavaRuntime(db, args?.input),
+    install_java_runtime: (args) => installJavaRuntime(db, args?.input),
+    start_server: (args) => startServer(db, args?.serverId),
+    stop_server: (args) => stopServer(db, args?.serverId),
+    restart_server: (args) => restartServer(db, args?.serverId),
+    restart_server_with_countdown: (args) =>
+      restartServerWithCountdown(db, args?.input),
+    send_server_command: (args) =>
+      sendServerCommand(db, args?.serverId, args?.command),
+    list_server_files: (args) =>
+      listServerFiles(db, args?.serverId, args?.relativePath || ""),
+    read_server_text_file: (args) =>
+      readServerTextFile(db, args?.serverId, args?.relativePath),
+    write_server_text_file: (args) =>
+      writeServerTextFile(
         db,
         args?.serverId,
         args?.relativePath,
         args?.content,
-      );
-    case "read_server_properties":
-      return readServerProperties(db, args?.serverId);
-    case "save_server_properties":
-      return saveServerProperties(
+      ),
+    read_server_properties: (args) =>
+      readServerProperties(db, args?.serverId),
+    save_server_properties: (args) =>
+      saveServerProperties(
         db,
         args?.serverId ?? args?.input?.serverId,
         args?.entries ?? args?.input?.updates,
-      );
-    case "list_server_backups":
-      return listServerBackups(db, args?.serverId);
-    case "create_world_backup":
-      return createWorldBackup(db, args?.input);
-    case "delete_server_backup":
-      return deleteServerBackup(db, args?.backupId || args?.input?.backupId);
-    case "export_server_backup":
-      return exportServerBackup(db, args?.input);
-    case "list_backup_profiles":
-      return listBackupProfiles(db, args?.serverId);
-    case "create_backup_profile":
-      return createBackupProfile(db, args?.input);
-    case "update_backup_profile":
-      return updateBackupProfile(db, args?.input);
-    case "delete_backup_profile":
-      return deleteBackupProfile(db, args?.profileId || args?.input?.profileId);
-    case "create_profile_backup":
-      return createProfileBackup(db, args?.input);
-    case "restore_world_backup":
-      return restoreWorldBackup(db, args?.input);
-    case "list_players":
-      return listPlayers(db, args?.serverId);
-    case "apply_player_action":
-      return applyPlayerAction(db, args?.input);
-    case "read_player_lists":
-      return readPlayerLists(db, args?.serverId);
-    case "save_player_list":
-      return savePlayerList(db, args?.input);
-    case "list_installed_content":
-      return listInstalledContent(db, args?.serverId);
-    case "import_local_content":
-      return importLocalContent(db, args?.input);
-    case "disable_installed_content":
-      return disableInstalledContent(db, args?.input);
-    case "enable_installed_content":
-      return enableInstalledContent(db, args?.input);
-    case "uninstall_installed_content":
-      return uninstallInstalledContent(db, args?.input);
-    case "get_content_update_policy":
-      return getContentUpdatePolicy(db, args);
-    case "save_content_update_policy":
-      return saveContentUpdatePolicy(db, args?.input);
-    case "plan_content_updates":
-      return planContentUpdates(db, args?.input);
-    case "check_content_updates":
-      return checkContentUpdates(db, args?.input);
-    case "install_content_update":
-      return installContentUpdate(db, args?.input);
-    case "install_all_content_updates":
-      return installAllContentUpdates(db, args?.input);
-    case "list_tunnel_providers":
-      return listTunnelProviders(db);
-    case "list_tunnel_statuses":
-      return listTunnelStatuses(db);
-    case "get_tunnel_provider":
-      return getTunnelProvider(db, args?.providerId || args?.input?.providerId);
-    case "create_tunnel_provider":
-      return createTunnelProvider(db, args?.input);
-    case "update_tunnel_provider":
-      return updateTunnelProvider(db, args?.input);
-    case "delete_tunnel_provider":
-      return deleteTunnelProvider(
-        db,
-        args?.providerId || args?.input?.providerId,
-      );
-    case "list_tunnel_bindings":
-      return listTunnelBindings(db);
-    case "bind_tunnel_to_server":
-      return bindTunnelToServer(db, args?.input);
-    case "unbind_tunnel_from_server":
-      return unbindTunnelFromServer(db, args?.input);
-    case "list_scheduled_tasks":
-      return listScheduledTasks(db, args?.serverId);
-    case "list_scheduled_task_runs":
-      return listScheduledTaskRuns(db, args?.serverId);
-    case "create_scheduled_task":
-      return createScheduledTask(db, args?.input);
-    case "update_scheduled_task":
-      return updateScheduledTask(db, args?.input);
-    case "delete_scheduled_task":
-      return deleteScheduledTask(db, args?.taskId || args?.input?.taskId);
-    case "run_due_scheduled_tasks":
-      return runDueScheduledTasks(db);
-    case "get_performance_history":
-      return getPerformanceHistory(db, args?.serverId);
-    case "sample_server_metrics":
-      return sampleServerMetrics(db, args?.serverId);
-    case "run_server_diagnostics":
-      return runServerDiagnostics(db, args?.serverId);
-    case "list_diagnostic_runs":
-      return listDiagnosticRuns(db, args?.serverId);
-    case "export_server_profile":
-      return exportServerProfile(db, args?.input);
-    case "preview_profile_import":
-      return previewProfileImport(args?.input);
-    case "import_profile":
-      return importProfile(db, args?.input);
-    case "preview_modpack_import_command":
-      return previewModpackImport(args?.input);
-    case "plan_server_provisioning":
-      return planServerProvisioning(args?.input);
-    case "create_provisioning_job":
-      return provisioningExecutorFor(db).createJob(
-        args?.input?.plan || args?.input,
-      );
-    case "get_provisioning_job":
-      return provisioningExecutorFor(db).getJob(
+      ),
+    list_server_backups: (args) => listServerBackups(db, args?.serverId),
+    create_world_backup: (args) => createWorldBackup(db, args?.input),
+    delete_server_backup: (args) =>
+      deleteServerBackup(db, args?.backupId || args?.input?.backupId),
+    export_server_backup: (args) => exportServerBackup(db, args?.input),
+    list_backup_profiles: (args) => listBackupProfiles(db, args?.serverId),
+    create_backup_profile: (args) => createBackupProfile(db, args?.input),
+    update_backup_profile: (args) => updateBackupProfile(db, args?.input),
+    delete_backup_profile: (args) =>
+      deleteBackupProfile(db, args?.profileId || args?.input?.profileId),
+    create_profile_backup: (args) => createProfileBackup(db, args?.input),
+    restore_world_backup: (args) => restoreWorldBackup(db, args?.input),
+    list_players: (args) => listPlayers(db, args?.serverId),
+    apply_player_change: (args) => applyPlayerChange(db, args?.input),
+    read_player_lists: (args) => readPlayerLists(db, args?.serverId),
+    save_player_list: (args) => savePlayerList(db, args?.input),
+    list_installed_content: (args) =>
+      listInstalledContent(db, args?.serverId),
+    import_local_content: (args) => importLocalContent(db, args?.input),
+    disable_installed_content: (args) =>
+      disableInstalledContent(db, args?.input),
+    enable_installed_content: (args) =>
+      enableInstalledContent(db, args?.input),
+    uninstall_installed_content: (args) =>
+      uninstallInstalledContent(db, args?.input),
+    get_content_update_policy: (args) => getContentUpdatePolicy(db, args),
+    save_content_update_policy: (args) =>
+      saveContentUpdatePolicy(db, args?.input),
+    plan_content_updates: (args) => planContentUpdates(db, args?.input),
+    check_content_updates: (args) => checkContentUpdates(db, args?.input),
+    install_content_update: (args) => installContentUpdate(db, args?.input),
+    install_all_content_updates: (args) =>
+      installAllContentUpdates(db, args?.input),
+    list_tunnel_providers: () => listTunnelProviders(db),
+    list_tunnel_statuses: () => listTunnelStatuses(db),
+    get_tunnel_provider: (args) =>
+      getTunnelProvider(db, args?.providerId || args?.input?.providerId),
+    create_tunnel_provider: (args) => createTunnelProvider(db, args?.input),
+    update_tunnel_provider: (args) => updateTunnelProvider(db, args?.input),
+    delete_tunnel_provider: (args) =>
+      deleteTunnelProvider(db, args?.providerId || args?.input?.providerId),
+    list_tunnel_bindings: () => listTunnelBindings(db),
+    bind_tunnel_to_server: (args) => bindTunnelToServer(db, args?.input),
+    unbind_tunnel_from_server: (args) =>
+      unbindTunnelFromServer(db, args?.input),
+    list_scheduled_tasks: (args) => listScheduledTasks(db, args?.serverId),
+    list_scheduled_task_runs: (args) =>
+      listScheduledTaskRuns(db, args?.serverId),
+    create_scheduled_task: (args) => createScheduledTask(db, args?.input),
+    update_scheduled_task: (args) => updateScheduledTask(db, args?.input),
+    delete_scheduled_task: (args) =>
+      deleteScheduledTask(db, args?.taskId || args?.input?.taskId),
+    run_due_scheduled_tasks: () => runDueScheduledTasks(db),
+    get_performance_history: (args) =>
+      getPerformanceHistory(db, args?.serverId),
+    sample_server_metrics: (args) => sampleServerMetrics(db, args?.serverId),
+    run_server_diagnostics: (args) =>
+      runServerDiagnostics(db, args?.serverId),
+    list_diagnostic_runs: (args) => listDiagnosticRuns(db, args?.serverId),
+    export_server_profile: (args) => exportServerProfile(db, args?.input),
+    preview_profile_import: (args) => previewProfileImport(args?.input),
+    import_profile: (args) => importProfile(db, args?.input),
+    preview_modpack_import_command: (args) =>
+      previewModpackImport(args?.input),
+    plan_server_provisioning: (args) => planServerProvisioning(args?.input),
+    create_provisioning_job: (args) =>
+      provisioningExecutorFor(db).createJob(args?.input?.plan || args?.input),
+    get_provisioning_job: (args) =>
+      provisioningExecutorFor(db).getJob(args?.input?.jobId || args?.jobId),
+    list_provisioning_jobs: () => provisioningExecutorFor(db).listJobs(),
+    list_recoverable_provisioning_jobs: () =>
+      provisioningExecutorFor(db).listRecoverableJobs(),
+    run_provisioning_job: (args) =>
+      provisioningExecutorFor(db).executeJob(
         args?.input?.jobId || args?.jobId,
-      );
-    case "list_provisioning_jobs":
-      return provisioningExecutorFor(db).listJobs();
-    case "list_recoverable_provisioning_jobs":
-      return provisioningExecutorFor(db).listRecoverableJobs();
-    case "run_provisioning_job":
-      return provisioningExecutorFor(db).executeJob(
-        args?.input?.jobId || args?.jobId,
-      );
-    case "retry_provisioning_job":
-      return provisioningExecutorFor(db).retryJob(
-        args?.input?.jobId || args?.jobId,
-      );
-    case "cancel_provisioning_job":
-      return provisioningExecutorFor(db).cancelJob(
-        args?.input?.jobId || args?.jobId,
-      );
-    case "import_modpack":
-      return importModpack(db, args?.input);
-    case "list_loader_minecraft_versions":
-      return listLoaderMinecraftVersions(args?.input);
-    case "list_loader_versions":
-      return listLoaderVersions(args?.input);
-    case "search_modrinth_projects":
-      return searchModrinthProjects(args?.input);
-    case "get_modrinth_project":
-      return getModrinthProject(args?.input);
-    case "list_modrinth_versions":
-      return listModrinthVersions(args?.input);
-    case "install_modrinth_version":
-      return installModrinthVersion(db, args?.input);
-    case "search_hangar_projects":
-      return searchHangarProjects(args?.query);
-    case "list_hangar_versions":
-      return listHangarVersions(args?.input);
-    case "install_hangar_version":
-      return installHangarVersion(db, args?.input);
-    case "search_curseforge_projects":
-      return searchCurseForgeProjects(args?.input);
-    case "get_curseforge_project":
-      return getCurseForgeProject(args?.input);
-    case "list_curseforge_files":
-      return listCurseForgeFiles(args?.input);
-    case "install_curseforge_file":
-      return installCurseForgeFile(db, args?.input);
-    case "import_curseforge_manual":
-      return importCurseForgeManual(db, args?.input);
-    case "search_bbsmc_projects":
-      return searchBbsmcProjects(args?.input);
-    case "get_bbsmc_project":
-      return getBbsmcProject(args?.input);
-    case "fetch_marketplace_image":
-      return fetchMarketplaceImage(args?.input);
-    case "list_bbsmc_versions":
-      return listBbsmcVersions(args?.input);
-    case "install_bbsmc_public_file":
-      return installBbsmcPublicFile(db, args?.input);
-    case "check_server_update":
-      return checkServerUpdate(db, args?.input);
-    case "install_server_update":
-      return installServerUpdate(db, args?.input);
-    case "list_server_update_history":
-      return listServerUpdateHistory(db, args?.serverId);
-    case "create_notification_event":
-      return createNotificationEvent(db, args?.input);
-    default:
-      return undefined;
-  }
+      ),
+    retry_provisioning_job: (args) =>
+      provisioningExecutorFor(db).retryJob(args?.input?.jobId || args?.jobId),
+    cancel_provisioning_job: (args) =>
+      provisioningExecutorFor(db).cancelJob(args?.input?.jobId || args?.jobId),
+    import_modpack: (args) => importModpack(db, args?.input),
+    list_loader_minecraft_versions: (args) =>
+      listLoaderMinecraftVersions(args?.input),
+    list_loader_versions: (args) => listLoaderVersions(args?.input),
+    search_modrinth_projects: (args) => searchModrinthProjects(args?.input),
+    get_modrinth_project: (args) => getModrinthProject(args?.input),
+    list_modrinth_versions: (args) => listModrinthVersions(args?.input),
+    install_modrinth_version: (args) =>
+      installModrinthVersion(db, args?.input),
+    search_hangar_projects: (args) => searchHangarProjects(args?.query),
+    list_hangar_versions: (args) => listHangarVersions(args?.input),
+    install_hangar_version: (args) => installHangarVersion(db, args?.input),
+    search_curseforge_projects: (args) =>
+      searchCurseForgeProjects(args?.input),
+    get_curseforge_project: (args) => getCurseForgeProject(args?.input),
+    list_curseforge_files: (args) => listCurseForgeFiles(args?.input),
+    install_curseforge_file: (args) =>
+      installCurseForgeFile(db, args?.input),
+    import_curseforge_manual: (args) =>
+      importCurseForgeManual(db, args?.input),
+    search_bbsmc_projects: (args) => searchBbsmcProjects(args?.input),
+    get_bbsmc_project: (args) => getBbsmcProject(args?.input),
+    fetch_marketplace_image: (args) => fetchMarketplaceImage(args?.input),
+    list_bbsmc_versions: (args) => listBbsmcVersions(args?.input),
+    install_bbsmc_public_file: (args) =>
+      installBbsmcPublicFile(db, args?.input),
+    check_server_update: (args) => checkServerUpdate(db, args?.input),
+    install_server_update: (args) => installServerUpdate(db, args?.input),
+    list_server_update_history: (args) =>
+      listServerUpdateHistory(db, args?.serverId),
+    create_notification_event: (args) =>
+      createNotificationEvent(db, args?.input),
+  };
 }
 
 function nowIso() {
@@ -759,12 +682,16 @@ const defaultProviders = {
   curseforge: true,
 };
 
-function appDataDirFor(db) {
-  const appDataDir = databaseAppDataDirs.get(db);
-  if (!appDataDir) {
-    throw new Error("app data directory is unavailable");
+function contextFor(db) {
+  const context = databaseContexts.get(db);
+  if (!context) {
+    throw new Error("backend context is unavailable");
   }
-  return appDataDir;
+  return context;
+}
+
+function appDataDirFor(db) {
+  return contextFor(db).appDataDir;
 }
 
 function appPreferencesPath(db) {
@@ -775,6 +702,7 @@ function defaultAppPreferences(db) {
   const appDataDir = appDataDirFor(db);
   return {
     closeBehavior: "minimize",
+    launchAtLogin: false,
     defaultServerDir: path.join(appDataDir, "servers"),
     defaultBackupDir: path.join(appDataDir, "backups"),
     cacheDir: path.join(appDataDir, "cache"),
@@ -854,6 +782,7 @@ function normalizeAppPreferences(db, input = {}) {
       input.closeBehavior === "quit" || input.closeBehavior === "minimize"
         ? input.closeBehavior
         : defaults.closeBehavior,
+    launchAtLogin: input.launchAtLogin === true,
     defaultServerDir: stringOrDefault(
       input.defaultServerDir,
       defaults.defaultServerDir,
@@ -1367,13 +1296,49 @@ function sha256File(filePath) {
   return createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
+function processEventKind(message) {
+  if (/\b(?:joined|left) the game\b/i.test(message)) {
+    return "players";
+  }
+  return /^(Server process|Stop requested|Restart|Auto restarting|Crash signature)/i.test(
+    message,
+  )
+    ? "lifecycle"
+    : "console";
+}
+
+function emitServerEvent(db, event) {
+  for (const listener of contextFor(db).runtimeState.serverEventListeners) {
+    try {
+      listener(event);
+    } catch {
+      // Event consumers must never interrupt process supervision.
+    }
+  }
+}
+
 function addProcessEvent(db, serverId, level, message) {
   if (closedDatabases.has(db)) {
     return;
   }
+  const id = randomUUID();
+  const createdAt = nowIso();
   db.prepare(
     "INSERT INTO process_events (id, server_id, level, message, created_at) VALUES (?, ?, ?, ?, ?)",
-  ).run(randomUUID(), serverId || null, level, message, nowIso());
+  ).run(id, serverId || null, level, message, createdAt);
+  if (serverId) {
+    emitServerEvent(db, {
+      serverId,
+      kind: processEventKind(message),
+      payload: {
+        id,
+        serverId,
+        level,
+        message,
+        createdAt,
+      },
+    });
+  }
 }
 
 function validateRuntimeSettings(serverPort, minMemoryMb, maxMemoryMb) {
@@ -1416,7 +1381,7 @@ function defaultRestartPolicy() {
 }
 
 function processSpawnerFor(db) {
-  return databaseProcessSpawners.get(db) || spawn;
+  return contextFor(db).dependencies.processSpawner;
 }
 
 function collectProcessMetrics(pid) {
@@ -1449,7 +1414,8 @@ function collectProcessMetrics(pid) {
 }
 
 async function measuredProcessMetrics(db, pid) {
-  const collector = databaseMetricCollectors.get(db) || collectProcessMetrics;
+  const context = contextFor(db);
+  const collector = context.dependencies.metricCollector;
   const measured = await Promise.resolve(collector(pid));
   if (!measured) return { cpuPercent: null, memoryMb: null, tps: null };
   let cpuPercent = Number.isFinite(measured.cpuPercent)
@@ -1457,7 +1423,7 @@ async function measuredProcessMetrics(db, pid) {
     : null;
   if (cpuPercent === null && Number.isFinite(measured.cpuSeconds)) {
     const now = Date.now();
-    const baselines = databaseMetricBaselines.get(db);
+    const baselines = context.runtimeState.metricBaselines;
     const baseline = baselines.get(pid);
     if (baseline && now > baseline.sampledAt) {
       cpuPercent = Math.max(
@@ -1809,13 +1775,74 @@ function updateServerProfile(db, input) {
   return getServerProfile(db, input.id);
 }
 
-function deleteServerProfile(db, id) {
-  if (!id) {
-    throw new Error("server profile id is required");
+function pathContains(parentPath, candidatePath) {
+  const relative = path.relative(parentPath, candidatePath);
+  return (
+    relative === "" ||
+    (relative !== ".." &&
+      !relative.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(relative))
+  );
+}
+
+function canonicalExistingPath(filePath) {
+  const resolved = path.resolve(filePath);
+  return fs.existsSync(resolved) ? fs.realpathSync(resolved) : resolved;
+}
+
+function deletableServerRoot(db, rootDir) {
+  const requestedRoot = stringFilePath(rootDir, "server root directory");
+  const canonicalRoot = canonicalExistingPath(requestedRoot);
+  const preferences = getAppPreferences(db);
+  const protectedPaths = [
+    path.parse(canonicalRoot).root,
+    os.homedir(),
+    process.cwd(),
+    __dirname,
+    appDataDirFor(db),
+    preferences.defaultServerDir,
+    preferences.defaultBackupDir,
+  ].map(canonicalExistingPath);
+
+  if (
+    protectedPaths.some((protectedPath) =>
+      pathContains(canonicalRoot, protectedPath),
+    )
+  ) {
+    throw new Error(
+      "Refusing to delete a protected directory. Choose the exact server folder instead.",
+    );
   }
-  const result = db.prepare("DELETE FROM servers WHERE id = ?").run(id);
+
+  return requestedRoot;
+}
+
+function deleteServerProfile(db, id, deleteFromDisk = false) {
+  const serverId = requireServerId(id);
+  const profile = getServerProfile(db, serverId);
+
+  if (deleteFromDisk) {
+    const processStatus = getServerProcessStatus(db, serverId)?.status;
+    if (
+      contextFor(db).runtimeState.startingServers.has(serverId) ||
+      managedChildren.has(serverId) ||
+      processStatus === "running" ||
+      processStatus === "externalRunning"
+    ) {
+      throw new Error(
+        "Stop the server before deleting its files from disk.",
+      );
+    }
+
+    const rootDir = deletableServerRoot(db, profile.rootDir);
+    clearRestartCountdown(serverId);
+    clearRestartState(serverId);
+    fs.rmSync(rootDir, { recursive: true, force: true });
+  }
+
+  const result = db.prepare("DELETE FROM servers WHERE id = ?").run(serverId);
   if (result.changes === 0) {
-    throw new Error(`server profile not found: ${id}`);
+    throw new Error(`server profile not found: ${serverId}`);
   }
   return null;
 }
@@ -1823,28 +1850,137 @@ function deleteServerProfile(db, id) {
 function getProcessSummary(db) {
   const rows = db
     .prepare(
-      `SELECT status, COUNT(*) AS count
-       FROM managed_processes
-       WHERE started_at = (
-         SELECT MAX(started_at)
-         FROM managed_processes m2
-         WHERE m2.server_id = managed_processes.server_id
-       )
-       AND status IN ('running', 'external_running', 'crashed')
-       GROUP BY status`,
+      `SELECT server.id AS server_id,
+              (
+                SELECT status
+                FROM managed_processes
+                WHERE server_id = server.id
+                ORDER BY started_at DESC, rowid DESC
+                LIMIT 1
+              ) AS status,
+              (
+                SELECT created_at
+                FROM backups
+                WHERE server_id = server.id
+                ORDER BY created_at DESC
+                LIMIT 1
+              ) AS last_backup_at
+       FROM servers AS server
+       ORDER BY server.id ASC`,
     )
     .all();
   return rows.reduce(
     (summary, row) => {
+      const status = row.status === "external_running" ? "externalRunning" : row.status;
+      if (status) summary.statuses[row.server_id] = status;
+      summary.lastBackups[row.server_id] = row.last_backup_at || null;
       if (row.status === "crashed") {
-        summary.crashedCount += row.count;
-      } else {
-        summary.runningCount += row.count;
+        summary.crashedCount += 1;
+      } else if (
+        row.status === "running" ||
+        row.status === "external_running"
+      ) {
+        summary.runningCount += 1;
       }
       return summary;
     },
-    { runningCount: 0, crashedCount: 0 },
+    { runningCount: 0, crashedCount: 0, statuses: {}, lastBackups: {} },
   );
+}
+
+function getAttentionItems(db) {
+  const staleBackupBefore = Date.now() - 7 * 24 * 60 * 60 * 1_000;
+  return db
+    .prepare("SELECT id, name FROM servers ORDER BY name COLLATE NOCASE")
+    .all()
+    .flatMap((server) => {
+      const items = [];
+      const process = db
+        .prepare(
+          `SELECT status, exited_at, started_at
+           FROM managed_processes
+           WHERE server_id = ?
+           ORDER BY started_at DESC, rowid DESC
+           LIMIT 1`,
+        )
+        .get(server.id);
+      if (process?.status === "crashed") {
+        items.push({
+          id: `crash:${server.id}`,
+          serverId: server.id,
+          serverName: server.name,
+          kind: "crash",
+          severity: "error",
+          createdAt: process.exited_at || process.started_at,
+        });
+      }
+
+      const update = db
+        .prepare(
+          `SELECT status, created_at
+           FROM server_update_history
+           WHERE server_id = ?
+           ORDER BY created_at DESC, rowid DESC
+           LIMIT 1`,
+        )
+        .get(server.id);
+      if (update?.status === "available") {
+        items.push({
+          id: `update:${server.id}`,
+          serverId: server.id,
+          serverName: server.name,
+          kind: "update",
+          severity: "info",
+          createdAt: update.created_at,
+        });
+      }
+
+      const backup = db
+        .prepare(
+          `SELECT created_at
+           FROM backups
+           WHERE server_id = ? AND status = 'completed'
+           ORDER BY created_at DESC, rowid DESC
+           LIMIT 1`,
+        )
+        .get(server.id);
+      const backupTime = backup ? new Date(backup.created_at).getTime() : 0;
+      if (!backup || !Number.isFinite(backupTime) || backupTime < staleBackupBefore) {
+        items.push({
+          id: `backup:${server.id}`,
+          serverId: server.id,
+          serverName: server.name,
+          kind: "backup",
+          severity: "warning",
+          createdAt: backup?.created_at || null,
+        });
+      }
+      return items;
+    });
+}
+
+function getLocalNetworkAddresses() {
+  const seen = new Set();
+  return Object.entries(os.networkInterfaces())
+    .flatMap(([interfaceName, entries]) =>
+      (entries || [])
+        .filter(
+          (entry) =>
+            entry.family === "IPv4" &&
+            !entry.internal &&
+            entry.address !== "0.0.0.0",
+        )
+        .map((entry) => ({
+          address: entry.address,
+          interfaceName,
+        })),
+    )
+    .filter((entry) => {
+      if (seen.has(entry.address)) return false;
+      seen.add(entry.address);
+      return true;
+    })
+    .sort((left, right) => left.interfaceName.localeCompare(right.interfaceName));
 }
 
 function mapProcess(row) {
@@ -2219,7 +2355,7 @@ function createJavaCompatibility(profile, runtimes) {
 }
 
 function managedJavaCandidates(db) {
-  const root = path.join(databaseAppDataDirs.get(db), "runtimes", "temurin");
+  const root = path.join(appDataDirFor(db), "runtimes", "temurin");
   if (!fs.existsSync(root)) return [];
   const executableName = process.platform === "win32" ? "java.exe" : "java";
   const pending = [root];
@@ -2294,9 +2430,9 @@ function listJavaRuntimes(db) {
 }
 
 function runtimeManagerFor(db) {
-  const configured = databaseRuntimeDependencies.get(db) || {};
+  const configured = contextFor(db).dependencies.runtimeDependencies;
   return createRuntimeManager({
-    userDataDir: databaseAppDataDirs.get(db),
+    userDataDir: appDataDirFor(db),
     platform: configured.platform,
     arch: configured.arch,
     fetchJson:
@@ -2612,7 +2748,7 @@ async function assertServerPortAvailable(db, profile) {
       `Port ${port} is already used by the running server ${conflictingProfile.name}.`,
     );
   }
-  const available = await databasePortCheckers.get(db)(port);
+  const available = await contextFor(db).dependencies.portChecker(port);
   if (!available) {
     throw provisioningError(
       "SERVER_PORT_IN_USE",
@@ -2623,7 +2759,7 @@ async function assertServerPortAvailable(db, profile) {
 
 async function startServer(db, serverId, options = {}) {
   const id = requireServerId(serverId);
-  const startingServers = databaseStartingServers.get(db);
+  const startingServers = contextFor(db).runtimeState.startingServers;
   if (startingServers.has(id) || managedChildren.has(id)) {
     throw provisioningError(
       "SERVER_ALREADY_RUNNING",
@@ -2678,10 +2814,17 @@ async function startReservedServer(db, serverId, options = {}) {
     child,
     db,
     crashDetected: false,
+    metricTimer: null,
     stopRequested: false,
     onlinePlayers: new Set(),
   };
   managedChildren.set(profile.id, managed);
+  managed.metricTimer = setInterval(() => {
+    void sampleServerMetrics(db, profile.id).catch(() => {
+      // A transient metrics failure must never interrupt the managed server.
+    });
+  }, 5_000);
+  managed.metricTimer.unref?.();
   addProcessEvent(db, profile.id, "info", "Server process started.");
   const handleOutputLine = (level, line) => {
     const joined = line.match(/\b([A-Za-z0-9_]{1,16}) joined the game\b/);
@@ -2718,7 +2861,8 @@ async function startReservedServer(db, serverId, options = {}) {
     }
   });
   child.on("exit", (code) => {
-    databaseMetricBaselines.get(db)?.delete(child.pid);
+    clearInterval(managed.metricTimer);
+    contextFor(db).runtimeState.metricBaselines.delete(child.pid);
     managedChildren.delete(profile.id);
     if (closedDatabases.has(db)) {
       return;
@@ -3334,42 +3478,100 @@ function restoreWorldBackup(db, input) {
 function listPlayers(db, serverId) {
   const id = requireServerId(serverId);
   const lists = readPlayerLists(db, id).lists;
+  const managed = managedChildren.get(id);
   const names = new Set();
+  const identities = new Map();
   for (const doc of lists) {
     for (const entry of doc.entries) {
-      if (entry.name) names.add(entry.name);
+      if (entry.name) {
+        names.add(entry.name);
+        if (entry.uuid) identities.set(entry.name.toLowerCase(), entry.uuid);
+      }
     }
   }
+  const userCachePath = path.join(serverRoot(db, id), "usercache.json");
+  try {
+    const cachedPlayers = fs.existsSync(userCachePath)
+      ? JSON.parse(fs.readFileSync(userCachePath, "utf8"))
+      : [];
+    for (const entry of Array.isArray(cachedPlayers) ? cachedPlayers : []) {
+      if (entry?.name) {
+        names.add(entry.name);
+        if (entry.uuid) identities.set(entry.name.toLowerCase(), entry.uuid);
+      }
+    }
+  } catch {
+    // Invalid usercache data must not hide the editable player lists.
+  }
+  for (const name of managed?.onlinePlayers ?? []) {
+    names.add(name);
+  }
+  const bannedIps =
+    lists.find((doc) => doc.listType === "bannedIps")?.entries ?? [];
+  const whitelistEnabled =
+    readServerProperties(db, id).entries.find(
+      (entry) => entry.key === "white-list",
+    )?.value === "true";
   return {
     serverId: id,
-    players: [...names].sort().map((username) => ({
-      username,
-      uuid: null,
-      online: false,
-      operator:
-        lists
-          .find((doc) => doc.listType === "ops")
-          ?.entries.some((entry) => entry.name === username) || false,
-      whitelisted:
-        lists
-          .find((doc) => doc.listType === "whitelist")
-          ?.entries.some((entry) => entry.name === username) || false,
-      banned:
-        lists
-          .find((doc) => doc.listType === "bannedPlayers")
-          ?.entries.some((entry) => entry.name === username) || false,
-      firstSeen: null,
-      lastSeen: null,
-    })),
-    actionsAvailable: Boolean(managedChildren.get(id)),
-    unavailableReason: managedChildren.get(id)
-      ? null
-      : "Server process is not running.",
+    whitelistEnabled,
+    players: [
+      ...[...names].sort().map((username) => ({
+        username,
+        uuid: identities.get(username.toLowerCase()) || null,
+        kind: "player",
+        online: managed?.onlinePlayers.has(username) || false,
+        operator:
+          lists
+            .find((doc) => doc.listType === "ops")
+            ?.entries.some((entry) => entry.name === username) || false,
+        whitelisted:
+          lists
+            .find((doc) => doc.listType === "whitelist")
+            ?.entries.some((entry) => entry.name === username) || false,
+        banned:
+          lists
+            .find((doc) => doc.listType === "bannedPlayers")
+            ?.entries.some((entry) => entry.name === username) || false,
+        firstSeen: null,
+        lastSeen: null,
+      })),
+      ...bannedIps
+        .filter((entry) => entry.ip)
+        .map((entry) => ({
+          username: entry.ip,
+          uuid: null,
+          kind: "ip",
+          online: false,
+          operator: false,
+          whitelisted: false,
+          banned: true,
+          firstSeen: null,
+          lastSeen: null,
+        })),
+    ],
+    actionsAvailable: true,
+    unavailableReason: null,
   };
 }
 
-function applyPlayerAction(db, input) {
+function playerIdentity(db, serverId, player, explicitUuid) {
+  if (explicitUuid) return explicitUuid;
+  const state = listPlayers(db, serverId);
+  return (
+    state.players.find(
+      (entry) =>
+        entry.kind !== "ip" &&
+        entry.username.toLowerCase() === player.toLowerCase(),
+    )?.uuid || null
+  );
+}
+
+function applyPlayerChange(db, input) {
+  const serverId = requireServerId(input?.serverId);
   const player = trimRequired(input?.player, "player name is required");
+  const action = input?.action;
+  const managed = managedChildren.get(serverId);
   const actionCommands = {
     op: `op ${player}`,
     deop: `deop ${player}`,
@@ -3378,13 +3580,85 @@ function applyPlayerAction(db, input) {
     kick: `kick ${player}`,
     whitelistAdd: `whitelist add ${player}`,
     whitelistRemove: `whitelist remove ${player}`,
+    banIp: `ban-ip ${player}`,
+    pardonIp: `pardon-ip ${player}`,
   };
-  const command = actionCommands[input?.action];
+  const command = actionCommands[action];
   if (!command) {
     throw new Error("unsupported player action");
   }
-  sendServerCommand(db, input.serverId, command);
-  return { commandSent: command };
+  if (managed?.db === db) {
+    sendServerCommand(db, serverId, command);
+    return { method: "command", commandSent: command };
+  }
+  if (action === "kick") {
+    throw new Error("Start the server before kicking an online player.");
+  }
+
+  const listByAction = {
+    op: ["ops", true],
+    deop: ["ops", false],
+    whitelistAdd: ["whitelist", true],
+    whitelistRemove: ["whitelist", false],
+    ban: ["bannedPlayers", true],
+    pardon: ["bannedPlayers", false],
+    banIp: ["bannedIps", true],
+    pardonIp: ["bannedIps", false],
+  };
+  const [listType, shouldAdd] = listByAction[action] || [];
+  if (!listType) {
+    throw new Error("unsupported offline player action");
+  }
+  const list = readPlayerLists(db, serverId).lists.find(
+    (entry) => entry.listType === listType,
+  );
+  if (!list || list.error) {
+    throw new Error(list?.error || "player list is unavailable");
+  }
+  const identityField = listType === "bannedIps" ? "ip" : "name";
+  const matchesPlayer = (entry) =>
+    String(entry[identityField] || "").toLowerCase() === player.toLowerCase();
+  let entries = list.entries.filter((entry) => !matchesPlayer(entry));
+  if (shouldAdd) {
+    if (listType === "bannedIps") {
+      entries.push({
+        ip: player,
+        created: nowIso(),
+        source: "MC Server Manager",
+        expires: "forever",
+        reason: input?.reason || "Banned by an operator.",
+      });
+    } else {
+      const uuid = playerIdentity(db, serverId, player, input?.uuid);
+      if (!uuid) {
+        throw new Error(
+          "The player's UUID is unknown. Start the server once so Minecraft can cache it.",
+        );
+      }
+      const base = { uuid, name: player };
+      entries.push(
+        listType === "ops"
+          ? { ...base, level: 4, bypassesPlayerLimit: false }
+          : listType === "bannedPlayers"
+            ? {
+                ...base,
+                created: nowIso(),
+                source: "MC Server Manager",
+                expires: "forever",
+                reason: input?.reason || "Banned by an operator.",
+              }
+            : base,
+      );
+    }
+  }
+  savePlayerList(db, { serverId, listType, entries });
+  addProcessEvent(
+    db,
+    serverId,
+    "info",
+    `Player access updated: ${action} ${player}.`,
+  );
+  return { method: "file", listType };
 }
 
 function playerListFiles(root) {
@@ -4559,6 +4833,11 @@ async function sampleServerMetrics(db, serverId) {
     JSON.stringify({ reasons: unavailableReasons, tps: sample.tps }),
     sample.sampledAt,
   );
+  emitServerEvent(db, {
+    serverId: profile.id,
+    kind: "metrics",
+    payload: sample,
+  });
   return sample;
 }
 

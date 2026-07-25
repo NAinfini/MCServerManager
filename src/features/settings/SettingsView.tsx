@@ -1,16 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Cog,
   Palette,
   Bell,
-  Package,
-  FolderOpen,
   Download,
   Info,
   ExternalLink,
-  Archive,
   Database,
-  FileText,
   Server,
   ShoppingBag,
 } from "lucide-react";
@@ -18,6 +15,7 @@ import { useAppSettings } from "../../i18n";
 import { Switch } from "../../components/ui/switch";
 import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
+import { LoadingState } from "../../components/ui/loading-state";
 import { TextField } from "../../components/ui/text-field";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { ThemeSettings } from "./ThemeSettings";
@@ -25,153 +23,50 @@ import { LocalizationSettings } from "./LocalizationSettings";
 import { NotificationSettings } from "./NotificationSettings";
 import { UpdateStatus } from "./UpdateStatus";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
+import { errorMessage } from "../../lib/error-message";
+import {
+  clearAppCache,
+  exportDiagnosticPackage,
+  exportAppSettings,
+  getAppPreferences,
+  importAppSettings,
+  resetAppPreferences,
+  saveAppPreferences,
+  settingsKeys,
+  type AppPreferences,
+  type BackupFrequency,
+  type CloseBehavior,
+  type CompressionFormat,
+  type FontSize,
+  type JavaStrategy,
+  type LogLevel,
+  type MarketplaceProvider,
+  type MotionStrength,
+} from "./api";
 
-type SettingsSection =
+export type SettingsSection =
   | "general"
   | "appearance"
-  | "logging"
-  | "serverDefaults"
-  | "backupDefaults"
+  | "defaults"
   | "marketplace"
   | "notifications"
-  | "providers"
-  | "paths"
-  | "data"
+  | "storage"
   | "updates"
   | "about";
 
-type CloseBehavior = "minimize" | "quit";
-type LogLevel = "debug" | "info" | "warning" | "error";
-type JavaStrategy = "auto" | "latest-lts" | "manual";
-type CompressionFormat = "zip" | "tar.gz";
-type BackupFrequency = "manual" | "daily" | "weekly";
-type MarketplaceProvider = "modrinth" | "bbsmc" | "hangar";
-type MotionStrength = "full" | "reduced" | "off";
-type FontSize = "small" | "medium" | "large";
-
-type AppPreferences = {
-  closeBehavior: CloseBehavior;
-  defaultServerDir: string;
-  defaultBackupDir: string;
-  cacheDir: string;
-  appDataDir: string;
-  logging: {
-    retentionDays: number;
-    maxSizeMb: number;
-    level: LogLevel;
-  };
-  serverDefaults: {
-    javaStrategy: JavaStrategy;
-    minMemoryMb: number;
-    maxMemoryMb: number;
-  };
-  backupDefaults: {
-    compression: CompressionFormat;
-    retentionDays: number;
-    frequency: BackupFrequency;
-  };
-  marketplace: {
-    defaultProvider: MarketplaceProvider;
-    showIncompatible: boolean;
-    autoInstallDependencies: boolean;
-    cacheSizeMb: number;
-  };
-  appearance: {
-    compactMode: boolean;
-    motion: MotionStrength;
-    fontSize: FontSize;
-  };
-  providers: {
-    modrinth: boolean;
-    hangar: boolean;
-    bbsmc: boolean;
-    curseforge: boolean;
-  };
-};
-
-const DEFAULT_PREFERENCES: AppPreferences = {
-  closeBehavior: "minimize",
-  defaultServerDir: "~/MCServers",
-  defaultBackupDir: "~/MCServers/backups",
-  cacheDir: "%APPDATA%/mc-server-manager/cache",
-  appDataDir: "%APPDATA%/mc-server-manager",
-  logging: {
-    retentionDays: 14,
-    maxSizeMb: 25,
-    level: "info",
-  },
-  serverDefaults: {
-    javaStrategy: "auto",
-    minMemoryMb: 1024,
-    maxMemoryMb: 4096,
-  },
-  backupDefaults: {
-    compression: "zip",
-    retentionDays: 14,
-    frequency: "daily",
-  },
-  marketplace: {
-    defaultProvider: "modrinth",
-    showIncompatible: false,
-    autoInstallDependencies: true,
-    cacheSizeMb: 1024,
-  },
-  appearance: {
-    compactMode: false,
-    motion: "full",
-    fontSize: "medium",
-  },
-  providers: {
-    modrinth: true,
-    hangar: true,
-    bbsmc: true,
-    curseforge: true,
-  },
-};
-
-function withPreferenceDefaults(input: Partial<AppPreferences>): AppPreferences {
-  return {
-    ...DEFAULT_PREFERENCES,
-    ...input,
-    logging: {
-      ...DEFAULT_PREFERENCES.logging,
-      ...(input.logging ?? {}),
-    },
-    serverDefaults: {
-      ...DEFAULT_PREFERENCES.serverDefaults,
-      ...(input.serverDefaults ?? {}),
-    },
-    backupDefaults: {
-      ...DEFAULT_PREFERENCES.backupDefaults,
-      ...(input.backupDefaults ?? {}),
-    },
-    marketplace: {
-      ...DEFAULT_PREFERENCES.marketplace,
-      ...(input.marketplace ?? {}),
-    },
-    appearance: {
-      ...DEFAULT_PREFERENCES.appearance,
-      ...(input.appearance ?? {}),
-    },
-    providers: {
-      ...DEFAULT_PREFERENCES.providers,
-      ...(input.providers ?? {}),
-    },
-  };
-}
-
-const NAV_ITEMS: Array<{ key: SettingsSection; icon: typeof Cog; labelKey: string }> = [
+const NAV_ITEMS: Array<{
+  key: SettingsSection;
+  icon: typeof Cog;
+  labelKey: string;
+  groupStart?: boolean;
+}> = [
   { key: "general", icon: Cog, labelKey: "settings.nav.general" },
   { key: "appearance", icon: Palette, labelKey: "settings.nav.appearance" },
-  { key: "logging", icon: FileText, labelKey: "settings.nav.logging" },
-  { key: "serverDefaults", icon: Server, labelKey: "settings.nav.serverDefaults" },
-  { key: "backupDefaults", icon: Archive, labelKey: "settings.nav.backupDefaults" },
-  { key: "marketplace", icon: ShoppingBag, labelKey: "settings.nav.marketplace" },
+  { key: "defaults", icon: Server, labelKey: "settings.nav.defaults", groupStart: true },
+  { key: "marketplace", icon: ShoppingBag, labelKey: "settings.nav.marketplaceSources" },
   { key: "notifications", icon: Bell, labelKey: "settings.nav.notifications" },
-  { key: "providers", icon: Package, labelKey: "settings.nav.providers" },
-  { key: "paths", icon: FolderOpen, labelKey: "settings.nav.paths" },
-  { key: "data", icon: Database, labelKey: "settings.nav.data" },
-  { key: "updates", icon: Download, labelKey: "settings.nav.updates" },
+  { key: "storage", icon: Database, labelKey: "settings.nav.storage" },
+  { key: "updates", icon: Download, labelKey: "settings.nav.updates", groupStart: true },
   { key: "about", icon: Info, labelKey: "settings.nav.about" },
 ];
 
@@ -180,10 +75,6 @@ type SettingsSectionProps = {
   onUpdate: (patch: Partial<AppPreferences>) => Promise<void>;
   onError: (message: string) => void;
 };
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function GeneralSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
   const { t } = useAppSettings();
@@ -196,7 +87,15 @@ function GeneralSection({ preferences, onUpdate, onError }: SettingsSectionProps
           <strong>{t("settings.general.launchAtLogin")}</strong>
           <span>{t("settings.general.launchAtLoginNote")}</span>
         </div>
-        <Switch checked={false} disabled aria-label={t("settings.general.launchAtLogin")} />
+        <Switch
+          checked={preferences.launchAtLogin}
+          aria-label={t("settings.general.launchAtLogin")}
+          onCheckedChange={(checked) => {
+            void onUpdate({ launchAtLogin: checked }).catch((error: unknown) =>
+              onError(errorMessage(error)),
+            );
+          }}
+        />
       </div>
       <div className="settings-row">
         <div className="settings-row-label">
@@ -356,9 +255,7 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
       if (!result.path) {
         return;
       }
-      await invokeDesktopCommand("export_diagnostic_package", {
-        input: { path: result.path },
-      });
+      await exportDiagnosticPackage(result.path);
       setDiagnosticsExported(true);
     } catch (error) {
       onError(errorMessage(error));
@@ -641,7 +538,7 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
 
   const clearCache = async () => {
     try {
-      await invokeDesktopCommand("clear_app_cache");
+      await clearAppCache();
       setCacheCleared(true);
     } catch (error) {
       onError(errorMessage(error));
@@ -755,7 +652,9 @@ function ProvidersSection({ preferences, onUpdate, onError }: SettingsSectionPro
           <strong>{t("settings.providers.modrinth")}</strong>
           <span>{t("settings.providers.alwaysEnabled")}</span>
         </div>
-        <Switch checked disabled aria-label={t("settings.providers.modrinth")} />
+        <span className="settings-static-state">
+          {t("settings.providers.alwaysEnabled")}
+        </span>
       </div>
       <div className="settings-row">
         <div className="settings-row-label">
@@ -811,7 +710,7 @@ function PathsSection({
   };
   const clearCache = async () => {
     try {
-      await invokeDesktopCommand("clear_app_cache");
+      await clearAppCache();
       setCacheCleared(true);
     } catch (error) {
       onError(errorMessage(error));
@@ -872,9 +771,12 @@ function PathsSection({
 }
 
 function DataManagementSection({
-  onUpdate,
+  onReplace,
   onError,
-}: SettingsSectionProps) {
+}: {
+  onReplace: (preferences: AppPreferences) => void;
+  onError: (message: string) => void;
+}) {
   const { t } = useAppSettings();
   const [resetOpen, setResetOpen] = useState(false);
   const [pendingImportPath, setPendingImportPath] = useState<string | null>(
@@ -891,9 +793,7 @@ function DataManagementSection({
       if (!result.path) {
         return;
       }
-      await invokeDesktopCommand("export_app_settings", {
-        input: { path: result.path },
-      });
+      await exportAppSettings(result.path);
       setStatus(t("settings.data.exported"));
     } catch (error) {
       onError(errorMessage(error));
@@ -917,11 +817,8 @@ function DataManagementSection({
 
   const applyImportSettings = async (path: string) => {
     try {
-      const importedPreferences = await invokeDesktopCommand<AppPreferences>(
-        "import_app_settings",
-        { input: { path } },
-      );
-      await onUpdate(importedPreferences);
+      const importedPreferences = await importAppSettings(path);
+      onReplace(importedPreferences);
       setPendingImportPath(null);
       setStatus(t("settings.data.imported"));
     } catch (error) {
@@ -932,10 +829,8 @@ function DataManagementSection({
 
   const resetSettings = async () => {
     try {
-      const resetPreferences = await invokeDesktopCommand<AppPreferences>(
-        "reset_app_preferences",
-      );
-      await onUpdate(resetPreferences);
+      const resetPreferences = await resetAppPreferences();
+      onReplace(resetPreferences);
       setResetOpen(false);
       setStatus(t("settings.data.resetDone"));
     } catch (error) {
@@ -1053,164 +948,263 @@ function AboutSection() {
         </div>
       </div>
       <div className="settings-about-system">
-        <span>Electron: {window.navigator.userAgent.match(/Electron\/([\d.]+)/)?.[1] ?? "N/A"}</span>
-        <span>Platform: {window.navigator.platform}</span>
+        <span>
+          {t("settings.about.electron")}:{" "}
+          {window.navigator.userAgent.match(/Electron\/([\d.]+)/)?.[1] ??
+            t("common.notAvailable")}
+        </span>
+        <span>
+          {t("settings.about.platform")}:{" "}
+          {window.navigator.platform || t("common.notAvailable")}
+        </span>
       </div>
     </div>
   );
 }
 
 interface SettingsViewProps {
-  embedded?: boolean;
+  activeSection?: string;
+  onSectionChange?: (section: SettingsSection) => void;
 }
 
-export function SettingsView({ embedded = false }: SettingsViewProps) {
+const settingsSectionIds = new Set<string>(NAV_ITEMS.map((item) => item.key));
+
+function canonicalSettingsSection(section?: string): SettingsSection | null {
+  if (!section) return null;
+  if (settingsSectionIds.has(section)) return section as SettingsSection;
+  if (section === "serverDefaults" || section === "backupDefaults") {
+    return "defaults";
+  }
+  if (section === "providers") return "marketplace";
+  if (section === "logging" || section === "paths" || section === "data") {
+    return "storage";
+  }
+  return null;
+}
+
+export function SettingsView({
+  activeSection: controlledSection,
+  onSectionChange,
+}: SettingsViewProps) {
   const { t } = useAppSettings();
-  const [activeSection, setActiveSection] = useState<SettingsSection>("general");
-  const [preferences, setPreferences] =
-    useState<AppPreferences>(DEFAULT_PREFERENCES);
+  const [uncontrolledSection, setUncontrolledSection] =
+    useState<SettingsSection>("general");
+  const activeSection =
+    canonicalSettingsSection(controlledSection) ?? uncontrolledSection;
+  const setActiveSection = (section: SettingsSection) => {
+    if (onSectionChange) {
+      onSectionChange(section);
+      return;
+    }
+    setUncontrolledSection(section);
+  };
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">(
+    "idle",
+  );
+  const saveSequence = useRef(0);
+  const queryClient = useQueryClient();
+  const navRef = useRef<HTMLElement>(null);
+  const preferencesQuery = useQuery({
+    queryKey: settingsKeys.preferences,
+    queryFn: async () => {
+      const preferences = await getAppPreferences();
+      if (!preferences || typeof preferences !== "object") {
+        throw new Error(t("settings.error.invalidPreferences"));
+      }
+      return preferences;
+    },
+  });
+  const preferences = preferencesQuery.data;
+  const visibleError =
+    settingsError ??
+    (preferencesQuery.error ? errorMessage(preferencesQuery.error) : null);
 
   useEffect(() => {
-    let isMounted = true;
-    invokeDesktopCommand<AppPreferences>("get_app_preferences")
-      .then((loadedPreferences) => {
-        if (!loadedPreferences || typeof loadedPreferences !== "object") {
-          throw new Error("Invalid app preferences response.");
-        }
-        if (isMounted) {
-          setPreferences(withPreferenceDefaults(loadedPreferences));
-          setSettingsError(null);
-        }
-      })
-      .catch((error: unknown) => {
-        if (isMounted) {
-          setSettingsError(errorMessage(error));
-        }
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    const activeItem = navRef.current?.querySelector<HTMLElement>(
+      `[data-settings-section="${activeSection}"]`,
+    );
+    activeItem?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeSection]);
 
   const updatePreferences = async (patch: Partial<AppPreferences>) => {
-    const nextPreferences = await invokeDesktopCommand<AppPreferences>(
-      "save_app_preferences",
-      { input: patch },
-    );
-    setPreferences(withPreferenceDefaults(nextPreferences));
+    const sequence = ++saveSequence.current;
+    setSaveState("saving");
+    try {
+      const nextPreferences = await saveAppPreferences(patch);
+      queryClient.setQueryData(settingsKeys.preferences, nextPreferences);
+      setSettingsError(null);
+      if (saveSequence.current === sequence) {
+        setSaveState("saved");
+        window.setTimeout(() => {
+          if (saveSequence.current === sequence) setSaveState("idle");
+        }, 1_800);
+      }
+    } catch (error) {
+      if (saveSequence.current === sequence) setSaveState("idle");
+      throw error;
+    }
+  };
+
+  const replacePreferences = (nextPreferences: AppPreferences) => {
+    queryClient.setQueryData(settingsKeys.preferences, nextPreferences);
     setSettingsError(null);
   };
 
   return (
     <section
-      aria-label={embedded ? t("settings.page.title") : undefined}
-      aria-labelledby={embedded ? undefined : "settings-title"}
-      className={embedded ? "settings-page settings-page-embedded" : "settings-page"}
+      aria-labelledby="settings-title"
+      className="settings-page"
     >
-      {!embedded ? (
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">{t("settings.page.eyebrow")}</p>
-            <h1 id="settings-title">{t("settings.page.title")}</h1>
-          </div>
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">{t("settings.page.eyebrow")}</p>
+          <h1 id="settings-title" tabIndex={-1}>{t("settings.page.title")}</h1>
         </div>
-      ) : null}
+        <span className="settings-save-state" aria-live="polite">
+          {saveState === "saving"
+            ? t("settings.save.saving")
+            : saveState === "saved"
+              ? t("settings.save.saved")
+              : ""}
+        </span>
+      </div>
       <div className="settings-layout">
-        <nav className="settings-nav" aria-label={t("settings.page.title")}>
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                className={
-                  isActive
-                    ? "settings-nav-item settings-nav-item-active"
-                    : "settings-nav-item"
-                }
-                aria-current={isActive ? "true" : undefined}
-                onClick={() => setActiveSection(item.key)}
-              >
-                <Icon aria-hidden="true" size={14} />
-                {t(item.labelKey)}
-              </button>
-            );
-          })}
-        </nav>
+        <div className="settings-nav-shell">
+          <nav
+            ref={navRef}
+            className="settings-nav"
+            aria-label={t("settings.page.title")}
+            onKeyDown={(event) => {
+              if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+              const items = Array.from(
+                event.currentTarget.querySelectorAll<HTMLButtonElement>(".settings-nav-item"),
+              );
+              const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+              if (currentIndex < 0) return;
+              const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+              event.preventDefault();
+              items[(currentIndex + direction + items.length) % items.length]?.focus();
+            }}
+          >
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeSection === item.key;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={
+                    isActive
+                      ? "settings-nav-item settings-nav-item-active"
+                      : "settings-nav-item"
+                  }
+                  aria-current={isActive ? "true" : undefined}
+                  data-nav-group-start={item.groupStart ? "true" : undefined}
+                  data-settings-section={item.key}
+                  onClick={() => setActiveSection(item.key)}
+                >
+                  <Icon aria-hidden="true" size={14} />
+                  {t(item.labelKey)}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
         <div className="settings-content">
-          {settingsError ? (
-            <p className="settings-error" role="alert">
-              {settingsError}
-            </p>
+          {visibleError ? (
+            <div className="settings-error" role="alert">
+              <div>
+                <strong>{t("settings.error.title")}</strong>
+                <span>{visibleError}</span>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  setSettingsError(null);
+                  void preferencesQuery.refetch();
+                }}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
           ) : null}
-          {activeSection === "general" ? (
-            <GeneralSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
+          {preferencesQuery.isLoading ? (
+            <LoadingState message={t("settings.loading")} />
           ) : null}
-          {activeSection === "appearance" ? (
-            <AppearanceSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
+          {preferences ? (
+            <>
+              {activeSection === "general" ? (
+                <GeneralSection
+                  preferences={preferences}
+                  onUpdate={updatePreferences}
+                  onError={setSettingsError}
+                />
+              ) : null}
+              {activeSection === "appearance" ? (
+                <AppearanceSection
+                  preferences={preferences}
+                  onUpdate={updatePreferences}
+                  onError={setSettingsError}
+                />
+              ) : null}
+              {activeSection === "defaults" ? (
+                <div className="settings-section-stack">
+                  <ServerDefaultsSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                  <BackupDefaultsSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                </div>
+              ) : null}
+              {activeSection === "marketplace" ? (
+                <div className="settings-section-stack">
+                  <MarketplaceSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                  <ProvidersSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                </div>
+              ) : null}
+              {activeSection === "notifications" ? (
+                <NotificationSettings />
+              ) : null}
+              {activeSection === "storage" ? (
+                <div className="settings-section-stack">
+                  <PathsSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                  <LoggingSection
+                    preferences={preferences}
+                    onUpdate={updatePreferences}
+                    onError={setSettingsError}
+                  />
+                  <DataManagementSection
+                    onReplace={replacePreferences}
+                    onError={setSettingsError}
+                  />
+                </div>
+              ) : null}
+              {activeSection === "updates" ? <UpdateStatus /> : null}
+              {activeSection === "about" ? <AboutSection /> : null}
+            </>
           ) : null}
-          {activeSection === "logging" ? (
-            <LoggingSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "serverDefaults" ? (
-            <ServerDefaultsSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "backupDefaults" ? (
-            <BackupDefaultsSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "marketplace" ? (
-            <MarketplaceSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "notifications" ? <NotificationSettings /> : null}
-          {activeSection === "providers" ? (
-            <ProvidersSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "paths" ? (
-            <PathsSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "data" ? (
-            <DataManagementSection
-              preferences={preferences}
-              onUpdate={updatePreferences}
-              onError={setSettingsError}
-            />
-          ) : null}
-          {activeSection === "updates" ? <UpdateStatus /> : null}
-          {activeSection === "about" ? <AboutSection /> : null}
         </div>
       </div>
     </section>

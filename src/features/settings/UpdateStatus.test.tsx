@@ -93,4 +93,54 @@ describe("UpdateStatus", () => {
       screen.getByRole("button", { name: /install update/i }),
     ).toBeDisabled();
   });
+
+  it("localizes the stable channel and does not render the backend summary", async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({
+      currentVersion: "1.0.0",
+      channel: "stable",
+      checkedAt: "2026-07-01T00:00:00Z",
+      updateAvailable: true,
+      installerEnabled: true,
+      installBlockedByRunningServers: false,
+      latestVersion: "1.1.0",
+      releaseNotes: null,
+      releaseDate: "2026-07-01T00:00:00Z",
+      message: "Backend-only update summary.",
+    });
+
+    renderUpdateStatus();
+
+    expect(await screen.findByText("Stable")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Backend-only update summary."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets users retry a failed update check", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke)
+      .mockRejectedValueOnce(new Error("network unavailable"))
+      .mockResolvedValueOnce({
+        currentVersion: "1.0.0",
+        channel: "stable",
+        checkedAt: "2026-07-01T00:00:00Z",
+        updateAvailable: false,
+        installerEnabled: false,
+        installBlockedByRunningServers: false,
+        latestVersion: "1.0.0",
+        releaseNotes: null,
+        releaseDate: "2026-07-01T00:00:00Z",
+        message: "MC Server Manager is up to date.",
+      });
+
+    renderUpdateStatus();
+
+    expect(
+      await screen.findByRole("alert", { name: /could not check updates/i }),
+    ).toHaveTextContent("network unavailable");
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("No update available")).toBeInTheDocument();
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
 });

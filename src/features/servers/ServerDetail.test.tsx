@@ -1,17 +1,15 @@
-﻿import { cleanup, render, screen, within } from "../../test/render";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ServerWorkspaceSection } from "../../app/router";
 import { AppSettingsProvider } from "../../i18n";
+import { cleanup, render, screen, within } from "../../test/render";
 import { ServerDetail } from "./ServerDetail";
-import { useServerUiStore } from "./serverUiStore";
 import type { ServerProfile } from "./types";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(async (command: string) => {
-    if (command === "get_server_process_status") {
-      return null;
-    }
+    if (command === "get_server_process_status") return null;
     if (command === "get_server_setup_status") {
       return {
         serverId: "server-1",
@@ -46,8 +44,9 @@ vi.mock("../../lib/desktop-runtime", () => ({
         ],
       };
     }
-    if (command === "list_process_events") {
-      return [];
+    if (command === "list_process_events") return [];
+    if (command === "get_performance_history") {
+      return { serverId: "server-1", samples: null, events: [] };
     }
     return null;
   }),
@@ -80,152 +79,191 @@ const server: ServerProfile = {
   },
 };
 
-function renderDetail() {
+function renderDetail({
+  section = "overview",
+  view,
+  onNavigate = vi.fn(),
+  profile = server,
+}: {
+  section?: ServerWorkspaceSection;
+  view?: string;
+  onNavigate?: (section: ServerWorkspaceSection, view?: string) => void;
+  profile?: ServerProfile;
+} = {}) {
   const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
+    defaultOptions: { queries: { retry: false } },
   });
 
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <AppSettingsProvider>
-        <ServerDetail server={server} />
-      </AppSettingsProvider>
-    </QueryClientProvider>,
-  );
+  return {
+    onNavigate,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <AppSettingsProvider>
+          <ServerDetail
+            onNavigate={onNavigate}
+            section={section}
+            server={profile}
+            view={view}
+          />
+        </AppSettingsProvider>
+      </QueryClientProvider>,
+    ),
+  };
 }
 
-describe("ServerDetail", () => {
+describe("ServerDetail command deck", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
-    useServerUiStore.setState({ selectedTabs: {} });
+    vi.unstubAllGlobals();
   });
 
-  it("keeps the server detail view usable when a lazy tab panel crashes", async () => {
+  it("uses eight task-oriented workspace sections instead of the legacy tab wall", () => {
     renderDetail();
 
-    await userEvent.click(screen.getByRole("tab", { name: "Console" }));
+    const workspace = screen.getByRole("navigation", {
+      name: "Review Server workspace",
+    });
+    expect(within(workspace).getAllByRole("button")).toHaveLength(8);
+    [
+      "Overview",
+      "Console",
+      "Players",
+      "Content",
+      "Files & backups",
+      "Operations",
+      "Automation",
+      "Server settings",
+    ].forEach((label) => {
+      expect(
+        within(workspace).getByRole("button", { name: label }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("complementary", { name: "Server context" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("localizes all primary workspace sections", () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+    renderDetail();
+
+    const workspace = screen.getByRole("navigation", {
+      name: "Review Server 工作台",
+    });
+    ["概览", "控制台", "玩家", "内容", "文件与备份", "运行状况", "自动化", "服务器设置"].forEach(
+      (label) => {
+        expect(
+          within(workspace).getByRole("button", { name: label }),
+        ).toBeInTheDocument();
+      },
+    );
+  });
+
+  it("requests canonical child views when a workspace section is chosen", async () => {
+    const onNavigate = vi.fn();
+    renderDetail({ onNavigate });
+
+    await userEvent.click(screen.getByRole("button", { name: "Players" }));
+    expect(onNavigate).toHaveBeenCalledWith("players", "online");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Server settings" }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("settings", "general");
+  });
+
+  it("shows one compact child-view switcher for a section", async () => {
+    const onNavigate = vi.fn();
+    renderDetail({ onNavigate, section: "players", view: "online" });
+
+    const switcher = screen.getByRole("navigation", {
+      name: "Workspace views",
+    });
+    expect(within(switcher).getAllByRole("button")).toHaveLength(4);
+    expect(
+      within(switcher).getByRole("button", { name: "Online" }),
+    ).toHaveAttribute("aria-current", "page");
+
+    await userEvent.click(
+      within(switcher).getByRole("button", { name: "Operators" }),
+    );
+    expect(onNavigate).toHaveBeenCalledWith("players", "ops");
+  });
+
+  it("normalizes an unknown child view to the section default", () => {
+    renderDetail({ section: "players", view: "removed-view" });
+
+    expect(
+      screen.getByRole("button", { name: "Online" }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
+  it("keeps the shell usable when a lazy workspace panel crashes", async () => {
+    renderDetail({ section: "console", view: "terminal" });
 
     expect(
       await screen.findByText("This panel could not load"),
     ).toBeInTheDocument();
     expect(screen.getByText("console render failed")).toBeInTheDocument();
-    expect(screen.getByText("Review Server")).toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
-
-    expect(await screen.findByText("Root folder")).toBeInTheDocument();
-  });
-
-  it("renders invalid profile dates without crashing the activity panel", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
-    });
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <AppSettingsProvider>
-          <ServerDetail server={{ ...server, updatedAt: "not-a-date" }} />
-        </AppSettingsProvider>
-      </QueryClientProvider>,
-    );
-
-    await userEvent.click(screen.getByRole("tab", { name: "Activity" }));
-
-    expect(await screen.findByText("Invalid date")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.getByText("Review Server")).toBeInTheDocument();
   });
 
-  it("localizes every server detail tab", () => {
-    localStorage.setItem("mcsm.language", "zh-CN");
-
+  it("places setup guidance and quick links on overview", async () => {
     renderDetail();
-
-    [
-      "控制台",
-      "文件",
-      "内容",
-      "备份",
-      "设置",
-      "活动",
-    ].forEach((label) => {
-      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
-    });
-  });
-
-  it("uses a left section menu with a bounded content workspace", () => {
-    const { container } = renderDetail();
-
-    expect(container.querySelector(".server-detail-workspace")).not.toBeNull();
-    expect(container.querySelector(".server-detail-menu")).not.toBeNull();
-    expect(container.querySelector(".detail-tab-content")).not.toBeNull();
-  });
-
-  it("shows a setup checklist in settings so new users know the current required actions", async () => {
-    renderDetail();
-
-    await userEvent.click(screen.getByRole("tab", { name: "Settings" }));
 
     const checklist = await screen.findByLabelText("Server setup checklist");
-
-    expect(within(checklist).getByText("Setup checklist")).toBeInTheDocument();
     expect(await within(checklist).findByText("Java")).toBeInTheDocument();
-    expect(within(checklist).getByText("Server runtime")).toBeInTheDocument();
     expect(within(checklist).getByText("Minecraft EULA")).toBeInTheDocument();
-    expect(within(checklist).getByText("Backup")).toBeInTheDocument();
-    expect(within(checklist).getByText("Done")).toBeInTheDocument();
-    expect(within(checklist).getAllByText("Action needed")).toHaveLength(2);
-    expect(within(checklist).getByText("Recommended")).toBeInTheDocument();
-    expect(within(checklist).getByText("Install or repair the validated server runtime before starting.")).toBeInTheDocument();
-    expect(within(checklist).getByText("Read the Minecraft EULA, then set eula=true yourself if you accept it.")).toBeInTheDocument();
-    expect(within(checklist).getByText("Create a backup before changing jars, mods, configs, or worlds.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("navigation", { name: "Server shortcuts" }),
+    ).toBeInTheDocument();
   });
 
-  it("renders the server name as the page heading in its merged header", () => {
+  it("renders invalid profile dates without crashing overview", async () => {
+    renderDetail({ profile: { ...server, updatedAt: "not-a-date" } });
+
+    const lastUpdated = await screen.findByText("Last updated");
+    expect(within(lastUpdated.parentElement!).getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("Review Server")).toBeInTheDocument();
+  });
+
+  it("keeps server identity, lifecycle actions, invite, and backup in one header", () => {
     renderDetail();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Review Server" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("MC 1.20.4")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start Review Server" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Invite friends")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Backup" })).toBeInTheDocument();
   });
 
-  it("shows a back button that calls onBack when provided", async () => {
+  it("shows a back button only when a back handler is provided", async () => {
     const onBack = vi.fn();
     const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: {
-          retry: false,
-        },
-      },
+      defaultOptions: { queries: { retry: false } },
     });
-
-    render(
+    const first = render(
       <QueryClientProvider client={queryClient}>
         <AppSettingsProvider>
-          <ServerDetail server={server} onBack={onBack} />
+          <ServerDetail onBack={onBack} server={server} />
         </AppSettingsProvider>
       </QueryClientProvider>,
     );
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-
     expect(onBack).toHaveBeenCalledTimes(1);
-  });
 
-  it("omits the back button when no onBack handler is provided", () => {
+    first.unmount();
     renderDetail();
-
     expect(
       screen.queryByRole("button", { name: "Back" }),
     ).not.toBeInTheDocument();
   });
 });
-

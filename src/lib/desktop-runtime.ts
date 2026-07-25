@@ -9,6 +9,13 @@ type ElectronBridge = {
   openExternalUrl: (url: string) => Promise<void>;
   windowAction: (action: DesktopWindowAction) => Promise<void>;
   onCloseBehaviorRequested: (callback: () => void) => () => void;
+  onServerEvent?: (callback: (event: DesktopServerEvent) => void) => () => void;
+};
+
+export type DesktopServerEvent = {
+  serverId: string;
+  kind: "console" | "lifecycle" | "metrics" | "players";
+  payload: unknown;
 };
 
 function electronBridge() {
@@ -52,6 +59,12 @@ export async function onDesktopCloseRequested(
 
 export async function onDesktopCloseBehaviorRequested(callback: () => void) {
   return requireElectronBridge().onCloseBehaviorRequested(callback);
+}
+
+export function onDesktopServerEvent(
+  callback: (event: DesktopServerEvent) => void,
+) {
+  return requireElectronBridge().onServerEvent?.(callback) ?? (() => undefined);
 }
 
 declare global {

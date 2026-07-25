@@ -1,6 +1,6 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { Archive, FileArchive, FileCode2, FolderOpen, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
 
 interface DropImportReviewDialogProps {
@@ -43,29 +43,39 @@ export function DropImportReviewDialog({
   const Icon = kindIcon[kind];
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="dialog-backdrop" />
-        <Dialog.Content className="modal-dialog drop-import-review-dialog">
-          <div className="create-server-dialog-header">
-            <div>
-              <Dialog.Title asChild>
-                <h2>{t("dropImport.review.title")}</h2>
-              </Dialog.Title>
-              <Dialog.Description asChild>
-                <p>{t("dropImport.review.description")}</p>
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <Button
-                aria-label={t("dropImport.review.close")}
-                className="icon-button"
-                variant="ghost"
-              >
-                <X aria-hidden="true" size={16} />
-              </Button>
-            </Dialog.Close>
+    <DialogSurface
+      open={open}
+      className="drop-import-review-dialog"
+      description={t("dropImport.review.description")}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            {t("common.cancel")}
+          </Button>
+          <Button disabled={paths.length !== 1} type="button" onClick={onContinue}>
+            {t("dropImport.review.continue")}
+          </Button>
+        </>
+      }
+      title={t("dropImport.review.title")}
+      onOpenChange={onOpenChange}
+      header={({ description, title }) => (
+        <div className="create-server-dialog-header">
+          <div>
+            {title}
+            {description}
           </div>
+          <Button
+            aria-label={t("dropImport.review.close")}
+            className="icon-button"
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+          >
+            <X aria-hidden="true" size={16} />
+          </Button>
+        </div>
+      )}
+    >
           <div className="drop-import-review-body">
             <div className="drop-import-detected">
               <span className="drop-import-detected-icon">
@@ -92,18 +102,6 @@ export function DropImportReviewDialog({
                 : t("dropImport.review.note")}
             </p>
           </div>
-          <div className="dialog-actions">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
-                {t("common.cancel")}
-              </Button>
-            </Dialog.Close>
-            <Button disabled={paths.length !== 1} type="button" onClick={onContinue}>
-              {t("dropImport.review.continue")}
-            </Button>
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    </DialogSurface>
   );
 }

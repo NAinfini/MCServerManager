@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原型 · 工作台(V1 指挥舱)— MC Server Manager 重设计</title>
+<style>
+/* ============ V1「指挥舱」Token 单一来源 ============ */
+:root {
+  --bg-app: #111823;
+  --bg-sidebar: #0d1420;
+  --bg-panel: #17202e;
+  --bg-elevated: #1d2836;
+  --bg-hover: rgba(122, 156, 210, 0.08);
+  --bg-inset: #0c121c;
+  --border-subtle: rgba(148, 170, 200, 0.13);
+  --border-strong: rgba(148, 170, 200, 0.28);
+  --text-main: #e6ebf2;
+  --text-muted: #94a1b5;
+  --text-subtle: #6b7889;
+  --text-inverse: #ffffff;
+  --accent: #3478f6;
+  --accent-hover: #4a89ff;
+  --accent-soft: rgba(52, 120, 246, 0.14);
+  --accent-secondary: #6c4af6;
+  --running-glow: rgba(62, 207, 142, 0.6);
+  --running: #3ecf8e;
+  --starting: #e8b93e;
+  --stopped: #6b7889;
+  --crashed: #e5544b;
+  --warn: #e8b93e;
+  --danger: #e5544b;
+  --danger-soft: rgba(229, 84, 75, 0.12);
+  --ok-soft: rgba(62, 207, 142, 0.12);
+  --warn-soft: rgba(232, 185, 62, 0.12);
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 48px;
+  --radius-control: 6px; --radius-card: 10px; --radius-panel: 16px; --radius-pill: 999px;
+  --shadow-overlay: 0 16px 48px rgba(2, 7, 14, 0.55);
+  --motion-fast: 120ms; --motion-medium: 180ms;
+  --row-h: 36px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  font-family: var(--font-sans); font-size: 13px; line-height: 1.4;
+  background: var(--bg-app); color: var(--text-main);
+  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+button:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-control);
+}
+.mono { font-family: var(--font-mono); font-size: 12px; }
+
+/* ============ 应用外壳 ============ */
+.app-body { display: flex; flex: 1; min-height: 0; }
+
+/* 全局侧栏 */
+.g-sidebar {
+  width: 232px; background: var(--bg-sidebar); border-right: 1px solid var(--border-subtle);
+  display: flex; flex-direction: column; padding: var(--space-3); gap: var(--space-2); flex-shrink: 0;
+}
+.brand { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); }
+.brand-mark {
+  width: 28px; height: 28px; border-radius: var(--radius-control);
+  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  display: grid; place-items: center; font-weight: 700; font-size: 12px; color: var(--text-inverse);
+}
+.brand-name { font-weight: 650; font-size: 13px; }
+.g-nav-item {
+  display: flex; align-items: center; gap: var(--space-3); width: 100%;
+  padding: 7px var(--space-3); border-radius: var(--radius-control);
+  color: var(--text-muted); transition: background var(--motion-fast), color var(--motion-fast);
+  text-align: left;
+}
+.g-nav-item:hover { background: var(--bg-hover); color: var(--text-main); }
+.g-nav-item.active { background: var(--accent-soft); color: var(--text-main); position: relative; }
+.g-nav-item.active::before {
+  content: ""; position: absolute; left: -12px; top: 6px; bottom: 6px; width: 3px;
+  background: var(--accent); border-radius: var(--radius-pill);
+}
+.g-nav-item svg { flex-shrink: 0; opacity: 0.85; }
+.side-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-subtle); padding: var(--space-3) var(--space-3) var(--space-1);
+}
+.server-item {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: 6px var(--space-2); border-radius: var(--radius-control); text-align: left;
+}
+.server-item:hover { background: var(--bg-hover); }
+.server-item.active { background: var(--accent-soft); }
+.server-cover {
+  width: 28px; height: 28px; border-radius: var(--radius-control); flex-shrink: 0;
+  background: var(--bg-elevated); display: grid; place-items: center; font-size: 13px;
+  border: 1px solid var(--border-subtle);
+}
+.server-item-copy { min-width: 0; }
+.server-item-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.server-item-meta { font-size: 11px; color: var(--text-subtle); }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dot-running { background: var(--running); box-shadow: 0 0 6px var(--running-glow); }
+.dot-stopped { background: var(--stopped); }
+.spacer { flex: 1; }
+.g-footer { border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
+
+/* ============ 工作台 ============ */
+.workbench { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* 状态头:全工作台唯一遥测呈现点 */
+.wb-header {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap; row-gap: var(--space-2);
+}
+.wb-back { padding: 6px; border-radius: var(--radius-control); color: var(--text-muted); }
+.wb-back:hover { background: var(--bg-hover); color: var(--text-main); }
+.wb-title { font-size: 16px; font-weight: 650; }
+.badge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
+  border-radius: var(--radius-pill); font-size: 12px; font-weight: 500;
+}
+.badge-running { background: var(--ok-soft); color: var(--running); }
+.telemetry { display: flex; gap: var(--space-4); color: var(--text-muted); font-size: 12px; cursor: default; }
+.telemetry b { color: var(--text-main); font-weight: 500; font-family: var(--font-mono); }
+.wb-actions { display: flex; gap: var(--space-2); margin-left: auto; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+  border-radius: var(--radius-control); font-weight: 500; font-size: 13px;
+  border: 1px solid transparent; transition: background var(--motion-fast), transform var(--motion-fast);
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: var(--text-inverse); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--bg-elevated); border-color: var(--border-subtle); }
+.btn-secondary:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+.btn-ghost { color: var(--text-muted); padding: 6px 8px; }
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-main); }
+.btn-danger-ghost { color: var(--danger); border-color: transparent; }
+.btn-danger-ghost:hover { background: var(--danger-soft); }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+.bell { position: relative; }
+.bell-dot {
+  position: absolute; top: 4px; right: 4px; width: 7px; height: 7px;
+  border-radius: 50%; background: var(--warn); border: 2px solid var(--bg-app);
+}
+
+/* 邀请朋友弹层 */
+.invite-wrap { position: relative; }
+.popover {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 320px; z-index: 40;
+  background: var(--bg-elevated); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card); box-shadow: var(--shadow-overlay);
+  padding: var(--space-4); display: none;
+}
+.popover.open { display: block; animation: pop var(--motion-medium) ease-out; }
+@keyframes pop { from { opacity: 0; transform: translateY(-4px); } }
+.popover h4 { font-size: 13px; margin-bottom: var(--space-3); }
+.invite-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.invite-row + .invite-row { border-top: 1px solid var(--border-subtle); }
+.invite-label { color: var(--text-muted); font-size: 12px; }
+.invite-value { font-family: var(--font-mono); font-size: 12px; }
+.copy-btn { color: var(--accent); font-size: 12px; padding: 2px 8px; border-radius: var(--radius-control); }
+.copy-btn:hover { background: var(--accent-soft); }
+.invite-note { font-size: 11px; color: var(--text-subtle); margin-top: var(--space-3); line-height: 1.5; }
+.invite-link { color: var(--accent); text-decoration: none; font-size: 12px; }
+
+/* 二级导航 + 主区 */
+.wb-body { display: flex; flex: 1; min-height: 0; }
+.wb-nav {
+  width: 176px; flex-shrink: 0; padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 2px;
+}
+.wb-nav-item {
+  display: flex; align-items: center; gap: var(--space-3); padding: 7px var(--space-3);
+  border-radius: var(--radius-control); color: var(--text-muted); text-align: left; width: 100%;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.wb-nav-item:hover { background: var(--bg-hover); color: var(--text-main); }
+.wb-nav-item.active { background: var(--accent-soft); color: var(--text-main); font-weight: 500; }
+.wb-nav-item .count {
+  margin-left: auto; font-size: 11px; font-family: var(--font-mono);
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+  padding: 0 6px; border-radius: var(--radius-pill); color: var(--text-muted);
+}
+.wb-nav-item .count.attn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.wb-main { flex: 1; overflow-y: auto; padding: var(--space-5) var(--space-6); min-width: 0; }
+.section { display: none; max-width: 1080px; }
+.section.active { display: block; animation: fade var(--motion-medium) ease-out; }
+@keyframes fade { from { opacity: 0; } }
+
+/* ============ 卡片与网格 ============ */
+.card {
+  background: var(--bg-panel); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card); padding: var(--space-4) var(--space-5);
+}
+.card-title { font-size: 13px; font-weight: 650; margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2); }
+.card-title .link { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 400; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); margin-bottom: var(--space-4); }
+@media (max-width: 1100px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* 就绪清单(全绿折叠为一行) */
+.readiness {
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--ok-soft); border: 1px solid rgba(62, 207, 142, 0.25);
+  border-radius: var(--radius-card); padding: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4); font-size: 12px;
+}
+.readiness .check { color: var(--running); font-weight: 650; }
+.readiness .items { color: var(--text-muted); display: flex; gap: var(--space-4); flex-wrap: wrap; }
+.readiness .rec { color: var(--warn); }
+
+/* KeyValueGrid */
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px var(--space-5); font-size: 12px; }
+.kv dt { color: var(--text-subtle); }
+.kv dd { font-family: var(--font-mono); }
+
+/* Timeline */
+.timeline { list-style: none; padding: 0; display: flex; flex-direction: column; }
+.timeline li { display: flex; gap: var(--space-3); padding: 6px 0; align-items: baseline; }
+.timeline time { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); flex-shrink: 0; width: 52px; }
+.tl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; align-self: center; }
+.tl-dot.ok { background: var(--running); } .tl-dot.warn { background: var(--warn); }
+
+/* 快速入口 */
+.quick-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
+@media (max-width: 880px) { .quick-row { grid-template-columns: 1fr; } }
+.quick-card {
+  display: flex; align-items: center; gap: var(--space-3); text-align: left;
+  background: var(--bg-panel); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-card); padding: var(--space-4);
+  transition: border-color var(--motion-fast), background var(--motion-fast);
+}
+.quick-card:hover { border-color: var(--accent); background: var(--bg-elevated); }
+.quick-icon {
+  width: 34px; height: 34px; border-radius: var(--radius-control); flex-shrink: 0;
+  background: var(--accent-soft); display: grid; place-items: center; color: var(--accent);
+}
+.quick-copy b { display: block; font-size: 13px; font-weight: 600; }
+.quick-copy span { font-size: 12px; color: var(--text-muted); }
+.quick-attn { color: var(--warn) !important; }
+
+/* ============ 段控 + DataTable(玩家节) ============ */
+.seg {
+  display: inline-flex; background: var(--bg-inset); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-control); padding: 3px; gap: 2px; margin-bottom: var(--space-4);
+}
+.seg button {
+  padding: 5px 14px; border-radius: 4px; color: var(--text-muted); font-size: 12px; font-weight: 500;
+}
+.seg button:hover { color: var(--text-main); }
+.seg button.active { background: var(--bg-elevated); color: var(--text-main); box-shadow: inset 0 0 0 1px var(--border-subtle); }
+.page-head { display: flex; align-items: center; margin-bottom: var(--space-4); gap: var(--space-3); }
+.page-head h2 { font-size: 15px; font-weight: 650; }
+.page-head .btn { margin-left: auto; }
+.table-panel { background: var(--bg-panel); border: 1px solid var(--border-subtle); border-radius: var(--radius-card); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+th {
+  text-align: left; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--text-subtle); font-weight: 500; padding: 10px var(--space-4);
+  border-bottom: 1px solid var(--border-subtle); background: var(--bg-inset);
+}
+td { padding: 0 var(--space-4); height: var(--row-h); border-bottom: 1px solid var(--border-subtle); font-size: 12.5px; }
+tr:last-child td { border-bottom: none; }
+tbody tr { transition: background var(--motion-fast); }
+tbody tr:hover { background: var(--bg-hover); }
+tbody tr:hover .row-actions { opacity: 1; }
+.player-cell { display: flex; align-items: center; gap: var(--space-2); font-weight: 500; }
+.avatar {
+  width: 22px; height: 22px; border-radius: 4px; image-rendering: pixelated;
+  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
+}
+.tag {
+  display: inline-block; padding: 1px 8px; border-radius: var(--radius-pill);
+  font-size: 11px; margin-right: 4px; border: 1px solid var(--border-subtle); color: var(--text-muted);
+}
+.tag-op { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.tag-wl { background: var(--ok-soft); color: var(--running); border-color: transparent; }
+.row-actions { opacity: 0; display: flex; gap: 4px; justify-content: flex-end; transition: opacity var(--motion-fast); }
+.row-actions button { padding: 4px 10px; border-radius: var(--radius-control); font-size: 12px; color: var(--text-muted); }
+.row-actions button:hover { background: var(--bg-elevated); color: var(--text-main); }
+.online-pill { display: inline-flex; align-items: center; gap: 6px; color: var(--running); font-size: 12px; }
+
+/* 空态(V2 像素插画吸收点) */
+.empty { padding: var(--space-8) var(--space-4); text-align: center; }
+.empty svg { margin-bottom: var(--space-3); image-rendering: pixelated; }
+.empty b { display: block; font-size: 13px; margin-bottom: 4px; }
+.empty span { font-size: 12px; color: var(--text-muted); }
+
+/* 占位节 */
+.stub { padding: var(--space-8); text-align: center; color: var(--text-subtle); border: 1px dashed var(--border-subtle); border-radius: var(--radius-card); }
+
+/* 底部状态栏 */
+.status-bar {
+  height: 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-sidebar);
+  display: flex; align-items: center; gap: var(--space-5); padding: 0 var(--space-4);
+  font-size: 11px; color: var(--text-subtle); flex-shrink: 0;
+}
+.status-bar .mono { font-size: 11px; }
+
+/* ============ 响应式:lg 以下二级导航折叠为图标轨 ============ */
+@media (max-width: 1100px) {
+  .wb-nav { width: 52px; padding: var(--space-4) var(--space-2); }
+  .wb-nav-item span.label, .wb-nav-item .count { display: none; }
+  .wb-nav-item { justify-content: center; padding: 9px; }
+}
+@media (max-width: 880px) {
+  .g-sidebar { width: 60px; }
+  .brand-name, .g-nav-item span, .side-label, .server-item-copy, .g-footer span { display: none; }
+  .g-nav-item, .server-item { justify-content: center; }
+  .telemetry { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app-body">
+  <!-- 全局侧栏 -->
+  <aside class="g-sidebar">
+    <div class="brand"><div class="brand-mark">MC</div><span class="brand-name">MC Server Manager</span></div>
+    <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>仪表盘</span></button>
+    <div class="side-label">服务器</div>
+    <button class="server-item active">
+      <span class="dot dot-running"></span>
+      <span class="server-cover">🧵</span>
+      <span class="server-item-copy"><span class="server-item-name">Fabric Workshop</span><br><span class="server-item-meta">Fabric 1.21.1 · :25565</span></span>
+    </button>
+    <button class="server-item">
+      <span class="dot dot-stopped"></span>
+      <span class="server-cover">📄</span>
+      <span class="server-item-copy"><span class="server-item-name">Paper Survival</span><br><span class="server-item-meta">Paper 1.21.4 · :25566</span></span>
+    </button>
+    <div class="spacer"></div>
+    <div class="g-footer">
+      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/></svg><span>Java Runtimes</span></button>
+      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/></svg><span>应用活动</span></button>
+      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span>设置</span></button>
+    </div>
+  </aside>
+
+  <!-- 工作台 -->
+  <div class="workbench">
+    <!-- 状态头:唯一遥测呈现点 -->
+    <header class="wb-header">
+      <button class="wb-back" aria-label="返回仪表盘">◀</button>
+      <h1 class="wb-title">Fabric Workshop</h1>
+      <span class="badge badge-running"><span class="dot dot-running"></span>运行中</span>
+      <div class="telemetry" title="CPU 18.4% · 内存 2560/6144 MB · TPS 19.9 · 已运行 01:00:00">
+        <span>CPU <b>18%</b></span><span>内存 <b>2.5G</b></span><span>玩家 <b>2</b></span><span>TPS <b>19.9</b></span>
+      </div>
+      <div class="wb-actions">
+        <button class="btn btn-secondary" disabled>启动</button>
+        <button class="btn btn-danger-ghost btn">停止</button>
+        <button class="btn btn-secondary">重启</button>
+        <button class="btn btn-secondary">备份</button>
+        <div class="invite-wrap">
+          <button class="btn btn-primary" id="inviteBtn" aria-haspopup="dialog" aria-expanded="false">邀请朋友 ▾</button>
+          <div class="popover" id="invitePop" role="dialog" aria-label="邀请朋友">
+            <h4>让朋友连接这台服务器</h4>
+            <div class="invite-row">
+              <div><div class="invite-label">同一局域网</div><div class="invite-value">192.168.1.23:25565</div></div>
+              <button class="copy-btn">复制</button>
+            </div>
+            <div class="invite-row">
+              <div><div class="invite-label">隧道(playit.gg)</div><div class="invite-value" style="color: var(--text-subtle)">未运行</div></div>
+              <button class="copy-btn">启动隧道</button>
+            </div>
+            <p class="invite-note">互联网上的朋友需要通过隧道或您路由器上的端口转发才能连入。本应用只负责按需拉起您配置的隧道软件,不会修改系统网络设置。</p>
+            <a class="invite-link" href="#settings">配置网络与联机 →</a>
+          </div>
+        </div>
+        <button class="btn btn-ghost bell" aria-label="通知"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0"/></svg><span class="bell-dot"></span></button>
+      </div>
+    </header>
+
+    <div class="wb-body">
+      <!-- 二级导航:替换 23 个横向标签 -->
+      <nav class="wb-nav" aria-label="服务器分区">
+        <button class="wb-nav-item active" data-sec="overview" title="总览"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12 12 3l9 9M5 10v10h5v-6h4v6h5V10"/></svg><span class="label">总览</span></button>
+        <button class="wb-nav-item" data-sec="console" title="控制台"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m4 17 6-6-6-6M12 19h8"/></svg><span class="label">控制台</span></button>
+        <button class="wb-nav-item" data-sec="players" title="玩家"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="label">玩家</span><span class="count">2</span></button>
+        <button class="wb-nav-item" data-sec="content" title="内容"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16ZM3.3 7 12 12l8.7-5M12 22V12"/></svg><span class="label">内容</span><span class="count attn">3</span></button>
+        <button class="wb-nav-item" data-sec="data" title="文件与备份"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5M3 12a9 3 0 0 0 18 0"/></svg><span class="label">文件与备份</span></button>
+        <button class="wb-nav-item" data-sec="monitor" title="运行状况"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="label">运行状况</span></button>
+        <button class="wb-nav-item" data-sec="automation" title="自动化"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span class="label">自动化</span></button>
+        <button class="wb-nav-item" data-sec="settings" title="服务器设置"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 7h-9M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg><span class="label">服务器设置</span></button>
+      </nav>
+
+      <!-- 主工作区 -->
+      <main class="wb-main">
+
+        <!-- ====== 总览 ====== -->
+        <section class="section active" id="sec-overview">
+          <div class="readiness" role="status">
+            <span class="check">✓ 就绪</span>
+            <span class="items">Java ✓ · 服务器运行时 ✓ · EULA ✓ · <span class="rec">建议:内容变更前先备份</span></span>
+            <button class="copy-btn" style="margin-left:auto" onclick="go('data')">去备份</button>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-title">运行信息</div>
+              <dl class="kv">
+                <dt>根目录</dt><dd>C:\Servers\fabric-workshop</dd>
+                <dt>版本</dt><dd>Fabric 0.16.9 · MC 1.21.1</dd>
+                <dt>端口</dt><dd>25565</dd>
+                <dt>内存分配</dt><dd>2048 – 6144 MB</dd>
+                <dt>重启策略</dt><dd>崩溃后重启,最多 3 次</dd>
+                <dt>自动启动</dt><dd>已启用</dd>
+              </dl>
+            </div>
+            <div class="card">
+              <div class="card-title">最近事件 <a class="link" href="#" onclick="go('monitor');return false">查看全部 →</a></div>
+              <ul class="timeline">
+                <li><time>11:00</time><span class="tl-dot ok"></span><span>服务器启动完成(1.2s)</span></li>
+                <li><time>10:58</time><span class="tl-dot warn"></span><span>建议在内容变更前创建备份</span></li>
+                <li><time>10:58</time><span class="tl-dot"></span><span>Alex 加入了游戏</span></li>
+                <li><time>10:55</time><span class="tl-dot"></span><span>世界备份完成 · 4.0 MB</span></li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="quick-row">
+            <button class="quick-card" onclick="go('players')">
+              <span class="quick-icon">👥</span>
+              <span class="quick-copy"><b>玩家</b><span><span class="online-pill">● 2 人在线</span> · 1 OP · 4 白名单</span></span>
+            </button>
+            <button class="quick-card" onclick="go('content')">
+              <span class="quick-icon">📦</span>
+              <span class="quick-copy"><b>内容</b><span>12 个模组 · <span class="quick-attn">3 个可更新</span></span></span>
+            </button>
+            <button class="quick-card" onclick="go('data')">
+              <span class="quick-icon">🗄</span>
+              <span class="quick-copy"><b>备份</b><span>最近:昨天 11:00 · 4.0 MB</span></span>
+            </button>
+          </div>
+        </section>
+
+        <!-- ====== 玩家 ====== -->
+        <section class="section" id="sec-players">
+          <div class="page-head">
+            <h2>玩家</h2>
+            <button class="btn btn-primary">+ 添加玩家</button>
+          </div>
+          <div class="seg" role="tablist" aria-label="玩家视图">
+            <button class="active" data-view="online">在线 (2)</button>
+            <button data-view="ops">OP (1)</button>
+            <button data-view="wl">白名单 (4)</button>
+            <button data-view="bans">封禁 (0)</button>
+          </div>
+
+          <div class="table-panel" id="view-online">
+            <table>
+              <caption>在线玩家</caption>
+              <thead><tr><th scope="col">玩家</th><th scope="col">状态</th><th scope="col">身份</th><th scope="col" style="text-align:right">操作</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="player-cell"><svg class="avatar" width="22" height="22" viewBox="0 0 8 8"><rect width="8" height="8" fill="#8a6a4f"/><rect x="1" y="2" width="2" height="2" fill="#fff"/><rect x="5" y="2" width="2" height="2" fill="#fff"/><rect x="2" y="5" width="4" height="1" fill="#5a4030"/></svg>Alex</span></td>
+                  <td><span class="online-pill">● 在线 42 分钟</span></td>
+                  <td><span class="tag tag-op">OP</span><span class="tag tag-wl">白名单</span></td>
+                  <td><div class="row-actions"><button>踢出</button><button>更多 ▾</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="player-cell"><svg class="avatar" width="22" height="22" viewBox="0 0 8 8"><rect width="8" height="8" fill="#4f6a8a"/><rect x="1" y="2" width="2" height="2" fill="#fff"/><rect x="5" y="2" width="2" height="2" fill="#fff"/><rect x="2" y="5" width="4" height="1" fill="#30405a"/></svg>Steve</span></td>
+                  <td><span class="online-pill">● 在线 12 分钟</span></td>
+                  <td><span class="tag tag-wl">白名单</span></td>
+                  <td><div class="row-actions"><button>踢出</button><button>更多 ▾</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-panel" id="view-ops" hidden>
+            <table>
+              <caption>管理员</caption>
+              <thead><tr><th scope="col">玩家</th><th scope="col">权限等级</th><th scope="col">绕过人数上限</th><th scope="col" style="text-align:right">操作</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="player-cell"><svg class="avatar" width="22" height="22" viewBox="0 0 8 8"><rect width="8" height="8" fill="#8a6a4f"/><rect x="1" y="2" width="2" height="2" fill="#fff"/><rect x="5" y="2" width="2" height="2" fill="#fff"/></svg>Alex</span></td>
+                  <td class="mono">4</td>
+                  <td>否</td>
+                  <td><div class="row-actions"><button>取消 OP</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-panel" id="view-wl" hidden>
+            <table>
+              <caption>白名单</caption>
+              <thead><tr><th scope="col">玩家</th><th scope="col">UUID</th><th scope="col" style="text-align:right">操作</th></tr></thead>
+              <tbody>
+                <tr><td class="player-cell">Alex</td><td class="mono" style="color:var(--text-subtle)">c06f8906-…-4f7a</td><td><div class="row-actions"><button>移出白名单</button></div></td></tr>
+                <tr><td class="player-cell">Steve</td><td class="mono" style="color:var(--text-subtle)">8667ba71-…-b9b8</td><td><div class="row-actions"><button>移出白名单</button></div></td></tr>
+                <tr><td class="player-cell">Kai</td><td class="mono" style="color:var(--text-subtle)">1a2b3c4d-…-9e0f</td><td><div class="row-actions"><button>移出白名单</button></div></td></tr>
+                <tr><td class="player-cell">Nova</td><td class="mono" style="color:var(--text-subtle)">5f6e7d8c-…-1a2b</td><td><div class="row-actions"><button>移出白名单</button></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="table-panel" id="view-bans" hidden>
+            <div class="empty" role="status">
+              <svg width="48" height="48" viewBox="0 0 12 12">
+                <rect x="2" y="2" width="8" height="8" fill="none" stroke="var(--border-strong)" stroke-width="1"/>
+                <rect x="4" y="4" width="1" height="1" fill="var(--running)"/><rect x="7" y="4" width="1" height="1" fill="var(--running)"/>
+                <rect x="4" y="7" width="4" height="1" fill="var(--border-strong)"/>
+              </svg>
+              <b>没有被封禁的玩家</b>
+              <span>一片祥和。封禁玩家或 IP 后会出现在这里,可随时解封。</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- ====== 占位节 ====== -->
+        <section class="section" id="sec-console"><div class="stub">控制台(原型未实现)— xterm 全高 + 命令行 + 右侧快捷命令抽屉(含 gamerules)</div></section>
+        <section class="section" id="sec-content"><div class="stub">内容(原型未实现)— 已安装 | 更新(含更新偏好卡)| 浏览(全屏市场)</div></section>
+        <section class="section" id="sec-data"><div class="stub">文件与备份(原型未实现)— 备份 | 文件(?path= 深链)</div></section>
+        <section class="section" id="sec-monitor"><div class="stub">运行状况(原型未实现)— 性能走线 | 日志文件 | 事件 | 体检</div></section>
+        <section class="section" id="sec-automation"><div class="stub">自动化(原型未实现)— 定时任务</div></section>
+        <section class="section" id="sec-settings"><div class="stub">服务器设置(原型未实现)— 常规 | 世界属性 | 网络与联机 | 版本升级 | 导入导出</div></section>
+
+      </main>
+    </div>
+    <footer class="status-bar">
+      <span>● 1 运行 · 1 停止</span>
+      <span class="mono">Java 21 (Temurin)</span>
+      <span style="margin-left:auto" class="mono">v0.2.0-redesign-prototype</span>
+    </footer>
+  </div>
+</div>
+
+<script>
+// 二级导航切换
+const navItems = document.querySelectorAll('.wb-nav-item');
+function go(sec) {
+  navItems.forEach(b => b.classList.toggle('active', b.dataset.sec === sec));
+  document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + sec));
+}
+navItems.forEach(b => b.addEventListener('click', () => go(b.dataset.sec)));
+
+// 玩家段控
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.seg button').forEach(x => x.classList.toggle('active', x === b));
+  const map = { online: 'view-online', ops: 'view-ops', wl: 'view-wl', bans: 'view-bans' };
+  Object.values(map).forEach(id => document.getElementById(id).hidden = true);
+  document.getElementById(map[b.dataset.view]).hidden = false;
+}));
+
+// 邀请朋友弹层
+const inviteBtn = document.getElementById('inviteBtn');
+const invitePop = document.getElementById('invitePop');
+inviteBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const open = invitePop.classList.toggle('open');
+  inviteBtn.setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('click', (e) => {
+  if (!invitePop.contains(e.target)) { invitePop.classList.remove('open'); inviteBtn.setAttribute('aria-expanded', 'false'); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { invitePop.classList.remove('open'); inviteBtn.setAttribute('aria-expanded', 'false'); } });
+</script>
+</body>
+</html>

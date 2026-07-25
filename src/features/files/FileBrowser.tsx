@@ -1,40 +1,52 @@
-import { FileText, Folder } from "lucide-react";
+import { FileText, Folder, RefreshCw } from "lucide-react";
+import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
+import { formatBytes } from "../../lib/format-bytes";
 import type { ServerFileEntry } from "./fileApi";
 
 interface FileBrowserProps {
   entries: ServerFileEntry[];
+  error?: Error | null;
   isLoading: boolean;
   selectedPath: string | null;
   onOpenDirectory: (path: string) => void;
   onOpenFile: (path: string) => void;
-}
-
-function formatBytes(sizeBytes: number) {
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`;
-  }
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
+  onRetry?: () => void;
 }
 
 export function FileBrowser({
   entries,
+  error = null,
   isLoading,
   selectedPath,
   onOpenDirectory,
   onOpenFile,
+  onRetry,
 }: FileBrowserProps) {
   const { t } = useAppSettings();
   return (
     <section className="files-browser" aria-label={t("files.browser.aria")}>
       {isLoading ? <div className="list-state">{t("files.loading")}</div> : null}
 
-      {!isLoading && entries.length === 0 ? (
+      {!isLoading && error ? (
+        <div
+          aria-label={t("files.loadError")}
+          className="list-state list-state-error"
+          role="alert"
+        >
+          <strong>{t("files.loadError")}</strong>
+          <span>{error.message}</span>
+          {onRetry ? (
+            <Button variant="secondary" onClick={onRetry}>
+              <RefreshCw aria-hidden="true" size={15} />
+              {t("common.retry")}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!isLoading && !error && entries.length === 0 ? (
         <EmptyState
           illustration="/illustrations/empty-folder.png"
           title={t("files.emptyDirectory.title")}
@@ -42,7 +54,7 @@ export function FileBrowser({
         />
       ) : null}
 
-      {!isLoading && entries.length > 0 ? (
+      {!isLoading && !error && entries.length > 0 ? (
         <div className="files-list" role="list">
           {entries.map((entry) => {
             const isDirectory = entry.kind === "directory";

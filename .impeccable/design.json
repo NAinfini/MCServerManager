@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-23T19:52:00Z",
+  "title": "Design System: MC Server Manager Command Studio",
+  "extensions": {
+    "colorMeta": {
+      "command-blue": {
+        "role": "primary",
+        "displayName": "Command Blue",
+        "canonical": "#3478f6",
+        "tonalRamp": ["#0d1b33", "#172b4d", "#234d91", "#3478f6", "#72a2ff", "#dce8ff"]
+      },
+      "operational-green": {
+        "role": "secondary",
+        "displayName": "Operational Green",
+        "canonical": "#55c66a",
+        "tonalRamp": ["#102518", "#173b23", "#2b773e", "#55c66a", "#91dfa0", "#e2f7e6"]
+      },
+      "incident-red": {
+        "role": "tertiary",
+        "displayName": "Incident Red",
+        "canonical": "#ed5c62",
+        "tonalRamp": ["#351c24", "#5a242c", "#a83e46", "#ed5c62", "#f49a9e", "#fde8e9"]
+      },
+      "graphite-canvas": {
+        "role": "neutral",
+        "displayName": "Graphite Canvas",
+        "canonical": "#111823",
+        "tonalRamp": ["#090f17", "#0d131c", "#101722", "#111823", "#151e2a", "#1b2634", "#34435a", "#eef4fb"]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Active Work Headline",
+        "purpose": "Active server and top-level page identity."
+      },
+      "body": {
+        "displayName": "Workbench Body",
+        "purpose": "Primary interface copy and controls."
+      },
+      "label": {
+        "displayName": "Compact Label",
+        "purpose": "Field labels, table headings, and telemetry labels."
+      },
+      "mono": {
+        "displayName": "Operational Mono",
+        "purpose": "Commands, paths, ports, timestamps, and measured values only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "floating-overlay",
+        "value": "0 18px 54px rgba(1, 5, 11, 0.56)",
+        "purpose": "Dialogs, menus, and drawers that physically overlap the workbench."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-change",
+        "value": "140ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Color, focus, and visibility changes."
+      },
+      {
+        "name": "context-drawer",
+        "value": "180ms cubic-bezier(0.2, 0.8, 0.2, 1)",
+        "purpose": "Responsive context-pane entry and exit."
+      }
+    ],
+    "breakpoints": [
+      { "name": "adaptive-context-overlay", "value": "1120px" },
+      { "name": "icon-rail", "value": "820px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single primary action for the current task.",
+      "html": "<button class=\"ds-button-primary\">Create Server</button>",
+      "css": ".ds-button-primary { min-height: 34px; border: 1px solid #3478f6; border-radius: 6px; padding: 0 12px; color: #fff; background: #3478f6; font: 500 13px/20px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; } .ds-button-primary:hover { background: #4c8cff; } .ds-button-primary:focus-visible { outline: 2px solid #72a2ff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "description": "A compact supporting action with a quiet structural edge.",
+      "html": "<button class=\"ds-button-secondary\">Backup</button>",
+      "css": ".ds-button-secondary { min-height: 34px; border: 1px solid #34435a; border-radius: 6px; padding: 0 11px; color: #eef4fb; background: #1b2634; font: 500 13px/20px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; } .ds-button-secondary:hover { background: #243246; } .ds-button-secondary:focus-visible { outline: 2px solid #72a2ff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A compact desktop field placed beneath a visible label.",
+      "html": "<label class=\"ds-field\">Server port<input value=\"25565\" /></label>",
+      "css": ".ds-field { display: grid; gap: 6px; color: #a3afbd; font: 500 12px/18px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; } .ds-field input { min-height: 34px; border: 1px solid #34435a; border-radius: 6px; padding: 0 11px; color: #eef4fb; background: #090f17; font: 400 13px/20px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; } .ds-field input:focus-visible { outline: 2px solid #72a2ff; outline-offset: 1px; }"
+    },
+    {
+      "name": "Server Status",
+      "kind": "custom",
+      "description": "A stable semantic marker that never reuses interaction blue.",
+      "html": "<span class=\"ds-status\"><i></i>Running</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; color: #55c66a; font: 600 12px/18px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; white-space: nowrap; } .ds-status i { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #55c66a; }"
+    },
+    {
+      "name": "Active Navigation Row",
+      "kind": "nav",
+      "description": "A compact tonal row with one command-blue active edge.",
+      "html": "<button class=\"ds-nav-active\">Dashboard</button>",
+      "css": ".ds-nav-active { width: 220px; min-height: 34px; border: 0; border-radius: 6px; padding: 0 10px; box-shadow: inset 2px 0 0 #3478f6; color: #eef4fb; background: #1b2634; font: 500 13px/20px \"Segoe UI Variable Text\", \"Segoe UI\", system-ui, sans-serif; text-align: left; } .ds-nav-active:focus-visible { outline: 2px solid #72a2ff; outline-offset: 1px; }"
+    },
+    {
+      "name": "Adaptive Splitter",
+      "kind": "custom",
+      "description": "A pointer- and keyboard-resizable boundary between the active task and contextual operations.",
+      "html": "<div class=\"ds-splitter\" role=\"separator\" aria-orientation=\"vertical\" tabindex=\"0\"></div>",
+      "css": ".ds-splitter { position: relative; width: 7px; cursor: col-resize; background: #0f1620; } .ds-splitter::after { position: absolute; inset: 0 auto 0 3px; width: 1px; content: \"\"; background: #263142; } .ds-splitter:hover::after, .ds-splitter:focus-visible::after { width: 2px; background: #3478f6; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Command Studio",
+    "overview": "A precise native desktop studio for operating local Minecraft servers. Server identity, health, runtime data, console events, backups, worlds, and content are first-class product objects. The signature composition is an Adaptive Split Workbench with one dominant task and one optional operational context pane.",
+    "keyCharacteristics": [
+      "Nearly flat graphite desktop surfaces with crisp semantic color.",
+      "Compact server inventory with unmistakable Minecraft loader identity.",
+      "One dominant task canvas plus one optional contextual pane.",
+      "Real operational data instead of decorative dashboard metrics.",
+      "Full-width work areas with no arbitrary content caps or empty columns."
+    ],
+    "rules": [
+      {
+        "name": "The Independent Signal Rule",
+        "body": "Interaction blue never means healthy; operational colors never indicate selection.",
+        "section": "colors"
+      },
+      {
+        "name": "The Incident Rarity Rule",
+        "body": "Amber and red appear only when the user must notice or act.",
+        "section": "colors"
+      },
+      {
+        "name": "The Operational Mono Rule",
+        "body": "Monospace is reserved for content the user may copy, compare, or diagnose.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Split Rule",
+        "body": "A workbench may show one persistent vertical split; nested left-right regions inside either side are prohibited.",
+        "section": "layout"
+      },
+      {
+        "name": "The No Empty Column Rule",
+        "body": "Space without a current operational purpose returns to the active task canvas.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-at-Rest Rule",
+        "body": "Persistent surfaces never float, glow, or translate on hover.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do make the current server, health, and primary action findable within seconds.",
+      "Do use real backend values and show unavailable data honestly.",
+      "Do let the active task reclaim width when context is closed.",
+      "Do preserve keyboard focus, reduced motion, dark theme, and light theme."
+    ],
+    "donts": [
+      "Don't build pages from equal-sized metric cards or nested panels.",
+      "Don't alternate repeated left-right and up-down subdivisions.",
+      "Don't leave a permanent empty right column.",
+      "Don't imitate Minecraft terrain, inventory chrome, or game HUD decoration.",
+      "Don't use gradients, glass, neon glow, oversized typography, or decorative gauges."
+    ]
+  }
+}

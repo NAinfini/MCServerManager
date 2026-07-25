@@ -1,5 +1,7 @@
 import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
+import { useId } from "react";
+import { useAppSettings } from "../../i18n";
 
 export interface SelectOption {
   iconAlt?: string;
@@ -27,10 +29,13 @@ export function Select({
   name,
   onValueChange,
   options,
-  placeholder = "Select…",
+  placeholder,
   value,
 }: SelectProps) {
+  const { t } = useAppSettings();
+  const generatedName = useId();
   const selectedOption = options.find((option) => option.value === value);
+  const resolvedPlaceholder = placeholder ?? t("common.select");
 
   const renderOptionIcon = (
     option: SelectOption | undefined,
@@ -46,7 +51,9 @@ export function Select({
           alt={option.iconAlt ?? ""}
           aria-hidden={option.iconAlt ? undefined : "true"}
           className={className}
+          height="18"
           src={option.iconSrc}
+          width="18"
         />
       );
     }
@@ -65,7 +72,7 @@ export function Select({
   return (
     <SelectPrimitive.Root
       disabled={disabled}
-      name={name}
+      name={name ?? generatedName}
       value={value}
       onValueChange={onValueChange}
     >
@@ -76,7 +83,7 @@ export function Select({
       >
         <span className="select-trigger-value">
           {renderOptionIcon(selectedOption, "select-option-icon")}
-          <SelectPrimitive.Value placeholder={placeholder} />
+          <SelectPrimitive.Value placeholder={resolvedPlaceholder} />
         </span>
         <SelectPrimitive.Icon asChild>
           <ChevronDown aria-hidden="true" size={15} />

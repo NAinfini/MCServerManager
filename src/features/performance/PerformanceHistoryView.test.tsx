@@ -6,10 +6,11 @@ import {
   screen,
   waitFor,
 } from "../../test/render";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { PerformanceHistoryView } from "./PerformanceHistoryView";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
@@ -94,12 +95,12 @@ describe("PerformanceHistoryView", () => {
 
     renderPerformance();
 
-    expect(await screen.findAllByText("Unavailable")).toHaveLength(4);
+    expect(await screen.findAllByText("Unavailable")).toHaveLength(6);
     expect(screen.getByText("Process metrics are unavailable.")).toBeInTheDocument();
     expect(screen.getByText("No real TPS provider is configured.")).toBeInTheDocument();
     expect(screen.getByText("process crashed")).toBeInTheDocument();
     expect(screen.getByText("Restarts")).toBeInTheDocument();
-    expect(screen.getByText("TPS")).toBeInTheDocument();
+    expect(screen.getAllByText("TPS")).toHaveLength(2);
   });
 
   it("shows every measured runtime value without synthesizing TPS", async () => {
@@ -125,8 +126,8 @@ describe("PerformanceHistoryView", () => {
 
     renderPerformance();
 
-    expect(await screen.findByText("12.5%")).toBeInTheDocument();
-    expect(screen.getByText("768 MB")).toBeInTheDocument();
+    expect(await screen.findAllByText("12.5%")).toHaveLength(2);
+    expect(screen.getAllByText("768 MB")).toHaveLength(2);
     expect(screen.getByText("20480 MB")).toBeInTheDocument();
     expect(screen.getByText("90 s")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -150,6 +151,35 @@ describe("PerformanceHistoryView", () => {
         serverId: server.id,
       });
     });
+  });
+
+  it("offers retry without showing an empty state when history fails", async () => {
+    const user = userEvent.setup();
+    let historyAttempts = 0;
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "get_performance_history") {
+        historyAttempts += 1;
+        if (historyAttempts === 1) {
+          throw new Error("metrics unavailable");
+        }
+        return { serverId: server.id, samples: [], events: [] };
+      }
+      return {};
+    });
+
+    renderPerformance();
+
+    expect(
+      await screen.findByRole("alert", {
+        name: /could not load performance history/i,
+      }),
+    ).toHaveTextContent("metrics unavailable");
+    expect(screen.queryByText("No metric samples")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("No metric samples")).toBeInTheDocument();
+    expect(historyAttempts).toBe(2);
   });
 });
 

@@ -67,6 +67,35 @@ describe("ServerProfileSettings", () => {
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_server_profile", {
         id: server.id,
+        deleteFromDisk: false,
+      });
+    });
+  });
+
+  it("can permanently delete the server folder after explicit confirmation", async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await user.click(screen.getByRole("button", { name: "Delete profile" }));
+    await user.click(
+      screen.getByRole("checkbox", {
+        name: "Also delete the server folder from disk",
+      }),
+    );
+    await user.type(
+      screen.getByRole("textbox", {
+        name: 'Type "Survival" to confirm',
+      }),
+      server.name,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Delete profile and files" }),
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("delete_server_profile", {
+        id: server.id,
+        deleteFromDisk: true,
       });
     });
   });

@@ -6,6 +6,7 @@ import {
   screen,
   waitFor,
 } from "../../test/render";
+import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NotificationSettings } from "./NotificationSettings";
@@ -78,7 +79,6 @@ describe("NotificationSettings", () => {
 
     renderSettings();
     fireEvent.click(await screen.findByLabelText(/desktop notifications/i));
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_notification_preferences", {
@@ -90,7 +90,7 @@ describe("NotificationSettings", () => {
     });
   });
 
-  it("saves rapid switch changes from the same draft", async () => {
+  it("shows auto-save feedback without a separate save action", async () => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === "get_notification_preferences") {
         return preferences;
@@ -98,27 +98,93 @@ describe("NotificationSettings", () => {
       if (command === "list_notification_events") {
         return [];
       }
-      return {
-        ...preferences,
-        desktopEnabled: false,
-        informationalEnabled: true,
-      };
+      return { ...preferences, desktopEnabled: false };
     });
 
     renderSettings();
     fireEvent.click(await screen.findByLabelText(/desktop notifications/i));
-    fireEvent.click(screen.getByLabelText(/informational notifications/i));
-    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    expect(await screen.findByText(/saved/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^save$/i }),
+    ).not.toBeInTheDocument();
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("save_notification_preferences", {
         preferences: {
           ...preferences,
           desktopEnabled: false,
-          informationalEnabled: true,
         },
       });
     });
+  });
+
+  it("lets users retry failed notification preferences", async () => {
+    const user = userEvent.setup();
+    let preferenceAttempts = 0;
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "get_notification_preferences") {
+        preferenceAttempts += 1;
+        if (preferenceAttempts === 1) {
+          throw new Error("preferences unavailable");
+        }
+        return preferences;
+      }
+      return [];
+    });
+
+    renderSettings();
+
+    expect(
+      await screen.findByRole("alert", {
+        name: /could not load notification settings/i,
+      }),
+    ).toHaveTextContent("preferences unavailable");
+    expect(
+      screen.queryByLabelText(/desktop notifications/i),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(
+      await screen.findByLabelText(/desktop notifications/i),
+    ).toBeChecked();
+    expect(preferenceAttempts).toBe(2);
+  });
+
+  it("shows retryable event errors without a contradictory empty state", async () => {
+    const user = userEvent.setup();
+    let eventAttempts = 0;
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "get_notification_preferences") {
+        return preferences;
+      }
+      if (command === "list_notification_events") {
+        eventAttempts += 1;
+        if (eventAttempts === 1) {
+          throw new Error("events unavailable");
+        }
+        return [];
+      }
+      return {};
+    });
+
+    renderSettings();
+
+    expect(
+      await screen.findByRole("alert", {
+        name: /could not load notification history/i,
+      }),
+    ).toHaveTextContent("events unavailable");
+    expect(
+      screen.queryByText("No notifications yet."),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Retry notification history" }),
+    );
+
+    expect(await screen.findByText("No notifications yet.")).toBeInTheDocument();
+    expect(eventAttempts).toBe(2);
   });
 });
 

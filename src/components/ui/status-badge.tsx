@@ -1,4 +1,3 @@
-import { AlertTriangle } from "lucide-react";
 import { useAppSettings } from "../../i18n";
 import { cn } from "../../lib/cn";
 
@@ -33,9 +32,10 @@ export function StatusBadge({ status, compact = false }: StatusBadgeProps) {
     <span
       className={cn("status-badge", statusClass, compact && "status-compact")}
     >
-      {status === "crashed" ? (
-        <AlertTriangle aria-hidden="true" size={13} />
-      ) : null}
+      <span
+        aria-hidden="true"
+        className={cn("status-indicator", `status-indicator-${status}`)}
+      />
       {t(statusLabelKeys[status])}
     </span>
   );

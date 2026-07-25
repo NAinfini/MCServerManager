@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Power, Trash2, X } from "lucide-react";
-import * as Separator from "@radix-ui/react-separator";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
-import type { ServerProfile } from "../servers/types";
+import { formatDateTime } from "../../lib/date-format";
+import { queryKeys } from "../../lib/query-keys";
+import type { ServerProfile } from "../../domain/server";
 import { TaskEditorDialog, type ScheduledTaskKind } from "./TaskEditorDialog";
 
 interface ScheduledTask {
@@ -41,19 +42,22 @@ interface TaskFormInput {
   command?: string | null;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function runStatusClass(status: string) {
   if (status === "completed" || status === "success")
     return "task-run-status task-run-status-completed";
   if (status === "failed" || status === "error")
     return "task-run-status task-run-status-failed";
   return "task-run-status";
+}
+
+function runStatusLabel(status: string, t: (key: string) => string) {
+  if (status === "completed" || status === "success") {
+    return t("tasks.runStatus.completed");
+  }
+  if (status === "failed" || status === "error") {
+    return t("tasks.runStatus.failed");
+  }
+  return t("tasks.runStatus.unknown");
 }
 
 function taskKindLabel(kind: ScheduledTaskKind, t: (key: string) => string) {
@@ -70,12 +74,12 @@ function taskKindLabel(kind: ScheduledTaskKind, t: (key: string) => string) {
 }
 
 export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
   const [deleteTask, setDeleteTask] = useState<ScheduledTask | null>(null);
   const tasksQuery = useQuery({
-    queryKey: ["scheduledTasks", server.id],
+    queryKey: queryKeys.tasks.definitions(server.id),
     queryFn: () =>
       invokeDesktopCommandWithErrorHandling<ScheduledTask[]>(
         "list_scheduled_tasks",
@@ -85,7 +89,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       ),
   });
   const runsQuery = useQuery({
-    queryKey: ["scheduledTaskRuns", server.id],
+    queryKey: queryKeys.tasks.runs(server.id),
     queryFn: () =>
       invokeDesktopCommandWithErrorHandling<ScheduledTaskRun[]>(
         "list_scheduled_task_runs",
@@ -93,7 +97,6 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
           serverId: server.id,
         },
       ),
-    refetchInterval: 3000,
   });
   const createMutation = useMutation({
     mutationFn: (input: TaskFormInput) =>
@@ -108,7 +111,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: ["scheduledTasks", server.id],
+        queryKey: queryKeys.tasks.definitions(server.id),
       });
     },
   });
@@ -123,7 +126,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
     onSuccess: async () => {
       setEditingTask(null);
       await queryClient.invalidateQueries({
-        queryKey: ["scheduledTasks", server.id],
+        queryKey: queryKeys.tasks.definitions(server.id),
       });
     },
   });
@@ -136,7 +139,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       setDeleteTask(null);
       setEditingTask(null);
       await queryClient.invalidateQueries({
-        queryKey: ["scheduledTasks", server.id],
+        queryKey: queryKeys.tasks.definitions(server.id),
       });
     },
   });
@@ -191,19 +194,25 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         </Button>
       ) : null}
       {createMutation.error ? (
-        <p className="danger-text">{createMutation.error.message}</p>
+        <p className="danger-text" role="alert">{createMutation.error.message}</p>
       ) : null}
       {updateMutation.error ? (
-        <p className="danger-text">{updateMutation.error.message}</p>
+        <p className="danger-text" role="alert">{updateMutation.error.message}</p>
       ) : null}
       {deleteMutation.error ? (
-        <p className="danger-text">{deleteMutation.error.message}</p>
+        <p className="danger-text" role="alert">{deleteMutation.error.message}</p>
       ) : null}
       {tasksQuery.error ? (
-        <p className="danger-text">{tasksQuery.error.message}</p>
+        <div className="list-state list-state-error" role="alert">
+          <strong>{t("tasks.loadError")}</strong>
+          <span>{tasksQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => tasksQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
       ) : null}
 
-      {tasks.length === 0 ? (
+      {!tasksQuery.error && tasks.length === 0 ? (
         <EmptyState
           illustration="/illustrations/no-tasks.png"
           title={t("tasks.empty.title")}
@@ -221,11 +230,11 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
               </div>
               <div className="task-item-meta">
                 <span>{t("tasks.everyMinutes", { minutes: task.intervalMinutes })}</span>
-                <span>{t("tasks.next", { date: formatDate(task.nextRunAt) })}</span>
+                <span>{t("tasks.next", { date: formatDateTime(task.nextRunAt, language) })}</span>
                 <span>
                   {task.enabled
-                    ? t("tunnels.status.enabled")
-                    : t("tunnels.status.disabled")}
+                    ? t("tasks.status.enabled")
+                    : t("tasks.status.disabled")}
                 </span>
                 {task.command ? <span>{task.command}</span> : null}
               </div>
@@ -236,7 +245,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
                   onClick={() => setEditingTask(task)}
                 >
                   <Pencil aria-hidden="true" size={14} />
-                  {t("tunnels.actions.edit")}
+                  {t("tasks.actions.edit")}
                 </Button>
                 <Button
                   disabled={isSaving}
@@ -245,8 +254,8 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
                 >
                   <Power aria-hidden="true" size={14} />
                   {task.enabled
-                    ? t("tunnels.actions.disable")
-                    : t("tunnels.actions.enable")}
+                    ? t("tasks.actions.disable")
+                    : t("tasks.actions.enable")}
                 </Button>
                 <Button
                   disabled={deleteMutation.isPending}
@@ -257,7 +266,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
                   }}
                 >
                   <Trash2 aria-hidden="true" size={14} />
-                  {t("tunnels.actions.delete")}
+                  {t("tasks.actions.delete")}
                 </Button>
               </div>
             </div>
@@ -265,22 +274,30 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         </div>
       )}
 
-      {runs.length > 0 ? (
-        <>
-          <Separator.Root className="section-separator" />
+      {runsQuery.error ? (
+        <div className="list-state list-state-error" role="alert">
+          <strong>{t("tasks.runsLoadError")}</strong>
+          <span>{runsQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => runsQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : null}
+      {!runsQuery.error && runs.length > 0 ? (
           <div className="task-runs-section">
             <p className="task-runs-heading">{t("tasks.recentRuns")}</p>
             {runs.slice(0, 5).map((run) => (
               <div className="task-run-item" key={run.id}>
-                <span className={runStatusClass(run.status)}>{run.status}</span>
+                <span className={runStatusClass(run.status)}>
+                  {runStatusLabel(run.status, t)}
+                </span>
                 <span className="task-run-message">{run.message}</span>
                 <span className="task-run-time">
-                  {formatDate(run.startedAt)}
+                  {formatDateTime(run.startedAt, language)}
                 </span>
               </div>
             ))}
           </div>
-        </>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteTask")}

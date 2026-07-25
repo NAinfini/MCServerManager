@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "../../test/render";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "../../test/render";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { JavaRuntimesView } from "./JavaRuntimesView";
@@ -28,6 +28,11 @@ function renderJavaView() {
 describe("JavaRuntimesView", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    localStorage.clear();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("renders runtimes, compatibility warnings, and scan failures", async () => {
@@ -75,11 +80,9 @@ describe("JavaRuntimesView", () => {
 
     expect(await screen.findAllByText("Java 21")).not.toHaveLength(0);
     expect(screen.getByText("OpenJDK")).toBeInTheDocument();
+    expect(screen.getByText("Compatible")).toBeInTheDocument();
     expect(
-      screen.getByText("Java 21 satisfies required Java 21"),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("Configure Java 21 or newer for this server"),
+      screen.getByText("Requires Java 21 or newer."),
     ).toBeInTheDocument();
     expect(screen.getByText("Managed Eclipse Temurin")).toBeInTheDocument();
     expect(
@@ -152,6 +155,31 @@ describe("JavaRuntimesView", () => {
     );
   });
 
+  it("localizes managed runtime sources with compact badge copy", async () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+    vi.mocked(invoke).mockResolvedValue({
+      runtimes: [
+        {
+          path: "C:/managed/java.exe",
+          source: "Managed by MC Server Manager",
+          version: "25.0.1",
+          majorVersion: 25,
+          vendor: "Eclipse Temurin",
+          architecture: "x64",
+        },
+      ],
+      failures: [],
+      compatibility: [],
+    });
+
+    renderJavaView();
+
+    expect(await screen.findByText("托管")).toHaveClass("java-source-chip");
+    expect(
+      screen.queryByText("Managed by MC Server Manager"),
+    ).not.toBeInTheDocument();
+  });
+
   it("groups managed runtime controls inside a padded panel body", async () => {
     vi.mocked(invoke).mockResolvedValue({
       runtimes: [],
@@ -164,7 +192,7 @@ describe("JavaRuntimesView", () => {
     const headings = await screen.findAllByRole("heading", {
       name: "Managed Eclipse Temurin",
     });
-    const heading = headings.at(-1)!;
+    const heading = headings[headings.length - 1]!;
     const panel = heading.closest("section");
     const body = panel?.querySelector(".java-panel-body");
 
@@ -202,5 +230,25 @@ describe("JavaRuntimesView", () => {
     expect(container.querySelector(".java-panel-installed")).not.toBeNull();
     expect(container.querySelector(".java-panel-compatibility")).not.toBeNull();
     expect(container.querySelector(".java-panel-failures")).not.toBeNull();
+  });
+
+  it("offers an explicit retry when runtime discovery fails", async () => {
+    vi.mocked(invoke)
+      .mockRejectedValueOnce(new Error("Java scan unavailable"))
+      .mockResolvedValueOnce({
+        runtimes: [],
+        failures: [],
+        compatibility: [],
+      });
+
+    renderJavaView();
+
+    expect(await screen.findByText("Java scan unavailable")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(
+      await screen.findAllByText("No Java runtimes detected"),
+    ).not.toHaveLength(0);
+    expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2);
   });
 });

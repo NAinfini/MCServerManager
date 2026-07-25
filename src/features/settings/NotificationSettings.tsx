@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
-import { Bell, Save } from "lucide-react";
+import { Bell } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { LoadingState } from "../../components/ui/loading-state";
 import { Switch } from "../../components/ui/switch";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
+import { notificationKeys } from "../notifications/api";
 
 interface NotificationPreferences {
   desktopEnabled: boolean;
@@ -42,30 +44,20 @@ const notificationPreferenceRows: Array<{
   { key: "informationalEnabled", labelKey: "settings.notifications.informational" },
 ];
 
-function preferencesEqual(
-  left: NotificationPreferences,
-  right: NotificationPreferences,
-) {
-  return notificationPreferenceRows.every(
-    (row) => left[row.key] === right[row.key],
-  );
-}
-
 export function NotificationSettings() {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [draftPreferences, setDraftPreferences] =
     useState<NotificationPreferences | null>(null);
-  const baselineRef = useRef<NotificationPreferences | null>(null);
   const preferencesQuery = useQuery({
-    queryKey: ["notificationPreferences"],
+    queryKey: notificationKeys.preferences,
     queryFn: () =>
       invokeDesktopCommandWithErrorHandling<NotificationPreferences>(
         "get_notification_preferences",
       ),
   });
   const eventsQuery = useQuery({
-    queryKey: ["notificationEvents"],
+    queryKey: notificationKeys.events,
     queryFn: () =>
       invokeDesktopCommandWithErrorHandling<NotificationEvent[]>(
         "list_notification_events",
@@ -76,34 +68,19 @@ export function NotificationSettings() {
       invokeDesktopCommandWithErrorHandling<NotificationPreferences>(
         "save_notification_preferences",
         { preferences },
-      ),
+    ),
     onSuccess: async (saved) => {
-      baselineRef.current = saved;
       setDraftPreferences(saved);
       await queryClient.invalidateQueries({
-        queryKey: ["notificationPreferences"],
+        queryKey: notificationKeys.preferences,
       });
     },
   });
   const preferences = draftPreferences;
-  const hasChanges =
-    preferences !== null &&
-    baselineRef.current !== null &&
-    !preferencesEqual(preferences, baselineRef.current);
 
   useEffect(() => {
-    if (!preferencesQuery.data) {
-      return;
-    }
-    if (
-      baselineRef.current === null ||
-      draftPreferences === null ||
-      preferencesEqual(draftPreferences, baselineRef.current)
-    ) {
-      baselineRef.current = preferencesQuery.data;
-      setDraftPreferences(preferencesQuery.data);
-    }
-  }, [draftPreferences, preferencesQuery.data]);
+    if (preferencesQuery.data) setDraftPreferences(preferencesQuery.data);
+  }, [preferencesQuery.data]);
 
   function updatePreference(
     key: keyof NotificationPreferences,
@@ -112,10 +89,12 @@ export function NotificationSettings() {
     if (!preferences) {
       return;
     }
-    setDraftPreferences({
+    const next = {
       ...preferences,
       [key]: value,
-    });
+    };
+    setDraftPreferences(next);
+    saveMutation.mutate(next);
   }
 
   return (
@@ -125,17 +104,43 @@ export function NotificationSettings() {
         <Bell aria-hidden="true" size={18} />
       </div>
       {preferencesQuery.error ? (
-        <p className="danger-text">{preferencesQuery.error.message}</p>
+        <div
+          aria-label={t("settings.notifications.preferencesLoadError")}
+          className="list-state list-state-error"
+          role="alert"
+        >
+          <strong>{t("settings.notifications.preferencesLoadError")}</strong>
+          <span>{preferencesQuery.error.message}</span>
+          <Button
+            disabled={preferencesQuery.isFetching}
+            variant="secondary"
+            onClick={() => preferencesQuery.refetch()}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
       ) : null}
       {saveMutation.error ? (
-        <p className="danger-text">{saveMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {saveMutation.error.message}
+        </p>
       ) : null}
-      {preferences ? (
+      <span className="settings-save-state" aria-live="polite">
+        {saveMutation.isPending
+          ? t("settings.save.saving")
+          : saveMutation.isSuccess
+            ? t("settings.save.saved")
+            : ""}
+      </span>
+      {preferencesQuery.isLoading ? (
+        <LoadingState message={t("settings.notifications.preferencesLoading")} />
+      ) : preferences ? (
         <div className="settings-grid">
           {notificationPreferenceRows.map((row) => (
             <label className="switch-row" key={row.key}>
               <Switch
                 checked={preferences[row.key]}
+                disabled={saveMutation.isPending}
                 aria-label={t(row.labelKey)}
                 onCheckedChange={(checked) =>
                   updatePreference(row.key, checked)
@@ -146,17 +151,26 @@ export function NotificationSettings() {
           ))}
         </div>
       ) : null}
-      <div style={{ padding: 'var(--space-3) var(--space-4)' }}>
-        <Button
-          disabled={saveMutation.isPending || !preferences || !hasChanges}
-          variant="secondary"
-          onClick={() => preferences && saveMutation.mutate(preferences)}
+      {eventsQuery.isLoading ? (
+        <LoadingState message={t("settings.notifications.historyLoading")} />
+      ) : eventsQuery.error ? (
+        <div
+          aria-label={t("settings.notifications.historyLoadError")}
+          className="list-state list-state-error"
+          role="alert"
         >
-          <Save aria-hidden="true" size={15} />
-          {t("settings.notifications.save")}
-        </Button>
-      </div>
-      {eventsQuery.data?.length ? (
+          <strong>{t("settings.notifications.historyLoadError")}</strong>
+          <span>{eventsQuery.error.message}</span>
+          <Button
+            aria-label={t("settings.notifications.retryHistory")}
+            disabled={eventsQuery.isFetching}
+            variant="secondary"
+            onClick={() => eventsQuery.refetch()}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : eventsQuery.data?.length ? (
         <div className="compatibility-list">
           {eventsQuery.data.map((event) => (
             <div key={event.id}>
@@ -166,12 +180,16 @@ export function NotificationSettings() {
                 {event.desktopDelivered
                   ? t("settings.notifications.desktopSent")
                   : t("settings.notifications.inlineOnly")}{" - "}
-                {formatDateTime(event.createdAt)}
+                {formatDateTime(event.createdAt, language)}
               </span>
             </div>
           ))}
         </div>
-      ) : null}
+      ) : (
+        <div className="list-state">
+          {t("settings.notifications.historyEmpty")}
+        </div>
+      )}
     </section>
   );
 }

@@ -8,7 +8,7 @@ import {
 } from "../../test/render";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 import { DiagnosticsView } from "./DiagnosticsView";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -54,6 +54,7 @@ function renderDiagnostics() {
 describe("DiagnosticsView", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -93,6 +94,48 @@ describe("DiagnosticsView", () => {
         serverId: server.id,
       });
     });
+  });
+
+  it("shows a retry action instead of an empty state when history fails", async () => {
+    vi.mocked(invoke)
+      .mockRejectedValueOnce(new Error("Diagnostics unavailable"))
+      .mockResolvedValueOnce([]);
+
+    renderDiagnostics();
+
+    expect(
+      await screen.findByText("Diagnostics unavailable"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No diagnostic runs")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(await screen.findByText("No diagnostic runs")).toBeInTheDocument();
+    expect(vi.mocked(invoke)).toHaveBeenCalledTimes(2);
+  });
+
+  it("localizes diagnostic status labels", async () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+    vi.mocked(invoke).mockResolvedValue([
+      {
+        id: "run-1",
+        serverId: server.id,
+        status: "warn",
+        createdAt: "2026-07-01T00:00:00Z",
+        results: [
+          {
+            name: "server.jar",
+            status: "warn",
+            message: "server.jar check completed",
+          },
+        ],
+      },
+    ]);
+
+    renderDiagnostics();
+
+    expect(await screen.findAllByText("警告")).toHaveLength(2);
+    expect(screen.queryByText("warn")).not.toBeInTheDocument();
   });
 });
 

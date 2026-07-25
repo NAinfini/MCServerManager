@@ -7,11 +7,31 @@ const { app, BrowserWindow, ipcMain } = require("electron");
 const rootDir = path.resolve(__dirname, "..");
 const rendererPath = path.join(rootDir, "dist", "index.html");
 const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-ui-smoke-"));
-const smokeTimeoutMs = 30_000;
+const smokeTimeoutMs = 55_000;
 const wizardHeaderViewports = [
   { width: 960, height: 720 },
   { width: 1280, height: 900 },
 ];
+const smokeServer = {
+  id: "smoke-server",
+  name: "Command Studio",
+  rootDir: "C:\\Servers\\command-studio",
+  minecraftVersion: "1.21.1",
+  loaderType: "fabric",
+  loaderVersion: "0.16.10",
+  javaPath: "C:\\Java\\bin\\java.exe",
+  serverPort: 25565,
+  minMemoryMb: 2048,
+  maxMemoryMb: 6144,
+  autoStart: true,
+  createdAt: "2026-07-01T00:00:00.000Z",
+  updatedAt: "2026-07-23T00:00:00.000Z",
+  restartPolicy: {
+    enabled: true,
+    maxAttempts: 3,
+    cooldownSeconds: 30,
+  },
+};
 
 app.setPath("userData", userDataDir);
 
@@ -43,6 +63,20 @@ async function buttonCenter(webContents, label) {
   })()`);
   if (point.count !== 1) {
     throw new Error(`Expected one ${label} button, found ${point.count}.`);
+  }
+  return point;
+}
+
+async function elementCenter(webContents, selector, label) {
+  const point = await webContents.executeJavaScript(`(() => {
+    const matches = [...document.querySelectorAll(${JSON.stringify(selector)})];
+    if (matches.length !== 1) return { count: matches.length };
+    matches[0].scrollIntoView({ block: "center", inline: "center" });
+    const rect = matches[0].getBoundingClientRect();
+    return { count: 1, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  if (point.count !== 1) {
+    throw new Error(`Expected one ${label}, found ${point.count}.`);
   }
   return point;
 }
@@ -91,6 +125,38 @@ async function setRendererViewport(window, viewport) {
   throw new Error(
     `Could not set the renderer viewport to ${viewport.width}x${viewport.height}; received ${actualViewport?.width}x${actualViewport?.height}.`,
   );
+}
+
+async function verifyPageWidth(window, selector, label) {
+  for (const viewport of [
+    { width: 960, height: 720 },
+    { width: 760, height: 720 },
+  ]) {
+    await setRendererViewport(window, viewport);
+    const geometry = await window.webContents.executeJavaScript(`(() => {
+      const page = document.querySelector(${JSON.stringify(selector)});
+      if (!page) return null;
+      const rect = page.getBoundingClientRect();
+      return {
+        documentOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        pageOverflow: page.scrollWidth > page.clientWidth + 1,
+        left: rect.left,
+        right: rect.right,
+        viewportWidth: window.innerWidth,
+      };
+    })()`);
+    if (
+      !geometry ||
+      geometry.documentOverflow ||
+      geometry.pageOverflow ||
+      geometry.left < -1 ||
+      geometry.right > geometry.viewportWidth + 1
+    ) {
+      throw new Error(
+        `${label} width failed at ${viewport.width}x${viewport.height}: ${JSON.stringify(geometry)}`,
+      );
+    }
+  }
 }
 
 async function verifyWizardHeaderGeometry(window, viewport) {
@@ -159,9 +225,112 @@ function registerSmokeIpc() {
   ipcMain.handle("app-command", (_event, command) => {
     switch (command) {
       case "get_process_summary":
-        return { runningCount: 0, crashedCount: 0 };
+        return { runningCount: 1, crashedCount: 0 };
       case "list_recoverable_provisioning_jobs":
+        return [];
       case "list_server_profiles":
+        return [smokeServer];
+      case "get_server_process_status":
+        return {
+          id: "smoke-process",
+          serverId: smokeServer.id,
+          pid: 4242,
+          command: "java -jar server.jar nogui",
+          status: "running",
+          startedAt: "2026-07-23T14:00:00.000Z",
+          exitedAt: null,
+          exitCode: null,
+        };
+      case "get_server_setup_status":
+        return {
+          serverId: smokeServer.id,
+          serverName: smokeServer.name,
+          checks: [
+            { id: "java", status: "ready", message: "Java is ready." },
+            {
+              id: "serverRuntime",
+              status: "ready",
+              message: "Server runtime is ready.",
+            },
+            { id: "eula", status: "ready", message: "EULA is accepted." },
+            {
+              id: "backup",
+              status: "warning",
+              count: 0,
+              message: "Create a first backup.",
+            },
+          ],
+        };
+      case "get_performance_history":
+        return {
+          samples: [
+            {
+              id: "metric-1",
+              sampledAt: "2026-07-23T15:00:00.000Z",
+              cpuPercent: 18.4,
+              memoryMb: 2560,
+              diskFreeMb: 102_400,
+              uptimeSeconds: 3600,
+              restartCount: 0,
+              playerCount: 7,
+              tps: 19.9,
+              unavailableReason: null,
+            },
+          ],
+          events: [],
+        };
+      case "list_process_events":
+        return [
+          {
+            id: "event-1",
+            serverId: smokeServer.id,
+            level: "info",
+            message: "Server started successfully.",
+            createdAt: "2026-07-23T15:00:00.000Z",
+          },
+          {
+            id: "event-2",
+            serverId: smokeServer.id,
+            level: "warning",
+            message: "Backup recommended before content changes.",
+            createdAt: "2026-07-23T14:58:00.000Z",
+          },
+        ];
+      case "list_java_runtimes":
+        return {
+          runtimes: [
+            {
+              path: "C:\\Java\\bin\\java.exe",
+              source: "Managed by MC Server Manager",
+              version: "21.0.8",
+              majorVersion: 21,
+              vendor: "Eclipse Temurin",
+              architecture: "x64",
+            },
+          ],
+          failures: [],
+          compatibility: [],
+        };
+      case "list_app_logs":
+        return [
+          {
+            id: "log-1",
+            level: "info",
+            source: "ui-smoke",
+            message: "Application logger smoke entry",
+            details: "No renderer errors.",
+            createdAt: "2026-07-23T15:00:00.000Z",
+          },
+        ];
+      case "list_tunnel_providers":
+      case "list_tunnel_statuses":
+      case "list_tunnel_bindings":
+      case "list_scheduled_tasks":
+      case "list_scheduled_task_runs":
+      case "list_diagnostic_runs":
+      case "list_server_backups":
+      case "list_notification_events":
+      case "get_attention_items":
         return [];
       case "show_open_dialog":
         return { path: null };
@@ -260,10 +429,210 @@ async function run() {
   }
   rendererErrors.splice(probeIndex, 1);
   process.stdout.write("Electron UI smoke: preload bridge ready.\n");
+  await window.webContents.executeJavaScript(
+    'localStorage.setItem("mcsm.theme", "dark"); document.documentElement.dataset.theme = "dark";',
+  );
   await waitFor(
     window.webContents,
     '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Create Server")',
     "the Create server action",
+  );
+
+  await setRendererViewport(window, { width: 1280, height: 900 });
+  await clickAt(
+    window.webContents,
+    await elementCenter(
+      window.webContents,
+      ".server-table .table-link-button",
+      "server table link",
+    ),
+  );
+  await waitFor(
+    window.webContents,
+    'document.querySelector(".server-workspace-shell .server-workspace-main")',
+    "the server workbench",
+  );
+  await waitFor(
+    window.webContents,
+    'document.querySelector(".server-header-telemetry")?.textContent.includes("18.4%") && document.querySelector(".server-header-telemetry")?.textContent.includes("7") && document.querySelector(".server-header-telemetry")?.textContent.includes("19.9")',
+    "live CPU, player, and TPS telemetry",
+  );
+  await waitFor(
+    window.webContents,
+    `(() => {
+      const overview = document.querySelector(".activity-overview");
+      const body = overview?.closest(".server-workspace-content");
+      if (!overview || !body) return false;
+      const rect = overview.getBoundingClientRect();
+      return (
+        overview.textContent.includes("Root folder") &&
+        rect.width > 0 &&
+        rect.height > 0 &&
+        Number.parseFloat(getComputedStyle(body).opacity) >= 0.99
+      );
+    })()`,
+    "the visible overview workspace",
+  );
+  const desktopWorkbench = await window.webContents.executeJavaScript(`(() => {
+    const workbench = document.querySelector(".server-workspace-shell");
+    const navigation = document.querySelector(".server-workspace-nav");
+    const content = document.querySelector(".server-workspace-main");
+    if (!workbench || !navigation || !content) return null;
+    const navigationRect = navigation.getBoundingClientRect();
+    const contentRect = content.getBoundingClientRect();
+    return {
+      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      navigationVisible: navigationRect.width >= 150,
+      contentDominates: contentRect.width > navigationRect.width * 3,
+      brokenVisibleImages: [...document.images].filter((image) => {
+        const rect = image.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0 && (!image.complete || image.naturalWidth === 0);
+      }).map((image) => image.src),
+      telemetryText: document.querySelector(".server-header-telemetry")?.textContent ?? "",
+    };
+  })()`);
+  if (
+    !desktopWorkbench ||
+    desktopWorkbench.horizontalOverflow ||
+    !desktopWorkbench.navigationVisible ||
+    !desktopWorkbench.contentDominates ||
+    desktopWorkbench.brokenVisibleImages.length > 0 ||
+    !desktopWorkbench.telemetryText.includes("18.4%") ||
+    !desktopWorkbench.telemetryText.includes("7")
+  ) {
+    throw new Error(
+      `Desktop workbench geometry failed: ${JSON.stringify(desktopWorkbench)}`,
+    );
+  }
+  const workbenchScreenshotPath = path.join(
+    os.tmpdir(),
+    `mcsm-command-studio-1280x900-${process.pid}.png`,
+  );
+  await window.webContents.executeJavaScript(
+    "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+  );
+  fs.writeFileSync(
+    workbenchScreenshotPath,
+    (await window.webContents.capturePage()).toPNG(),
+  );
+  process.stdout.write(
+    `Electron command studio screenshot: ${workbenchScreenshotPath}\n`,
+  );
+
+  await setRendererViewport(window, { width: 960, height: 720 });
+  const compactWorkbench = await window.webContents.executeJavaScript(`(() => {
+    const workbench = document.querySelector(".server-workspace-shell");
+    const navigation = document.querySelector(".server-workspace-nav");
+    const navigationItem = document.querySelector(".server-workspace-nav-item");
+    if (!workbench || !navigation || !navigationItem) return null;
+    const navigationRect = navigation.getBoundingClientRect();
+    const itemRect = navigationItem.getBoundingClientRect();
+    return {
+      horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+      compactNavigation: navigationRect.width <= 60 && itemRect.width <= 44,
+    };
+  })()`);
+  if (
+    !compactWorkbench ||
+    compactWorkbench.horizontalOverflow ||
+    !compactWorkbench.compactNavigation
+  ) {
+    throw new Error(
+      `Compact workbench geometry failed: ${JSON.stringify(compactWorkbench)}`,
+    );
+  }
+  process.stdout.write("Electron UI smoke: compact workbench verified.\n");
+
+  for (const route of [
+    {
+      primary: "Automation",
+      view: null,
+      text: "Scheduled tasks",
+    },
+    {
+      primary: "Operations",
+      view: "Diagnostics",
+      text: "Diagnostics",
+    },
+    {
+      primary: "Server settings",
+      view: "Network & access",
+      text: "Network and connections",
+    },
+    {
+      primary: "Server settings",
+      view: "Import & export",
+      text: "Profile import/export",
+    },
+  ]) {
+    const label = route.view ?? route.primary;
+    process.stdout.write(`Electron UI smoke: checking ${label} server route.\n`);
+    await setRendererViewport(window, { width: 960, height: 720 });
+    await clickAt(
+      window.webContents,
+      await buttonCenter(window.webContents, route.primary),
+    );
+    if (route.view) {
+      await waitFor(
+        window.webContents,
+        `[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === ${JSON.stringify(route.view)})`,
+        `the ${route.view} workspace view`,
+      );
+      await clickAt(
+        window.webContents,
+        await buttonCenter(window.webContents, route.view),
+      );
+    }
+    await waitFor(
+      window.webContents,
+      `document.querySelector(".server-workspace-content")?.textContent.includes(${JSON.stringify(route.text)})`,
+      `the ${label} server route`,
+    );
+    await verifyPageWidth(
+      window,
+      ".server-workspace-main",
+      `${label} server route`,
+    );
+    process.stdout.write(`Electron UI smoke: ${label} server route verified.\n`);
+  }
+
+  await setRendererViewport(window, { width: 960, height: 720 });
+  await window.webContents.executeJavaScript(
+    'document.querySelector(".page-header-back")?.click()',
+  );
+  await waitFor(
+    window.webContents,
+    '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Create Server")',
+    "the dashboard after leaving the server workbench",
+  );
+
+  for (const page of [
+    {
+      label: "Java Runtimes",
+      selector: ".java-page",
+    },
+    {
+      label: "Logger",
+      selector: ".logger-page",
+    },
+  ]) {
+    process.stdout.write(`Electron UI smoke: checking ${page.label} page.\n`);
+    await setRendererViewport(window, { width: 960, height: 720 });
+    await clickAt(window.webContents, await buttonCenter(window.webContents, page.label));
+    await waitFor(
+      window.webContents,
+      `document.querySelector(${JSON.stringify(page.selector)})`,
+      `the ${page.label} page`,
+    );
+    await verifyPageWidth(window, page.selector, page.label);
+    process.stdout.write(`Electron UI smoke: ${page.label} page verified.\n`);
+  }
+  await setRendererViewport(window, { width: 960, height: 720 });
+  await clickAt(window.webContents, await buttonCenter(window.webContents, "Dashboard"));
+  await waitFor(
+    window.webContents,
+    '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Create Server")',
+    "the dashboard after secondary-page checks",
   );
 
   await clickAt(window.webContents, await buttonCenter(window.webContents, "Create Server"));

@@ -17,7 +17,9 @@ export function LoaderIcon({
         alt=""
         aria-hidden="true"
         className={className}
+        height="18"
         src={branding.iconSrc}
+        width="18"
       />
     );
   }

@@ -38,7 +38,7 @@ describe("FileEditor", () => {
     const { rerender } = render(
       <FileEditor
         error={null}
-        file={file("server.properties", "motd=old")}
+        file={file("notes.txt", "old")}
         isLoading={false}
         isSaving={false}
         onSave={vi.fn()}
@@ -46,26 +46,26 @@ describe("FileEditor", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Monaco editor"), {
-      target: { value: "motd=draft" },
+      target: { value: "draft" },
     });
     rerender(
       <FileEditor
         error={null}
-        file={file("server.properties", "motd=remote")}
+        file={file("notes.txt", "remote")}
         isLoading={false}
         isSaving={false}
         onSave={vi.fn()}
       />,
     );
 
-    expect(screen.getByLabelText("Monaco editor")).toHaveValue("motd=draft");
+    expect(screen.getByLabelText("Monaco editor")).toHaveValue("draft");
   });
 
   it("loads fresh content when switching files", () => {
     const { rerender } = render(
       <FileEditor
         error={null}
-        file={file("server.properties", "motd=old")}
+        file={file("notes.txt", "old")}
         isLoading={false}
         isSaving={false}
         onSave={vi.fn()}
@@ -73,19 +73,67 @@ describe("FileEditor", () => {
     );
 
     fireEvent.change(screen.getByLabelText("Monaco editor"), {
-      target: { value: "motd=draft" },
+      target: { value: "draft" },
     });
     rerender(
       <FileEditor
         error={null}
-        file={file("ops.json", "[]")}
+        file={file("other-notes.txt", "fresh")}
         isLoading={false}
         isSaving={false}
         onSave={vi.fn()}
       />,
     );
 
-    expect(screen.getByLabelText("Monaco editor")).toHaveValue("[]");
+    expect(screen.getByLabelText("Monaco editor")).toHaveValue("fresh");
+  });
+
+  it("uses a key-value table for properties files", () => {
+    const onSave = vi.fn();
+    render(
+      <FileEditor
+        error={null}
+        file={file(
+          "server.properties",
+          "# server settings\nmotd=Old server\nmax-players=20\n",
+        )}
+        isLoading={false}
+        isSaving={false}
+        onSave={onSave}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Monaco editor")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "motd value" }), {
+      target: { value: "Friendly server" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      "# server settings\nmotd=Friendly server\nmax-players=20\n",
+    );
+  });
+
+  it("uses an editable table for JSON object arrays", () => {
+    const onSave = vi.fn();
+    render(
+      <FileEditor
+        error={null}
+        file={file("whitelist.json", '[{"uuid":"one","name":"Alex"}]\n')}
+        isLoading={false}
+        isSaving={false}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole("textbox", { name: "name row 1" }), {
+      target: { value: "Steve" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      `${JSON.stringify([{ uuid: "one", name: "Steve" }], null, 2)}\n`,
+    );
   });
 });
 

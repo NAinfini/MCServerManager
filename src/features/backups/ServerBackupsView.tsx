@@ -14,10 +14,14 @@ import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { TextField } from "../../components/ui/text-field";
+import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
-import type { ServerProfile } from "../servers/types";
-import { getServerProcessStatus } from "../process/api";
+import { formatDateTime } from "../../lib/date-format";
+import { formatBytes } from "../../lib/format-bytes";
+import { useServerRuntime } from "../servers/ServerRuntimeContext";
+import type { ServerProfile } from "../../domain/server";
+import { processKeys } from "../process/queries";
 import {
   createWorldBackup,
   deleteServerBackup,
@@ -27,30 +31,10 @@ import {
   type BackupRecord,
 } from "./backupApi";
 import { BackupProfilesView } from "./BackupProfilesView";
+import { backupKeys } from "./queries";
 
 interface ServerBackupsViewProps {
   server: ServerProfile;
-}
-
-function formatBytes(sizeBytes: number) {
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`;
-  }
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  }
-  if (sizeBytes < 1024 * 1024 * 1024) {
-    return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`;
-  }
-
-  return `${(sizeBytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function formatRelativeTime(value: string, language: string) {
@@ -106,26 +90,22 @@ function isSafeRestoreTarget(value: string) {
 export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
+  const runtime = useServerRuntime();
   const [restoreBackup, setRestoreBackup] = useState<BackupRecord | null>(null);
   const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
   const [deleteBackup, setDeleteBackup] = useState<BackupRecord | null>(null);
   const [targetWorldDir, setTargetWorldDir] = useState("");
   const backupsQuery = useQuery({
-    queryKey: ["backups", server.id],
+    queryKey: backupKeys.list(server.id),
     queryFn: () => listServerBackups(server.id),
-  });
-  const processQuery = useQuery({
-    queryKey: ["serverProcessStatus", server.id],
-    queryFn: () => getServerProcessStatus(server.id),
-    refetchInterval: 1500,
   });
   const createMutation = useMutation({
     mutationFn: () => createWorldBackup({ serverId: server.id }),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["backups", server.id] }),
+        queryClient.invalidateQueries({ queryKey: backupKeys.list(server.id) }),
         queryClient.invalidateQueries({
-          queryKey: ["processEvents", server.id],
+          queryKey: processKeys.events(server.id),
         }),
       ]);
     },
@@ -141,14 +121,14 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
       setIsRestoreConfirmOpen(false);
       setRestoreBackup(null);
       setTargetWorldDir("");
-      await queryClient.invalidateQueries({ queryKey: ["backups", server.id] });
+      await queryClient.invalidateQueries({ queryKey: backupKeys.list(server.id) });
     },
   });
   const deleteMutation = useMutation({
     mutationFn: (backupId: string) => deleteServerBackup(backupId),
     onSuccess: async () => {
       setDeleteBackup(null);
-      await queryClient.invalidateQueries({ queryKey: ["backups", server.id] });
+      await queryClient.invalidateQueries({ queryKey: backupKeys.list(server.id) });
     },
   });
   const exportMutation = useMutation({
@@ -185,9 +165,17 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
     : t("backups.lastBackupNone");
   const canRestoreTarget = isSafeRestoreTarget(targetWorldDir);
   const restoreBlocked =
-    processQuery.isError ||
-    processQuery.data?.status === "running" ||
-    processQuery.data?.status === "externalRunning";
+    runtime.error !== null ||
+    runtime.status === "running" ||
+    runtime.status === "externalRunning";
+  const columns: DataTableColumn<BackupRecord>[] = [
+    { id: "status", header: t("backups.table.status"), cell: backupStatusIcon },
+    { id: "world", header: t("backups.table.world"), rowHeader: true, cell: (backup) => backup.worldName },
+    { id: "created", header: t("backups.table.created"), cell: (backup) => formatDateTime(backup.createdAt, language) },
+    { id: "size", header: t("backups.table.size"), cell: (backup) => backup.status === "completed" ? formatBytes(backup.sizeBytes) : t("backups.failed") },
+    { id: "archive", header: t("backups.table.archive"), cellClassName: "path-cell", cell: (backup) => backup.error ?? backup.archivePath },
+    { id: "actions", header: t("backups.table.actions"), cell: (backup) => <><Button aria-label={t("backups.restore.titleAttr")} className="icon-button" disabled={backup.status !== "completed" || restoreBlocked || restoreMutation.isPending} title={restoreBlocked ? t("backups.restore.runningTitle") : backup.status === "completed" ? t("backups.restore.titleAttr") : t("backups.restore.unavailableTitle")} variant="ghost" onClick={() => { restoreMutation.reset(); setRestoreBackup(backup); setTargetWorldDir(backup.worldName); }}><RotateCcw aria-hidden="true" size={14} /></Button><Button aria-label={t("backups.export.titleAttr")} className="icon-button" disabled={backup.status !== "completed" || exportMutation.isPending} title={t("backups.export.titleAttr")} variant="ghost" onClick={() => exportMutation.mutate(backup.id)}><Download aria-hidden="true" size={14} /></Button><Button aria-label={t("backups.delete.titleAttr")} className="icon-button" disabled={deleteMutation.isPending} title={t("backups.delete.titleAttr")} variant="ghost" onClick={() => { deleteMutation.reset(); setDeleteBackup(backup); }}><Trash2 aria-hidden="true" size={14} /></Button></> },
+  ];
 
   return (
     <section className="backups-panel" aria-label={t("backups.aria")}>
@@ -296,9 +284,12 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
       ) : null}
 
       {backupsQuery.error ? (
-        <div className="list-state list-state-error">
+        <div className="list-state list-state-error" role="alert">
           <strong>{t("backups.loadError.title")}</strong>
           <span>{backupsQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => backupsQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
         </div>
       ) : null}
 
@@ -323,90 +314,11 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
 
       {backups.length > 0 ? (
         <div className="backups-table-scroll">
-          <table className="backups-table">
-            <thead>
-              <tr>
-                <th scope="col">{t("backups.table.status")}</th>
-                <th scope="col">{t("backups.table.world")}</th>
-                <th scope="col">{t("backups.table.created")}</th>
-                <th scope="col">{t("backups.table.size")}</th>
-                <th scope="col">{t("backups.table.archive")}</th>
-                <th scope="col">{t("backups.table.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {backups.map((backup) => (
-                <tr key={backup.id}>
-                  <td>{backupStatusIcon(backup)}</td>
-                  <th scope="row">{backup.worldName}</th>
-                  <td>{formatDate(backup.createdAt)}</td>
-                  <td>
-                    {backup.status === "completed"
-                      ? formatBytes(backup.sizeBytes)
-                      : t("backups.failed")}
-                  </td>
-                  <td className="path-cell">
-                    {backup.error ?? backup.archivePath}
-                  </td>
-                  <td>
-                    <Button
-                      disabled={
-                        backup.status !== "completed" ||
-                        restoreBlocked ||
-                        restoreMutation.isPending
-                      }
-                      title={
-                        restoreBlocked
-                          ? t("backups.restore.runningTitle")
-                          : backup.status === "completed"
-                          ? t("backups.restore.titleAttr")
-                          : t("backups.restore.unavailableTitle")
-                      }
-                      variant="ghost"
-                      onClick={() => {
-                        restoreMutation.reset();
-                        setRestoreBackup(backup);
-                        setTargetWorldDir(backup.worldName);
-                      }}
-                    >
-                      <RotateCcw aria-hidden="true" size={14} />
-                    </Button>
-                    <Button
-                      disabled={
-                        backup.status !== "completed" ||
-                        exportMutation.isPending
-                      }
-                      title={t("backups.export.titleAttr")}
-                      variant="ghost"
-                      onClick={() => exportMutation.mutate(backup.id)}
-                    >
-                      <Download aria-hidden="true" size={14} />
-                    </Button>
-                    <Button
-                      disabled={deleteMutation.isPending}
-                      title={t("backups.delete.titleAttr")}
-                      variant="ghost"
-                      onClick={() => {
-                        deleteMutation.reset();
-                        setDeleteBackup(backup);
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" size={14} />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <DataTable caption={t("backups.title")} className="backups-table" columns={columns} getRowKey={(backup) => backup.id} rows={backups} />
         </div>
       ) : null}
 
-      <details className="disclosure backups-advanced">
-        <summary>{t("backups.profiles.advancedTitle")}</summary>
-        <div className="disclosure-body">
-          <BackupProfilesView server={server} />
-        </div>
-      </details>
+      <BackupProfilesView server={server} />
 
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.restoreBackup")}

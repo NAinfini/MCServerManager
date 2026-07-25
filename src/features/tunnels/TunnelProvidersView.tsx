@@ -19,35 +19,18 @@ import { EmptyState } from "../../components/ui/empty-state";
 import { Select } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 import { TunnelBindingEditor } from "./TunnelBindingEditor";
+import {
+  listTunnelBindings,
+  listTunnelProviders,
+  listTunnelStatuses,
+  openTunnelApplication,
+  tunnelKeys,
+  type TunnelProvider,
+} from "./api";
 
-export interface TunnelProvider {
-  id: string;
-  name: string;
-  kind: "custom" | "application";
-  command: string | null;
-  enabled: boolean;
-  createdAt: string;
-}
-
-interface TunnelStatus {
-  providerId: string;
-  status: string;
-  pid: number | null;
-  refCount: number;
-  lastError: string | null;
-  updatedAt: string;
-}
-
-export interface TunnelBinding {
-  id: string;
-  providerId: string;
-  serverId: string;
-  providerName: string;
-  serverName: string;
-  createdAt: string;
-}
+export type { TunnelBinding, TunnelProvider } from "./api";
 
 interface CreateTunnelProviderInput {
   name: string;
@@ -58,6 +41,7 @@ interface CreateTunnelProviderInput {
 
 interface TunnelProvidersViewProps {
   servers: ServerProfile[];
+  embedded?: boolean;
 }
 
 async function pickTunnelApplication(): Promise<string | null> {
@@ -97,7 +81,10 @@ function TunnelProviderKindIcon({ kind }: { kind: TunnelProvider["kind"] }) {
   );
 }
 
-export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
+export function TunnelProvidersView({
+  servers,
+  embedded = false,
+}: TunnelProvidersViewProps) {
   const { t } = useAppSettings();
   const [name, setName] = useState("Custom tunnel");
   const [kind, setKind] = useState<CreateTunnelProviderInput["kind"]>("custom");
@@ -109,26 +96,16 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
     provider: TunnelProvider;
   } | null>(null);
   const providersQuery = useQuery({
-    queryKey: ["tunnelProviders"],
-    queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<TunnelProvider[]>(
-        "list_tunnel_providers",
-      ),
+    queryKey: tunnelKeys.providers,
+    queryFn: listTunnelProviders,
   });
   const statusesQuery = useQuery({
-    queryKey: ["tunnelStatuses"],
-    queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<TunnelStatus[]>(
-        "list_tunnel_statuses",
-      ),
-    refetchInterval: 2000,
+    queryKey: tunnelKeys.statuses,
+    queryFn: listTunnelStatuses,
   });
   const bindingsQuery = useQuery({
-    queryKey: ["tunnelBindings"],
-    queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<TunnelBinding[]>(
-        "list_tunnel_bindings",
-      ),
+    queryKey: tunnelKeys.bindings,
+    queryFn: listTunnelBindings,
   });
   const createMutation = useMutation({
     mutationFn: (input: CreateTunnelProviderInput) =>
@@ -176,13 +153,16 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
     onSuccess: () => bindingsQuery.refetch(),
   });
   const openApplicationMutation = useMutation({
-    mutationFn: (providerId: string) =>
-      invokeDesktopCommandWithErrorHandling<void>("open_tunnel_application", {
-        input: { providerId },
-      }),
+    mutationFn: openTunnelApplication,
   });
   const providers = providersQuery.data ?? [];
   const bindings = bindingsQuery.data ?? [];
+  const currentServer = embedded ? servers[0] : undefined;
+  const bindingsForCurrentServer = new Map(
+    bindings
+      .filter((binding) => binding.serverId === currentServer?.id)
+      .map((binding) => [binding.providerId, binding]),
+  );
   const statusesByProvider = new Map(
     (statusesQuery.data ?? []).map((status) => [status.providerId, status]),
   );
@@ -251,23 +231,36 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
   }
 
   return (
-    <section className="settings-page" aria-labelledby="tunnels-title">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">{t("tunnels.eyebrow")}</p>
-          <h1 id="tunnels-title">{t("tunnels.title")}</h1>
+    <section className={embedded ? "tunnel-settings-section" : "settings-page"} aria-labelledby="tunnels-title">
+      {embedded ? (
+        <div className="section-heading tunnel-settings-heading">
+          <div>
+            <h2 id="tunnels-title">{t("tunnels.settingsTitle")}</h2>
+            <span>{t("tunnels.settingsDescription")}</span>
+          </div>
+          <Button disabled={providersQuery.isFetching} variant="secondary" onClick={() => providersQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("tunnels.refresh")}
+          </Button>
         </div>
-        <Button
-          disabled={providersQuery.isFetching}
-          variant="secondary"
-          onClick={() => providersQuery.refetch()}
-        >
-          <RefreshCw aria-hidden="true" size={15} />
-          {t("tunnels.refresh")}
-        </Button>
-      </div>
+      ) : (
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">{t("tunnels.eyebrow")}</p>
+            <h1 id="tunnels-title">{t("tunnels.title")}</h1>
+          </div>
+          <Button disabled={providersQuery.isFetching} variant="secondary" onClick={() => providersQuery.refetch()}>
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("tunnels.refresh")}
+          </Button>
+        </div>
+      )}
 
-      <section className="settings-panel" aria-labelledby="tunnel-create-title">
+      <div className="tunnel-workbench">
+      <section
+        className="tunnel-workbench-section"
+        aria-labelledby="tunnel-create-title"
+      >
         <div className="section-heading">
           <h2 id="tunnel-create-title">
             {editingProviderId ? t("tunnels.edit.title") : t("tunnels.add.title")}
@@ -321,9 +314,11 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
               </span>
             </label>
           ) : null}
-          {pickerError ? <p className="danger-text">{pickerError}</p> : null}
+          {pickerError ? (
+            <p className="danger-text" role="alert">{pickerError}</p>
+          ) : null}
           {createMutation.error || updateMutation.error ? (
-            <p className="danger-text">
+            <p className="danger-text" role="alert">
               {(createMutation.error || updateMutation.error)?.message}
             </p>
           ) : null}
@@ -346,7 +341,7 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
       </section>
 
       <section
-        className="settings-panel"
+        className="tunnel-workbench-section"
         aria-labelledby="tunnel-provider-list-title"
       >
         <div className="section-heading">
@@ -354,19 +349,32 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
           <span>{t("tunnels.providers.configured", { count: providers.length })}</span>
         </div>
         {providersQuery.error ? (
-          <div className="list-state list-state-error">
+          <div className="list-state list-state-error" role="alert">
             <strong>{t("tunnels.providers.loadError.title")}</strong>
             <span>{providersQuery.error.message}</span>
+            <Button variant="secondary" onClick={() => providersQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
           </div>
         ) : null}
-        {providers.length === 0 ? (
-          <EmptyState
-            illustration="/illustrations/no-tunnels.png"
-            title={t("tunnels.empty.title")}
-            description={t("tunnels.empty.description")}
-          />
-        ) : (
-          <div className="provider-list">
+        {statusesQuery.error ? (
+          <div className="list-state list-state-error" role="alert">
+            <strong>{t("tunnels.statuses.loadError")}</strong>
+            <span>{statusesQuery.error.message}</span>
+            <Button variant="secondary" onClick={() => statusesQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : null}
+        {!providersQuery.error ? (
+          providers.length === 0 ? (
+            <EmptyState
+              illustration="/illustrations/no-tunnels.png"
+              title={t("tunnels.empty.title")}
+              description={t("tunnels.empty.description")}
+            />
+          ) : (
+            <div className="provider-list">
             {providers.map((provider) => (
               <div className="provider-row" key={provider.id}>
                 <TunnelProviderKindIcon kind={provider.kind} />
@@ -386,21 +394,49 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
                     </span>
                   </strong>
                   <span>{tunnelProviderDescription(provider, t)}</span>
-                  <small>
-                    {statusesByProvider.get(provider.id)?.status ??
-                      (provider.enabled
-                        ? t("tunnels.status.enabled")
-                        : t("tunnels.status.disabled"))}
-                    {statusesByProvider.get(provider.id)?.refCount
-                      ? ` / ${t("tunnels.status.refs", {
-                          count: statusesByProvider.get(provider.id)?.refCount,
-                        })}`
-                      : ""}
-                  </small>
+                  {!statusesQuery.error ? (
+                    <small>
+                      {statusesByProvider.get(provider.id)?.status ??
+                        (provider.enabled
+                          ? t("tunnels.status.enabled")
+                          : t("tunnels.status.disabled"))}
+                      {statusesByProvider.get(provider.id)?.refCount
+                        ? ` / ${t("tunnels.status.refs", {
+                            count: statusesByProvider.get(provider.id)?.refCount,
+                          })}`
+                        : ""}
+                    </small>
+                  ) : null}
                   {statusesByProvider.get(provider.id)?.lastError ? (
                     <small className="danger-text">
                       {statusesByProvider.get(provider.id)?.lastError}
                     </small>
+                  ) : null}
+                  {currentServer ? (
+                    <div className="provider-server-binding">
+                      <span>
+                        {bindingsForCurrentServer.has(provider.id)
+                          ? t("tunnels.currentBinding.connected", { server: currentServer.name })
+                          : t("tunnels.currentBinding.disconnected", { server: currentServer.name })}
+                      </span>
+                      <Button
+                        disabled={bindMutation.isPending || unbindMutation.isPending}
+                        type="button"
+                        variant={bindingsForCurrentServer.has(provider.id) ? "secondary" : "primary"}
+                        onClick={() => {
+                          const binding = bindingsForCurrentServer.get(provider.id);
+                          if (binding) {
+                            unbindMutation.mutate({ providerId: provider.id, serverId: currentServer.id });
+                            return;
+                          }
+                          bindMutation.mutate({ providerId: provider.id, serverId: currentServer.id });
+                        }}
+                      >
+                        {bindingsForCurrentServer.has(provider.id)
+                          ? t("tunnels.currentBinding.disconnect")
+                          : t("tunnels.currentBinding.connect")}
+                      </Button>
+                    </div>
                   ) : null}
                 </div>
                 <div className="provider-row-actions">
@@ -454,32 +490,44 @@ export function TunnelProvidersView({ servers }: TunnelProvidersViewProps) {
                 </div>
               </div>
             ))}
-          </div>
-        )}
+            </div>
+          )
+        ) : null}
       </section>
       {openApplicationMutation.error || deleteMutation.error ? (
-        <p className="danger-text">
+        <p className="danger-text" role="alert">
           {(openApplicationMutation.error || deleteMutation.error)?.message}
         </p>
       ) : null}
 
-      <TunnelBindingEditor
-        bindings={bindings}
-        providers={providers}
-        servers={servers}
-        isSaving={bindMutation.isPending || unbindMutation.isPending}
-        onBind={(providerId, serverId) =>
-          bindMutation.mutate({ providerId, serverId })
-        }
-        onUnbind={(providerId, serverId) =>
-          unbindMutation.mutate({ providerId, serverId })
-        }
-      />
+      {!embedded && bindingsQuery.error ? (
+        <div className="list-state list-state-error" role="alert">
+          <strong>{t("tunnels.bindings.loadError")}</strong>
+          <span>{bindingsQuery.error.message}</span>
+          <Button variant="secondary" onClick={() => bindingsQuery.refetch()}>
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : !embedded ? (
+        <TunnelBindingEditor
+          bindings={bindings}
+          providers={providers}
+          servers={servers}
+          isSaving={bindMutation.isPending || unbindMutation.isPending}
+          onBind={(providerId, serverId) =>
+            bindMutation.mutate({ providerId, serverId })
+          }
+          onUnbind={(providerId, serverId) =>
+            unbindMutation.mutate({ providerId, serverId })
+          }
+        />
+      ) : null}
       {bindMutation.error || unbindMutation.error ? (
-        <p className="danger-text">
+        <p className="danger-text" role="alert">
           {(bindMutation.error || unbindMutation.error)?.message}
         </p>
       ) : null}
+      </div>
       <ConfirmDangerDialog
         confirmLabel={
           dangerAction?.kind === "delete"

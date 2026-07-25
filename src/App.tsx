@@ -14,8 +14,8 @@ import {
   type ReactNode,
 } from "react";
 import { AppShell } from "./components/layout/AppShell";
+import { installDesktopServerEventSync } from "./app/serverEventSync";
 import { CloseBehaviorDialog } from "./features/app/CloseBehaviorDialog";
-import { getProcessSummary } from "./features/process/api";
 import {
   cancelProvisioningJob,
   listRecoverableProvisioningJobs,
@@ -23,6 +23,7 @@ import {
   runProvisioningJob,
   type ProvisioningJob,
 } from "./features/servers/provisioningApi";
+import { serverKeys } from "./features/servers/queries";
 import { AppSettingsProvider, useAppSettings } from "./i18n";
 import {
   invokeDesktopCommand,
@@ -31,13 +32,20 @@ import {
   runDesktopWindowAction,
 } from "./lib/desktop-runtime";
 import { installRendererLogger } from "./lib/app-logger";
-import "./styles.css";
-import "./styles/preview/tokens.css";
-import "./styles/preview/shell.css";
-import "./styles/preview/components.css";
-import "./styles/preview/pages.css";
+import { useProcessSummaryPolling } from "./lib/polling";
+import { queryKeys } from "./lib/query-keys";
+import "./styles/tokens.css";
+import "./styles/app.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 5 * 60_000,
+      refetchOnWindowFocus: false,
+      staleTime: 5_000,
+    },
+  },
+});
 
 function AppErrorFallback({
   error,
@@ -116,17 +124,15 @@ function AppRuntime() {
   const { t } = useAppSettings();
   const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
-  const processSummaryQuery = useQuery({
-    queryKey: ["processSummary"],
-    queryFn: getProcessSummary,
-    refetchInterval: 1500,
-  });
+  const processSummaryQuery = useProcessSummaryPolling();
   const runningServerCount = processSummaryQuery.data?.runningCount ?? null;
   const runningServerCountRef = useRef(runningServerCount);
 
   useEffect(() => {
     installRendererLogger();
   }, [t]);
+
+  useEffect(() => installDesktopServerEventSync(queryClient), []);
 
   useEffect(() => {
     runningServerCountRef.current = runningServerCount;
@@ -236,9 +242,8 @@ function ProvisioningRecoveryNotice() {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const jobsQuery = useQuery({
-    queryKey: ["recoverableProvisioningJobs"],
+    queryKey: queryKeys.provisioning.recoverable,
     queryFn: listRecoverableProvisioningJobs,
-    refetchInterval: 5000,
   });
   const actionMutation = useMutation({
     mutationFn: async ({ action, job }: { action: "resume" | "cleanup"; job: ProvisioningJob }) => {
@@ -248,13 +253,14 @@ function ProvisioningRecoveryNotice() {
         : runProvisioningJob(job.id);
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ["recoverableProvisioningJobs"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.provisioning.recoverable });
       if (result.stage === "ready") {
-        await queryClient.invalidateQueries({ queryKey: ["serverProfiles"] });
+        await queryClient.invalidateQueries({ queryKey: serverKeys.profiles });
       }
     },
   });
   if (jobsQuery.error) {
+    if (!isDesktopRuntimeAvailable()) return null;
     return (
       <aside className="provisioning-recovery-notice" role="alert">
         <strong>{t("provisioning.recovery.loadError")}</strong>

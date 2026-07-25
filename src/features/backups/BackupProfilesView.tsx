@@ -4,10 +4,13 @@ import { Archive, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
+import { EditableStringList } from "../../components/ui/editable-string-list";
+import { LoadingState } from "../../components/ui/loading-state";
 import { Select } from "../../components/ui/select";
-import { TextArea, TextField } from "../../components/ui/text-field";
+import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
+import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
 import {
   createBackupProfile,
   createProfileBackup,
@@ -17,16 +20,10 @@ import {
   type BackupProfile,
   type BackupProfileMode,
 } from "./backupApi";
+import { backupKeys } from "./queries";
 
 interface BackupProfilesViewProps {
   server: ServerProfile;
-}
-
-function splitPaths(value: string) {
-  return value
-    .split(/[\n,]/)
-    .map((path) => path.trim())
-    .filter(Boolean);
 }
 
 function modeLabel(mode: BackupProfileMode, t: (key: string) => string) {
@@ -64,30 +61,30 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [mode, setMode] = useState<BackupProfileMode>("worldOnly");
-  const [includePaths, setIncludePaths] = useState("");
-  const [excludePaths, setExcludePaths] = useState("");
+  const [includePaths, setIncludePaths] = useState<string[]>([]);
+  const [excludePaths, setExcludePaths] = useState<string[]>([]);
   const [retentionCount, setRetentionCount] = useState("5");
   const [confirmFullServer, setConfirmFullServer] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [deleteProfile, setDeleteProfile] = useState<BackupProfile | null>(null);
   const profilesQuery = useQuery({
-    queryKey: ["backupProfiles", server.id],
+    queryKey: backupKeys.profiles(server.id),
     queryFn: () => listBackupProfiles(server.id),
   });
   const profileInput = () => ({
     serverId: server.id,
     name,
     mode,
-    includePaths: splitPaths(includePaths),
-    excludePaths: splitPaths(excludePaths),
+    includePaths: includePaths.map((path) => path.trim()).filter(Boolean),
+    excludePaths: excludePaths.map((path) => path.trim()).filter(Boolean),
     retentionCount: retentionCount.trim() ? Number(retentionCount) : null,
     confirmFullServer,
   });
   const clearForm = () => {
     setName("");
     setMode("worldOnly");
-    setIncludePaths("");
-    setExcludePaths("");
+    setIncludePaths([]);
+    setExcludePaths([]);
     setRetentionCount("5");
     setConfirmFullServer(false);
     setEditingProfileId(null);
@@ -97,7 +94,7 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     onSuccess: async () => {
       clearForm();
       await queryClient.invalidateQueries({
-        queryKey: ["backupProfiles", server.id],
+        queryKey: backupKeys.profiles(server.id),
       });
     },
   });
@@ -112,7 +109,7 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     onSuccess: async () => {
       clearForm();
       await queryClient.invalidateQueries({
-        queryKey: ["backupProfiles", server.id],
+        queryKey: backupKeys.profiles(server.id),
       });
     },
   });
@@ -120,9 +117,9 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     mutationFn: (profileId: string) => createProfileBackup({ profileId }),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["backups", server.id] }),
+        queryClient.invalidateQueries({ queryKey: backupKeys.list(server.id) }),
         queryClient.invalidateQueries({
-          queryKey: ["backupProfiles", server.id],
+          queryKey: backupKeys.profiles(server.id),
         }),
       ]);
     },
@@ -133,12 +130,37 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
       setDeleteProfile(null);
       clearForm();
       await queryClient.invalidateQueries({
-        queryKey: ["backupProfiles", server.id],
+        queryKey: backupKeys.profiles(server.id),
       });
     },
   });
   const profiles = profilesQuery.data ?? [];
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const editingProfile =
+    profiles.find((profile) => profile.id === editingProfileId) ?? null;
+  const isDirty = editingProfile
+    ? name !== editingProfile.name ||
+      mode !== editingProfile.mode ||
+      JSON.stringify(includePaths) !==
+        JSON.stringify(editingProfile.includePaths) ||
+      JSON.stringify(excludePaths) !==
+        JSON.stringify(editingProfile.excludePaths) ||
+      retentionCount !==
+        (editingProfile.retentionCount
+          ? String(editingProfile.retentionCount)
+          : "") ||
+      confirmFullServer !== (editingProfile.mode === "fullServer")
+    : name !== "" ||
+      mode !== "worldOnly" ||
+      includePaths.length > 0 ||
+      excludePaths.length > 0 ||
+      retentionCount !== "5" ||
+      confirmFullServer;
+  useUnsavedGuard({
+    isDirty,
+    message: t("backups.profiles.unsaved.confirm"),
+    onDiscard: clearForm,
+  });
   const backupModeOptions = [
     { value: "worldOnly", label: t("backups.profiles.mode.worldOnly") },
     {
@@ -153,8 +175,8 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     setEditingProfileId(profile.id);
     setName(profile.name);
     setMode(profile.mode);
-    setIncludePaths(profile.includePaths.join("\n"));
-    setExcludePaths(profile.excludePaths.join("\n"));
+    setIncludePaths(profile.includePaths);
+    setExcludePaths(profile.excludePaths);
     setRetentionCount(profile.retentionCount ? String(profile.retentionCount) : "");
     setConfirmFullServer(profile.mode === "fullServer");
   }
@@ -173,16 +195,24 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
         <h2>{t("backups.profiles.title")}</h2>
       </div>
       {createMutation.error ? (
-        <p className="danger-text">{createMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {createMutation.error.message}
+        </p>
       ) : null}
       {updateMutation.error ? (
-        <p className="danger-text">{updateMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {updateMutation.error.message}
+        </p>
       ) : null}
       {runMutation.error ? (
-        <p className="danger-text">{runMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {runMutation.error.message}
+        </p>
       ) : null}
       {deleteMutation.error ? (
-        <p className="danger-text">{deleteMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {deleteMutation.error.message}
+        </p>
       ) : null}
       <div className="settings-grid">
         <label>
@@ -201,24 +231,44 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
             onValueChange={(value) => setMode(value as BackupProfileMode)}
           />
         </label>
-        <label>
-          {t("backups.profiles.includePaths")}
-          <TextArea
+        <div className="structured-field structured-field-wide">
+          <span className="structured-field-label">
+            {t("backups.profiles.includePaths")}
+          </span>
+          <EditableStringList
+            addLabel={t("backups.profiles.addIncludePath")}
+            emptyText={t("backups.profiles.includePathsEmpty")}
+            inputLabel={t("backups.profiles.newIncludePath")}
+            itemLabel={(index) =>
+              t("backups.profiles.includePathItem", { index: index + 1 })
+            }
             placeholder={t("backups.profiles.pathPlaceholder")}
-            rows={3}
-            value={includePaths}
-            onChange={(event) => setIncludePaths(event.target.value)}
+            removeLabel={(path) =>
+              t("backups.profiles.removeIncludePath", { path })
+            }
+            values={includePaths}
+            onChange={setIncludePaths}
           />
-        </label>
-        <label>
-          {t("backups.profiles.excludePaths")}
-          <TextArea
+        </div>
+        <div className="structured-field structured-field-wide">
+          <span className="structured-field-label">
+            {t("backups.profiles.excludePaths")}
+          </span>
+          <EditableStringList
+            addLabel={t("backups.profiles.addExcludePath")}
+            emptyText={t("backups.profiles.excludePathsEmpty")}
+            inputLabel={t("backups.profiles.newExcludePath")}
+            itemLabel={(index) =>
+              t("backups.profiles.excludePathItem", { index: index + 1 })
+            }
             placeholder={t("backups.profiles.pathPlaceholder")}
-            rows={3}
-            value={excludePaths}
-            onChange={(event) => setExcludePaths(event.target.value)}
+            removeLabel={(path) =>
+              t("backups.profiles.removeExcludePath", { path })
+            }
+            values={excludePaths}
+            onChange={setExcludePaths}
           />
-        </label>
+        </div>
         <label>
           {t("backups.profiles.retentionCount")}
           <TextField
@@ -257,41 +307,63 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
           </Button>
         ) : null}
       </div>
-      <div className="compatibility-list">
-        {profiles.map((profile) => (
-          <div key={profile.id}>
-            <strong>{profile.name}</strong>
-            <span>{profileSummary(profile, t)}</span>
-            <Button
-              disabled={runMutation.isPending}
-              variant="secondary"
-              onClick={() => runMutation.mutate(profile.id)}
-            >
-              <Archive aria-hidden="true" size={14} />
-              {t("backups.profiles.run")}
-            </Button>
-            <Button
-              disabled={isSaving}
-              variant="secondary"
-              onClick={() => editProfile(profile)}
-            >
-              <Pencil aria-hidden="true" size={14} />
-              {t("tunnels.actions.edit")}
-            </Button>
-            <Button
-              disabled={deleteMutation.isPending}
-              variant="danger"
-              onClick={() => {
-                deleteMutation.reset();
-                setDeleteProfile(profile);
-              }}
-            >
-              <Trash2 aria-hidden="true" size={14} />
-              {t("tunnels.actions.delete")}
-            </Button>
-          </div>
-        ))}
-      </div>
+      {profilesQuery.isLoading ? (
+        <LoadingState message={t("backups.profiles.loading")} />
+      ) : profilesQuery.error ? (
+        <div
+          aria-label={t("backups.profiles.loadError")}
+          className="list-state list-state-error"
+          role="alert"
+        >
+          <strong>{t("backups.profiles.loadError")}</strong>
+          <span>{profilesQuery.error.message}</span>
+          <Button
+            disabled={profilesQuery.isFetching}
+            variant="secondary"
+            onClick={() => profilesQuery.refetch()}
+          >
+            {t("common.retry")}
+          </Button>
+        </div>
+      ) : profiles.length ? (
+        <div className="compatibility-list">
+          {profiles.map((profile) => (
+            <div key={profile.id}>
+              <strong>{profile.name}</strong>
+              <span>{profileSummary(profile, t)}</span>
+              <Button
+                disabled={runMutation.isPending}
+                variant="secondary"
+                onClick={() => runMutation.mutate(profile.id)}
+              >
+                <Archive aria-hidden="true" size={14} />
+                {t("backups.profiles.run")}
+              </Button>
+              <Button
+                disabled={isSaving}
+                variant="secondary"
+                onClick={() => editProfile(profile)}
+              >
+                <Pencil aria-hidden="true" size={14} />
+                {t("backups.profiles.actions.edit")}
+              </Button>
+              <Button
+                disabled={deleteMutation.isPending}
+                variant="danger"
+                onClick={() => {
+                  deleteMutation.reset();
+                  setDeleteProfile(profile);
+                }}
+              >
+                <Trash2 aria-hidden="true" size={14} />
+                {t("backups.profiles.actions.delete")}
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="list-state">{t("backups.profiles.empty")}</div>
+      )}
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteBackupProfile")}
         description={t("danger.backupProfile.delete.description", {

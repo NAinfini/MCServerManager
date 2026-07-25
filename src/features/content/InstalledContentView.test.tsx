@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { InstalledContentView } from "./InstalledContentView";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),

@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
+import { queryKeys } from "../../lib/query-keys";
 import { formatDateTime } from "../../lib/date-format";
 import {
   clearAppLogs,
@@ -62,22 +63,21 @@ function groupLogs(logs: AppLogEntry[]): GroupedLogEntry[] {
 }
 
 export function AppLoggerView() {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [level, setLevel] = useState<AppLogLevelFilter>("all");
   const [selectedLogKey, setSelectedLogKey] = useState<string | null>(null);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
   const logsQuery = useQuery({
-    queryKey: ["appLogs", level],
+    queryKey: queryKeys.logs.app(level),
     queryFn: () => listAppLogs(level),
-    refetchInterval: 5000,
   });
   const clearMutation = useMutation({
     mutationFn: clearAppLogs,
     onSuccess: () => {
       setIsClearConfirmOpen(false);
-      queryClient.setQueryData(["appLogs", level], []);
-      void queryClient.invalidateQueries({ queryKey: ["appLogs"] });
+      queryClient.setQueryData(queryKeys.logs.app(level), []);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.logs.appAll });
     },
   });
   const logs = logsQuery.data ?? [];
@@ -134,7 +134,7 @@ export function AppLoggerView() {
       </div>
 
       {logsQuery.error ? (
-        <div className="list-state list-state-error">
+        <div className="list-state list-state-error" role="alert">
           <strong>{t("logger.loadError")}</strong>
           <span>{logsQuery.error.message}</span>
           <Button variant="secondary" onClick={() => logsQuery.refetch()}>
@@ -224,7 +224,7 @@ export function AppLoggerView() {
                       </div>
                       <div className="app-log-meta">
                         <span>{entry.source}</span>
-                        <span>{formatDateTime(entry.createdAt)}</span>
+                        <span>{formatDateTime(entry.createdAt, language)}</span>
                       </div>
                     </div>
                   </button>
@@ -252,7 +252,7 @@ export function AppLoggerView() {
                 </div>
                 <div>
                   <dt>{t("logger.time")}</dt>
-                  <dd>{formatDateTime(selectedGroup.entry.createdAt)}</dd>
+                  <dd>{formatDateTime(selectedGroup.entry.createdAt, language)}</dd>
                 </div>
               </dl>
               {selectedGroup.count > 1 ? (

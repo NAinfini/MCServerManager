@@ -9,7 +9,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { PlayersView } from "./PlayersView";
-import type { ServerProfile } from "../servers/types";
+import type { ServerProfile } from "../../domain/server";
+import { ServerRuntimeProvider } from "../servers/ServerRuntimeContext";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
@@ -47,7 +48,9 @@ function renderPlayers() {
 
   return render(
     <QueryClientProvider client={queryClient}>
-      <PlayersView server={server} />
+      <ServerRuntimeProvider serverId={server.id}>
+        <PlayersView server={server} />
+      </ServerRuntimeProvider>
     </QueryClientProvider>,
   );
 }
@@ -95,7 +98,10 @@ describe("PlayersView", () => {
     renderPlayers();
 
     expect(await screen.findByText("Alex")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "OP Alex" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Deop Alex" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Deop Alex" })).toHaveClass(
+      "icon-button",
+    );
     expect(screen.queryByPlaceholderText(/command/i)).not.toBeInTheDocument();
   });
 
@@ -121,8 +127,8 @@ describe("PlayersView", () => {
       if (command === "get_server_process_status") {
         return { status: "running" };
       }
-      if (command === "apply_player_action") {
-        return { commandSent: "op Alex" };
+      if (command === "apply_player_change") {
+        return { method: "command", commandSent: "op Alex" };
       }
       if (command === "read_player_lists") {
         return {
@@ -142,11 +148,12 @@ describe("PlayersView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Grant operator" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("apply_player_action", {
+      expect(invoke).toHaveBeenCalledWith("apply_player_change", {
         input: {
           serverId: server.id,
           player: "Alex",
           action: "op",
+          uuid: "uuid-alex",
         },
       });
     });
@@ -174,8 +181,8 @@ describe("PlayersView", () => {
       if (command === "get_server_process_status") {
         return { status: "running" };
       }
-      if (command === "apply_player_action") {
-        return { commandSent: "whitelist add Alex" };
+      if (command === "apply_player_change") {
+        return { method: "command", commandSent: "whitelist add Alex" };
       }
       if (command === "read_player_lists") {
         return {
@@ -197,36 +204,24 @@ describe("PlayersView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to whitelist" }));
 
     await waitFor(() => {
-      expect(invoke).toHaveBeenCalledWith("apply_player_action", {
+      expect(invoke).toHaveBeenCalledWith("apply_player_change", {
         input: {
           serverId: server.id,
           player: "Alex",
           action: "whitelistAdd",
+          uuid: "uuid-alex",
         },
       });
     });
   });
 
-  it("keeps structured list errors visible when player summary fails", async () => {
+  it("keeps the player summary failure isolated to the players page", async () => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === "list_players") {
         throw new Error("could not parse player list");
       }
       if (command === "get_server_process_status") {
         return { status: "stopped" };
-      }
-      if (command === "read_player_lists") {
-        return {
-          serverId: server.id,
-          lists: [
-            {
-              listType: "ops",
-              fileName: "ops.json",
-              entries: [],
-              error: "could not parse ops.json",
-            },
-          ],
-        };
       }
       return null;
     });
@@ -236,9 +231,93 @@ describe("PlayersView", () => {
     expect(
       await screen.findByText("Could not load players"),
     ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(invoke).mock.calls.filter(([command]) => command === "list_players"),
+      ).toHaveLength(2);
+    });
+    expect(invoke).not.toHaveBeenCalledWith("read_player_lists", {
+      serverId: server.id,
+    });
+  });
+
+  it("explains that an unenforced whitelist lets everyone join", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_players") {
+        return {
+          serverId: server.id,
+          actionsAvailable: true,
+          unavailableReason: null,
+          whitelistEnabled: false,
+          players: [
+            {
+              username: "Alex",
+              uuid: "uuid-alex",
+              online: false,
+              operator: false,
+              whitelisted: true,
+              banned: false,
+            },
+          ],
+        };
+      }
+      if (command === "get_server_process_status") {
+        return { status: "running" };
+      }
+      return null;
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ServerRuntimeProvider serverId={server.id}>
+          <PlayersView server={server} view="whitelist" />
+        </ServerRuntimeProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Whitelist is off")).toBeInTheDocument();
     expect(
-      await screen.findByText("could not parse ops.json"),
+      screen.getByRole("button", { name: "Turn on in properties" }),
     ).toBeInTheDocument();
+  });
+
+  it("hides the whitelist notice when the whitelist is enforced", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_players") {
+        return {
+          serverId: server.id,
+          actionsAvailable: true,
+          unavailableReason: null,
+          whitelistEnabled: true,
+          players: [
+            {
+              username: "Alex",
+              uuid: "uuid-alex",
+              online: false,
+              operator: false,
+              whitelisted: true,
+              banned: false,
+            },
+          ],
+        };
+      }
+      if (command === "get_server_process_status") {
+        return { status: "running" };
+      }
+      return null;
+    });
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <ServerRuntimeProvider serverId={server.id}>
+          <PlayersView server={server} view="whitelist" />
+        </ServerRuntimeProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByText("Alex")).toBeInTheDocument();
+    expect(screen.queryByText("Whitelist is off")).not.toBeInTheDocument();
   });
 });
 

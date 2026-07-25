@@ -7,11 +7,14 @@ export type PlayerAction =
   | "pardon"
   | "kick"
   | "whitelistAdd"
-  | "whitelistRemove";
+  | "whitelistRemove"
+  | "banIp"
+  | "pardonIp";
 
 export interface PlayerSummary {
   username: string;
   uuid?: string | null;
+  kind?: "player" | "ip";
   online: boolean;
   operator: boolean;
   whitelisted: boolean;
@@ -25,16 +28,22 @@ export interface PlayerState {
   players: PlayerSummary[];
   actionsAvailable: boolean;
   unavailableReason?: string | null;
+  /** Mirrors `white-list` in server.properties; false means everyone may join. */
+  whitelistEnabled?: boolean;
 }
 
 export interface PlayerActionInput {
   serverId: string;
   player: string;
   action: PlayerAction;
+  uuid?: string | null;
+  reason?: string;
 }
 
 export interface PlayerActionResult {
-  commandSent: string;
+  method: "command" | "file";
+  commandSent?: string;
+  listType?: string;
 }
 
 export interface PlayerListEntry {
@@ -66,8 +75,8 @@ export function listPlayers(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<PlayerState>("list_players", { serverId });
 }
 
-export function applyPlayerAction(input: PlayerActionInput) {
-  return invokeDesktopCommandWithErrorHandling<PlayerActionResult>("apply_player_action", {
+export function applyPlayerChange(input: PlayerActionInput) {
+  return invokeDesktopCommandWithErrorHandling<PlayerActionResult>("apply_player_change", {
     input,
   });
 }

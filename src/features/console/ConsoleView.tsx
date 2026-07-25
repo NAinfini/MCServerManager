@@ -1,26 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import * as Toolbar from "@radix-ui/react-toolbar";
 import * as Separator from "@radix-ui/react-separator";
-import { Copy, Eraser, RefreshCw, X } from "lucide-react";
+import { Copy, Eraser, PanelRightOpen, RefreshCw, Users, X } from "lucide-react";
 import {
-  getServerProcessStatus,
   sendServerCommand,
   listProcessEvents,
   type ProcessEvent,
 } from "../process/api";
+import { processKeys } from "../process/queries";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { TextField } from "../../components/ui/text-field";
 import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
+import { useServerRuntime } from "../servers/ServerRuntimeContext";
 import { CommandSuggestions } from "./CommandSuggestions";
 import { MC_COMMANDS } from "./mcCommands";
+import { GamerulesEditor } from "../config/GamerulesEditor";
 
 interface ConsoleViewProps {
   serverId: string;
+  onOpenPlayers?: () => void;
 }
 
 const quickCommands = [
@@ -35,8 +38,10 @@ const whitelistOptions = [
   { value: "whitelist off", labelKey: "console.whitelist.off" },
 ];
 
-export function ConsoleView({ serverId }: ConsoleViewProps) {
+export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
   const { t } = useAppSettings();
+  const terminalInputId = useId();
+  const runtime = useServerRuntime();
   const queryClient = useQueryClient();
   const terminalElementRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -54,16 +59,10 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const [whitelistValue, setWhitelistValue] = useState("");
   const normalizedSearch = searchText.trim().toLowerCase();
   const eventsQuery = useQuery({
-    queryKey: ["processEvents", serverId],
+    queryKey: processKeys.events(serverId),
     queryFn: () => listProcessEvents(serverId),
-    refetchInterval: 1000,
   });
-  const processQuery = useQuery({
-    queryKey: ["serverProcessStatus", serverId],
-    queryFn: () => getServerProcessStatus(serverId),
-    refetchInterval: 1500,
-  });
-  const canSendCommand = processQuery.data?.status === "running";
+  const canSendCommand = runtime.status === "running";
 
   useEffect(() => {
     if (!terminalElementRef.current) {
@@ -87,11 +86,18 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           fontSize: 12,
           rows: 10,
           theme: {
-            background: "#07090b",
+            background: "#090f17",
             foreground: "#e9eef4",
           },
         });
         terminal.open(terminalElementRef.current);
+        const terminalInput = terminalElementRef.current.querySelector<HTMLTextAreaElement>(
+          ".xterm-helper-textarea",
+        );
+        if (terminalInput) {
+          terminalInput.id = terminalInputId;
+          terminalInput.name = "serverConsoleTerminalInput";
+        }
         terminalRef.current = terminal;
         setTerminalReadyToken((value) => value + 1);
       })
@@ -108,7 +114,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
       terminalRef.current = null;
       writtenEventIdsRef.current = new Set();
     };
-  }, [serverId]);
+  }, [serverId, terminalInputId, t]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -153,7 +159,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
       setCommandText("");
       setShowSuggestions(false);
       await queryClient.invalidateQueries({
-        queryKey: ["processEvents", serverId],
+        queryKey: processKeys.events(serverId),
       });
     },
   });
@@ -184,7 +190,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
       ) ?? [],
     [eventsQuery.data, normalizedSearch],
   );
-  const status = processQuery.data?.status ?? "stopped";
+  const status = runtime.status;
   const statusLabel = t(`servers.status.${status}`);
   const dotStatus = status === "externalRunning" ? "running" : status;
   const recentWarnings = visibleEvents
@@ -272,6 +278,26 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
         </Toolbar.Root>
       </div>
 
+      <details className="console-quick-drawer">
+        <summary className="button button-secondary">
+          <PanelRightOpen aria-hidden="true" size={15} />
+          {t("console.tools.open")}
+        </summary>
+        <aside aria-label={t("console.tools.title")}>
+          <header>
+            <strong>{t("console.tools.title")}</strong>
+            <span>{t("console.tools.description")}</span>
+          </header>
+          <GamerulesEditor serverId={serverId} />
+          {onOpenPlayers ? (
+            <Button variant="secondary" onClick={onOpenPlayers}>
+              <Users aria-hidden="true" size={15} />
+              {t("console.tools.players")}
+            </Button>
+          ) : null}
+        </aside>
+      </details>
+
       {showWarnings ? (
         <div className="console-warning-banner" role="status">
           <div className="console-warning-banner-body">
@@ -295,7 +321,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
 
       <div className="console-output">
         {eventsQuery.error ? (
-          <div className="list-state list-state-error">
+          <div className="list-state list-state-error" role="alert">
             <strong>{t("console.eventsError.title")}</strong>
             <span>{eventsQuery.error.message}</span>
             <Button variant="secondary" onClick={() => eventsQuery.refetch()}>
@@ -304,7 +330,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           </div>
         ) : null}
         {terminalLoadError ? (
-          <div className="inline-error console-load-error">
+          <div className="inline-error console-load-error" role="alert">
             {terminalLoadError}
           </div>
         ) : null}
@@ -408,20 +434,20 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
             !canSendCommand ||
             commandText.trim().length === 0 ||
             sendCommandMutation.isPending ||
-            processQuery.isLoading
+            runtime.isLoading
           }
           type="submit"
         >
           {t("console.send")}
         </Button>
       </form>
-      {!canSendCommand && !processQuery.isLoading ? (
-        <div className="inline-error console-command-error">
+      {!canSendCommand && !runtime.isLoading ? (
+        <div className="inline-error console-command-error" role="status">
           {t("console.command.startFirst")}
         </div>
       ) : null}
       {sendCommandMutation.error ? (
-        <div className="inline-error console-command-error">
+        <div className="inline-error console-command-error" role="alert">
           {sendCommandMutation.error.message}
         </div>
       ) : null}

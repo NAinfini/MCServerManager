@@ -7,28 +7,12 @@ interface ServerCoverProps {
   className?: string;
 }
 
-// Deterministic cover gradient derived from the loader type so a server keeps a
-// stable identity across the dashboard, sidebar, and detail header.
-const coverGradients: Record<string, [string, string]> = {
-  paper: ["#14b8a6", "#0f766e"],
-  fabric: ["#f0a838", "#b45309"],
-  forge: ["#f97316", "#c2410c"],
-  neoforge: ["#ef4444", "#b21c1c"],
-  vanilla: ["#64748b", "#334155"],
-};
-
-function gradientFor(loaderType?: string | null): [string, string] {
-  const key = (loaderType ?? "").toLowerCase();
-  return coverGradients[key] ?? coverGradients.vanilla;
-}
-
 export function ServerCover({
   loaderType,
   size = 48,
   className,
 }: ServerCoverProps) {
   const branding = getLoaderBranding(loaderType);
-  const [from, to] = gradientFor(loaderType);
   const radius = size >= 40 ? 8 : 6;
 
   return (
@@ -39,7 +23,8 @@ export function ServerCover({
         width: size,
         height: size,
         borderRadius: radius,
-        background: `linear-gradient(135deg, ${from}, ${to})`,
+        background: "var(--bg-elevated)",
+        border: "1px solid var(--border-subtle)",
       }}
     >
       {branding.iconSrc ? (

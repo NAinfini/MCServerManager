@@ -6,31 +6,22 @@ import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
-import type { ServerProfile } from "../servers/types";
+import { formatBytes } from "../../lib/format-bytes";
+import { queryKeys } from "../../lib/query-keys";
+import type { ServerProfile } from "../../domain/server";
 import { listServerLogs, readServerLog } from "./logApi";
 
-function formatBytes(value: number) {
-  if (value < 1024) {
-    return `${value} B`;
-  }
-  if (value < 1024 * 1024) {
-    return `${Math.round(value / 1024)} KB`;
-  }
-  return `${(value / 1024 / 1024).toFixed(1)} MB`;
-}
-
 export function ServerLogsView({ server }: { server: ServerProfile }) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const logsQuery = useQuery({
-    queryKey: ["serverLogs", server.id],
+    queryKey: queryKeys.logs.server(server.id),
     queryFn: () => listServerLogs(server.id),
-    refetchInterval: 10_000,
   });
   const logs = logsQuery.data?.logs ?? [];
   const selectedLog = logs.find((log) => log.relativePath === selectedPath);
   const contentQuery = useQuery({
-    queryKey: ["serverLogContent", server.id, selectedPath],
+    queryKey: queryKeys.logs.content(server.id, selectedPath),
     queryFn: () => readServerLog(server.id, selectedPath ?? ""),
     enabled: Boolean(selectedPath),
   });
@@ -61,9 +52,17 @@ export function ServerLogsView({ server }: { server: ServerProfile }) {
       {logsQuery.isLoading ? <LoadingState message={t("logs.loading")} /> : null}
 
       {logsQuery.error ? (
-        <div className="list-state list-state-error">
+        <div className="list-state list-state-error" role="alert">
           <strong>{t("logs.loadError.title")}</strong>
           <span>{logsQuery.error.message}</span>
+          <Button
+            disabled={logsQuery.isFetching}
+            variant="secondary"
+            onClick={() => logsQuery.refetch()}
+          >
+            <RefreshCw aria-hidden="true" size={15} />
+            {t("common.retry")}
+          </Button>
         </div>
       ) : null}
 
@@ -93,7 +92,7 @@ export function ServerLogsView({ server }: { server: ServerProfile }) {
                 <span>
                   <strong>{log.fileName}</strong>
                   <small>
-                    {formatBytes(log.sizeBytes)} - {formatDateTime(log.modifiedAt)}
+                    {formatBytes(log.sizeBytes)} - {formatDateTime(log.modifiedAt, language)}
                   </small>
                 </span>
               </button>
@@ -104,9 +103,17 @@ export function ServerLogsView({ server }: { server: ServerProfile }) {
               <LoadingState message={t("logs.opening")} />
             ) : null}
             {contentQuery.error ? (
-              <div className="list-state list-state-error">
+              <div className="list-state list-state-error" role="alert">
                 <strong>{t("logs.openError.title")}</strong>
                 <span>{contentQuery.error.message}</span>
+                <Button
+                  disabled={contentQuery.isFetching}
+                  variant="secondary"
+                  onClick={() => contentQuery.refetch()}
+                >
+                  <RefreshCw aria-hidden="true" size={15} />
+                  {t("common.retry")}
+                </Button>
               </div>
             ) : null}
             {!contentQuery.isLoading && !contentQuery.error ? (

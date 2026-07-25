@@ -36,12 +36,20 @@ function ProjectDetailIcon({
         <img
           alt=""
           aria-hidden="true"
+          height="52"
           referrerPolicy="no-referrer"
           src={project.iconUrl}
+          width="52"
           onError={() => setFailed(true)}
         />
       ) : providerBranding?.iconSrc ? (
-        <img alt="" aria-hidden="true" src={providerBranding.iconSrc} />
+        <img
+          alt=""
+          aria-hidden="true"
+          height="52"
+          src={providerBranding.iconSrc}
+          width="52"
+        />
       ) : (
         <span>{fallback}</span>
       )}

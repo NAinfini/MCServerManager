@@ -31,8 +31,11 @@ const dictionaries: Record<Language, Record<string, string>> = {
 
 const AppSettingsContext = createContext<AppSettingsContextValue | null>(null);
 
-function readStoredLanguage(): Language {
-  return localStorage.getItem(LANGUAGE_KEY) === "zh-CN" ? "zh-CN" : "en";
+export function readStoredLanguage(): Language {
+  return typeof localStorage !== "undefined" &&
+    localStorage.getItem(LANGUAGE_KEY) === "zh-CN"
+    ? "zh-CN"
+    : "en";
 }
 
 function readStoredTheme(): ThemeSetting {
@@ -51,6 +54,22 @@ function applyTheme(theme: ThemeSetting) {
     theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme;
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.style.colorScheme = resolvedTheme;
+}
+
+export function translate(
+  language: Language,
+  key: string,
+  values?: Record<string, string | number | null | undefined>,
+) {
+  const template = dictionaries[language][key] ?? `[[${key}]]`;
+  if (!values) {
+    return template;
+  }
+  return template.replace(/\{(\w+)\}/g, (match, name) =>
+    values[name] === undefined || values[name] === null
+      ? match
+      : String(values[name]),
+  );
 }
 
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
@@ -88,20 +107,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
       language,
       setLanguage: setLanguageState,
       setTheme: setThemeState,
-      t: (
-        key: string,
-        values?: Record<string, string | number | null | undefined>,
-      ) => {
-        const template = dictionaries[language][key] ?? `[[${key}]]`;
-        if (!values) {
-          return template;
-        }
-        return template.replace(/\{(\w+)\}/g, (match, name) =>
-          values[name] === undefined || values[name] === null
-            ? match
-            : String(values[name]),
-        );
-      },
+      t: (key, values) => translate(language, key, values),
       theme,
     }),
     [language, theme],

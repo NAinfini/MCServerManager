@@ -10,6 +10,7 @@ vi.mock("../../lib/desktop-runtime", () => ({
 
 describe("MarketplaceMarkdown", () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     vi.mocked(invokeDesktopCommand).mockResolvedValue({
       contentType: "image/webp",
       dataUrl: "data:image/webp;base64,AQID",
@@ -77,6 +78,9 @@ describe("MarketplaceMarkdown", () => {
     expect(screen.getByText("My Modpack").tagName).toBe("H1");
     expect(screen.getByAltText("Badge")).toBeInTheDocument();
     expect(screen.getByAltText("Badge").tagName).toBe("IMG");
+    expect(screen.getByAltText("Badge")).toHaveAttribute("width", "960");
+    expect(screen.getByAltText("Badge")).toHaveAttribute("height", "540");
+    expect(screen.getByAltText("Badge")).toHaveAttribute("decoding", "async");
     expect(screen.getByText("Homepage").tagName).toBe("A");
     expect(screen.getByText("Homepage")).toHaveAttribute(
       "href",
@@ -103,5 +107,23 @@ describe("MarketplaceMarkdown", () => {
         },
       },
     );
+  });
+
+  it("limits proxied body image work instead of starting every request at once", async () => {
+    vi.mocked(invokeDesktopCommand).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+    render(
+      <MarketplaceMarkdown
+        source={Array.from(
+          { length: 5 },
+          (_, index) =>
+            `![Image ${index}](https://cdn.bbsmc.net/bbsmc/data/cached_images/${index}.webp)`,
+        ).join("\n\n")}
+      />,
+    );
+
+    await waitFor(() => expect(invokeDesktopCommand).toHaveBeenCalledTimes(3));
+    expect(invokeDesktopCommand).toHaveBeenCalledTimes(3);
   });
 });

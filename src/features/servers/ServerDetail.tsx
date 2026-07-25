@@ -1,60 +1,42 @@
 import {
   Component,
-  lazy,
-  Suspense,
   type ErrorInfo,
+  type KeyboardEvent,
   type ReactNode,
 } from "react";
-import * as Tabs from "@radix-ui/react-tabs";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import {
-  Activity,
-  Archive,
-  ChevronLeft,
-  FileCode2,
-  Package,
-  Settings,
-  Terminal,
-} from "lucide-react";
+import { ChevronLeft, RefreshCw } from "lucide-react";
+import type { ServerWorkspaceSection } from "../../app/router";
 import { Button } from "../../components/ui/button";
-import { ServerCover } from "../../components/ui/server-cover";
-import { createWorldBackup } from "../backups/backupApi";
-import { ServerActions, ServerProcessStatusBadge } from "./ServerActions";
-import type { ServerProfile } from "./types";
-import { useServerUiStore, type ServerDetailTab } from "./serverUiStore";
-import { LoaderPill } from "../loaders/LoaderIdentity";
 import { useAppSettings } from "../../i18n";
-import { ServerActivityView } from "../activity/ServerActivityView";
+import { createWorldBackup } from "../backups/backupApi";
+import { backupKeys } from "../backups/queries";
+import { LoaderPill } from "../loaders/LoaderIdentity";
+import { usePlayerViewCounts } from "../players/usePlayerViewCounts";
+import { InviteFriendsPopover } from "./InviteFriendsPopover";
+import { ServerActions, ServerProcessStatusBadge } from "./ServerActions";
+import { ServerHeaderTelemetry } from "./ServerHeaderTelemetry";
+import { ServerWorkspacePanel } from "./ServerWorkspacePanel";
+import { serverKeys } from "./queries";
+import {
+  normalizeWorkspaceView,
+  serverWorkspaceDefinitions,
+  workspaceDefinition,
+} from "./serverWorkspace";
+import type { ServerProfile } from "./types";
 
-const ConsoleView = lazy(() =>
-  import("../console/ConsoleView").then((module) => ({
-    default: module.ConsoleView,
-  })),
-);
-const ServerSettingsView = lazy(() =>
-  import("./ServerSettingsView").then((module) => ({
-    default: module.ServerSettingsView,
-  })),
-);
-const ServerFilesView = lazy(() =>
-  import("../files/ServerFilesView").then((module) => ({
-    default: module.ServerFilesView,
-  })),
-);
-const ServerBackupsView = lazy(() =>
-  import("../backups/ServerBackupsView").then((module) => ({
-    default: module.ServerBackupsView,
-  })),
-);
-const ServerContentView = lazy(() =>
-  import("../content/ServerContentView").then((module) => ({
-    default: module.ServerContentView,
-  })),
-);
 interface ServerDetailProps {
   server: ServerProfile;
+  section?: ServerWorkspaceSection;
+  view?: string;
+  path?: string;
   onBack?: () => void;
+  onNavigate?: (
+    section: ServerWorkspaceSection,
+    view?: string,
+    path?: string,
+  ) => void;
   onOpenJava?: () => void;
 }
 
@@ -62,6 +44,7 @@ interface PanelErrorBoundaryProps {
   children: ReactNode;
   errorTitle: string;
   panelLabel: string;
+  retryLabel: string;
   resetKey: string;
 }
 
@@ -73,9 +56,7 @@ class PanelErrorBoundary extends Component<
   PanelErrorBoundaryProps,
   PanelErrorBoundaryState
 > {
-  state: PanelErrorBoundaryState = {
-    error: null,
-  };
+  state: PanelErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): PanelErrorBoundaryState {
     return { error };
@@ -83,7 +64,7 @@ class PanelErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(
-      `Failed to render ${this.props.panelLabel} server detail panel`,
+      `Failed to render ${this.props.panelLabel} server workspace`,
       error,
       info.componentStack,
     );
@@ -96,81 +77,71 @@ class PanelErrorBoundary extends Component<
   }
 
   render() {
-    if (!this.state.error) {
-      return this.props.children;
-    }
-
+    if (!this.state.error) return this.props.children;
     return (
       <div className="list-state list-state-error" role="alert">
         <strong>{this.props.errorTitle}</strong>
-        <span>{this.state.error.message}</span>
+        <details>
+          <summary>{this.props.panelLabel}</summary>
+          <code>{this.state.error.message}</code>
+        </details>
+        <Button
+          variant="secondary"
+          onClick={() => this.setState({ error: null })}
+        >
+          <RefreshCw aria-hidden="true" size={15} />
+          {this.props.retryLabel}
+        </Button>
       </div>
     );
   }
 }
 
-const detailTabs: Array<{
-  id: ServerDetailTab;
-  labelKey: string;
-  panelId: string;
-  icon: typeof Terminal;
-}> = [
-  { id: "console", labelKey: "server.tabs.console", panelId: "server-detail-console", icon: Terminal },
-  { id: "files", labelKey: "server.tabs.files", panelId: "server-detail-files", icon: FileCode2 },
-  { id: "content", labelKey: "server.tabs.content", panelId: "server-detail-content", icon: Package },
-  { id: "backups", labelKey: "server.tabs.backups", panelId: "server-detail-backups", icon: Archive },
-  { id: "settings", labelKey: "server.tabs.settings", panelId: "server-detail-settings", icon: Settings },
-  { id: "activity", labelKey: "server.tabs.activity", panelId: "server-detail-activity", icon: Activity },
-];
-
-function ServerDetailPanel({
-  server,
-  tab,
-  onOpenJava,
-}: {
-  server: ServerProfile;
-  tab: ServerDetailTab;
-  onOpenJava?: () => void;
-}) {
-  switch (tab) {
-    case "console":
-      return <ConsoleView serverId={server.id} />;
-    case "settings":
-      return <ServerSettingsView server={server} onOpenJava={onOpenJava} />;
-    case "files":
-      return <ServerFilesView server={server} />;
-    case "backups":
-      return <ServerBackupsView server={server} />;
-    case "content":
-      return <ServerContentView server={server} />;
-    case "activity":
-      return <ServerActivityView server={server} />;
-  }
+function moveWorkspaceFocus(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+  const buttons = Array.from(
+    event.currentTarget.querySelectorAll<HTMLButtonElement>(
+      ".server-workspace-nav-item",
+    ),
+  );
+  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+  if (current < 0) return;
+  event.preventDefault();
+  const direction = event.key === "ArrowDown" ? 1 : -1;
+  buttons[(current + direction + buttons.length) % buttons.length]?.focus();
 }
 
-export function ServerDetail({ server, onBack, onOpenJava }: ServerDetailProps) {
+export function ServerDetail({
+  server,
+  section = "overview",
+  view,
+  path,
+  onBack,
+  onNavigate = () => undefined,
+  onOpenJava,
+}: ServerDetailProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
-  const storedTab = useServerUiStore(
-    (state) => state.selectedTabs[server.id],
-  );
-  const activeTab = detailTabs.some((tab) => tab.id === storedTab)
-    ? storedTab
-    : "console";
-  const setSelectedTab = useServerUiStore((state) => state.setSelectedTab);
-  const setActiveTab = (tab: ServerDetailTab) => {
-    setSelectedTab(server.id, tab);
-  };
+  const definition = workspaceDefinition(section);
+  const activeView = normalizeWorkspaceView(section, view);
+  const playerViewCounts = usePlayerViewCounts(server.id, section === "players");
   const backupMutation = useMutation({
     mutationFn: () => createWorldBackup({ serverId: server.id }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["backups", server.id] });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: backupKeys.list(server.id),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: serverKeys.setupStatus(server.id),
+        }),
+      ]);
     },
   });
 
   return (
-    <div className="detail-panel">
-      <div className="detail-panel-header">
+    <div className="detail-panel command-deck-detail">
+      <header className="detail-panel-header command-deck-header">
         <div className="detail-panel-title">
           <div className="detail-panel-heading">
             {onBack ? (
@@ -184,95 +155,149 @@ export function ServerDetail({ server, onBack, onOpenJava }: ServerDetailProps) 
                 <ChevronLeft aria-hidden="true" size={17} />
               </Button>
             ) : null}
-            <ServerCover loaderType={server.loaderType} size={40} />
-            <h1 className="detail-panel-name" id="servers-title">
-              {server.name}
-            </h1>
+            <div>
+              <div className="detail-panel-name-row">
+                <h1 className="detail-panel-name" id="servers-title">
+                  {server.name}
+                </h1>
+                <ServerProcessStatusBadge />
+              </div>
+              <div className="detail-panel-meta">
+                <LoaderPill loaderType={server.loaderType} />
+                <span>{t("server.meta.mc", { version: server.minecraftVersion ?? "?" })}</span>
+                <span>
+                  {t("server.meta.port", {
+                    port: server.serverPort ?? t("server.meta.unset"),
+                  })}
+                </span>
+                <span>
+                  {server.minMemoryMb ?? "?"}–{server.maxMemoryMb ?? "?"} MB
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="detail-panel-meta">
-            <LoaderPill loaderType={server.loaderType} />
-            <span className="detail-meta-separator" />
-            <span>
-              {t("server.meta.mc", { version: server.minecraftVersion ?? "?" })}
-            </span>
-            <span className="detail-meta-separator" />
-            <span>
-              {t("server.meta.port", {
-                port: server.serverPort ?? t("server.meta.unset"),
-              })}
-            </span>
-            <span className="detail-meta-separator" />
-            <span>{server.minMemoryMb ?? "?"}-{server.maxMemoryMb ?? "?"} MB</span>
-          </div>
+          <ServerHeaderTelemetry serverId={server.id} />
         </div>
         <div className="detail-panel-actions">
           <ServerActions server={server} />
-          <button
-            className="button button-secondary"
+          <InviteFriendsPopover
+            server={server}
+            onConfigureNetwork={() => onNavigate("settings", "network")}
+          />
+          <Button
             disabled={backupMutation.isPending}
             type="button"
+            variant="secondary"
             onClick={() => backupMutation.mutate()}
           >
             {t("servers.actions.backup")}
-          </button>
-          <ServerProcessStatusBadge serverId={server.id} />
+          </Button>
         </div>
-      </div>
+      </header>
+
       {backupMutation.error ? (
-        <p className="detail-panel-error">{backupMutation.error.message}</p>
+        <p className="detail-panel-error" role="alert">
+          {backupMutation.error.message}
+        </p>
       ) : null}
-      <Tabs.Root
-        className="server-detail-workspace"
-        value={activeTab}
-        onValueChange={(value) => setActiveTab(value as ServerDetailTab)}
-      >
-        <Tabs.List
-          className="detail-tabs server-detail-menu"
-          aria-label={t("server.tabs.aria", { server: server.name })}
+
+      <div className="server-workspace-shell">
+        <nav
+          aria-label={t("server.workspace.aria", { server: server.name })}
+          className="server-workspace-nav"
+          onKeyDown={moveWorkspaceFocus}
         >
-          {detailTabs.map((tab) => (
-            <Tabs.Trigger key={tab.id} value={tab.id}>
-              <tab.icon aria-hidden="true" size={12} />
-              <span>{t(tab.labelKey)}</span>
-            </Tabs.Trigger>
-          ))}
-        </Tabs.List>
-        <div className="detail-tab-content">
-          {detailTabs.map((tab) => (
-            <Tabs.Content key={tab.id} id={tab.panelId} value={tab.id}>
-              {activeTab === tab.id ? (
-                <motion.div
-                  key={`${server.id}-${activeTab}`}
-                  className={`detail-tab-body detail-tab-body-${tab.id}`}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.14, ease: "easeOut" }}
-                >
-                  <PanelErrorBoundary
-                    errorTitle={t("server.panel.errorTitle")}
-                    panelLabel={t(tab.labelKey)}
-                    resetKey={`${server.id}-${activeTab}`}
-                  >
-                    <Suspense
-                      fallback={
-                        <div className="list-state">
-                          {t("common.loadingPanel")}
-                        </div>
+          {serverWorkspaceDefinitions.map((item) => {
+            const active = item.id === section;
+            const Icon = item.icon;
+            return (
+              <button
+                aria-current={active ? "page" : undefined}
+                className={
+                  active
+                    ? "server-workspace-nav-item server-workspace-nav-item-active"
+                    : "server-workspace-nav-item"
+                }
+                key={item.id}
+                title={t(item.labelKey)}
+                type="button"
+                onClick={() => onNavigate(item.id, item.defaultView)}
+              >
+                <Icon aria-hidden="true" size={16} />
+                <span>{t(item.labelKey)}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <section
+          aria-label={t(definition.labelKey)}
+          className="server-workspace-main"
+        >
+          <header className="server-workspace-heading">
+            <div>
+              <p>{t("server.workspace.current")}</p>
+              <h2>{t(definition.labelKey)}</h2>
+            </div>
+            {definition.views ? (
+              <nav
+                aria-label={t("server.workspace.views")}
+                className="workspace-view-switcher"
+              >
+                {definition.views.map((item) => {
+                  const count = playerViewCounts?.[item.id];
+                  return (
+                    <button
+                      aria-current={activeView === item.id ? "page" : undefined}
+                      className={
+                        activeView === item.id
+                          ? "workspace-view-option workspace-view-option-active"
+                          : "workspace-view-option"
                       }
+                      key={item.id}
+                      type="button"
+                      onClick={() => onNavigate(section, item.id)}
                     >
-                      <ServerDetailPanel
-                        server={server}
-                        tab={tab.id}
-                        onOpenJava={onOpenJava}
-                      />
-                    </Suspense>
-                  </PanelErrorBoundary>
-                </motion.div>
-              ) : null}
-            </Tabs.Content>
-          ))}
-        </div>
-      </Tabs.Root>
+                      {t(item.labelKey)}
+                      {/* Decorative: the panel below announces the same totals,
+                          and a changing accessible name would be unstable. */}
+                      {count === undefined ? null : (
+                        <span aria-hidden="true" className="workspace-view-count">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </nav>
+            ) : null}
+          </header>
+
+          <motion.div
+            animate={{ opacity: 1, y: 0 }}
+            className="server-workspace-content"
+            initial={{ opacity: 0.82, y: 2 }}
+            key={`${server.id}-${section}-${activeView ?? "root"}`}
+            transition={{ duration: 0.14, ease: "easeOut" }}
+          >
+            <PanelErrorBoundary
+              errorTitle={t("server.panel.errorTitle")}
+              panelLabel={t(definition.labelKey)}
+              resetKey={`${server.id}-${section}-${activeView ?? "root"}`}
+              retryLabel={t("common.retry")}
+            >
+              <ServerWorkspacePanel
+                onNavigate={onNavigate}
+                onOpenJava={onOpenJava}
+                path={path}
+                section={section}
+                server={server}
+                view={activeView}
+              />
+            </PanelErrorBoundary>
+          </motion.div>
+        </section>
+      </div>
     </div>
   );
 }

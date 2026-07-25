@@ -2,10 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ChevronLeft,
   CircleAlert,
-  CirclePlay,
-  CircleStop,
-  LayoutGrid,
-  List,
   Plus,
   Server as ServerIcon,
   X,
@@ -15,6 +11,8 @@ import { BottomStatusBar } from "./BottomStatusBar";
 import { Sidebar, type PrimaryPage } from "./Sidebar";
 import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
+import { TextField } from "../ui/text-field";
+import { AttentionBar } from "../ui/attention-bar";
 import { ConfirmDangerDialog } from "../ui/ConfirmDangerDialog";
 import { listServerProfiles } from "../../features/servers/api";
 import {
@@ -24,16 +22,18 @@ import {
 } from "../../features/servers/CreateServerWizard";
 import { DropImportOverlay } from "../../features/servers/DropImportOverlay";
 import { DropImportReviewDialog } from "../../features/servers/DropImportReviewDialog";
-import { ServerCardView } from "../../features/servers/ServerCardView";
 import { ServerList } from "../../features/servers/ServerList";
 import { ServerDetail } from "../../features/servers/ServerDetail";
-import { useServerUiStore } from "../../features/servers/serverUiStore";
+import { ServerRuntimeProvider } from "../../features/servers/ServerRuntimeContext";
 import { WizardStepIndicator } from "../../features/servers/WizardStepIndicator";
-import type { ServerProfile } from "../../features/servers/types";
+import type { ServerProfile } from "../../domain/server";
+import type { ProcessSummary } from "../../features/process/api";
+import { serverKeys } from "../../features/servers/queries";
 import {
-  getProcessSummary,
-  type ProcessSummary,
-} from "../../features/process/api";
+  attentionKeys,
+  getAttentionItems,
+  type AttentionItem,
+} from "../../features/attention/api";
 import { JavaRuntimesView } from "../../features/java/JavaRuntimesView";
 import { AppLoggerView } from "../../features/logger/AppLoggerView";
 import { SettingsView } from "../../features/settings/SettingsView";
@@ -43,6 +43,11 @@ import {
   openExternalUrl,
 } from "../../lib/desktop-runtime";
 import { useSidebarStore } from "./sidebarStore";
+import {
+  navigateTo,
+  useAppRoute,
+  type ServerWorkspaceSection,
+} from "../../app/router";
 
 const externalLinkProtocols = new Set(["http:", "https:", "mailto:"]);
 
@@ -61,14 +66,23 @@ function resolveExternalHref(link: HTMLAnchorElement) {
 }
 
 interface AppShellProps {
-  processSummary?: ProcessSummary | null;
+  processSummary: ProcessSummary | null;
 }
 
-export function AppShell({ processSummary }: AppShellProps = {}) {
+export function AppShell({ processSummary }: AppShellProps) {
   const { t } = useAppSettings();
+  const route = useAppRoute();
+  const routeFocusKey = window.location.hash;
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const [activePage, setActivePage] = useState<PrimaryPage>("servers");
-  const [isCreateServerActive, setCreateServerActive] = useState(false);
+  const activePage: PrimaryPage =
+    route.name === "java"
+      ? "java"
+      : route.name === "activity"
+        ? "logger"
+        : route.name === "settings"
+          ? "settings"
+          : "servers";
+  const isCreateServerActive = route.name === "create-server";
   const [createServerLifecycle, setCreateServerLifecycle] =
     useState<CreateServerWizardLifecycle>("draft");
   const [pendingCreateServerExit, setPendingCreateServerExit] = useState<
@@ -81,28 +95,22 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     useState(false);
   const [createServerProgress, setCreateServerProgress] =
     useState<CreateServerWizardProgress | null>(null);
-  const [createServerSourcePath, setCreateServerSourcePath] = useState<string | null>(null);
   const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
-  const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const viewMode = useServerUiStore((s) => s.viewMode);
-  const setViewMode = useServerUiStore((s) => s.setViewMode);
-  const shouldOwnProcessSummary = processSummary === undefined;
+  const [serverFilter, setServerFilter] = useState("");
+  const selectedServerId = route.name === "server" ? route.serverId : null;
   const profilesQuery = useQuery({
-    queryKey: ["serverProfiles"],
+    queryKey: serverKeys.profiles,
     queryFn: listServerProfiles,
   });
-  const processSummaryQuery = useQuery({
-    queryKey: ["processSummary"],
-    queryFn: getProcessSummary,
-    enabled: shouldOwnProcessSummary,
-    refetchInterval: 1500,
-  });
   const servers = profilesQuery.data ?? [];
-  const effectiveProcessSummary = shouldOwnProcessSummary
-    ? processSummaryQuery.data
-    : processSummary;
-  const runningCount = effectiveProcessSummary?.runningCount;
-  const crashedCount = effectiveProcessSummary?.crashedCount;
+  const normalizedServerFilter = serverFilter.trim().toLowerCase();
+  const filteredServers = normalizedServerFilter
+    ? servers.filter((server) =>
+        server.name.toLowerCase().includes(normalizedServerFilter),
+      )
+    : servers;
+  const runningCount = processSummary?.runningCount;
+  const crashedCount = processSummary?.crashedCount;
   const stoppedCount = Math.max(
     servers.length - (runningCount ?? 0) - (crashedCount ?? 0),
     0,
@@ -111,11 +119,79 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
     selectedServerId
       ? servers.find((server) => server.id === selectedServerId) ?? null
       : null;
+  const isDashboard = activePage === "servers" && !selectedServer && !isCreateServerActive;
+  const attentionQuery = useQuery({
+    enabled: isDashboard && isDesktopRuntimeAvailable(),
+    queryKey: attentionKeys.all,
+    queryFn: getAttentionItems,
+  });
+  const attentionItems = attentionQuery.data ?? [];
+  const fallbackCrashItems: AttentionItem[] =
+    attentionItems.length === 0 && (crashedCount ?? 0) > 0
+      ? servers
+          .filter(
+            (server, index) =>
+              processSummary?.statuses?.[server.id] === "crashed" ||
+              (!processSummary?.statuses && index < (crashedCount ?? 0)),
+          )
+          .map((server) => ({
+            id: `crash-${server.id}`,
+            serverId: server.id,
+            serverName: server.name,
+            kind: "crash" as const,
+            severity: "warning" as const,
+            createdAt: null,
+          }))
+      : [];
+  const dashboardAttentionItems =
+    attentionItems.length > 0 ? attentionItems : fallbackCrashItems;
+  const isCrashFallback =
+    attentionItems.length === 0 && fallbackCrashItems.length > 0;
+
+  const openAttentionItem = (item: AttentionItem) => {
+    navigateTo({
+      name: "server",
+      serverId: item.serverId,
+      section:
+        item.kind === "update"
+          ? "content"
+          : item.kind === "backup"
+            ? "data"
+            : "monitor",
+      view:
+        item.kind === "update"
+          ? "updates"
+          : item.kind === "backup"
+            ? "backups"
+            : "diagnostics",
+    });
+  };
+
   useEffect(() => {
-    if (selectedServerId && !servers.some((server) => server.id === selectedServerId)) {
-      setSelectedServerId(null);
+    if (!window.location.hash) {
+      navigateTo({ name: "dashboard" }, true);
     }
-  }, [selectedServerId, servers]);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.querySelector<HTMLElement>("main h1");
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [routeFocusKey]);
+
+  useEffect(() => {
+    if (
+      profilesQuery.isSuccess &&
+      selectedServerId &&
+      !servers.some((server) => server.id === selectedServerId)
+    ) {
+      navigateTo({ name: "dashboard" }, true);
+    }
+  }, [profilesQuery.isSuccess, selectedServerId, servers]);
 
   useEffect(() => {
     const openExternalLink = (event: MouseEvent) => {
@@ -151,13 +227,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   }, []);
 
   const openServersOverview = useCallback(() => {
-    setActivePage("servers");
-    setSelectedServerId(null);
+    navigateTo({ name: "dashboard" });
   }, []);
 
   const openJavaRuntimes = useCallback(() => {
-    setActivePage("java");
-    setSelectedServerId(null);
+    navigateTo({ name: "java" });
   }, []);
 
   const handleCreateServerHeaderBackChange = useCallback(
@@ -168,21 +242,64 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
   );
 
   const resetCreateServer = useCallback(() => {
-    setCreateServerActive(false);
     setCreateServerLifecycle("draft");
-    setCreateServerSourcePath(null);
     setCreateServerHeaderBack(null);
     setCreateServerHeaderHidden(false);
     setCreateServerProgress(null);
   }, []);
 
   const openCreateServer = useCallback((sourcePath: string | null = null) => {
-    setActivePage("servers");
-    setSelectedServerId(null);
-    setCreateServerSourcePath(sourcePath);
     setCreateServerLifecycle("draft");
-    setCreateServerActive(true);
+    navigateTo({
+      name: "create-server",
+      ...(sourcePath ? { sourcePath } : {}),
+    });
   }, []);
+
+  const handleCreateServerRouteState = useCallback(
+    (state: { step: number; jobId?: string | null }) => {
+      if (route.name !== "create-server") return;
+      const jobId = state.jobId || undefined;
+      if (route.step === state.step && route.jobId === jobId) return;
+      navigateTo({
+        name: "create-server",
+        ...(route.sourcePath ? { sourcePath: route.sourcePath } : {}),
+        step: state.step,
+        ...(jobId ? { jobId } : {}),
+      });
+    },
+    [route],
+  );
+
+  const handleCreateServerCompletionAction = useCallback(
+    (
+      serverId: string,
+      action: "overview" | "invite" | "content" | "backup",
+    ) => {
+      resetCreateServer();
+      navigateTo({
+        name: "server",
+        serverId,
+        section:
+          action === "content"
+            ? "content"
+            : action === "backup"
+              ? "data"
+              : action === "invite"
+                ? "settings"
+                : "overview",
+        view:
+          action === "content"
+            ? "browse"
+            : action === "backup"
+              ? "backups"
+              : action === "invite"
+                ? "network"
+                : undefined,
+      });
+    },
+    [resetCreateServer],
+  );
 
   const requestCreateServerExit = useCallback(
     (destination: () => void) => {
@@ -259,6 +376,7 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
         <Sidebar
           activePage={activePage}
           selectedServerId={selectedServerId ?? undefined}
+          serverStatuses={processSummary?.statuses}
           servers={servers}
           onSelectPage={(page) => {
             if (page === "servers") {
@@ -266,14 +384,22 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
               return;
             }
             requestCreateServerExit(() => {
-              setSelectedServerId(null);
-              setActivePage(page);
+              navigateTo(
+                page === "java"
+                  ? { name: "java" }
+                  : page === "logger"
+                    ? { name: "activity" }
+                    : { name: "settings", section: "general" },
+              );
             });
           }}
           onSelectServer={(serverId) => {
             requestCreateServerExit(() => {
-              setActivePage("servers");
-              setSelectedServerId(serverId);
+              navigateTo({
+                name: "server",
+                serverId,
+                section: "overview",
+              });
             });
           }}
         />
@@ -356,30 +482,68 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                 </header>
               )}
               <CreateServerWizard
-                initialSourcePath={createServerSourcePath}
+                initialSourcePath={
+                  route.name === "create-server"
+                    ? route.sourcePath ?? null
+                    : null
+                }
+                initialStep={
+                  route.name === "create-server" ? route.step : undefined
+                }
+                initialJobId={
+                  route.name === "create-server" ? route.jobId ?? null : null
+                }
                 showHeading={false}
                 onHeaderHiddenChange={setCreateServerHeaderHidden}
                 onHeaderBackChange={handleCreateServerHeaderBackChange}
                 onProgressChange={setCreateServerProgress}
                 onLifecycleChange={setCreateServerLifecycle}
+                onRouteStateChange={handleCreateServerRouteState}
+                onCompletionAction={handleCreateServerCompletionAction}
                 onCreated={() => {
-                  resetCreateServer();
-                  openServersOverview();
+                  void profilesQuery.refetch();
                 }}
               />
             </section>
           ) : activePage === "java" ? (
             <JavaRuntimesView />
           ) : activePage === "settings" ? (
-            <SettingsView />
+            <SettingsView
+              activeSection={
+                route.name === "settings" ? route.section : "general"
+              }
+              onSectionChange={(section) =>
+                navigateTo({ name: "settings", section })
+              }
+            />
           ) : activePage === "logger" && !selectedServer ? (
             <AppLoggerView />
           ) : selectedServer ? (
-            <ServerDetail
-              server={selectedServer}
-              onBack={openServersOverview}
-              onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
-            />
+            <ServerRuntimeProvider serverId={selectedServer.id}>
+              <ServerDetail
+                server={selectedServer}
+                section={
+                  route.name === "server" ? route.section : "overview"
+                }
+                view={route.name === "server" ? route.view : undefined}
+                path={route.name === "server" ? route.path : undefined}
+                onBack={openServersOverview}
+                onNavigate={(
+                  section: ServerWorkspaceSection,
+                  view?: string,
+                  path?: string,
+                ) =>
+                  navigateTo({
+                    name: "server",
+                    serverId: selectedServer.id,
+                    section,
+                    ...(view ? { view } : {}),
+                    ...(path ? { path } : {}),
+                  })
+                }
+                onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
+              />
+            </ServerRuntimeProvider>
           ) : (
             <>
               <section className="page-header dashboard-page-header">
@@ -387,28 +551,16 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
                   <h1 id="servers-title">{t("servers.page.title")}</h1>
                 </div>
                 <div className="page-header-actions">
-                  <div
-                    className="server-view-toggle"
-                    role="group"
-                    aria-label={t("servers.viewMode")}
-                  >
-                    <Button
-                      aria-label={t("servers.viewCards")}
-                      aria-pressed={viewMode === "cards"}
-                      variant="ghost"
-                      onClick={() => setViewMode("cards")}
-                    >
-                      <LayoutGrid aria-hidden="true" size={14} />
-                    </Button>
-                    <Button
-                      aria-label={t("servers.viewTable")}
-                      aria-pressed={viewMode === "table"}
-                      variant="ghost"
-                      onClick={() => setViewMode("table")}
-                    >
-                      <List aria-hidden="true" size={14} />
-                    </Button>
-                  </div>
+                  {servers.length > 1 ? (
+                    <TextField
+                      aria-label={t("servers.filter.label")}
+                      className="dashboard-filter"
+                      placeholder={t("servers.filter.placeholder")}
+                      type="search"
+                      value={serverFilter}
+                      onChange={(event) => setServerFilter(event.target.value)}
+                    />
+                  ) : null}
                   <Button
                     onClick={() => openCreateServer()}
                     variant="primary"
@@ -420,64 +572,120 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
               </section>
 
               <section
-                className="summary-strip"
+                className="dashboard-status-rail"
                 aria-label={t("servers.summary.aria")}
               >
-                <div>
-                  <span className="summary-label summary-label-running">
-                    <CirclePlay aria-hidden="true" size={14} />
-                    {t("servers.summary.running")}
-                  </span>
+                <div className="dashboard-status-item">
+                  <span
+                    aria-hidden="true"
+                    className="status-indicator status-indicator-running"
+                  />
+                  <span>{t("servers.summary.running")}</span>
                   <strong>{runningCount ?? t("common.unknown")}</strong>
                 </div>
-                <div>
-                  <span className="summary-label summary-label-stopped">
-                    <CircleStop aria-hidden="true" size={14} />
-                    {t("servers.summary.stopped")}
-                  </span>
+                <div className="dashboard-status-item">
+                  <span
+                    aria-hidden="true"
+                    className="status-indicator status-indicator-stopped"
+                  />
+                  <span>{t("servers.summary.stopped")}</span>
                   <strong>{stoppedCount}</strong>
                 </div>
-                <div>
-                  <span className="summary-label summary-label-crashed">
-                    <CircleAlert aria-hidden="true" size={14} />
-                    {t("servers.summary.crashed")}
-                  </span>
-                  <strong className="danger-text">
+                <div className="dashboard-status-item">
+                  <span
+                    aria-hidden="true"
+                    className="status-indicator status-indicator-crashed"
+                  />
+                  <span>{t("servers.summary.crashed")}</span>
+                  <strong>
                     {crashedCount ?? t("common.unknown")}
                   </strong>
                 </div>
-                <div>
-                  <span className="summary-label summary-label-total">
-                    <ServerIcon aria-hidden="true" size={14} />
-                    {t("servers.summary.total")}
-                  </span>
+                <div className="dashboard-status-item dashboard-status-total">
+                  <ServerIcon aria-hidden="true" size={13} />
+                  <span>{t("servers.summary.total")}</span>
                   <strong>{servers.length}</strong>
                 </div>
               </section>
 
-              {viewMode === "cards" ? (
-                <ServerCardView
+              {dashboardAttentionItems.length > 0 ? (
+                <AttentionBar
+                  aria-label={
+                    isCrashFallback
+                      ? t("servers.incident.aria")
+                      : t("attention.aria")
+                  }
+                  className="dashboard-attention"
+                  tone={
+                    dashboardAttentionItems.some(
+                      (item) => item.severity === "error",
+                    )
+                      ? "danger"
+                      : dashboardAttentionItems.some(
+                            (item) => item.severity === "warning",
+                          )
+                        ? "warning"
+                        : "info"
+                  }
+                >
+                  <CircleAlert aria-hidden="true" size={17} />
+                  <div>
+                    <strong>
+                      {isCrashFallback
+                        ? t(
+                            dashboardAttentionItems.length === 1
+                              ? "servers.incident.titleOne"
+                              : "servers.incident.titleMany",
+                            { count: dashboardAttentionItems.length },
+                          )
+                        : t("attention.title", {
+                            count: dashboardAttentionItems.length,
+                          })}
+                    </strong>
+                    <span>
+                      {t(
+                        isCrashFallback
+                          ? "servers.incident.description"
+                          : "attention.description",
+                      )}
+                    </span>
+                  </div>
+                  <div className="dashboard-attention-actions">
+                    {dashboardAttentionItems.slice(0, 4).map((item) => (
+                      <Button
+                        key={item.id}
+                        variant="ghost"
+                        onClick={() => openAttentionItem(item)}
+                      >
+                        {item.serverName}
+                        <span>{t(`attention.kind.${item.kind}`)}</span>
+                      </Button>
+                    ))}
+                  </div>
+                </AttentionBar>
+              ) : null}
+
+              <div className="server-table-panel">
+                <ServerList
                   error={profilesQuery.error}
+                  filtered={normalizedServerFilter.length > 0}
                   isLoading={profilesQuery.isLoading}
                   selectedServerId={selectedServerId ?? undefined}
-                  servers={servers}
-                  onSelectServer={setSelectedServerId}
+                  servers={filteredServers}
+                  lastBackups={processSummary?.lastBackups}
+                  serverStatuses={processSummary?.statuses}
+                  onCreateServer={() => openCreateServer()}
+                  onImportServer={() => openCreateServer()}
+                  onRetry={() => void profilesQuery.refetch()}
+                  onSelectServer={(serverId) =>
+                    navigateTo({
+                      name: "server",
+                      serverId,
+                      section: "overview",
+                    })
+                  }
                 />
-              ) : (
-                <div className="server-table-panel">
-                  <div className="section-heading">
-                    <h2>{t("servers.overview.title")}</h2>
-                    <span>{t("servers.overview.description")}</span>
-                  </div>
-                  <ServerList
-                    error={profilesQuery.error}
-                    isLoading={profilesQuery.isLoading}
-                    selectedServerId={selectedServerId ?? undefined}
-                    servers={servers}
-                    onSelectServer={setSelectedServerId}
-                  />
-                </div>
-              )}
+              </div>
             </>
           )}
 
@@ -488,6 +696,11 @@ export function AppShell({ processSummary }: AppShellProps = {}) {
         crashedCount={crashedCount}
         selectedServer={selectedServer}
         onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
+        onOpenNotifications={() =>
+          requestCreateServerExit(() =>
+            navigateTo({ name: "settings", section: "notifications" }),
+          )
+        }
       />
     </div>
   );

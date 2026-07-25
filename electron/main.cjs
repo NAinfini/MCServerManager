@@ -51,6 +51,28 @@ function writeMainLog(level, source, message, details) {
   }
 }
 
+function applyLaunchAtLoginPreference(preferences, { reportFailure = false } = {}) {
+  if (isDev) {
+    return;
+  }
+
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: preferences?.launchAtLogin === true,
+    });
+  } catch (error) {
+    writeMainLog(
+      "error",
+      "main.login",
+      "Failed to update launch-at-login preference.",
+      error instanceof Error ? error.stack || error.message : String(error),
+    );
+    if (reportFailure) {
+      throw error;
+    }
+  }
+}
+
 function installMainConsoleLogger() {
   console.info = (...args) => {
     originalConsole.info(...args);
@@ -380,12 +402,19 @@ ipcMain.handle("app-command", async (_event, command, args) => {
       return openTunnelApplication(args);
     }
 
-    const backendResult = backend?.handle(command, args);
-    if (backendResult !== undefined) {
-      return await backendResult;
+    if (!backend?.supports(command)) {
+      throw new Error(`Unsupported Electron backend command: ${command}.`);
     }
 
-    throw new Error(`Unsupported Electron backend command: ${command}.`);
+    const resolvedResult = await backend.handle(command, args);
+    if (
+      command === "save_app_preferences" ||
+      command === "reset_app_preferences" ||
+      command === "import_app_settings"
+    ) {
+      applyLaunchAtLoginPreference(resolvedResult, { reportFailure: true });
+    }
+    return resolvedResult;
   } catch (error) {
     if (command !== "write_app_log") {
       writeMainLog(
@@ -401,6 +430,12 @@ ipcMain.handle("app-command", async (_event, command, args) => {
 
 app.whenReady().then(() => {
   backend = createBackend(app);
+  backend.onServerEvent((event) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("server-event", event);
+    }
+  });
+  applyLaunchAtLoginPreference(backend.handle("get_app_preferences"));
   installMainConsoleLogger();
   startScheduledTaskRunner();
   createWindow();

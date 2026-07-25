@@ -9,20 +9,10 @@ import {
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ServerProfile } from "../../features/servers/types";
-import { getServerProcessStatus } from "../../features/process/api";
+import type { ServerProfile } from "../../domain/server";
+import type { ManagedProcessStatus } from "../../features/process/api";
 import { useSidebarStore } from "./sidebarStore";
 import { Sidebar } from "./Sidebar";
-
-vi.mock("../../features/process/api", () => ({
-  getServerProcessStatus: vi.fn(async (serverId: string) => ({
-    id: `process-${serverId}`,
-    serverId,
-    command: "java -jar server.jar",
-    status: "stopped",
-    pid: null,
-  })),
-}));
 
 const servers: ServerProfile[] = [
   {
@@ -87,7 +77,9 @@ const servers: ServerProfile[] = [
   },
 ];
 
-function renderSidebar() {
+function renderSidebar(
+  serverStatuses: Record<string, ManagedProcessStatus> = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -101,6 +93,7 @@ function renderSidebar() {
         onSelectPage={onSelectPage}
         onSelectServer={onSelectServer}
         selectedServerId="survival"
+        serverStatuses={serverStatuses}
         servers={servers}
       />
     </QueryClientProvider>,
@@ -146,7 +139,7 @@ describe("Sidebar server organization", () => {
     renderSidebar();
 
     const dragged = screen.getByRole("button", { name: /paper lobby/i });
-    const beforeSurvival = screen.getByLabelText(/move before survival smp/i);
+    const beforeSurvival = screen.getByTestId("drop-before-survival");
     const dataTransfer = createDataTransfer();
 
     fireEvent.dragStart(dragged, { dataTransfer });
@@ -204,11 +197,11 @@ describe("Sidebar server organization", () => {
     await userEvent.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();
     await userEvent.keyboard("{End}");
-    expect(items.at(-1)).toHaveFocus();
+    expect(items[items.length - 1]).toHaveFocus();
     await userEvent.keyboard("{Home}");
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{ArrowUp}");
-    expect(items.at(-1)).toHaveFocus();
+    expect(items[items.length - 1]).toHaveFocus();
     await userEvent.keyboard("{Escape}");
 
     expect(menu).not.toBeInTheDocument();
@@ -288,29 +281,10 @@ describe("Sidebar status badges", () => {
     cleanup();
     localStorage.clear();
     useSidebarStore.getState().resetServerLayout();
-    vi.mocked(getServerProcessStatus).mockImplementation(
-      async (serverId: string) => ({
-        id: `process-${serverId}`,
-        serverId,
-        command: "java -jar server.jar",
-        status: "stopped",
-        pid: null,
-      }),
-    );
   });
 
   it("shows a badge only for servers that need attention", async () => {
-    vi.mocked(getServerProcessStatus).mockImplementation(
-      async (serverId: string) => ({
-        id: `process-${serverId}`,
-        serverId,
-        command: "java -jar server.jar",
-        status: serverId === "forge" ? "crashed" : "stopped",
-        pid: null,
-      }),
-    );
-
-    renderSidebar();
+    renderSidebar({ forge: "crashed", survival: "stopped" });
 
     const crashedRow = screen.getByRole("button", { name: /modded forge/i });
     await waitFor(() =>

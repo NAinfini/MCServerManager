@@ -10,6 +10,7 @@ import {
   stopServer,
 } from "../process/api";
 import { ServerActions } from "./ServerActions";
+import { ServerRuntimeProvider } from "./ServerRuntimeContext";
 import type { ServerProfile } from "./types";
 
 vi.mock("../process/api", () => ({
@@ -44,7 +45,9 @@ function renderActions() {
   });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ServerActions server={server} />
+      <ServerRuntimeProvider serverId={server.id}>
+        <ServerActions server={server} />
+      </ServerRuntimeProvider>
     </QueryClientProvider>,
   );
 }

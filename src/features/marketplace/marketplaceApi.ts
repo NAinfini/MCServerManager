@@ -1,7 +1,7 @@
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import type { InstalledContent } from "../content/contentApi";
 
-export interface ProjectSummary {
+export interface MarketplaceProject {
   id: string;
   slug: string;
   title: string;
@@ -19,23 +19,8 @@ export interface ProjectSummary {
   websiteUrl?: string | null;
 }
 
-export interface ProjectDetails {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  projectType: string;
-  loaders: string[];
-  gameVersions: string[];
-  iconUrl?: string | null;
-  gallery?: string[];
-  downloads?: number;
-  follows?: number;
-  modCount?: number | null;
-  updatedAt?: string | null;
-  body?: string | null;
-  websiteUrl?: string | null;
-}
+export type ProjectSummary = MarketplaceProject;
+export type ProjectDetails = MarketplaceProject;
 
 export interface ProjectVersion {
   id: string;
@@ -78,23 +63,7 @@ export interface HangarVersion {
   createdAt?: string | null;
 }
 
-export interface BbsmcProjectSummary {
-  id: string;
-  slug: string;
-  title: string;
-  description: string;
-  projectType: string;
-  loaders: string[];
-  gameVersions: string[];
-  iconUrl?: string | null;
-  gallery?: string[];
-  downloads?: number;
-  follows?: number;
-  modCount?: number | null;
-  updatedAt?: string | null;
-  body?: string | null;
-  websiteUrl?: string | null;
-}
+export type BbsmcProjectSummary = MarketplaceProject;
 
 export type MarketplaceProjectType =
   "mod" | "modpack" | "plugin" | "resourcepack" | "shader" | "datapack";

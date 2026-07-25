@@ -9,6 +9,11 @@ import type {
   ServerLaunchSpec,
   ValidatedJavaRuntime,
 } from "./types";
+export {
+  installJavaRuntime,
+  planJavaRuntime,
+  type JavaRuntimePlan,
+} from "../java/javaApi";
 
 export type ProvisioningStage =
   | "planned"
@@ -90,34 +95,10 @@ export interface ProvisioningJob {
   updatedAt: string;
 }
 
-export interface JavaRuntimePlan {
-  action: "reuse" | "install";
-  majorVersion: number;
-  runtime?: Omit<ValidatedJavaRuntime, "validated">;
-  vendor?: string;
-  version?: string;
-  licenseUrl?: string;
-  [key: string]: unknown;
-}
-
 export function planServerProvisioning(input: ServerPlanningInput) {
   return invokeDesktopCommandWithErrorHandling<SourceProvisioningPlan>(
     "plan_server_provisioning",
     { input },
-  );
-}
-
-export function planJavaRuntime(majorVersion: number) {
-  return invokeDesktopCommandWithErrorHandling<JavaRuntimePlan>(
-    "plan_java_runtime",
-    { input: { majorVersion } },
-  );
-}
-
-export function installJavaRuntime(plan: JavaRuntimePlan, consent: boolean) {
-  return invokeDesktopCommandWithErrorHandling<Omit<ValidatedJavaRuntime, "validated">>(
-    "install_java_runtime",
-    { input: { plan, consent } },
   );
 }
 

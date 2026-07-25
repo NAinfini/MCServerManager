@@ -4,7 +4,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { ServerBackupsView } from "./ServerBackupsView";
-import type { ServerProfile } from "../servers/types";
+import { ServerRuntimeProvider } from "../servers/ServerRuntimeContext";
+import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
@@ -50,7 +51,9 @@ function renderBackups(
 ) {
   return render(
     <QueryClientProvider client={queryClient}>
-      <ServerBackupsView server={server} />
+      <ServerRuntimeProvider serverId={server.id}>
+        <ServerBackupsView server={server} />
+      </ServerRuntimeProvider>
     </QueryClientProvider>,
   );
 }
@@ -77,7 +80,11 @@ describe("ServerBackupsView", () => {
     const user = userEvent.setup();
     renderBackups();
 
-    await user.click(await screen.findByTitle("Delete backup"));
+    const deleteButton = await screen.findByRole("button", {
+      name: "Delete backup",
+    });
+    expect(deleteButton).toHaveClass("icon-button");
+    await user.click(deleteButton);
     expect(invoke).not.toHaveBeenCalledWith("delete_server_backup", {
       backupId: backup.id,
     });
@@ -154,6 +161,29 @@ describe("ServerBackupsView", () => {
     ).toBeDisabled();
     expect(invoke).not.toHaveBeenCalledWith("get_server_process_status", {
       serverId: server.id,
+    });
+  });
+
+  it("lets users retry a failed backup list", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") {
+        throw new Error("backup store unavailable");
+      }
+      if (command === "list_backup_profiles") {
+        return [];
+      }
+      return {};
+    });
+
+    renderBackups();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(invoke).mock.calls.filter(
+          ([command]) => command === "list_server_backups",
+        ),
+      ).toHaveLength(2);
     });
   });
 });

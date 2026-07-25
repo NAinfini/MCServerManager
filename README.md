@@ -6,12 +6,21 @@ MC Server Manager is a standalone Electron desktop application for managing loca
 
 ## Project Status
 
-This project is an MVP. It focuses on local desktop server management, explicit safety checks, and visible failure states. Remote public administration, RCON, and silent automatic content installation are intentionally out of scope for the first version.
+This project is in active pre-release development. The local desktop management workflows are implemented end to end, with explicit safety checks and visible failure states. Remote public administration, RCON, and silent automatic content installation remain intentionally out of scope.
+
+## Interface Architecture
+
+- The dashboard aggregates all local servers, lifecycle state, backups, and items that need attention.
+- Each server opens a deep-linkable eight-section workbench: Overview, Console, Players, Content, Files & backups, Operations, Automation, and Server settings.
+- Console output, lifecycle changes, player state, and performance samples use a shared desktop event channel; only the dashboard summary and active-server status retain bounded fallback polling.
+- Marketplace browsing is shared by server creation and installed-content management.
+- Structured Minecraft files use table or form editors where possible, while advanced source editing remains available for unsupported formats.
+- English and Simplified Chinese are supported across the complete interface.
 
 ## Prerequisites
 
-- Node.js 22
-- pnpm 9
+- Node.js 24
+- pnpm 11
 - Electron build prerequisites for your operating system
 - Java can be reused from the local machine or installed as a managed Eclipse Temurin runtime by the app after explicit consent.
 
