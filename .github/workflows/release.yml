@@ -17,6 +17,12 @@ jobs:
   publish:
     strategy:
       fail-fast: false
+      # electron-builder looks for an existing draft and creates one if it finds
+      # none. Three jobs publishing at once lose that race and split the release
+      # in two, which scatters the binaries and their latest*.yml manifests
+      # across separate drafts and leaves the auto-updater with nothing to read.
+      # One at a time is slower and correct.
+      max-parallel: 1
       matrix:
         include:
           - os: windows-latest
