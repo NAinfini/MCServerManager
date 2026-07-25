@@ -1905,6 +1905,48 @@ describe("Electron backend resource lifecycle management", () => {
     }
   });
 
+  it("backs up a server whose root is reached through a symbolic link", async () => {
+    // macOS puts every temporary directory behind /var -> /private/var, so the
+    // resolved world path and the stored root disagreed and the backup
+    // destination climbed out of the backup folder: EACCES on /var/folders.
+    const backend = createTestBackend();
+    const realRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-real-"));
+    const linkParent = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-link-root-"),
+    );
+    tempDirs.push(realRoot, linkParent);
+    fs.mkdirSync(path.join(realRoot, "world"), { recursive: true });
+    fs.writeFileSync(path.join(realRoot, "world", "level.dat"), "world");
+    const linkedRoot = path.join(linkParent, "server");
+
+    let linked = false;
+    try {
+      // On Windows this needs privileges the test may not have, so skip rather
+      // than fail; Linux and macOS always cover it.
+      fs.symlinkSync(realRoot, linkedRoot, "junction");
+      linked = true;
+    } catch {
+      linked = false;
+    }
+
+    try {
+      if (!linked) return;
+      const server = createServer(backend, linkedRoot);
+      const backup = await backend.handle("create_world_backup", {
+        input: { serverId: server.id },
+      });
+
+      expect(
+        fs.readFileSync(
+          path.join(backup.archivePath, "world", "level.dat"),
+          "utf8",
+        ),
+      ).toBe("world");
+    } finally {
+      backend.close();
+    }
+  });
+
   it("keeps the existing world when a restore cannot finish", async () => {
     const backend = createTestBackend();
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-restore-"));

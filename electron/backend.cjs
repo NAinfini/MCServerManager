@@ -3654,10 +3654,14 @@ async function createBackupRecord(
   try {
     fs.mkdirSync(backupRoot, { recursive: true });
     for (const relative of includePaths.length ? includePaths : ["world"]) {
-      const { target: source } = safeServerPath(db, profile.id, relative);
+      // Both sides of this must be the resolved root: safeServerPath follows
+      // links, and on macOS /var is a link to /private/var, so measuring the
+      // resolved source against the stored rootDir produced a path that climbed
+      // out of the backup folder entirely.
+      const { root, target: source } = safeServerPath(db, profile.id, relative);
       if (fs.existsSync(source)) {
         const destinationRelative = path
-          .relative(path.resolve(profile.rootDir), source)
+          .relative(root, source)
           .replace(/\\/g, "/");
         await copyTree(source, path.join(backupRoot, destinationRelative));
       }
