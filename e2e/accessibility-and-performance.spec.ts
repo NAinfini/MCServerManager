@@ -52,9 +52,7 @@ test.describe("accessibility and idle performance", () => {
     });
     await players.focus();
     await players.press("Enter");
-    await expect(page).toHaveURL(
-      /#\/servers\/server-1\/players\?view=online/,
-    );
+    await expect(page).toHaveURL(/#\/servers\/server-1\/players\?view=online/);
 
     const whitelist = page
       .getByRole("navigation", { name: "Workspace views" })
@@ -76,9 +74,7 @@ test.describe("accessibility and idle performance", () => {
       .getByRole("button", { name: "World properties", exact: true });
     await worldProperties.focus();
     await worldProperties.press("Enter");
-    await expect(page).toHaveURL(
-      /#\/servers\/server-1\/settings\/properties/,
-    );
+    await expect(page).toHaveURL(/#\/servers\/server-1\/settings\/properties/);
 
     const dashboard = page.getByRole("button", {
       name: "Dashboard",
@@ -96,7 +92,9 @@ test.describe("accessibility and idle performance", () => {
     const general = page.getByRole("button", { name: "General", exact: true });
     await general.focus();
     await general.press("ArrowDown");
-    await expect(page.getByRole("button", { name: "Appearance" })).toBeFocused();
+    await expect(
+      page.getByRole("button", { name: "Appearance" }),
+    ).toBeFocused();
   });
 
   test("keeps dashboard idle IPC at the two-second summary budget", async ({
@@ -106,11 +104,15 @@ test.describe("accessibility and idle performance", () => {
     fakeDesktop.calls.length = 0;
     await page.waitForTimeout(2_100);
     const pollingCalls = fakeDesktop.calls.filter((call) =>
-      ["get_process_summary", "get_server_process_status"].includes(call.command),
+      ["get_process_summary", "get_server_process_status"].includes(
+        call.command,
+      ),
     );
     expect(pollingCalls.length).toBeLessThanOrEqual(2);
     expect(
-      pollingCalls.filter((call) => call.command === "get_server_process_status"),
+      pollingCalls.filter(
+        (call) => call.command === "get_server_process_status",
+      ),
     ).toHaveLength(0);
   });
 });

@@ -131,8 +131,12 @@ describe("Sidebar server organization", () => {
     fireEvent.drop(target, { dataTransfer });
 
     const group = await screen.findByRole("group", { name: /new group/i });
-    expect(within(group).getByRole("button", { name: /modded forge/i })).toBeInTheDocument();
-    expect(within(group).getByRole("button", { name: /survival smp/i })).toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: /modded forge/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(group).getByRole("button", { name: /survival smp/i }),
+    ).toBeInTheDocument();
   });
 
   it("reorders servers when dropped on a row insertion target", async () => {
@@ -160,13 +164,17 @@ describe("Sidebar server organization", () => {
   it("opens a right-click menu with server organization actions", async () => {
     renderSidebar();
 
-    fireEvent.contextMenu(screen.getByRole("button", { name: /survival smp/i }));
+    fireEvent.contextMenu(
+      screen.getByRole("button", { name: /survival smp/i }),
+    );
 
     expect(
       await screen.findByRole("menu", { name: /survival smp actions/i }),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("menuitem", { name: /create group/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /create group/i }),
+    );
 
     expect(
       await screen.findByRole("group", { name: /new group/i }),
@@ -213,10 +221,9 @@ describe("Sidebar server organization", () => {
     renderSidebar();
 
     const dataTransfer = createDataTransfer();
-    fireEvent.dragStart(
-      screen.getByRole("button", { name: /modded forge/i }),
-      { dataTransfer },
-    );
+    fireEvent.dragStart(screen.getByRole("button", { name: /modded forge/i }), {
+      dataTransfer,
+    });
     fireEvent.drop(screen.getByRole("button", { name: /survival smp/i }), {
       dataTransfer,
     });
@@ -230,7 +237,9 @@ describe("Sidebar server organization", () => {
 
     fireEvent.contextMenu(trigger);
 
-    const menu = await screen.findByRole("menu", { name: /new group actions/i });
+    const menu = await screen.findByRole("menu", {
+      name: /new group actions/i,
+    });
     const items = within(menu).getAllByRole("menuitem");
     await waitFor(() => expect(items[0]).toHaveFocus());
     await userEvent.keyboard("{ArrowDown}");

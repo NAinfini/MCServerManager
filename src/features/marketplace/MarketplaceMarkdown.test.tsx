@@ -31,19 +31,17 @@ describe("MarketplaceMarkdown", () => {
     const { rerender } = render(<MarketplaceMarkdown source={source} />);
 
     await userEvent.click(screen.getByText("点击展开mod list"));
-    expect(screen.getByText("点击展开mod list").closest("details")).toHaveAttribute(
-      "open",
-    );
+    expect(
+      screen.getByText("点击展开mod list").closest("details"),
+    ).toHaveAttribute("open");
 
     rerender(
-      <MarketplaceMarkdown
-        source={`${source}<p>后台刷新后的新增说明</p>`}
-      />,
+      <MarketplaceMarkdown source={`${source}<p>后台刷新后的新增说明</p>`} />,
     );
 
-    expect(screen.getByText("点击展开mod list").closest("details")).toHaveAttribute(
-      "open",
-    );
+    expect(
+      screen.getByText("点击展开mod list").closest("details"),
+    ).toHaveAttribute("open");
   });
 
   it("marks a broken direct body image so it collapses instead of leaking alt text", async () => {
@@ -90,9 +88,7 @@ describe("MarketplaceMarkdown", () => {
 
   it("loads BBSMC markdown images through the desktop backend", async () => {
     render(
-      <MarketplaceMarkdown
-        source="![任务截图](https://cdn.bbsmc.net/bbsmc/data/cached_images/task.webp)"
-      />,
+      <MarketplaceMarkdown source="![任务截图](https://cdn.bbsmc.net/bbsmc/data/cached_images/task.webp)" />,
     );
 
     const image = screen.getByAltText("任务截图");

@@ -21,6 +21,7 @@
 ### Task 1: Add ZIP tooling and provisioning contracts
 
 **Files:**
+
 - Modify: `package.json`
 - Modify: `pnpm-lock.yaml`
 - Create: `electron/provisioning/contracts.cjs`
@@ -45,7 +46,9 @@ Generate ZIPs in the test with `yazl`. Cover normal UTF-8 entries, `../escape`, 
 ```js
 it("rejects entries that escape the destination", async () => {
   const archive = await zipFixture([["../escape.txt", "bad"]]);
-  await expect(inspectZip(archive, DEFAULT_ARCHIVE_LIMITS)).rejects.toMatchObject({
+  await expect(
+    inspectZip(archive, DEFAULT_ARCHIVE_LIMITS),
+  ).rejects.toMatchObject({
     code: "ARCHIVE_UNSAFE_PATH",
   });
 });
@@ -63,12 +66,26 @@ Export immutable constants and constructors from `contracts.cjs`:
 
 ```js
 const SUPPORTED_LOADERS = Object.freeze([
-  "vanilla", "paper", "fabric", "forge", "neoForge", "quilt",
+  "vanilla",
+  "paper",
+  "fabric",
+  "forge",
+  "neoForge",
+  "quilt",
 ]);
 const JOB_STAGES = Object.freeze([
-  "planned", "downloading", "verifying", "extracting",
-  "installingRuntime", "installingLoader", "writingConfiguration",
-  "awaitingEula", "committing", "starting", "ready", "failed",
+  "planned",
+  "downloading",
+  "verifying",
+  "extracting",
+  "installingRuntime",
+  "installingLoader",
+  "writingConfiguration",
+  "awaitingEula",
+  "committing",
+  "starting",
+  "ready",
+  "failed",
 ]);
 ```
 
@@ -90,6 +107,7 @@ git commit -m "feat: add safe provisioning archive reader"
 ### Task 2: Preserve `server.properties` while applying explicit settings
 
 **Files:**
+
 - Create: `electron/provisioning/properties.cjs`
 - Create: `electron/provisioning/properties.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -142,6 +160,7 @@ git commit -m "fix: preserve server properties during updates"
 ### Task 3: Migrate persistence for Quilt, launch specs, sources, EULA, and jobs
 
 **Files:**
+
 - Modify: `electron/backend.cjs`
 - Modify: `electron/backend.test.mjs`
 - Modify: `src/features/servers/types.ts`
@@ -212,6 +231,7 @@ git commit -m "feat: persist provisioning and quilt profiles"
 ### Task 4: Parse local Modrinth and CurseForge server packs
 
 **Files:**
+
 - Create: `electron/provisioning/sources.cjs`
 - Create: `electron/provisioning/sources.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -274,6 +294,7 @@ git commit -m "feat: inspect local server modpacks"
 ### Task 5: Return server-aware Modrinth and CurseForge marketplace plans
 
 **Files:**
+
 - Modify: `electron/backend.cjs`
 - Modify: `electron/backend.test.mjs`
 - Modify: `src/features/marketplace/marketplaceApi.ts`
@@ -327,6 +348,7 @@ git commit -m "feat: discover dedicated server packs"
 ### Task 6: Add six trusted loader adapters and structured launch specs
 
 **Files:**
+
 - Create: `electron/provisioning/loaders.cjs`
 - Create: `electron/provisioning/loaders.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -383,6 +405,7 @@ git commit -m "feat: provision six server loaders"
 ### Task 7: Install application-managed Temurin runtimes with consent
 
 **Files:**
+
 - Create: `electron/provisioning/runtimes.cjs`
 - Create: `electron/provisioning/runtimes.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -429,6 +452,7 @@ git commit -m "feat: install managed Temurin runtimes"
 ### Task 8: Persist and execute resumable provisioning jobs
 
 **Files:**
+
 - Create: `electron/provisioning/jobs.cjs`
 - Create: `electron/provisioning/jobs.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -480,6 +504,7 @@ git commit -m "feat: execute resumable server provisioning jobs"
 ### Task 9: Enforce configuration, compatibility, EULA, and atomic profile creation
 
 **Files:**
+
 - Modify: `electron/provisioning/jobs.cjs`
 - Modify: `electron/provisioning/jobs.test.mjs`
 - Modify: `electron/backend.cjs`
@@ -545,6 +570,7 @@ git commit -m "feat: gate server creation on explicit approval"
 ### Task 10: Start structured launch specs and keep legacy startup working
 
 **Files:**
+
 - Modify: `electron/backend.cjs`
 - Modify: `electron/backend.test.mjs`
 - Modify: `src/features/servers/setupApi.ts`
@@ -589,6 +615,7 @@ git commit -m "feat: start provisioned loader runtimes"
 ### Task 11: Replace the create wizard with the unified six-step flow
 
 **Files:**
+
 - Create: `src/features/servers/provisioningApi.ts`
 - Create: `src/features/servers/ProvisioningProgress.tsx`
 - Create: `src/features/servers/ProvisioningProgress.test.tsx`
@@ -642,6 +669,7 @@ git commit -m "feat: add guided server provisioning flow"
 ### Task 12: Complete guided configuration and honest runtime statistics
 
 **Files:**
+
 - Modify: `src/features/servers/ServerProfileSettings.tsx`
 - Modify: `src/features/servers/ServerProfileSettings.test.tsx`
 - Modify: `src/features/config/ServerPropertiesEditor.tsx`
@@ -691,6 +719,7 @@ git commit -m "feat: complete server configuration and statistics"
 ### Task 13: Add recovery UI, documentation, and desktop smoke coverage
 
 **Files:**
+
 - Modify: `src/App.tsx`
 - Modify: `src/App.test.tsx`
 - Modify: `README.md`
@@ -743,6 +772,7 @@ git commit -m "test: cover server provisioning recovery"
 ### Task 14: Final verification and mandatory engineering review
 
 **Files:**
+
 - Review all files changed on `codex/full-server-provisioning`
 
 **Step 1: Run whitespace and repository checks**

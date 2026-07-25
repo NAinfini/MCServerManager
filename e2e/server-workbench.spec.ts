@@ -21,12 +21,7 @@ test.describe("server workbench", () => {
       { section: "Console", views: [] },
       {
         section: "Players",
-        views: [
-          "Online",
-          "Operators",
-          "Whitelist",
-          "Bans",
-        ],
+        views: ["Online", "Operators", "Whitelist", "Bans"],
       },
       {
         section: "Content",

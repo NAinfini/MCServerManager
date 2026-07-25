@@ -58,7 +58,9 @@ function RecentActivityTimeline({ serverId }: { serverId: string }) {
         const severity = eventSeverity(event);
         return (
           <div className="activity-event" key={event.id}>
-            <span className={`activity-event-dot activity-event-dot-${severity}`} />
+            <span
+              className={`activity-event-dot activity-event-dot-${severity}`}
+            />
             <span className="activity-event-time">
               {formatDateTime(event.createdAt, language)}
             </span>

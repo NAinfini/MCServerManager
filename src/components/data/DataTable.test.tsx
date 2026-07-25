@@ -6,14 +6,39 @@ import { EditableTable } from "./EditableTable";
 
 describe("DataTable", () => {
   it("renders column definitions and row headers", () => {
-    render(<DataTable caption="Examples" className="example" columns={[{ id: "name", header: "Name", rowHeader: true, sortValue: ({ name }) => name, cell: ({ name }) => name }]} getRowKey={({ id }) => id} rows={[{ id: "one", name: "One" }]} />);
+    render(
+      <DataTable
+        caption="Examples"
+        className="example"
+        columns={[
+          {
+            id: "name",
+            header: "Name",
+            rowHeader: true,
+            sortValue: ({ name }) => name,
+            cell: ({ name }) => name,
+          },
+        ]}
+        getRowKey={({ id }) => id}
+        rows={[{ id: "one", name: "One" }]}
+      />,
+    );
     expect(screen.getByRole("table")).toHaveClass("example");
-    expect(screen.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "Name" }),
+    ).toBeInTheDocument();
     expect(screen.getByRole("rowheader", { name: "One" })).toBeInTheDocument();
   });
 
   it("supports editable table variant", () => {
-    render(<EditableTable caption="Editable examples" columns={[{ id: "value", header: "Value", cell: ({ value }) => value }]} getRowKey={(_, index) => index} rows={[{ value: "A" }]} />);
+    render(
+      <EditableTable
+        caption="Editable examples"
+        columns={[{ id: "value", header: "Value", cell: ({ value }) => value }]}
+        getRowKey={(_, index) => index}
+        rows={[{ value: "A" }]}
+      />,
+    );
     expect(screen.getByText("A")).toBeInTheDocument();
   });
 
@@ -41,10 +66,9 @@ describe("DataTable", () => {
 
     const table = screen.getByRole("table", { name: "Servers" });
     await userEvent.click(within(table).getByRole("button", { name: /name/i }));
-    expect(within(table).getByRole("columnheader", { name: /name/i })).toHaveAttribute(
-      "aria-sort",
-      "ascending",
-    );
+    expect(
+      within(table).getByRole("columnheader", { name: /name/i }),
+    ).toHaveAttribute("aria-sort", "ascending");
     const firstDataRow = within(table).getAllByRole("row")[1];
     expect(firstDataRow).toHaveTextContent("Alpha");
     firstDataRow.focus();

@@ -88,11 +88,20 @@ function creationMetadata(project: ProjectSummary, version: ProjectVersion) {
   const loader = [...version.loaders, ...project.loaders]
     .map((value) => value.toLowerCase())
     .find((value) =>
-      ["vanilla", "paper", "forge", "fabric", "quilt", "neoforge", "neo-forge"].includes(value),
+      [
+        "vanilla",
+        "paper",
+        "forge",
+        "fabric",
+        "quilt",
+        "neoforge",
+        "neo-forge",
+      ].includes(value),
     );
-  const loaderType = loader === "neoforge" || loader === "neo-forge"
-    ? "neoForge"
-    : (loader as LoaderType | undefined);
+  const loaderType =
+    loader === "neoforge" || loader === "neo-forge"
+      ? "neoForge"
+      : (loader as LoaderType | undefined);
   return {
     loaderType: loaderType ?? null,
     minecraftVersion:
@@ -106,8 +115,8 @@ function creationMetadata(project: ProjectSummary, version: ProjectVersion) {
 function isVerifiedServerPack(version: ProjectVersion) {
   return Boolean(
     version.isServerPack ||
-      version.serverPackFileId ||
-      version.serverCompatibility === "serverPack",
+    version.serverPackFileId ||
+    version.serverCompatibility === "serverPack",
   );
 }
 
@@ -388,37 +397,39 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
       className="marketplace-panel"
       aria-label={t("marketplace.server.aria")}
     >
-      {!isCreateMode ? <div
-        className="marketplace-content-switch"
-        aria-label={t("marketplace.contentType.aria")}
-      >
-        {[
-          ["mods", t("marketplace.contentType.mods")],
-          ["plugins", t("marketplace.contentType.plugins")],
-          ["modpacks", t("marketplace.contentType.modpacks")],
-        ].map(([value, label]) =>
-          (() => {
-            const Icon = contentTypeIcons[value as MarketplaceContentType];
-            return (
-              <button
-                className={
-                  contentType === value
-                    ? "marketplace-content-option marketplace-content-option-active"
-                    : "marketplace-content-option marketplace-content-option-muted"
-                }
-                key={value}
-                type="button"
-                onClick={() =>
-                  changeContentType(value as MarketplaceContentType)
-                }
-              >
-                <Icon aria-hidden="true" size={15} />
-                {label}
-              </button>
-            );
-          })(),
-        )}
-      </div> : null}
+      {!isCreateMode ? (
+        <div
+          className="marketplace-content-switch"
+          aria-label={t("marketplace.contentType.aria")}
+        >
+          {[
+            ["mods", t("marketplace.contentType.mods")],
+            ["plugins", t("marketplace.contentType.plugins")],
+            ["modpacks", t("marketplace.contentType.modpacks")],
+          ].map(([value, label]) =>
+            (() => {
+              const Icon = contentTypeIcons[value as MarketplaceContentType];
+              return (
+                <button
+                  className={
+                    contentType === value
+                      ? "marketplace-content-option marketplace-content-option-active"
+                      : "marketplace-content-option marketplace-content-option-muted"
+                  }
+                  key={value}
+                  type="button"
+                  onClick={() =>
+                    changeContentType(value as MarketplaceContentType)
+                  }
+                >
+                  <Icon aria-hidden="true" size={15} />
+                  {label}
+                </button>
+              );
+            })(),
+          )}
+        </div>
+      ) : null}
 
       <form className="marketplace-search-row" onSubmit={handleSubmit}>
         <Select
@@ -522,7 +533,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           aria-label={t("marketplace.results.aria")}
         >
           {isSearching ? (
-            <LoadingState message={t("marketplace.searching", { provider: source })} />
+            <LoadingState
+              message={t("marketplace.searching", { provider: source })}
+            />
           ) : null}
           {!isSearching && activeSearchError ? (
             <div
@@ -754,7 +767,8 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                   versionName: selectedVersion.versionNumber,
                   ...creationMetadata(selectedProject, selectedVersion),
                 };
-                if (isVerifiedServerPack(selectedVersion)) props.onSelect(selection);
+                if (isVerifiedServerPack(selectedVersion))
+                  props.onSelect(selection);
                 else setPendingCreateSelection(selection);
               }}
             >
@@ -767,9 +781,30 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
         open={pendingCreateSelection !== null}
         className="confirm-danger-dialog"
         description={t("marketplace.unverifiedDialog.description")}
-        footer={<><Button variant="ghost" onClick={() => setPendingCreateSelection(null)}>{t("common.cancel")}</Button><Button variant="primary" onClick={() => { if (pendingCreateSelection && props.mode === "create") props.onSelect(pendingCreateSelection); setPendingCreateSelection(null); }}>{t("marketplace.unverifiedDialog.confirm")}</Button></>}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setPendingCreateSelection(null)}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (pendingCreateSelection && props.mode === "create")
+                  props.onSelect(pendingCreateSelection);
+                setPendingCreateSelection(null);
+              }}
+            >
+              {t("marketplace.unverifiedDialog.confirm")}
+            </Button>
+          </>
+        }
         title={t("marketplace.unverifiedDialog.title")}
-        onOpenChange={(open) => { if (!open) setPendingCreateSelection(null); }}
+        onOpenChange={(open) => {
+          if (!open) setPendingCreateSelection(null);
+        }}
       />
     </section>
   );

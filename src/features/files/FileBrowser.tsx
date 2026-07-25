@@ -27,7 +27,9 @@ export function FileBrowser({
   const { t } = useAppSettings();
   return (
     <section className="files-browser" aria-label={t("files.browser.aria")}>
-      {isLoading ? <div className="list-state">{t("files.loading")}</div> : null}
+      {isLoading ? (
+        <div className="list-state">{t("files.loading")}</div>
+      ) : null}
 
       {!isLoading && error ? (
         <div
@@ -77,7 +79,9 @@ export function FileBrowser({
                 <Icon aria-hidden="true" size={16} />
                 <span>{entry.name}</span>
                 <small>
-                  {isDirectory ? t("files.folder") : formatBytes(entry.sizeBytes)}
+                  {isDirectory
+                    ? t("files.folder")
+                    : formatBytes(entry.sizeBytes)}
                 </small>
               </button>
             );

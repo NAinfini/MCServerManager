@@ -63,7 +63,9 @@ describe("ServerUpdatesView", () => {
       target: { value: "C:/downloads/server.jar" },
     });
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    const installButton = screen.getByRole("button", { name: "Back up and install" });
+    const installButton = screen.getByRole("button", {
+      name: "Back up and install",
+    });
     expect(installButton).toBeDisabled();
     await user.click(screen.getByRole("checkbox"));
     await user.click(installButton);
@@ -80,12 +82,22 @@ describe("ServerUpdatesView", () => {
         }),
       });
     });
-    const backupCall = vi.mocked(invoke).mock.invocationCallOrder[
-      vi.mocked(invoke).mock.calls.findIndex(([command]) => command === "create_world_backup")
-    ];
-    const installCall = vi.mocked(invoke).mock.invocationCallOrder[
-      vi.mocked(invoke).mock.calls.findIndex(([command]) => command === "install_server_update")
-    ];
+    const backupCall =
+      vi.mocked(invoke).mock.invocationCallOrder[
+        vi
+          .mocked(invoke)
+          .mock.calls.findIndex(
+            ([command]) => command === "create_world_backup",
+          )
+      ];
+    const installCall =
+      vi.mocked(invoke).mock.invocationCallOrder[
+        vi
+          .mocked(invoke)
+          .mock.calls.findIndex(
+            ([command]) => command === "install_server_update",
+          )
+      ];
     expect(backupCall).toBeLessThan(installCall);
   });
 
@@ -115,9 +127,16 @@ describe("ServerUpdatesView", () => {
     });
     await user.click(screen.getByRole("button", { name: "Continue" }));
     await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Back up and install" }));
+    await user.click(
+      screen.getByRole("button", { name: "Back up and install" }),
+    );
 
-    expect(await screen.findByText(/The previous server runtime was left unchanged/)).toBeInTheDocument();
-    expect(invoke).not.toHaveBeenCalledWith("install_server_update", expect.anything());
+    expect(
+      await screen.findByText(/The previous server runtime was left unchanged/),
+    ).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "install_server_update",
+      expect.anything(),
+    );
   });
 });

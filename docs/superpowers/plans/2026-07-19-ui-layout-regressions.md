@@ -22,12 +22,14 @@
 ### Task 1: Java 运行时平衡网格
 
 **Files:**
+
 - Modify: `src/features/java/JavaRuntimesView.tsx`
 - Modify: `src/styles/preview/pages.css`
 - Test: `src/features/java/JavaRuntimesView.test.tsx`
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `JavaRuntimesView` 当前的四个条件面板。
 - Produces: `.java-panel-managed`、`.java-panel-installed`、`.java-panel-compatibility`、`.java-panel-failures`。
 
@@ -52,11 +54,13 @@ Expected: PASS。
 ### Task 2: 空日志工作区
 
 **Files:**
+
 - Modify: `src/features/logger/AppLoggerView.tsx`
 - Modify: `src/styles/preview/pages.css`
 - Test: `src/features/logger/AppLoggerView.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `groupedLogs: GroupedLogEntry[]` 与 `selectedGroup`。
 - Produces: 始终存在的 `.logger-filter-rail`、`.app-log-list`，以及空数据时的 `.app-log-workspace-empty`。
 
@@ -81,10 +85,12 @@ Expected: PASS。
 ### Task 3: 紧凑开关控件
 
 **Files:**
+
 - Modify: `src/styles/preview/components.css`
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `.switch-root` 与 `.checkbox-root` Radix 控件类名。
 - Produces: 仅普通按钮匹配的预览按钮高度规则。
 
@@ -116,6 +122,7 @@ Expected: PASS。
 ### Task 4: 市场卡片与详情图片
 
 **Files:**
+
 - Modify: `src/styles/preview/components.css`
 - Modify: `src/styles/preview/pages.css`
 - Modify: `src/styles.css`
@@ -132,9 +139,11 @@ Expected: PASS。
 ### Task 5: 完整验证
 
 **Files:**
+
 - Verify only.
 
 **Interfaces:**
+
 - Consumes: Tasks 1–4 的最终代码。
 - Produces: 测试、构建和浏览器验收证据。
 

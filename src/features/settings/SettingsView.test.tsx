@@ -92,7 +92,9 @@ describe("SettingsView", () => {
   it("keeps the single settings tab layer scannable and scrollable", async () => {
     const { container } = render(<SettingsView />);
 
-    expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Settings" }),
+    ).toBeInTheDocument();
     expect(
       container.querySelectorAll(".settings-nav-item[data-nav-group-start]")
         .length,
@@ -172,9 +174,7 @@ describe("SettingsView", () => {
   it("keeps server runtime choices as new-server defaults", async () => {
     render(<SettingsView />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /^defaults$/i }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /^defaults$/i }));
     expect(
       await screen.findByText(/used only when creating new servers/i),
     ).toBeInTheDocument();
@@ -209,9 +209,7 @@ describe("SettingsView", () => {
   it("persists backup and marketplace defaults without touching server profiles", async () => {
     render(<SettingsView />);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /^defaults$/i }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /^defaults$/i }));
     await userEvent.click(
       screen.getByRole("combobox", { name: /compression format/i }),
     );
@@ -325,9 +323,9 @@ describe("SettingsView", () => {
 
     render(<SettingsView />);
 
-    expect(
-      await screen.findByRole("alert"),
-    ).toHaveTextContent("settings unavailable");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "settings unavailable",
+    );
     expect(
       screen.queryByRole("combobox", { name: /close button behavior/i }),
     ).not.toBeInTheDocument();

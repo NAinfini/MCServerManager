@@ -2,7 +2,10 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { TextField } from "../../components/ui/text-field";
-import { EditableTable, type EditableTableProps } from "../../components/data/EditableTable";
+import {
+  EditableTable,
+  type EditableTableProps,
+} from "../../components/data/EditableTable";
 import { useAppSettings } from "../../i18n";
 
 type JsonScalar = string | number | boolean | null;
@@ -203,9 +206,63 @@ export function StructuredFileEditor({
 
   if (document.kind === "properties") {
     const columns: EditableTableProps<PropertyRow>["columns"] = [
-      { id: "key", header: t("files.structured.key"), cell: (row) => <TextField aria-label={`${row.key} ${t("files.structured.key").toLowerCase()}`} disabled={readOnly} value={row.key} onChange={(event) => onChange(replaceLine(content, row.lineIndex, `${row.prefix}${event.target.value}${row.separator}${row.value}`))} /> },
-      { id: "value", header: t("files.structured.value"), cell: (row) => <TextField aria-label={`${row.key} ${t("files.structured.value").toLowerCase()}`} disabled={readOnly} value={row.value} onChange={(event) => onChange(replaceLine(content, row.lineIndex, `${row.prefix}${row.key}${row.separator}${event.target.value}`))} /> },
-      { id: "actions", header: "", cellClassName: "structured-table-actions", cell: (row) => <Button aria-label={t("files.structured.removeProperty", { key: row.key })} className="icon-button" disabled={readOnly} title={t("files.structured.removeProperty", { key: row.key })} variant="ghost" onClick={() => onChange(removeLine(content, row.lineIndex))}><Trash2 aria-hidden="true" size={15} /></Button> },
+      {
+        id: "key",
+        header: t("files.structured.key"),
+        cell: (row) => (
+          <TextField
+            aria-label={`${row.key} ${t("files.structured.key").toLowerCase()}`}
+            disabled={readOnly}
+            value={row.key}
+            onChange={(event) =>
+              onChange(
+                replaceLine(
+                  content,
+                  row.lineIndex,
+                  `${row.prefix}${event.target.value}${row.separator}${row.value}`,
+                ),
+              )
+            }
+          />
+        ),
+      },
+      {
+        id: "value",
+        header: t("files.structured.value"),
+        cell: (row) => (
+          <TextField
+            aria-label={`${row.key} ${t("files.structured.value").toLowerCase()}`}
+            disabled={readOnly}
+            value={row.value}
+            onChange={(event) =>
+              onChange(
+                replaceLine(
+                  content,
+                  row.lineIndex,
+                  `${row.prefix}${row.key}${row.separator}${event.target.value}`,
+                ),
+              )
+            }
+          />
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        cellClassName: "structured-table-actions",
+        cell: (row) => (
+          <Button
+            aria-label={t("files.structured.removeProperty", { key: row.key })}
+            className="icon-button"
+            disabled={readOnly}
+            title={t("files.structured.removeProperty", { key: row.key })}
+            variant="ghost"
+            onClick={() => onChange(removeLine(content, row.lineIndex))}
+          >
+            <Trash2 aria-hidden="true" size={15} />
+          </Button>
+        ),
+      },
     ];
     return (
       <div className="structured-file-editor">
@@ -222,7 +279,13 @@ export function StructuredFileEditor({
         </div>
         {document.rows.length ? (
           <div className="structured-table-scroll">
-            <EditableTable caption={t("files.structured.propertiesDescription")} className="structured-table structured-properties-table" columns={columns} getRowKey={(row) => row.lineIndex} rows={document.rows} />
+            <EditableTable
+              caption={t("files.structured.propertiesDescription")}
+              className="structured-table structured-properties-table"
+              columns={columns}
+              getRowKey={(row) => row.lineIndex}
+              rows={document.rows}
+            />
           </div>
         ) : (
           <p className="structured-editor-empty">
@@ -240,10 +303,7 @@ export function StructuredFileEditor({
         header: column,
         cell: (row: JsonRecord, rowIndex: number) => {
           const value = row[column];
-          if (
-            typeof value === "boolean" ||
-            column === "bypassesPlayerLimit"
-          ) {
+          if (typeof value === "boolean" || column === "bypassesPlayerLimit") {
             return (
               <Checkbox
                 aria-label={`${column} ${t("files.structured.row", {
@@ -479,9 +539,7 @@ export function StructuredFileEditor({
         <Button
           disabled={readOnly}
           variant="secondary"
-          onClick={() =>
-            onChange(serializeJson([...document.value, ""]))
-          }
+          onClick={() => onChange(serializeJson([...document.value, ""]))}
         >
           <Plus aria-hidden="true" size={15} />
           {t("files.structured.addValue")}

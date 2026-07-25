@@ -92,7 +92,8 @@ export function installRendererLogger() {
 
   window.addEventListener("error", errorListener);
   window.addEventListener("unhandledrejection", rejectionListener);
-  removeErrorListener = () => window.removeEventListener("error", errorListener);
+  removeErrorListener = () =>
+    window.removeEventListener("error", errorListener);
   removeRejectionListener = () =>
     window.removeEventListener("unhandledrejection", rejectionListener);
 }

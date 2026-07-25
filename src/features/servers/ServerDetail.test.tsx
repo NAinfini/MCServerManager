@@ -33,13 +33,15 @@ vi.mock("../../lib/desktop-runtime", () => ({
             exists: true,
             accepted: false,
             fileName: "eula.txt",
-            message: "Read the Minecraft EULA, then set eula=true yourself if you accept it.",
+            message:
+              "Read the Minecraft EULA, then set eula=true yourself if you accept it.",
           },
           {
             id: "backup",
             status: "warning",
             count: 0,
-            message: "Create a backup before changing jars, mods, configs, or worlds.",
+            message:
+              "Create a backup before changing jars, mods, configs, or worlds.",
           },
         ],
       };
@@ -152,13 +154,20 @@ describe("ServerDetail command deck", () => {
     const workspace = screen.getByRole("navigation", {
       name: "Review Server 工作台",
     });
-    ["概览", "控制台", "玩家", "内容", "文件与备份", "运行状况", "自动化", "服务器设置"].forEach(
-      (label) => {
-        expect(
-          within(workspace).getByRole("button", { name: label }),
-        ).toBeInTheDocument();
-      },
-    );
+    [
+      "概览",
+      "控制台",
+      "玩家",
+      "内容",
+      "文件与备份",
+      "运行状况",
+      "自动化",
+      "服务器设置",
+    ].forEach((label) => {
+      expect(
+        within(workspace).getByRole("button", { name: label }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("requests canonical child views when a workspace section is chosen", async () => {
@@ -195,9 +204,10 @@ describe("ServerDetail command deck", () => {
   it("normalizes an unknown child view to the section default", () => {
     renderDetail({ section: "players", view: "removed-view" });
 
-    expect(
-      screen.getByRole("button", { name: "Online" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Online" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("keeps the shell usable when a lazy workspace panel crashes", async () => {
@@ -226,7 +236,9 @@ describe("ServerDetail command deck", () => {
     renderDetail({ profile: { ...server, updatedAt: "not-a-date" } });
 
     const lastUpdated = await screen.findByText("Last updated");
-    expect(within(lastUpdated.parentElement!).getByText("—")).toBeInTheDocument();
+    expect(
+      within(lastUpdated.parentElement!).getByText("—"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Review Server")).toBeInTheDocument();
   });
 

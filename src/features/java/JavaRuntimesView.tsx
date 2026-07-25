@@ -8,7 +8,10 @@ import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { publicAssetUrl } from "../../lib/public-asset";
-import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/data/DataTable";
 import {
   installJavaRuntime,
   listJavaRuntimes,
@@ -35,10 +38,7 @@ function javaDownloadUrl(majorVersion: number) {
   return `https://adoptium.net/temurin/releases/?version=${majorVersion}`;
 }
 
-function runtimeSourceLabel(
-  source: string,
-  t: (key: string) => string,
-) {
+function runtimeSourceLabel(source: string, t: (key: string) => string) {
   const keyBySource: Record<string, string> = {
     managed: "java.source.managed",
     "Managed by MC Server Manager": "java.source.managed",
@@ -110,23 +110,68 @@ export function JavaRuntimesView() {
       await javaQuery.refetch();
     },
   });
-  const runtimeColumns: DataTableColumn<NonNullable<typeof javaQuery.data>["runtimes"][number]>[] = [
-    { id: "version", header: t("java.table.version"), rowHeader: true, cell: (runtime) => <span className="java-runtime-identity">{isAdoptiumRuntime(runtime.vendor) ? <img alt="" aria-hidden="true" className="provider-icon" height="17" src={publicAssetUrl("/brand/adoptium-logo.svg")} width="17" /> : <span className="java-runtime-icon"><Coffee aria-hidden="true" size={14} /></span>}<span>Java {runtime.majorVersion}</span></span> },
-    { id: "vendor", header: t("java.table.vendor"), cell: (runtime) => runtime.vendor ?? t("common.unknown") },
-    { id: "architecture", header: t("java.table.architecture"), cell: (runtime) => runtime.architecture ?? t("common.unknown") },
-    { id: "source", header: t("java.table.source"), cell: (runtime) => <span className="java-source-chip">{runtimeSourceLabel(runtime.source, t)}</span> },
-    { id: "path", header: t("java.table.path"), cellClassName: "path-cell", cell: (runtime) => runtime.path },
+  const runtimeColumns: DataTableColumn<
+    NonNullable<typeof javaQuery.data>["runtimes"][number]
+  >[] = [
+    {
+      id: "version",
+      header: t("java.table.version"),
+      rowHeader: true,
+      cell: (runtime) => (
+        <span className="java-runtime-identity">
+          {isAdoptiumRuntime(runtime.vendor) ? (
+            <img
+              alt=""
+              aria-hidden="true"
+              className="provider-icon"
+              height="17"
+              src={publicAssetUrl("/brand/adoptium-logo.svg")}
+              width="17"
+            />
+          ) : (
+            <span className="java-runtime-icon">
+              <Coffee aria-hidden="true" size={14} />
+            </span>
+          )}
+          <span>Java {runtime.majorVersion}</span>
+        </span>
+      ),
+    },
+    {
+      id: "vendor",
+      header: t("java.table.vendor"),
+      cell: (runtime) => runtime.vendor ?? t("common.unknown"),
+    },
+    {
+      id: "architecture",
+      header: t("java.table.architecture"),
+      cell: (runtime) => runtime.architecture ?? t("common.unknown"),
+    },
+    {
+      id: "source",
+      header: t("java.table.source"),
+      cell: (runtime) => (
+        <span className="java-source-chip">
+          {runtimeSourceLabel(runtime.source, t)}
+        </span>
+      ),
+    },
+    {
+      id: "path",
+      header: t("java.table.path"),
+      cellClassName: "path-cell",
+      cell: (runtime) => runtime.path,
+    },
   ];
 
   return (
-    <section
-      aria-labelledby="java-runtimes-title"
-      className="java-page"
-    >
+    <section aria-labelledby="java-runtimes-title" className="java-page">
       <div className="page-header">
         <div>
           <p className="eyebrow">{t("java.eyebrow")}</p>
-          <h1 id="java-runtimes-title" tabIndex={-1}>{t("java.title")}</h1>
+          <h1 id="java-runtimes-title" tabIndex={-1}>
+            {t("java.title")}
+          </h1>
         </div>
         <div className="page-header-actions">
           <Button
@@ -251,7 +296,13 @@ export function JavaRuntimesView() {
               />
             ) : (
               <div className="java-table-scroll">
-                <DataTable caption={t("java.title")} className="java-table" columns={runtimeColumns} getRowKey={(runtime) => `${runtime.path}-${runtime.version}`} rows={javaQuery.data.runtimes} />
+                <DataTable
+                  caption={t("java.title")}
+                  className="java-table"
+                  columns={runtimeColumns}
+                  getRowKey={(runtime) => `${runtime.path}-${runtime.version}`}
+                  rows={javaQuery.data.runtimes}
+                />
               </div>
             )}
           </section>

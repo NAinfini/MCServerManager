@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -175,16 +169,15 @@ describe("NotificationSettings", () => {
         name: /could not load notification history/i,
       }),
     ).toHaveTextContent("events unavailable");
-    expect(
-      screen.queryByText("No notifications yet."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No notifications yet.")).not.toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Retry notification history" }),
     );
 
-    expect(await screen.findByText("No notifications yet.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No notifications yet."),
+    ).toBeInTheDocument();
     expect(eventAttempts).toBe(2);
   });
 });
-

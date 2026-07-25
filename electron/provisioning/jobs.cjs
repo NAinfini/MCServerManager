@@ -17,7 +17,8 @@ const EXECUTION_STAGES = Object.freeze([
 
 function requireJob(store, id) {
   const job = store.get(id);
-  if (!job) throw provisioningError("JOB_NOT_FOUND", "Provisioning job not found.");
+  if (!job)
+    throw provisioningError("JOB_NOT_FOUND", "Provisioning job not found.");
   return job;
 }
 
@@ -90,7 +91,10 @@ function validateCommitGates(plan) {
   }
   const port = Number(plan.configuration?.serverPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw gateError("SERVER_PORT_INVALID", "Server port must be between 1 and 65535.");
+    throw gateError(
+      "SERVER_PORT_INVALID",
+      "Server port must be between 1 and 65535.",
+    );
   }
   if (plan.javaRuntime?.validated !== true || !plan.javaRuntime?.path) {
     throw gateError(
@@ -142,7 +146,10 @@ function createJobExecutor(dependencies) {
   function createJob(plan) {
     const targetDir = path.resolve(String(plan?.targetDir || ""));
     if (!plan?.targetDir) {
-      throw provisioningError("JOB_TARGET_REQUIRED", "Server target directory is required.");
+      throw provisioningError(
+        "JOB_TARGET_REQUIRED",
+        "Server target directory is required.",
+      );
     }
     if (plan?.useExistingTarget === true && !fileSystem.existsSync(targetDir)) {
       throw provisioningError(
@@ -199,7 +206,11 @@ function createJobExecutor(dependencies) {
       job = update(id, {
         stage,
         error: null,
-        progress: { ...job.progress, resumeStage: stage, completedStages: [...completed] },
+        progress: {
+          ...job.progress,
+          resumeStage: stage,
+          completedStages: [...completed],
+        },
       });
       try {
         if (stage === "committing") {
@@ -281,7 +292,9 @@ function createJobExecutor(dependencies) {
           },
         });
       } catch (error) {
-        const committed = Boolean(job.progress?.committed || stage === "starting");
+        const committed = Boolean(
+          job.progress?.committed || stage === "starting",
+        );
         const payload = errorPayload(error, stage, committed);
         update(id, {
           stage: "failed",
@@ -299,7 +312,11 @@ function createJobExecutor(dependencies) {
     return update(id, {
       stage: "ready",
       error: null,
-      progress: { ...job.progress, completedStages: [...completed], resumeStage: null },
+      progress: {
+        ...job.progress,
+        completedStages: [...completed],
+        resumeStage: null,
+      },
     });
   }
 

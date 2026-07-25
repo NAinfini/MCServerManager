@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -96,8 +90,12 @@ describe("PerformanceHistoryView", () => {
     renderPerformance();
 
     expect(await screen.findAllByText("Unavailable")).toHaveLength(6);
-    expect(screen.getByText("Process metrics are unavailable.")).toBeInTheDocument();
-    expect(screen.getByText("No real TPS provider is configured.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Process metrics are unavailable."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No real TPS provider is configured."),
+    ).toBeInTheDocument();
     expect(screen.getByText("process crashed")).toBeInTheDocument();
     expect(screen.getByText("Restarts")).toBeInTheDocument();
     expect(screen.getAllByText("TPS")).toHaveLength(2);
@@ -132,7 +130,9 @@ describe("PerformanceHistoryView", () => {
     expect(screen.getByText("90 s")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("No real TPS provider is configured.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No real TPS provider is configured."),
+    ).toBeInTheDocument();
   });
 
   it("requests a new local sample", async () => {
@@ -182,4 +182,3 @@ describe("PerformanceHistoryView", () => {
     expect(historyAttempts).toBe(2);
   });
 });
-

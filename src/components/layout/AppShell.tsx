@@ -115,11 +115,11 @@ export function AppShell({ processSummary }: AppShellProps) {
     servers.length - (runningCount ?? 0) - (crashedCount ?? 0),
     0,
   );
-  const selectedServer: ServerProfile | null =
-    selectedServerId
-      ? servers.find((server) => server.id === selectedServerId) ?? null
-      : null;
-  const isDashboard = activePage === "servers" && !selectedServer && !isCreateServerActive;
+  const selectedServer: ServerProfile | null = selectedServerId
+    ? (servers.find((server) => server.id === selectedServerId) ?? null)
+    : null;
+  const isDashboard =
+    activePage === "servers" && !selectedServer && !isCreateServerActive;
   const attentionQuery = useQuery({
     enabled: isDashboard && isDesktopRuntimeAvailable(),
     queryKey: attentionKeys.all,
@@ -372,7 +372,11 @@ export function AppShell({ processSummary }: AppShellProps) {
         onConfirm={confirmCreateServerExit}
       />
 
-      <div className={sidebarCollapsed ? "app-body app-body-sidebar-collapsed" : "app-body"}>
+      <div
+        className={
+          sidebarCollapsed ? "app-body app-body-sidebar-collapsed" : "app-body"
+        }
+      >
         <Sidebar
           activePage={activePage}
           selectedServerId={selectedServerId ?? undefined}
@@ -493,14 +497,14 @@ export function AppShell({ processSummary }: AppShellProps) {
               <CreateServerWizard
                 initialSourcePath={
                   route.name === "create-server"
-                    ? route.sourcePath ?? null
+                    ? (route.sourcePath ?? null)
                     : null
                 }
                 initialStep={
                   route.name === "create-server" ? route.step : undefined
                 }
                 initialJobId={
-                  route.name === "create-server" ? route.jobId ?? null : null
+                  route.name === "create-server" ? (route.jobId ?? null) : null
                 }
                 showHeading={false}
                 onHeaderHiddenChange={setCreateServerHeaderHidden}
@@ -531,9 +535,7 @@ export function AppShell({ processSummary }: AppShellProps) {
             <ServerRuntimeProvider serverId={selectedServer.id}>
               <ServerDetail
                 server={selectedServer}
-                section={
-                  route.name === "server" ? route.section : "overview"
-                }
+                section={route.name === "server" ? route.section : "overview"}
                 view={route.name === "server" ? route.view : undefined}
                 path={route.name === "server" ? route.path : undefined}
                 onBack={openServersOverview}
@@ -570,10 +572,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                       onChange={(event) => setServerFilter(event.target.value)}
                     />
                   ) : null}
-                  <Button
-                    onClick={() => openCreateServer()}
-                    variant="primary"
-                  >
+                  <Button onClick={() => openCreateServer()} variant="primary">
                     <Plus aria-hidden="true" size={15} />
                     {t("servers.create.button")}
                   </Button>
@@ -606,9 +605,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                     className="status-indicator status-indicator-crashed"
                   />
                   <span>{t("servers.summary.crashed")}</span>
-                  <strong>
-                    {crashedCount ?? t("common.unknown")}
-                  </strong>
+                  <strong>{crashedCount ?? t("common.unknown")}</strong>
                 </div>
                 <div className="dashboard-status-item dashboard-status-total">
                   <ServerIcon aria-hidden="true" size={13} />
@@ -697,7 +694,6 @@ export function AppShell({ processSummary }: AppShellProps) {
               </div>
             </>
           )}
-
         </main>
       </div>
       <BottomStatusBar

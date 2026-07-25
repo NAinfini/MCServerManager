@@ -81,9 +81,7 @@ describe("JavaRuntimesView", () => {
     expect(await screen.findAllByText("Java 21")).not.toHaveLength(0);
     expect(screen.getByText("OpenJDK")).toBeInTheDocument();
     expect(screen.getByText("Compatible")).toBeInTheDocument();
-    expect(
-      screen.getByText("Requires Java 21 or newer."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Requires Java 21 or newer.")).toBeInTheDocument();
     expect(screen.getByText("Managed Eclipse Temurin")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Oracle Java downloads" }),
@@ -243,7 +241,9 @@ describe("JavaRuntimesView", () => {
 
     renderJavaView();
 
-    expect(await screen.findByText("Java scan unavailable")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Java scan unavailable"),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Retry" }));
 
     expect(

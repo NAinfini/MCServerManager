@@ -29,7 +29,11 @@ interface PerformanceHistoryViewProps {
   server: ServerProfile;
 }
 
-function displayMetric(value: number | null, unavailableLabel: string, suffix = "") {
+function displayMetric(
+  value: number | null,
+  unavailableLabel: string,
+  suffix = "",
+) {
   return value === null ? unavailableLabel : `${value}${suffix}`;
 }
 
@@ -195,8 +199,16 @@ export function PerformanceHistoryView({
                 <Cpu aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.cpu")}</span>
-              <strong>{displayMetric(latest.cpuPercent, t("performance.unavailable"), "%")}</strong>
-              {latest.cpuPercent === null ? <small>{unavailableReason(latest, "cpuPercent", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.cpuPercent,
+                  t("performance.unavailable"),
+                  "%",
+                )}
+              </strong>
+              {latest.cpuPercent === null ? (
+                <small>{unavailableReason(latest, "cpuPercent", t)}</small>
+              ) : null}
               {latest.cpuPercent !== null && (
                 <Progress.Root
                   className="metric-progress"
@@ -217,8 +229,16 @@ export function PerformanceHistoryView({
                 <MemoryStick aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.memory")}</span>
-              <strong>{displayMetric(latest.memoryMb, t("performance.unavailable"), " MB")}</strong>
-              {latest.memoryMb === null ? <small>{unavailableReason(latest, "memoryMb", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.memoryMb,
+                  t("performance.unavailable"),
+                  " MB",
+                )}
+              </strong>
+              {latest.memoryMb === null ? (
+                <small>{unavailableReason(latest, "memoryMb", t)}</small>
+              ) : null}
               {latest.memoryMb !== null && (
                 <Progress.Root
                   className="metric-progress"
@@ -242,40 +262,74 @@ export function PerformanceHistoryView({
                 <HardDrive aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.diskFree")}</span>
-              <strong>{displayMetric(latest.diskFreeMb, t("performance.unavailable"), " MB")}</strong>
-              {latest.diskFreeMb === null ? <small>{unavailableReason(latest, "diskFreeMb", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.diskFreeMb,
+                  t("performance.unavailable"),
+                  " MB",
+                )}
+              </strong>
+              {latest.diskFreeMb === null ? (
+                <small>{unavailableReason(latest, "diskFreeMb", t)}</small>
+              ) : null}
             </div>
             <div className="metric-card">
               <div className="metric-card-icon">
                 <Users aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.players")}</span>
-              <strong>{displayMetric(latest.playerCount, t("performance.unavailable"))}</strong>
-              {latest.playerCount === null ? <small>{unavailableReason(latest, "playerCount", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.playerCount,
+                  t("performance.unavailable"),
+                )}
+              </strong>
+              {latest.playerCount === null ? (
+                <small>{unavailableReason(latest, "playerCount", t)}</small>
+              ) : null}
             </div>
             <div className="metric-card">
               <div className="metric-card-icon">
                 <Clock aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.uptime")}</span>
-              <strong>{displayMetric(latest.uptimeSeconds, t("performance.unavailable"), " s")}</strong>
-              {latest.uptimeSeconds === null ? <small>{unavailableReason(latest, "uptimeSeconds", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.uptimeSeconds,
+                  t("performance.unavailable"),
+                  " s",
+                )}
+              </strong>
+              {latest.uptimeSeconds === null ? (
+                <small>{unavailableReason(latest, "uptimeSeconds", t)}</small>
+              ) : null}
             </div>
             <div className="metric-card">
               <div className="metric-card-icon">
                 <RotateCcw aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.restarts")}</span>
-              <strong>{displayMetric(latest.restartCount, t("performance.unavailable"))}</strong>
-              {latest.restartCount === null ? <small>{unavailableReason(latest, "restartCount", t)}</small> : null}
+              <strong>
+                {displayMetric(
+                  latest.restartCount,
+                  t("performance.unavailable"),
+                )}
+              </strong>
+              {latest.restartCount === null ? (
+                <small>{unavailableReason(latest, "restartCount", t)}</small>
+              ) : null}
             </div>
             <div className="metric-card">
               <div className="metric-card-icon">
                 <Gauge aria-hidden="true" size={16} />
               </div>
               <span>{t("performance.tps")}</span>
-              <strong>{displayMetric(latest.tps, t("performance.unavailable"))}</strong>
-              {latest.tps === null ? <small>{unavailableReason(latest, "tps", t)}</small> : null}
+              <strong>
+                {displayMetric(latest.tps, t("performance.unavailable"))}
+              </strong>
+              {latest.tps === null ? (
+                <small>{unavailableReason(latest, "tps", t)}</small>
+              ) : null}
             </div>
           </div>
           {history?.events.length ? (

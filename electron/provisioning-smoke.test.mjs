@@ -87,7 +87,10 @@ describe("deterministic desktop provisioning smoke", () => {
       if (href === "https://fill-data.papermc.io/fixtures/paper-server.jar") {
         return new Response(serverJar, { status: 200 });
       }
-      if (href === "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds") {
+      if (
+        href ===
+        "https://fill.papermc.io/v3/projects/paper/versions/1.21.10/builds"
+      ) {
         return new Response(
           JSON.stringify([
             {
@@ -133,7 +136,13 @@ describe("deterministic desktop provisioning smoke", () => {
       const firstTarget = path.join(appDataDir, "servers", "smoke-server");
       const firstJob = backend.handle("create_provisioning_job", {
         input: {
-          plan: finalPlan(sourcePlan, firstTarget, javaPath, "Smoke Server", true),
+          plan: finalPlan(
+            sourcePlan,
+            firstTarget,
+            javaPath,
+            "Smoke Server",
+            true,
+          ),
         },
       });
       const ready = await backend.handle("run_provisioning_job", {
@@ -141,15 +150,22 @@ describe("deterministic desktop provisioning smoke", () => {
       });
 
       expect(ready.stage).toBe("ready");
-      expect(fs.readFileSync(path.join(firstTarget, "server.jar"))).toEqual(serverJar);
-      expect(fs.readFileSync(path.join(firstTarget, "eula.txt"), "utf8")).toBe("eula=true\n");
+      expect(fs.readFileSync(path.join(firstTarget, "server.jar"))).toEqual(
+        serverJar,
+      );
+      expect(fs.readFileSync(path.join(firstTarget, "eula.txt"), "utf8")).toBe(
+        "eula=true\n",
+      );
       expect(spawn).toHaveBeenCalledWith(
         javaPath,
         ["-Xms1024M", "-Xmx2048M", "-jar", "server.jar", "nogui"],
         expect.objectContaining({ cwd: firstTarget, shell: false }),
       );
 
-      children[0].stdout.emit("data", "[Server thread/INFO]: Done (1.0s)! For help, type help\n");
+      children[0].stdout.emit(
+        "data",
+        "[Server thread/INFO]: Done (1.0s)! For help, type help\n",
+      );
       expect(
         backend
           .handle("list_process_events", { serverId: ready.serverId })
@@ -158,10 +174,20 @@ describe("deterministic desktop provisioning smoke", () => {
       backend.handle("stop_server", { serverId: ready.serverId });
       expect(children[0].stdin.writes).toContain("stop\n");
 
-      const recoveryTarget = path.join(appDataDir, "servers", "recovered-server");
+      const recoveryTarget = path.join(
+        appDataDir,
+        "servers",
+        "recovered-server",
+      );
       const recoveryJob = backend.handle("create_provisioning_job", {
         input: {
-          plan: finalPlan(sourcePlan, recoveryTarget, javaPath, "Recovered Server", false),
+          plan: finalPlan(
+            sourcePlan,
+            recoveryTarget,
+            javaPath,
+            "Recovered Server",
+            false,
+          ),
         },
       });
       backend.close();

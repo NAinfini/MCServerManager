@@ -1,10 +1,5 @@
 export type LoaderType =
-  | "vanilla"
-  | "paper"
-  | "forge"
-  | "neoForge"
-  | "fabric"
-  | "quilt";
+  "vanilla" | "paper" | "forge" | "neoForge" | "fabric" | "quilt";
 
 export interface ServerLaunchSpec {
   executable: { kind: "java" };

@@ -1,4 +1,9 @@
-import { useMemo, useState, type ReactNode, type TableHTMLAttributes } from "react";
+import {
+  useMemo,
+  useState,
+  type ReactNode,
+  type TableHTMLAttributes,
+} from "react";
 
 export interface DataTableColumn<T> {
   id: string;
@@ -10,7 +15,9 @@ export interface DataTableColumn<T> {
   sortValue?: (row: T) => number | string | null | undefined;
 }
 
-export interface DataTableProps<T> extends TableHTMLAttributes<HTMLTableElement> {
+export interface DataTableProps<
+  T,
+> extends TableHTMLAttributes<HTMLTableElement> {
   columns: readonly DataTableColumn<T>[];
   caption: ReactNode;
   rows: readonly T[];
@@ -28,7 +35,10 @@ export function DataTable<T>({
   onRowActivate,
   ...tableProps
 }: DataTableProps<T>) {
-  const [sort, setSort] = useState<{ columnId: string; direction: "ascending" | "descending" } | null>(null);
+  const [sort, setSort] = useState<{
+    columnId: string;
+    direction: "ascending" | "descending";
+  } | null>(null);
   const visibleRows = useMemo(() => {
     if (!sort) return rows;
     const column = columns.find((candidate) => candidate.id === sort.columnId);
@@ -39,10 +49,14 @@ export function DataTable<T>({
       const comparison =
         typeof leftValue === "number" && typeof rightValue === "number"
           ? leftValue - rightValue
-          : String(leftValue ?? "").localeCompare(String(rightValue ?? ""), undefined, {
-              numeric: true,
-              sensitivity: "base",
-            });
+          : String(leftValue ?? "").localeCompare(
+              String(rightValue ?? ""),
+              undefined,
+              {
+                numeric: true,
+                sensitivity: "base",
+              },
+            );
       return sort.direction === "ascending" ? comparison : -comparison;
     });
   }, [columns, rows, sort]);
@@ -85,7 +99,9 @@ export function DataTable<T>({
                       : " ↕"}
                   </span>
                 </button>
-              ) : column.header}
+              ) : (
+                column.header
+              )}
             </th>
           ))}
         </tr>
@@ -99,7 +115,10 @@ export function DataTable<T>({
             onKeyDown={
               onRowActivate
                 ? (event) => {
-                    if (event.key === "Enter" && event.target === event.currentTarget) {
+                    if (
+                      event.key === "Enter" &&
+                      event.target === event.currentTarget
+                    ) {
                       onRowActivate(row, index);
                     }
                   }
@@ -107,12 +126,17 @@ export function DataTable<T>({
             }
           >
             {columns.map((column) => {
-              const className = typeof column.cellClassName === "function"
-                ? column.cellClassName(row, index)
-                : column.cellClassName;
+              const className =
+                typeof column.cellClassName === "function"
+                  ? column.cellClassName(row, index)
+                  : column.cellClassName;
               const Cell = column.rowHeader ? "th" : "td";
               return (
-                <Cell className={className} key={column.id} scope={column.rowHeader ? "row" : undefined}>
+                <Cell
+                  className={className}
+                  key={column.id}
+                  scope={column.rowHeader ? "row" : undefined}
+                >
                   {column.cell(row, index)}
                 </Cell>
               );

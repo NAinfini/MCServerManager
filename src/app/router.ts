@@ -46,10 +46,7 @@ function decodePart(value: string | undefined) {
 export function parseAppHash(hash: string): AppRoute {
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   const [pathname = "", query = ""] = raw.split("?");
-  const parts = pathname
-    .split("/")
-    .filter(Boolean)
-    .map(decodePart);
+  const parts = pathname.split("/").filter(Boolean).map(decodePart);
   const search = new URLSearchParams(query);
 
   if (parts.length === 0 || parts[0] === "dashboard") {
@@ -71,9 +68,10 @@ export function parseAppHash(hash: string): AppRoute {
     const sourcePath = search.get("source") || undefined;
     const rawStep = search.get("step");
     const parsedStep = rawStep === null ? Number.NaN : Number(rawStep);
-    const step = Number.isInteger(parsedStep) && parsedStep >= 0 && parsedStep <= 5
-      ? parsedStep
-      : undefined;
+    const step =
+      Number.isInteger(parsedStep) && parsedStep >= 0 && parsedStep <= 5
+        ? parsedStep
+        : undefined;
     const jobId = search.get("job") || undefined;
     return {
       name: "create-server",
@@ -153,7 +151,11 @@ function currentHash() {
 }
 
 export function useAppRoute() {
-  const hash = useSyncExternalStore(subscribeHash, currentHash, () => "#/dashboard");
+  const hash = useSyncExternalStore(
+    subscribeHash,
+    currentHash,
+    () => "#/dashboard",
+  );
   return parseAppHash(hash);
 }
 

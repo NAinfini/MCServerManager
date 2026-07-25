@@ -95,10 +95,7 @@ describe("ServerOverviewSummary", () => {
 
     render(
       <QueryClientProvider client={queryClient}>
-        <ServerOverviewSummary
-          server={server}
-          onViewAllActivity={vi.fn()}
-        />
+        <ServerOverviewSummary server={server} onViewAllActivity={vi.fn()} />
       </QueryClientProvider>,
     );
 

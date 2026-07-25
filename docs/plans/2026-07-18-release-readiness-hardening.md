@@ -13,6 +13,7 @@
 ### Task 1: Block unsafe world restore
 
 **Files:**
+
 - Modify: `electron/backend.test.mjs`
 - Modify: `electron/backend.cjs`
 - Modify: `src/features/backups/ServerBackupsView.tsx`
@@ -47,6 +48,7 @@ Commit message: `fix: block live world restores`
 ### Task 2: Preflight server ports before start
 
 **Files:**
+
 - Modify: `electron/backend.test.mjs`
 - Modify: `electron/backend.cjs`
 - Modify: `src/features/servers/ServerActions.test.tsx`
@@ -75,6 +77,7 @@ Commit message: `fix: preflight server ports before launch`
 ### Task 3: Remove unavailable CurseForge discovery
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.test.tsx`
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx`
 - Modify: `src/features/settings/SettingsView.test.tsx`
@@ -103,6 +106,7 @@ Commit message: `fix: clarify manual CurseForge support`
 ### Task 4: Restore keyboard-only focus and UI contracts
 
 **Files:**
+
 - Modify: `src/styles.test.mjs`
 - Modify: `src/styles.css`
 - Modify: `src/i18n/index.test.tsx`
@@ -138,6 +142,7 @@ Commit message: `fix: restore keyboard focus visibility`
 ### Task 5: Add a real production Electron UI smoke
 
 **Files:**
+
 - Create: `electron/ui-smoke.cjs`
 - Modify: `package.json`
 - Modify: `.github/workflows/ci.yml`
@@ -171,6 +176,7 @@ Commit message: `test: launch production Electron UI smoke`
 ### Task 6: Gate stable releases on signing credentials
 
 **Files:**
+
 - Modify: `electron/release-workflows.test.mjs`
 - Modify: `.github/workflows/release.yml`
 - Modify: `README.md`
@@ -195,6 +201,7 @@ Commit message: `ci: require signing for stable releases`
 ### Task 7: Final review and verification
 
 **Files:**
+
 - Review all files changed by Tasks 1-6.
 
 **Step 1: Run focused regressions**

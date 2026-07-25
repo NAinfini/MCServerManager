@@ -55,13 +55,15 @@ const profileSchema = z
     ]),
     loaderVersion: z.string(),
     javaPath: z.string(),
-    serverPort: z.string().refine(
-      (value) =>
-        Number.isInteger(Number(value)) &&
-        Number(value) >= 1 &&
-        Number(value) <= 65535,
-      "port",
-    ),
+    serverPort: z
+      .string()
+      .refine(
+        (value) =>
+          Number.isInteger(Number(value)) &&
+          Number(value) >= 1 &&
+          Number(value) <= 65535,
+        "port",
+      ),
     minMemoryMb: optionalInteger,
     maxMemoryMb: optionalInteger,
     autoStart: z.boolean(),
@@ -70,12 +72,8 @@ const profileSchema = z
     restartCooldown: optionalInteger,
   })
   .superRefine((values, context) => {
-    const min = values.minMemoryMb.trim()
-      ? Number(values.minMemoryMb)
-      : null;
-    const max = values.maxMemoryMb.trim()
-      ? Number(values.maxMemoryMb)
-      : null;
+    const min = values.minMemoryMb.trim() ? Number(values.minMemoryMb) : null;
+    const max = values.maxMemoryMb.trim() ? Number(values.maxMemoryMb) : null;
     if (min !== null && max !== null && min > max) {
       context.addIssue({
         code: "custom",
@@ -137,9 +135,7 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
   });
 
   const validationMessage = (message?: string) =>
-    message
-      ? t(`profileSettings.validation.${message}`)
-      : null;
+    message ? t(`profileSettings.validation.${message}`) : null;
 
   const pickServerFolder = async () => {
     setFolderPickerError(null);
@@ -304,7 +300,11 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
           </label>
           <label>
             {t("profileSettings.minMemoryMb")}
-            <TextField min="0" type="number" {...form.register("minMemoryMb")} />
+            <TextField
+              min="0"
+              type="number"
+              {...form.register("minMemoryMb")}
+            />
           </label>
           <label>
             {t("profileSettings.maxMemoryMb")}
@@ -327,7 +327,9 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
               render={({ field }) => (
                 <Checkbox
                   checked={field.value}
-                  onCheckedChange={(checked) => field.onChange(checked === true)}
+                  onCheckedChange={(checked) =>
+                    field.onChange(checked === true)
+                  }
                 />
               )}
             />
@@ -340,7 +342,9 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
               render={({ field }) => (
                 <Checkbox
                   checked={field.value}
-                  onCheckedChange={(checked) => field.onChange(checked === true)}
+                  onCheckedChange={(checked) =>
+                    field.onChange(checked === true)
+                  }
                 />
               )}
             />
@@ -365,9 +369,7 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
         </div>
         <StickyActionBar className="form-actions">
           <Button
-            disabled={
-              updateMutation.isPending || !form.formState.isDirty
-            }
+            disabled={updateMutation.isPending || !form.formState.isDirty}
             type="submit"
             variant="primary"
           >

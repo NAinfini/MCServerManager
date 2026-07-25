@@ -37,7 +37,9 @@ export function CloseBehaviorDialog({
           <Button variant="danger" onClick={onQuit}>
             {t("close.quit")}
           </Button>
-          <Button variant="ghost" onClick={onCancel}>{t("common.cancel")}</Button>
+          <Button variant="ghost" onClick={onCancel}>
+            {t("common.cancel")}
+          </Button>
         </>
       }
       footerClassName="close-dialog-actions"
@@ -55,11 +57,14 @@ export function CloseBehaviorDialog({
           ) : null}
           {hasRunningServers ? (
             <p className="close-dialog-warning" role="alert">
-              {t(runningServerCount === 1
-                ? "close.runningWarning.one"
-                : "close.runningWarning.many", {
-                count: runningServerCount ?? 0,
-              })}
+              {t(
+                runningServerCount === 1
+                  ? "close.runningWarning.one"
+                  : "close.runningWarning.many",
+                {
+                  count: runningServerCount ?? 0,
+                },
+              )}
             </p>
           ) : null}
           {operationError ? (

@@ -71,9 +71,9 @@ describe("motion affordance classes", () => {
       </>,
     );
 
-    expect(screen.getByRole("checkbox", { name: "Enable whitelist" })).toHaveClass(
-      "motion-check",
-    );
+    expect(
+      screen.getByRole("checkbox", { name: "Enable whitelist" }),
+    ).toHaveClass("motion-check");
     expect(screen.getByRole("switch", { name: "Auto restart" })).toHaveClass(
       "motion-toggle",
     );

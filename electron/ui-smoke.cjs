@@ -90,7 +90,9 @@ async function exactButtonCenter(webContents, label) {
     return { count: 1, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   })()`);
   if (point.count !== 1) {
-    throw new Error(`Expected one exact "${label}" button, found ${point.count}.`);
+    throw new Error(
+      `Expected one exact "${label}" button, found ${point.count}.`,
+    );
   }
   return point;
 }
@@ -412,7 +414,9 @@ function cleanupAndExit(code) {
     path.dirname(resolvedUserDataDir) !== resolvedTempRoot ||
     !path.basename(resolvedUserDataDir).startsWith("mcsm-ui-smoke-")
   ) {
-    throw new Error(`Refusing to clean unexpected smoke path: ${resolvedUserDataDir}`);
+    throw new Error(
+      `Refusing to clean unexpected smoke path: ${resolvedUserDataDir}`,
+    );
   }
   const cleanup = spawn(
     process.execPath,
@@ -437,7 +441,9 @@ function cleanupAndExit(code) {
 
 async function run() {
   if (!fs.existsSync(rendererPath)) {
-    throw new Error("Production renderer is missing. Run the build before this smoke test.");
+    throw new Error(
+      "Production renderer is missing. Run the build before this smoke test.",
+    );
   }
   registerSmokeIpc();
   process.stdout.write("Electron UI smoke: loading production renderer.\n");
@@ -623,7 +629,9 @@ async function run() {
     },
   ]) {
     const label = route.view ?? route.primary;
-    process.stdout.write(`Electron UI smoke: checking ${label} server route.\n`);
+    process.stdout.write(
+      `Electron UI smoke: checking ${label} server route.\n`,
+    );
     await setRendererViewport(window, { width: 960, height: 720 });
     await clickAt(
       window.webContents,
@@ -650,13 +658,17 @@ async function run() {
       ".server-workspace-main",
       `${label} server route`,
     );
-    process.stdout.write(`Electron UI smoke: ${label} server route verified.\n`);
+    process.stdout.write(
+      `Electron UI smoke: ${label} server route verified.\n`,
+    );
   }
 
   // Monaco is bundled rather than fetched from a CDN, and its workers have to
   // start from the file:// origin the packaged app runs on. Neither survives a
   // config mistake, and neither shows up anywhere except a real editor mount.
-  process.stdout.write("Electron UI smoke: checking the bundled file editor.\n");
+  process.stdout.write(
+    "Electron UI smoke: checking the bundled file editor.\n",
+  );
   await setRendererViewport(window, { width: 1280, height: 900 });
   await clickAt(
     window.webContents,
@@ -731,7 +743,10 @@ async function run() {
   ]) {
     process.stdout.write(`Electron UI smoke: checking ${page.label} page.\n`);
     await setRendererViewport(window, { width: 960, height: 720 });
-    await clickAt(window.webContents, await buttonCenter(window.webContents, page.label));
+    await clickAt(
+      window.webContents,
+      await buttonCenter(window.webContents, page.label),
+    );
     await waitFor(
       window.webContents,
       `document.querySelector(${JSON.stringify(page.selector)})`,
@@ -741,20 +756,28 @@ async function run() {
     process.stdout.write(`Electron UI smoke: ${page.label} page verified.\n`);
   }
   await setRendererViewport(window, { width: 960, height: 720 });
-  await clickAt(window.webContents, await buttonCenter(window.webContents, "Dashboard"));
+  await clickAt(
+    window.webContents,
+    await buttonCenter(window.webContents, "Dashboard"),
+  );
   await waitFor(
     window.webContents,
     '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Create Server")',
     "the dashboard after secondary-page checks",
   );
 
-  await clickAt(window.webContents, await buttonCenter(window.webContents, "Create Server"));
+  await clickAt(
+    window.webContents,
+    await buttonCenter(window.webContents, "Create Server"),
+  );
   await waitFor(
     window.webContents,
     'document.querySelector(".page-create-server .create-server-page")',
     "the inline Create server page",
   );
-  process.stdout.write("Electron UI smoke: inline Create server page opened.\n");
+  process.stdout.write(
+    "Electron UI smoke: inline Create server page opened.\n",
+  );
 
   await waitFor(
     window.webContents,
@@ -803,12 +826,18 @@ async function run() {
       fs.writeFileSync(wizardHeaderScreenshotPath, screenshot.toPNG());
     }
   }
-  process.stdout.write(`Electron UI smoke screenshot: ${wizardHeaderScreenshotPath}\n`);
+  process.stdout.write(
+    `Electron UI smoke screenshot: ${wizardHeaderScreenshotPath}\n`,
+  );
 
-  const fileButton = await buttonCenter(window.webContents, "Open modpack file");
+  const fileButton = await buttonCenter(
+    window.webContents,
+    "Open modpack file",
+  );
   await clickAt(window.webContents, fileButton);
   await delay(100);
-  const pointerFocusVisible = await window.webContents.executeJavaScript(`(() => {
+  const pointerFocusVisible = await window.webContents
+    .executeJavaScript(`(() => {
     const button = [...document.querySelectorAll("button")].find(
       (item) => item.textContent.includes("Open modpack file"),
     );
@@ -839,7 +868,8 @@ async function run() {
     })()`);
     if (
       keyboardFocus?.focusVisible &&
-      (keyboardFocus.outlineWidth !== "0px" || keyboardFocus.boxShadow !== "none")
+      (keyboardFocus.outlineWidth !== "0px" ||
+        keyboardFocus.boxShadow !== "none")
     ) {
       break;
     }
@@ -848,14 +878,18 @@ async function run() {
     !keyboardFocus?.focusVisible ||
     (keyboardFocus.outlineWidth === "0px" && keyboardFocus.boxShadow === "none")
   ) {
-    throw new Error(`Keyboard focus was not visibly rendered: ${JSON.stringify(keyboardFocus)}`);
+    throw new Error(
+      `Keyboard focus was not visibly rendered: ${JSON.stringify(keyboardFocus)}`,
+    );
   }
   if (rendererErrors.length > 0) {
     throw new Error(`Renderer errors: ${rendererErrors.join(" | ")}`);
   }
 
   window.destroy();
-  process.stdout.write("Electron UI smoke passed: bridge, wizard, and focus behavior verified.\n");
+  process.stdout.write(
+    "Electron UI smoke passed: bridge, wizard, and focus behavior verified.\n",
+  );
 }
 
 const hardTimeout = setTimeout(() => {
@@ -872,7 +906,9 @@ app
   })
   .catch((error) => {
     clearTimeout(hardTimeout);
-    process.stderr.write(`Electron UI smoke failed: ${error.stack || error.message}\n`);
+    process.stderr.write(
+      `Electron UI smoke failed: ${error.stack || error.message}\n`,
+    );
     if (rendererErrors.length > 0) {
       process.stderr.write(
         `Renderer errors during the run:\n  ${rendererErrors.join("\n  ")}\n`,

@@ -14,7 +14,10 @@ import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
-import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/data/DataTable";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
 import { LoaderPill } from "../loaders/LoaderIdentity";
@@ -119,7 +122,8 @@ export function InstalledContentView({
     onError: notifyActionError,
   });
   const installUpdateMutation = useMutation({
-    mutationFn: (contentId: string) => installContentUpdate(server.id, contentId),
+    mutationFn: (contentId: string) =>
+      installContentUpdate(server.id, contentId),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({
@@ -150,13 +154,121 @@ export function InstalledContentView({
     ]),
   );
   const columns: DataTableColumn<InstalledContent>[] = [
-    { id: "name", header: t("content.table.name"), rowHeader: true, cell: (item) => <span className="content-name-cell"><span className="content-name-icon"><Package aria-hidden="true" size={15} /></span><span><span>{item.name}</span><small>{item.contentId ?? t("content.installed.unknownId")}</small></span></span> },
-    { id: "loader", header: t("content.table.loader"), cell: (item) => <LoaderPill loaderType={item.loader} /> },
-    { id: "version", header: t("content.table.version"), cell: (item) => item.version ?? t("common.unknown") },
-    { id: "update", header: t("content.table.update"), cell: (item) => { const update = updateByContentId.get(item.id); return update ? <span className="content-update-cell"><strong>{update.latestVersion}</strong><small>{update.provider}</small></span> : updateCheck ? t("content.installed.current") : t("content.installed.notChecked"); } },
-    { id: "installed", header: t("content.table.installed"), cell: (item) => formatDateTime(item.installedAt, language) },
-    { id: "warnings", header: t("content.table.warnings"), cell: (item) => item.warnings.length === 0 ? t("common.none") : <span className="content-warning"><AlertTriangle aria-hidden="true" size={14} />{item.warnings.join("; ")}</span> },
-    { id: "actions", header: t("content.table.actions"), cell: (item) => { const update = updateByContentId.get(item.id); return <>{item.installedPath.endsWith(".disabled") ? <Button disabled={enableMutation.isPending} variant="secondary" onClick={() => enableMutation.mutate(item.id)}>{t("tunnels.actions.enable")}</Button> : <Button disabled={disableMutation.isPending} variant="secondary" onClick={() => { disableMutation.reset(); setDangerAction({ kind: "disable", item }); }}>{t("tunnels.actions.disable")}</Button>}<Button disabled={uninstallMutation.isPending} variant="ghost" onClick={() => { uninstallMutation.reset(); setDangerAction({ kind: "uninstall", item }); }}>{t("content.installed.uninstall")}</Button>{update ? <Button aria-label={t("content.installed.updateOneAria", { content: item.name })} disabled={installUpdateMutation.isPending} variant="primary" onClick={() => installUpdateMutation.mutate(item.id)}><Download aria-hidden="true" size={14} />{t("content.installed.update")}</Button> : null}</>; } },
+    {
+      id: "name",
+      header: t("content.table.name"),
+      rowHeader: true,
+      cell: (item) => (
+        <span className="content-name-cell">
+          <span className="content-name-icon">
+            <Package aria-hidden="true" size={15} />
+          </span>
+          <span>
+            <span>{item.name}</span>
+            <small>{item.contentId ?? t("content.installed.unknownId")}</small>
+          </span>
+        </span>
+      ),
+    },
+    {
+      id: "loader",
+      header: t("content.table.loader"),
+      cell: (item) => <LoaderPill loaderType={item.loader} />,
+    },
+    {
+      id: "version",
+      header: t("content.table.version"),
+      cell: (item) => item.version ?? t("common.unknown"),
+    },
+    {
+      id: "update",
+      header: t("content.table.update"),
+      cell: (item) => {
+        const update = updateByContentId.get(item.id);
+        return update ? (
+          <span className="content-update-cell">
+            <strong>{update.latestVersion}</strong>
+            <small>{update.provider}</small>
+          </span>
+        ) : updateCheck ? (
+          t("content.installed.current")
+        ) : (
+          t("content.installed.notChecked")
+        );
+      },
+    },
+    {
+      id: "installed",
+      header: t("content.table.installed"),
+      cell: (item) => formatDateTime(item.installedAt, language),
+    },
+    {
+      id: "warnings",
+      header: t("content.table.warnings"),
+      cell: (item) =>
+        item.warnings.length === 0 ? (
+          t("common.none")
+        ) : (
+          <span className="content-warning">
+            <AlertTriangle aria-hidden="true" size={14} />
+            {item.warnings.join("; ")}
+          </span>
+        ),
+    },
+    {
+      id: "actions",
+      header: t("content.table.actions"),
+      cell: (item) => {
+        const update = updateByContentId.get(item.id);
+        return (
+          <>
+            {item.installedPath.endsWith(".disabled") ? (
+              <Button
+                disabled={enableMutation.isPending}
+                variant="secondary"
+                onClick={() => enableMutation.mutate(item.id)}
+              >
+                {t("tunnels.actions.enable")}
+              </Button>
+            ) : (
+              <Button
+                disabled={disableMutation.isPending}
+                variant="secondary"
+                onClick={() => {
+                  disableMutation.reset();
+                  setDangerAction({ kind: "disable", item });
+                }}
+              >
+                {t("tunnels.actions.disable")}
+              </Button>
+            )}
+            <Button
+              disabled={uninstallMutation.isPending}
+              variant="ghost"
+              onClick={() => {
+                uninstallMutation.reset();
+                setDangerAction({ kind: "uninstall", item });
+              }}
+            >
+              {t("content.installed.uninstall")}
+            </Button>
+            {update ? (
+              <Button
+                aria-label={t("content.installed.updateOneAria", {
+                  content: item.name,
+                })}
+                disabled={installUpdateMutation.isPending}
+                variant="primary"
+                onClick={() => installUpdateMutation.mutate(item.id)}
+              >
+                <Download aria-hidden="true" size={14} />
+                {t("content.installed.update")}
+              </Button>
+            ) : null}
+          </>
+        );
+      },
+    },
   ];
 
   return (
@@ -177,7 +289,8 @@ export function InstalledContentView({
           </Button>
           <Button
             disabled={
-              !updateCheck?.updates.length || installAllUpdatesMutation.isPending
+              !updateCheck?.updates.length ||
+              installAllUpdatesMutation.isPending
             }
             variant="secondary"
             onClick={() => installAllUpdatesMutation.mutate()}
@@ -270,7 +383,13 @@ export function InstalledContentView({
 
       {content.length > 0 ? (
         <div className="content-table-scroll">
-          <DataTable caption={t("content.installed.title")} className="content-table" columns={columns} getRowKey={(item) => item.id} rows={content} />
+          <DataTable
+            caption={t("content.installed.title")}
+            className="content-table"
+            columns={columns}
+            getRowKey={(item) => item.id}
+            rows={content}
+          />
         </div>
       ) : null}
       <ConfirmDangerDialog
@@ -292,8 +411,8 @@ export function InstalledContentView({
         }
         error={
           dangerAction?.kind === "uninstall"
-            ? uninstallMutation.error?.message ?? null
-            : disableMutation.error?.message ?? null
+            ? (uninstallMutation.error?.message ?? null)
+            : (disableMutation.error?.message ?? null)
         }
         isConfirming={disableMutation.isPending || uninstallMutation.isPending}
         isOpen={dangerAction !== null}

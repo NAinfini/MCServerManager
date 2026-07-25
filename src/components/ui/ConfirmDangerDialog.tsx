@@ -35,8 +35,7 @@ export function ConfirmDangerDialog({
   const { t } = useAppSettings();
   const [typedValue, setTypedValue] = useState("");
   const isTypedMatch =
-    !requireTypedConfirmation ||
-    typedValue.trim() === requireTypedConfirmation;
+    !requireTypedConfirmation || typedValue.trim() === requireTypedConfirmation;
 
   return (
     <DialogSurface
@@ -77,38 +76,37 @@ export function ConfirmDangerDialog({
         </div>
       )}
     >
-          {consequences && consequences.length > 0 ? (
-            <ul className="confirm-danger-consequences">
-              {consequences.map((item, index) => (
-                <li key={index}>{item}</li>
-              ))}
-            </ul>
-          ) : null}
+      {consequences && consequences.length > 0 ? (
+        <ul className="confirm-danger-consequences">
+          {consequences.map((item, index) => (
+            <li key={index}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
 
-          {children}
+      {children}
 
-          {requireTypedConfirmation ? (
-            <label className="confirm-danger-typed">
-              <span>
-                {t("common.typeToConfirm", { value: requireTypedConfirmation })}
-              </span>
-              <input
-                className="field-control"
-                type="text"
-                value={typedValue}
-                autoComplete="off"
-                spellCheck={false}
-                onChange={(e) => setTypedValue(e.target.value)}
-              />
-            </label>
-          ) : null}
+      {requireTypedConfirmation ? (
+        <label className="confirm-danger-typed">
+          <span>
+            {t("common.typeToConfirm", { value: requireTypedConfirmation })}
+          </span>
+          <input
+            className="field-control"
+            type="text"
+            value={typedValue}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setTypedValue(e.target.value)}
+          />
+        </label>
+      ) : null}
 
-          {error ? (
-            <div className="inline-error" role="alert">
-              {error}
-            </div>
-          ) : null}
-
+      {error ? (
+        <div className="inline-error" role="alert">
+          {error}
+        </div>
+      ) : null}
     </DialogSurface>
   );
 }

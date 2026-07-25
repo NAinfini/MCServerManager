@@ -9,8 +9,7 @@ export interface SidebarServerGroup {
 }
 
 export type SidebarRootItem =
-  | { type: "server"; id: string }
-  | { type: "group"; id: string };
+  { type: "server"; id: string } | { type: "group"; id: string };
 
 interface SidebarState {
   collapsed: boolean;
@@ -19,7 +18,10 @@ interface SidebarState {
   rootItems: SidebarRootItem[];
   addServerToGroup: (serverId: string, groupId: string) => void;
   createGroupFromServer: (serverId: string) => void;
-  createGroupWithServers: (sourceServerId: string, targetServerId: string) => void;
+  createGroupWithServers: (
+    sourceServerId: string,
+    targetServerId: string,
+  ) => void;
   disbandGroup: (groupId: string) => void;
   moveServerAfter: (serverId: string, targetServerId: string) => void;
   moveServerBefore: (serverId: string, targetServerId: string) => void;
@@ -97,7 +99,10 @@ export const useSidebarStore = create<SidebarState>()(
           return {
             groups: cleaned.groups.map((group) =>
               group.id === groupId
-                ? { ...group, serverIds: unique([...group.serverIds, serverId]) }
+                ? {
+                    ...group,
+                    serverIds: unique([...group.serverIds, serverId]),
+                  }
                 : group,
             ),
             rootItems: cleaned.rootItems,
@@ -142,7 +147,10 @@ export const useSidebarStore = create<SidebarState>()(
             };
           }
 
-          const targetIndex = findServerRootIndex(state.rootItems, targetServerId);
+          const targetIndex = findServerRootIndex(
+            state.rootItems,
+            targetServerId,
+          );
           const cleanedOnce = removeServerFromLayout(state, sourceServerId);
           const cleaned = removeServerFromLayout(
             { ...state, ...cleanedOnce },
@@ -161,7 +169,9 @@ export const useSidebarStore = create<SidebarState>()(
         }),
       disbandGroup: (groupId) =>
         set((state) => {
-          const group = state.groups.find((candidate) => candidate.id === groupId);
+          const group = state.groups.find(
+            (candidate) => candidate.id === groupId,
+          );
           if (!group) {
             return state;
           }
@@ -172,7 +182,9 @@ export const useSidebarStore = create<SidebarState>()(
             (item) => item.type !== "group" || item.id !== groupId,
           );
           return {
-            groups: state.groups.filter((candidate) => candidate.id !== groupId),
+            groups: state.groups.filter(
+              (candidate) => candidate.id !== groupId,
+            ),
             rootItems: insertRootItem(
               rootItems,
               { type: "server", id: group.serverIds[0] },
@@ -208,7 +220,10 @@ export const useSidebarStore = create<SidebarState>()(
               rootItems: cleaned.rootItems,
             };
           }
-          const targetIndex = findServerRootIndex(cleaned.rootItems, targetServerId);
+          const targetIndex = findServerRootIndex(
+            cleaned.rootItems,
+            targetServerId,
+          );
           return {
             groups: cleaned.groups,
             rootItems: insertRootItem(
@@ -239,7 +254,10 @@ export const useSidebarStore = create<SidebarState>()(
               rootItems: cleaned.rootItems,
             };
           }
-          const targetIndex = findServerRootIndex(cleaned.rootItems, targetServerId);
+          const targetIndex = findServerRootIndex(
+            cleaned.rootItems,
+            targetServerId,
+          );
           return {
             groups: cleaned.groups,
             rootItems: insertRootItem(
@@ -257,7 +275,8 @@ export const useSidebarStore = create<SidebarState>()(
           if (group) {
             const currentIndex = group.serverIds.indexOf(serverId);
             const nextIndex = currentIndex + offset;
-            if (nextIndex < 0 || nextIndex >= group.serverIds.length) return state;
+            if (nextIndex < 0 || nextIndex >= group.serverIds.length)
+              return state;
             const serverIds = group.serverIds.slice();
             [serverIds[currentIndex], serverIds[nextIndex]] = [
               serverIds[nextIndex],
@@ -265,7 +284,9 @@ export const useSidebarStore = create<SidebarState>()(
             ];
             return {
               groups: state.groups.map((candidate) =>
-                candidate.id === group.id ? { ...candidate, serverIds } : candidate,
+                candidate.id === group.id
+                  ? { ...candidate, serverIds }
+                  : candidate,
               ),
             };
           }
@@ -335,7 +356,10 @@ export const useSidebarStore = create<SidebarState>()(
               .map((item) => item.id),
           );
           for (const serverId of serverIds) {
-            if (!groupedServerIds.has(serverId) && !visibleServerIds.has(serverId)) {
+            if (
+              !groupedServerIds.has(serverId) &&
+              !visibleServerIds.has(serverId)
+            ) {
               rootItems.push({ type: "server", id: serverId });
             }
           }

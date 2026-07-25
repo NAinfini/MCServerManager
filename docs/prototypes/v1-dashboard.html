@@ -1,371 +1,883 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN" data-theme="dark">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>原型 · 仪表盘(V1 指挥舱)— MC Server Manager 重设计</title>
-<style>
-/* ============ V1「指挥舱」Token 单一来源(与 v1-workbench.html 一致) ============ */
-:root {
-  --bg-app: #111823;
-  --bg-sidebar: #0d1420;
-  --bg-panel: #17202e;
-  --bg-elevated: #1d2836;
-  --bg-hover: rgba(122, 156, 210, 0.08);
-  --bg-inset: #0c121c;
-  --border-subtle: rgba(148, 170, 200, 0.13);
-  --border-strong: rgba(148, 170, 200, 0.28);
-  --text-main: #e6ebf2;
-  --text-muted: #94a1b5;
-  --text-subtle: #6b7889;
-  --text-inverse: #ffffff;
-  --accent: #3478f6;
-  --accent-hover: #4a89ff;
-  --accent-soft: rgba(52, 120, 246, 0.14);
-  --accent-secondary: #6c4af6;
-  --running-glow: rgba(62, 207, 142, 0.6);
-  --running: #3ecf8e;
-  --starting: #e8b93e;
-  --stopped: #6b7889;
-  --crashed: #e5544b;
-  --warn: #e8b93e;
-  --danger: #e5544b;
-  --danger-soft: rgba(229, 84, 75, 0.12);
-  --ok-soft: rgba(62, 207, 142, 0.12);
-  --warn-soft: rgba(232, 185, 62, 0.12);
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
-  --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
-  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
-  --space-5: 20px; --space-6: 24px; --space-7: 32px; --space-8: 48px;
-  --radius-control: 6px; --radius-card: 10px; --radius-panel: 16px; --radius-pill: 999px;
-  --shadow-overlay: 0 16px 48px rgba(2, 7, 14, 0.55);
-  --motion-fast: 120ms; --motion-medium: 180ms;
-}
-@media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
-}
-* { box-sizing: border-box; margin: 0; }
-body {
-  font-family: var(--font-sans); font-size: 13px; line-height: 1.4;
-  background: var(--bg-app); color: var(--text-main);
-  height: 100vh; display: flex; flex-direction: column; overflow: hidden;
-}
-button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
-button:focus-visible, a:focus-visible {
-  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-control);
-}
-.mono { font-family: var(--font-mono); font-size: 12px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>原型 · 仪表盘(V1 指挥舱)— MC Server Manager 重设计</title>
+    <style>
+      /* ============ V1「指挥舱」Token 单一来源(与 v1-workbench.html 一致) ============ */
+      :root {
+        --bg-app: #111823;
+        --bg-sidebar: #0d1420;
+        --bg-panel: #17202e;
+        --bg-elevated: #1d2836;
+        --bg-hover: rgba(122, 156, 210, 0.08);
+        --bg-inset: #0c121c;
+        --border-subtle: rgba(148, 170, 200, 0.13);
+        --border-strong: rgba(148, 170, 200, 0.28);
+        --text-main: #e6ebf2;
+        --text-muted: #94a1b5;
+        --text-subtle: #6b7889;
+        --text-inverse: #ffffff;
+        --accent: #3478f6;
+        --accent-hover: #4a89ff;
+        --accent-soft: rgba(52, 120, 246, 0.14);
+        --accent-secondary: #6c4af6;
+        --running-glow: rgba(62, 207, 142, 0.6);
+        --running: #3ecf8e;
+        --starting: #e8b93e;
+        --stopped: #6b7889;
+        --crashed: #e5544b;
+        --warn: #e8b93e;
+        --danger: #e5544b;
+        --danger-soft: rgba(229, 84, 75, 0.12);
+        --ok-soft: rgba(62, 207, 142, 0.12);
+        --warn-soft: rgba(232, 185, 62, 0.12);
+        --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+        --font-mono: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+        --space-1: 4px;
+        --space-2: 8px;
+        --space-3: 12px;
+        --space-4: 16px;
+        --space-5: 20px;
+        --space-6: 24px;
+        --space-7: 32px;
+        --space-8: 48px;
+        --radius-control: 6px;
+        --radius-card: 10px;
+        --radius-panel: 16px;
+        --radius-pill: 999px;
+        --shadow-overlay: 0 16px 48px rgba(2, 7, 14, 0.55);
+        --motion-fast: 120ms;
+        --motion-medium: 180ms;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+        }
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+      body {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        line-height: 1.4;
+        background: var(--bg-app);
+        color: var(--text-main);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: none;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      a:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
 
-/* ============ 应用外壳(与工作台页一致) ============ */
-.app-body { display: flex; flex: 1; min-height: 0; }
-.g-sidebar {
-  width: 232px; background: var(--bg-sidebar); border-right: 1px solid var(--border-subtle);
-  display: flex; flex-direction: column; padding: var(--space-3); gap: var(--space-2); flex-shrink: 0;
-}
-.brand { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); }
-.brand-mark {
-  width: 28px; height: 28px; border-radius: var(--radius-control);
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
-  display: grid; place-items: center; font-weight: 700; font-size: 12px; color: var(--text-inverse);
-}
-.brand-name { font-weight: 650; font-size: 13px; }
-.g-nav-item {
-  display: flex; align-items: center; gap: var(--space-3); width: 100%;
-  padding: 7px var(--space-3); border-radius: var(--radius-control);
-  color: var(--text-muted); transition: background var(--motion-fast), color var(--motion-fast);
-  text-align: left;
-}
-.g-nav-item:hover { background: var(--bg-hover); color: var(--text-main); }
-.g-nav-item.active { background: var(--accent-soft); color: var(--text-main); position: relative; }
-.g-nav-item.active::before {
-  content: ""; position: absolute; left: -12px; top: 6px; bottom: 6px; width: 3px;
-  background: var(--accent); border-radius: var(--radius-pill);
-}
-.g-nav-item svg { flex-shrink: 0; opacity: 0.85; }
-.side-label {
-  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-subtle); padding: var(--space-3) var(--space-3) var(--space-1);
-}
-.server-item {
-  display: flex; align-items: center; gap: var(--space-2); width: 100%;
-  padding: 6px var(--space-2); border-radius: var(--radius-control); text-align: left;
-}
-.server-item:hover { background: var(--bg-hover); }
-.server-cover {
-  width: 28px; height: 28px; border-radius: var(--radius-control); flex-shrink: 0;
-  background: var(--bg-elevated); display: grid; place-items: center; font-size: 13px;
-  border: 1px solid var(--border-subtle);
-}
-.server-item-copy { min-width: 0; }
-.server-item-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.server-item-meta { font-size: 11px; color: var(--text-subtle); }
-.dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.dot-running { background: var(--running); box-shadow: 0 0 6px var(--running-glow); }
-.dot-stopped { background: var(--stopped); }
-.spacer { flex: 1; }
-.g-footer { border-top: 1px solid var(--border-subtle); padding-top: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
+      /* ============ 应用外壳(与工作台页一致) ============ */
+      .app-body {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+      }
+      .g-sidebar {
+        width: 232px;
+        background: var(--bg-sidebar);
+        border-right: 1px solid var(--border-subtle);
+        display: flex;
+        flex-direction: column;
+        padding: var(--space-3);
+        gap: var(--space-2);
+        flex-shrink: 0;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        padding: var(--space-2);
+      }
+      .brand-mark {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: linear-gradient(
+          135deg,
+          var(--accent),
+          var(--accent-secondary)
+        );
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 12px;
+        color: var(--text-inverse);
+      }
+      .brand-name {
+        font-weight: 650;
+        font-size: 13px;
+      }
+      .g-nav-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        width: 100%;
+        padding: 7px var(--space-3);
+        border-radius: var(--radius-control);
+        color: var(--text-muted);
+        transition:
+          background var(--motion-fast),
+          color var(--motion-fast);
+        text-align: left;
+      }
+      .g-nav-item:hover {
+        background: var(--bg-hover);
+        color: var(--text-main);
+      }
+      .g-nav-item.active {
+        background: var(--accent-soft);
+        color: var(--text-main);
+        position: relative;
+      }
+      .g-nav-item.active::before {
+        content: "";
+        position: absolute;
+        left: -12px;
+        top: 6px;
+        bottom: 6px;
+        width: 3px;
+        background: var(--accent);
+        border-radius: var(--radius-pill);
+      }
+      .g-nav-item svg {
+        flex-shrink: 0;
+        opacity: 0.85;
+      }
+      .side-label {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-subtle);
+        padding: var(--space-3) var(--space-3) var(--space-1);
+      }
+      .server-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        padding: 6px var(--space-2);
+        border-radius: var(--radius-control);
+        text-align: left;
+      }
+      .server-item:hover {
+        background: var(--bg-hover);
+      }
+      .server-cover {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        flex-shrink: 0;
+        background: var(--bg-elevated);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        border: 1px solid var(--border-subtle);
+      }
+      .server-item-copy {
+        min-width: 0;
+      }
+      .server-item-name {
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .server-item-meta {
+        font-size: 11px;
+        color: var(--text-subtle);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .dot-running {
+        background: var(--running);
+        box-shadow: 0 0 6px var(--running-glow);
+      }
+      .dot-stopped {
+        background: var(--stopped);
+      }
+      .spacer {
+        flex: 1;
+      }
+      .g-footer {
+        border-top: 1px solid var(--border-subtle);
+        padding-top: var(--space-2);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
 
-/* ============ 仪表盘主区 ============ */
-.dash { flex: 1; overflow-y: auto; padding: var(--space-6) var(--space-7); min-width: 0; }
-.dash-inner { max-width: 1080px; margin: 0 auto; }
-.dash-head { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-5); }
-.dash-head h1 { font-size: 18px; font-weight: 650; }
-.dash-head .sub { color: var(--text-subtle); font-size: 12px; }
-.dash-head .btn { margin-left: auto; }
-.btn {
-  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
-  border-radius: var(--radius-control); font-weight: 500; font-size: 13px;
-  border: 1px solid transparent; transition: background var(--motion-fast), transform var(--motion-fast);
-}
-.btn:active { transform: scale(0.97); }
-.btn-primary { background: var(--accent); color: var(--text-inverse); }
-.btn-primary:hover { background: var(--accent-hover); }
-.btn-secondary { background: var(--bg-elevated); border-color: var(--border-subtle); }
-.btn-secondary:hover { background: var(--bg-hover); border-color: var(--border-strong); }
-.btn-ghost { color: var(--text-muted); padding: 6px 8px; }
-.btn-ghost:hover { background: var(--bg-hover); color: var(--text-main); }
-.btn-danger-ghost { color: var(--danger); }
-.btn-danger-ghost:hover { background: var(--danger-soft); }
+      /* ============ 仪表盘主区 ============ */
+      .dash {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--space-6) var(--space-7);
+        min-width: 0;
+      }
+      .dash-inner {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      .dash-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        margin-bottom: var(--space-5);
+      }
+      .dash-head h1 {
+        font-size: 18px;
+        font-weight: 650;
+      }
+      .dash-head .sub {
+        color: var(--text-subtle);
+        font-size: 12px;
+      }
+      .dash-head .btn {
+        margin-left: auto;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: var(--radius-control);
+        font-weight: 500;
+        font-size: 13px;
+        border: 1px solid transparent;
+        transition:
+          background var(--motion-fast),
+          transform var(--motion-fast);
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn-primary {
+        background: var(--accent);
+        color: var(--text-inverse);
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+      }
+      .btn-secondary {
+        background: var(--bg-elevated);
+        border-color: var(--border-subtle);
+      }
+      .btn-secondary:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-strong);
+      }
+      .btn-ghost {
+        color: var(--text-muted);
+        padding: 6px 8px;
+      }
+      .btn-ghost:hover {
+        background: var(--bg-hover);
+        color: var(--text-main);
+      }
+      .btn-danger-ghost {
+        color: var(--danger);
+      }
+      .btn-danger-ghost:hover {
+        background: var(--danger-soft);
+      }
 
-/* 需要关注(A 概念的任务聚合层) */
-.attn-strip {
-  background: var(--bg-panel); border: 1px solid var(--border-subtle);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--radius-card); margin-bottom: var(--space-5); overflow: hidden;
-}
-.attn-head {
-  display: flex; align-items: center; gap: var(--space-2); width: 100%;
-  padding: var(--space-3) var(--space-4); text-align: left; font-weight: 600; font-size: 13px;
-}
-.attn-head .count-pill {
-  font-size: 11px; font-family: var(--font-mono); background: var(--warn-soft); color: var(--warn);
-  padding: 0 8px; border-radius: var(--radius-pill);
-}
-.attn-head .chev { margin-left: auto; color: var(--text-subtle); transition: transform var(--motion-medium); }
-.attn-strip.collapsed .chev { transform: rotate(-90deg); }
-.attn-list { list-style: none; padding: 0; }
-.attn-strip.collapsed .attn-list { display: none; }
-.attn-item {
-  display: flex; align-items: center; gap: var(--space-3);
-  padding: var(--space-2) var(--space-4); border-top: 1px solid var(--border-subtle); font-size: 12.5px;
-}
-.attn-item .srv { color: var(--text-subtle); font-size: 12px; flex-shrink: 0; }
-.attn-item .act { margin-left: auto; color: var(--accent); font-size: 12px; padding: 2px 8px; border-radius: var(--radius-control); flex-shrink: 0; }
-.attn-item .act:hover { background: var(--accent-soft); }
+      /* 需要关注(A 概念的任务聚合层) */
+      .attn-strip {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+        border-left: 3px solid var(--warn);
+        border-radius: var(--radius-card);
+        margin-bottom: var(--space-5);
+        overflow: hidden;
+      }
+      .attn-head {
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+        width: 100%;
+        padding: var(--space-3) var(--space-4);
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+      }
+      .attn-head .count-pill {
+        font-size: 11px;
+        font-family: var(--font-mono);
+        background: var(--warn-soft);
+        color: var(--warn);
+        padding: 0 8px;
+        border-radius: var(--radius-pill);
+      }
+      .attn-head .chev {
+        margin-left: auto;
+        color: var(--text-subtle);
+        transition: transform var(--motion-medium);
+      }
+      .attn-strip.collapsed .chev {
+        transform: rotate(-90deg);
+      }
+      .attn-list {
+        list-style: none;
+        padding: 0;
+      }
+      .attn-strip.collapsed .attn-list {
+        display: none;
+      }
+      .attn-item {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+        padding: var(--space-2) var(--space-4);
+        border-top: 1px solid var(--border-subtle);
+        font-size: 12.5px;
+      }
+      .attn-item .srv {
+        color: var(--text-subtle);
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .attn-item .act {
+        margin-left: auto;
+        color: var(--accent);
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: var(--radius-control);
+        flex-shrink: 0;
+      }
+      .attn-item .act:hover {
+        background: var(--accent-soft);
+      }
 
-/* 服务器卡片 */
-.card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
-.srv-card {
-  background: var(--bg-panel); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card); padding: var(--space-4) var(--space-5);
-  display: flex; flex-direction: column; gap: var(--space-3); text-align: left;
-  transition: border-color var(--motion-fast);
-}
-.srv-card:hover { border-color: var(--border-strong); }
-.srv-card.is-running { border-top: 2px solid var(--running); }
-.srv-top { display: flex; align-items: center; gap: var(--space-3); }
-.srv-cover-lg {
-  width: 40px; height: 40px; border-radius: var(--radius-control); flex-shrink: 0;
-  background: var(--bg-elevated); border: 1px solid var(--border-subtle);
-  display: grid; place-items: center; font-size: 19px;
-}
-.srv-name { font-size: 14px; font-weight: 650; }
-.srv-meta { font-size: 12px; color: var(--text-subtle); font-family: var(--font-mono); }
-.badge {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px;
-  border-radius: var(--radius-pill); font-size: 12px; font-weight: 500; margin-left: auto; flex-shrink: 0;
-}
-.badge-running { background: var(--ok-soft); color: var(--running); }
-.badge-stopped { background: var(--bg-elevated); color: var(--text-subtle); }
-.srv-tele { display: flex; gap: var(--space-4); font-size: 12px; color: var(--text-muted); align-items: center; }
-.srv-tele b { color: var(--text-main); font-weight: 500; font-family: var(--font-mono); }
-.spark { margin-left: auto; }
-.spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; }
-.spark .area { fill: var(--accent-soft); stroke: none; }
-.srv-idle-note { font-size: 12px; color: var(--text-subtle); }
-.srv-actions { display: flex; gap: var(--space-2); border-top: 1px solid var(--border-subtle); padding-top: var(--space-3); margin-top: auto; }
-.srv-actions .grow { margin-left: auto; }
+      /* 服务器卡片 */
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: var(--space-4);
+        margin-bottom: var(--space-5);
+      }
+      .srv-card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-card);
+        padding: var(--space-4) var(--space-5);
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        text-align: left;
+        transition: border-color var(--motion-fast);
+      }
+      .srv-card:hover {
+        border-color: var(--border-strong);
+      }
+      .srv-card.is-running {
+        border-top: 2px solid var(--running);
+      }
+      .srv-top {
+        display: flex;
+        align-items: center;
+        gap: var(--space-3);
+      }
+      .srv-cover-lg {
+        width: 40px;
+        height: 40px;
+        border-radius: var(--radius-control);
+        flex-shrink: 0;
+        background: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        display: grid;
+        place-items: center;
+        font-size: 19px;
+      }
+      .srv-name {
+        font-size: 14px;
+        font-weight: 650;
+      }
+      .srv-meta {
+        font-size: 12px;
+        color: var(--text-subtle);
+        font-family: var(--font-mono);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: auto;
+        flex-shrink: 0;
+      }
+      .badge-running {
+        background: var(--ok-soft);
+        color: var(--running);
+      }
+      .badge-stopped {
+        background: var(--bg-elevated);
+        color: var(--text-subtle);
+      }
+      .srv-tele {
+        display: flex;
+        gap: var(--space-4);
+        font-size: 12px;
+        color: var(--text-muted);
+        align-items: center;
+      }
+      .srv-tele b {
+        color: var(--text-main);
+        font-weight: 500;
+        font-family: var(--font-mono);
+      }
+      .spark {
+        margin-left: auto;
+      }
+      .spark polyline {
+        fill: none;
+        stroke: var(--accent);
+        stroke-width: 1.5;
+      }
+      .spark .area {
+        fill: var(--accent-soft);
+        stroke: none;
+      }
+      .srv-idle-note {
+        font-size: 12px;
+        color: var(--text-subtle);
+      }
+      .srv-actions {
+        display: flex;
+        gap: var(--space-2);
+        border-top: 1px solid var(--border-subtle);
+        padding-top: var(--space-3);
+        margin-top: auto;
+      }
+      .srv-actions .grow {
+        margin-left: auto;
+      }
 
-/* 新建服务器卡 */
-.new-card {
-  border: 1px dashed var(--border-strong); border-radius: var(--radius-card);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
-  color: var(--text-subtle); min-height: 172px; text-align: center; padding: var(--space-4);
-  transition: border-color var(--motion-fast), color var(--motion-fast), background var(--motion-fast);
-}
-.new-card:hover { border-color: var(--accent); color: var(--text-main); background: var(--bg-hover); }
-.new-plus {
-  width: 34px; height: 34px; border-radius: var(--radius-control);
-  background: var(--accent-soft); color: var(--accent);
-  display: grid; place-items: center; font-size: 18px; font-weight: 600;
-}
-.new-card b { font-size: 13px; font-weight: 600; }
-.new-card span { font-size: 12px; }
+      /* 新建服务器卡 */
+      .new-card {
+        border: 1px dashed var(--border-strong);
+        border-radius: var(--radius-card);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+        color: var(--text-subtle);
+        min-height: 172px;
+        text-align: center;
+        padding: var(--space-4);
+        transition:
+          border-color var(--motion-fast),
+          color var(--motion-fast),
+          background var(--motion-fast);
+      }
+      .new-card:hover {
+        border-color: var(--accent);
+        color: var(--text-main);
+        background: var(--bg-hover);
+      }
+      .new-plus {
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-control);
+        background: var(--accent-soft);
+        color: var(--accent);
+        display: grid;
+        place-items: center;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .new-card b {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .new-card span {
+        font-size: 12px;
+      }
 
-/* 最近活动 */
-.card {
-  background: var(--bg-panel); border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card); padding: var(--space-4) var(--space-5);
-}
-.card-title { font-size: 13px; font-weight: 650; margin-bottom: var(--space-3); display: flex; align-items: center; gap: var(--space-2); }
-.card-title .link { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 400; text-decoration: none; }
-.timeline { list-style: none; padding: 0; display: flex; flex-direction: column; }
-.timeline li { display: flex; gap: var(--space-3); padding: 6px 0; align-items: baseline; }
-.timeline time { font-family: var(--font-mono); font-size: 11px; color: var(--text-subtle); flex-shrink: 0; width: 52px; }
-.tl-srv { color: var(--text-subtle); font-size: 12px; flex-shrink: 0; }
-.tl-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); flex-shrink: 0; align-self: center; }
-.tl-dot.ok { background: var(--running); } .tl-dot.warn { background: var(--warn); }
+      /* 最近活动 */
+      .card {
+        background: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-card);
+        padding: var(--space-4) var(--space-5);
+      }
+      .card-title {
+        font-size: 13px;
+        font-weight: 650;
+        margin-bottom: var(--space-3);
+        display: flex;
+        align-items: center;
+        gap: var(--space-2);
+      }
+      .card-title .link {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--accent);
+        font-weight: 400;
+        text-decoration: none;
+      }
+      .timeline {
+        list-style: none;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .timeline li {
+        display: flex;
+        gap: var(--space-3);
+        padding: 6px 0;
+        align-items: baseline;
+      }
+      .timeline time {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-subtle);
+        flex-shrink: 0;
+        width: 52px;
+      }
+      .tl-srv {
+        color: var(--text-subtle);
+        font-size: 12px;
+        flex-shrink: 0;
+      }
+      .tl-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--border-strong);
+        flex-shrink: 0;
+        align-self: center;
+      }
+      .tl-dot.ok {
+        background: var(--running);
+      }
+      .tl-dot.warn {
+        background: var(--warn);
+      }
 
-/* 底部状态栏 */
-.status-bar {
-  height: 24px; border-top: 1px solid var(--border-subtle); background: var(--bg-sidebar);
-  display: flex; align-items: center; gap: var(--space-5); padding: 0 var(--space-4);
-  font-size: 11px; color: var(--text-subtle); flex-shrink: 0;
-}
-.status-bar .mono { font-size: 11px; }
+      /* 底部状态栏 */
+      .status-bar {
+        height: 24px;
+        border-top: 1px solid var(--border-subtle);
+        background: var(--bg-sidebar);
+        display: flex;
+        align-items: center;
+        gap: var(--space-5);
+        padding: 0 var(--space-4);
+        font-size: 11px;
+        color: var(--text-subtle);
+        flex-shrink: 0;
+      }
+      .status-bar .mono {
+        font-size: 11px;
+      }
 
-/* ============ 响应式 ============ */
-@media (max-width: 880px) {
-  .g-sidebar { width: 60px; }
-  .brand-name, .g-nav-item span, .side-label, .server-item-copy, .g-footer span { display: none; }
-  .g-nav-item, .server-item { justify-content: center; }
-  .dash { padding: var(--space-5) var(--space-4); }
-}
-</style>
-</head>
-<body>
+      /* ============ 响应式 ============ */
+      @media (max-width: 880px) {
+        .g-sidebar {
+          width: 60px;
+        }
+        .brand-name,
+        .g-nav-item span,
+        .side-label,
+        .server-item-copy,
+        .g-footer span {
+          display: none;
+        }
+        .g-nav-item,
+        .server-item {
+          justify-content: center;
+        }
+        .dash {
+          padding: var(--space-5) var(--space-4);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app-body">
+      <!-- 全局侧栏(与工作台页一致,仪表盘为当前项) -->
+      <aside class="g-sidebar">
+        <div class="brand">
+          <div class="brand-mark">MC</div>
+          <span class="brand-name">MC Server Manager</span>
+        </div>
+        <button class="g-nav-item active">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="3" y="3" width="7" height="9" rx="1" />
+            <rect x="14" y="3" width="7" height="5" rx="1" />
+            <rect x="14" y="12" width="7" height="9" rx="1" />
+            <rect x="3" y="16" width="7" height="5" rx="1" /></svg
+          ><span>仪表盘</span>
+        </button>
+        <div class="side-label">服务器</div>
+        <button class="server-item">
+          <span class="dot dot-running"></span>
+          <span class="server-cover">🧵</span>
+          <span class="server-item-copy"
+            ><span class="server-item-name">Fabric Workshop</span><br /><span
+              class="server-item-meta"
+              >Fabric 1.21.1 · :25565</span
+            ></span
+          >
+        </button>
+        <button class="server-item">
+          <span class="dot dot-stopped"></span>
+          <span class="server-cover">📄</span>
+          <span class="server-item-copy"
+            ><span class="server-item-name">Paper Survival</span><br /><span
+              class="server-item-meta"
+              >Paper 1.21.4 · :25566</span
+            ></span
+          >
+        </button>
+        <div class="spacer"></div>
+        <div class="g-footer">
+          <button class="g-nav-item">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"
+              /></svg
+            ><span>Java Runtimes</span>
+          </button>
+          <button class="g-nav-item">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"
+              /></svg
+            ><span>应用活动</span>
+          </button>
+          <button class="g-nav-item">
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+              /></svg
+            ><span>设置</span>
+          </button>
+        </div>
+      </aside>
 
-<div class="app-body">
-  <!-- 全局侧栏(与工作台页一致,仪表盘为当前项) -->
-  <aside class="g-sidebar">
-    <div class="brand"><div class="brand-mark">MC</div><span class="brand-name">MC Server Manager</span></div>
-    <button class="g-nav-item active"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span>仪表盘</span></button>
-    <div class="side-label">服务器</div>
-    <button class="server-item">
-      <span class="dot dot-running"></span>
-      <span class="server-cover">🧵</span>
-      <span class="server-item-copy"><span class="server-item-name">Fabric Workshop</span><br><span class="server-item-meta">Fabric 1.21.1 · :25565</span></span>
-    </button>
-    <button class="server-item">
-      <span class="dot dot-stopped"></span>
-      <span class="server-cover">📄</span>
-      <span class="server-item-copy"><span class="server-item-name">Paper Survival</span><br><span class="server-item-meta">Paper 1.21.4 · :25566</span></span>
-    </button>
-    <div class="spacer"></div>
-    <div class="g-footer">
-      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 8h1a4 4 0 1 1 0 8h-1M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/></svg><span>Java Runtimes</span></button>
-      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/></svg><span>应用活动</span></button>
-      <button class="g-nav-item"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg><span>设置</span></button>
+      <!-- 仪表盘 -->
+      <main class="dash">
+        <div class="dash-inner">
+          <div class="dash-head">
+            <h1>仪表盘</h1>
+            <span class="sub">2 台服务器 · 1 台运行中</span>
+            <button class="btn btn-primary">+ 新建服务器</button>
+          </div>
+
+          <!-- 需要关注:跨服任务聚合(概念 A 吸收点) -->
+          <div class="attn-strip" id="attnStrip">
+            <button
+              class="attn-head"
+              id="attnToggle"
+              aria-expanded="true"
+              aria-controls="attnList"
+            >
+              需要关注 <span class="count-pill">3</span>
+              <span class="chev">▾</span>
+            </button>
+            <ul class="attn-list" id="attnList">
+              <li class="attn-item">
+                <span class="tl-dot warn"></span>
+                <span class="srv">Fabric Workshop</span>
+                <span>3 个模组有可用更新</span>
+                <button class="act">查看更新 →</button>
+              </li>
+              <li class="attn-item">
+                <span class="tl-dot warn"></span>
+                <span class="srv">Paper Survival</span>
+                <span>已 7 天未备份</span>
+                <button class="act">立即备份 →</button>
+              </li>
+              <li class="attn-item">
+                <span class="tl-dot"></span>
+                <span class="srv">应用</span>
+                <span>Java 21.0.5 更新可用(当前 21.0.3)</span>
+                <button class="act">前往 Java →</button>
+              </li>
+            </ul>
+          </div>
+
+          <!-- 服务器卡片 -->
+          <div class="card-grid">
+            <button class="srv-card is-running">
+              <span class="srv-top">
+                <span class="srv-cover-lg">🧵</span>
+                <span
+                  ><span class="srv-name">Fabric Workshop</span><br /><span
+                    class="srv-meta"
+                    >Fabric 1.21.1 · :25565</span
+                  ></span
+                >
+                <span class="badge badge-running"
+                  ><span class="dot dot-running"></span>运行中</span
+                >
+              </span>
+              <span class="srv-tele">
+                <span>CPU <b>18%</b></span
+                ><span>内存 <b>2.5G</b></span
+                ><span>玩家 <b>2</b></span
+                ><span>TPS <b>19.9</b></span>
+                <svg
+                  class="spark"
+                  width="72"
+                  height="24"
+                  viewBox="0 0 72 24"
+                  aria-hidden="true"
+                >
+                  <polygon
+                    class="area"
+                    points="0,24 0,16 9,14 18,17 27,12 36,13 45,9 54,11 63,7 72,9 72,24"
+                  />
+                  <polyline
+                    points="0,16 9,14 18,17 27,12 36,13 45,9 54,11 63,7 72,9"
+                  />
+                </svg>
+              </span>
+              <span class="srv-actions">
+                <span class="btn btn-secondary">打开</span>
+                <span class="btn btn-danger-ghost">停止</span>
+                <span class="btn btn-primary grow">邀请朋友</span>
+              </span>
+            </button>
+
+            <button class="srv-card">
+              <span class="srv-top">
+                <span class="srv-cover-lg">📄</span>
+                <span
+                  ><span class="srv-name">Paper Survival</span><br /><span
+                    class="srv-meta"
+                    >Paper 1.21.4 · :25566</span
+                  ></span
+                >
+                <span class="badge badge-stopped"
+                  ><span class="dot dot-stopped"></span>已停止</span
+                >
+              </span>
+              <span class="srv-idle-note"
+                >上次运行:昨天 22:14 · 已 7 天未备份</span
+              >
+              <span class="srv-actions">
+                <span class="btn btn-primary">启动</span>
+                <span class="btn btn-secondary grow">打开</span>
+              </span>
+            </button>
+
+            <button class="new-card">
+              <span class="new-plus">+</span>
+              <b>新建服务器</b>
+              <span>向导会引导选择版本、Java 与内存,3 步完成</span>
+            </button>
+          </div>
+
+          <!-- 最近活动(跨服) -->
+          <div class="card">
+            <div class="card-title">
+              最近活动 <a class="link" href="#activity">查看全部 →</a>
+            </div>
+            <ul class="timeline">
+              <li>
+                <time>11:00</time><span class="tl-dot ok"></span
+                ><span class="tl-srv">Fabric Workshop</span
+                ><span>服务器启动完成(1.2s)</span>
+              </li>
+              <li>
+                <time>10:58</time><span class="tl-dot"></span
+                ><span class="tl-srv">Fabric Workshop</span
+                ><span>Alex 加入了游戏</span>
+              </li>
+              <li>
+                <time>10:55</time><span class="tl-dot"></span
+                ><span class="tl-srv">Fabric Workshop</span
+                ><span>世界备份完成 · 4.0 MB</span>
+              </li>
+              <li>
+                <time>昨天</time><span class="tl-dot warn"></span
+                ><span class="tl-srv">Paper Survival</span
+                ><span>服务器已停止(手动)</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </main>
     </div>
-  </aside>
 
-  <!-- 仪表盘 -->
-  <main class="dash">
-    <div class="dash-inner">
-      <div class="dash-head">
-        <h1>仪表盘</h1>
-        <span class="sub">2 台服务器 · 1 台运行中</span>
-        <button class="btn btn-primary">+ 新建服务器</button>
-      </div>
+    <footer class="status-bar">
+      <span>● 1 运行 · 1 停止</span>
+      <span class="mono">Java 21 (Temurin)</span>
+      <span style="margin-left: auto" class="mono"
+        >v0.2.0-redesign-prototype</span
+      >
+    </footer>
 
-      <!-- 需要关注:跨服任务聚合(概念 A 吸收点) -->
-      <div class="attn-strip" id="attnStrip">
-        <button class="attn-head" id="attnToggle" aria-expanded="true" aria-controls="attnList">
-          需要关注 <span class="count-pill">3</span>
-          <span class="chev">▾</span>
-        </button>
-        <ul class="attn-list" id="attnList">
-          <li class="attn-item">
-            <span class="tl-dot warn"></span>
-            <span class="srv">Fabric Workshop</span>
-            <span>3 个模组有可用更新</span>
-            <button class="act">查看更新 →</button>
-          </li>
-          <li class="attn-item">
-            <span class="tl-dot warn"></span>
-            <span class="srv">Paper Survival</span>
-            <span>已 7 天未备份</span>
-            <button class="act">立即备份 →</button>
-          </li>
-          <li class="attn-item">
-            <span class="tl-dot"></span>
-            <span class="srv">应用</span>
-            <span>Java 21.0.5 更新可用(当前 21.0.3)</span>
-            <button class="act">前往 Java →</button>
-          </li>
-        </ul>
-      </div>
-
-      <!-- 服务器卡片 -->
-      <div class="card-grid">
-        <button class="srv-card is-running">
-          <span class="srv-top">
-            <span class="srv-cover-lg">🧵</span>
-            <span><span class="srv-name">Fabric Workshop</span><br><span class="srv-meta">Fabric 1.21.1 · :25565</span></span>
-            <span class="badge badge-running"><span class="dot dot-running"></span>运行中</span>
-          </span>
-          <span class="srv-tele">
-            <span>CPU <b>18%</b></span><span>内存 <b>2.5G</b></span><span>玩家 <b>2</b></span><span>TPS <b>19.9</b></span>
-            <svg class="spark" width="72" height="24" viewBox="0 0 72 24" aria-hidden="true">
-              <polygon class="area" points="0,24 0,16 9,14 18,17 27,12 36,13 45,9 54,11 63,7 72,9 72,24"/>
-              <polyline points="0,16 9,14 18,17 27,12 36,13 45,9 54,11 63,7 72,9"/>
-            </svg>
-          </span>
-          <span class="srv-actions">
-            <span class="btn btn-secondary">打开</span>
-            <span class="btn btn-danger-ghost">停止</span>
-            <span class="btn btn-primary grow">邀请朋友</span>
-          </span>
-        </button>
-
-        <button class="srv-card">
-          <span class="srv-top">
-            <span class="srv-cover-lg">📄</span>
-            <span><span class="srv-name">Paper Survival</span><br><span class="srv-meta">Paper 1.21.4 · :25566</span></span>
-            <span class="badge badge-stopped"><span class="dot dot-stopped"></span>已停止</span>
-          </span>
-          <span class="srv-idle-note">上次运行:昨天 22:14 · 已 7 天未备份</span>
-          <span class="srv-actions">
-            <span class="btn btn-primary">启动</span>
-            <span class="btn btn-secondary grow">打开</span>
-          </span>
-        </button>
-
-        <button class="new-card">
-          <span class="new-plus">+</span>
-          <b>新建服务器</b>
-          <span>向导会引导选择版本、Java 与内存,3 步完成</span>
-        </button>
-      </div>
-
-      <!-- 最近活动(跨服) -->
-      <div class="card">
-        <div class="card-title">最近活动 <a class="link" href="#activity">查看全部 →</a></div>
-        <ul class="timeline">
-          <li><time>11:00</time><span class="tl-dot ok"></span><span class="tl-srv">Fabric Workshop</span><span>服务器启动完成(1.2s)</span></li>
-          <li><time>10:58</time><span class="tl-dot"></span><span class="tl-srv">Fabric Workshop</span><span>Alex 加入了游戏</span></li>
-          <li><time>10:55</time><span class="tl-dot"></span><span class="tl-srv">Fabric Workshop</span><span>世界备份完成 · 4.0 MB</span></li>
-          <li><time>昨天</time><span class="tl-dot warn"></span><span class="tl-srv">Paper Survival</span><span>服务器已停止(手动)</span></li>
-        </ul>
-      </div>
-    </div>
-  </main>
-</div>
-
-<footer class="status-bar">
-  <span>● 1 运行 · 1 停止</span>
-  <span class="mono">Java 21 (Temurin)</span>
-  <span style="margin-left:auto" class="mono">v0.2.0-redesign-prototype</span>
-</footer>
-
-<script>
-// 需要关注折叠
-const attnStrip = document.getElementById('attnStrip');
-const attnToggle = document.getElementById('attnToggle');
-attnToggle.addEventListener('click', () => {
-  const collapsed = attnStrip.classList.toggle('collapsed');
-  attnToggle.setAttribute('aria-expanded', String(!collapsed));
-});
-</script>
-</body>
+    <script>
+      // 需要关注折叠
+      const attnStrip = document.getElementById("attnStrip");
+      const attnToggle = document.getElementById("attnToggle");
+      attnToggle.addEventListener("click", () => {
+        const collapsed = attnStrip.classList.toggle("collapsed");
+        attnToggle.setAttribute("aria-expanded", String(!collapsed));
+      });
+    </script>
+  </body>
 </html>

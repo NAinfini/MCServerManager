@@ -103,7 +103,9 @@ describe("ServerBackupsView", () => {
     renderBackups();
 
     await user.click(await screen.findByTitle("Restore backup"));
-    fireEvent.submit(screen.getByRole("button", { name: "Restore" }).closest("form")!);
+    fireEvent.submit(
+      screen.getByRole("button", { name: "Restore" }).closest("form")!,
+    );
     expect(invoke).not.toHaveBeenCalledWith("restore_world_backup", {
       input: {
         backupId: backup.id,
@@ -180,9 +182,9 @@ describe("ServerBackupsView", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await waitFor(() => {
       expect(
-        vi.mocked(invoke).mock.calls.filter(
-          ([command]) => command === "list_server_backups",
-        ),
+        vi
+          .mocked(invoke)
+          .mock.calls.filter(([command]) => command === "list_server_backups"),
       ).toHaveLength(2);
     });
   });

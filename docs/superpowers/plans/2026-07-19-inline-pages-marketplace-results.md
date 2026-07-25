@@ -20,11 +20,13 @@
 ### Task 1: Java 与设置主内容页
 
 **Files:**
+
 - Modify: `src/components/layout/AppShell.test.tsx`
 - Modify: `src/components/layout/AppShell.tsx`
 - Modify: `src/styles.css`
 
 **Interfaces:**
+
 - Consumes: `SidebarPage`、`JavaRuntimesView`、`SettingsView`。
 - Produces: `activePage === "java" | "settings"` 的内联主内容渲染。
 
@@ -49,10 +51,12 @@ Expected: PASS。
 ### Task 2: 创建市场高度与重复导航
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerWizard.test.tsx`
 - Modify: `src/features/servers/CreateServerWizard.tsx`
 
 **Interfaces:**
+
 - Consumes: `CreateServerMarketplaceBrowser`、`onHeaderBackChange`。
 - Produces: `.wizard-marketplace-step` 满高容器及仅顶部返回入口。
 
@@ -77,12 +81,14 @@ Expected: PASS。
 ### Task 3: BBSMC 默认公开整合包列表
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.test.tsx`
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx`
 - Modify: `electron/backend.test.mjs`
 - Modify: `electron/backend.cjs`
 
 **Interfaces:**
+
 - Consumes: `searchBbsmcProjects(query, options)`。
 - Produces: BBSMC 空查询默认列表；Modrinth 默认行为不变。
 
@@ -107,9 +113,11 @@ Expected: PASS。
 ### Task 4: 综合验证与审查
 
 **Files:**
+
 - Review: all modified source and test files.
 
 **Interfaces:**
+
 - Consumes: Tasks 1–3 outputs.
 - Produces: 可构建、类型正确且无回归的应用。
 

@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -213,7 +207,9 @@ describe("ScheduledTasksView", () => {
 
     renderTasks();
 
-    expect(await screen.findByText("Task list unavailable")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Task list unavailable"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("No scheduled tasks")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
@@ -245,4 +241,3 @@ describe("ScheduledTasksView", () => {
     expect(screen.queryByText("failed")).not.toBeInTheDocument();
   });
 });
-

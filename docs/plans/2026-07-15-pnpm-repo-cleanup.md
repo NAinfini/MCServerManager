@@ -13,6 +13,7 @@
 ### Task 1: Pin pnpm and prevent repository-local dependency duplication
 
 **Files:**
+
 - Modify: `electron/release-workflows.test.mjs`
 - Modify: `package.json`
 - Modify: `.npmrc`
@@ -74,6 +75,7 @@ git commit -m "Configure pnpm without a local copied store"
 ### Task 2: Remove generated dependency and build trees
 
 **Files:**
+
 - Remove ignored directories only: `node_modules`, `.pnpm-store`, `dist`, `release`, `artifacts`, `tmp`
 
 **Step 1: Verify the worktree and target paths**
@@ -97,6 +99,7 @@ Expected: no output.
 ### Task 3: Prune obsolete Git recovery objects
 
 **Files:**
+
 - Mutate Git metadata only: `.git/logs`, `.git/objects`
 
 **Step 1: Check repository integrity before pruning**
@@ -137,6 +140,7 @@ Expected: loose object storage is near zero and packed reachable history remains
 ### Task 4: Reinstall and verify the Electron project
 
 **Files:**
+
 - Recreate ignored directory: `node_modules`
 - Use external pnpm store selected by pnpm
 
@@ -171,4 +175,3 @@ Run: `git status --short`
 Expected: no tracked changes.
 
 Measure top-level directory sizes again. Confirm `.git` no longer contains the obsolete loose-object payload, `.pnpm-store` is absent, and only the reproducible `node_modules` and `dist` generated trees remain.
-

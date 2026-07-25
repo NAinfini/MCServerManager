@@ -96,4 +96,3 @@ describe("CloseBehaviorDialog", () => {
     expect(container).toBeEmptyDOMElement();
   });
 });
-

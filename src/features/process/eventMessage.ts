@@ -12,10 +12,7 @@ const exactMessages: Record<string, string> = {
     "processEvents.restartAborted",
 };
 
-export function formatProcessEventMessage(
-  message: string,
-  t: EventTranslator,
-) {
+export function formatProcessEventMessage(message: string, t: EventTranslator) {
   const exactKey = exactMessages[message];
   if (exactKey) return t(exactKey);
 
@@ -38,9 +35,7 @@ export function formatProcessEventMessage(
     return t("processEvents.restartScheduled", { time: countdown[1] });
   }
 
-  const playerAccess = message.match(
-    /^Player access updated: (\S+) (.+)\.$/,
-  );
+  const playerAccess = message.match(/^Player access updated: (\S+) (.+)\.$/);
   if (playerAccess) {
     return t("processEvents.playerAccessUpdated", {
       action: playerAccess[1],

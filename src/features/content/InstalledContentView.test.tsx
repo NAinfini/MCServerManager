@@ -142,7 +142,9 @@ describe("InstalledContentView", () => {
     });
     renderContent();
 
-    await user.click(await screen.findByRole("button", { name: "Check updates" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Check updates" }),
+    );
 
     expect(await screen.findByText("2.0.0")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Update Fabric API" }));

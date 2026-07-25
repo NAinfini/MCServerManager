@@ -9,7 +9,11 @@ import {
 } from "../../test/render";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
-import { filterPropertyGroups, serverPropertiesDefaultValues, ServerPropertiesEditor } from "./ServerPropertiesEditor";
+import {
+  filterPropertyGroups,
+  serverPropertiesDefaultValues,
+  ServerPropertiesEditor,
+} from "./ServerPropertiesEditor";
 import type { ServerProfile } from "../../domain/server";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -74,9 +78,11 @@ describe("ServerPropertiesEditor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
     await waitFor(() => {
       expect(
-        vi.mocked(invoke).mock.calls.filter(
-          ([command]) => command === "read_server_properties",
-        ),
+        vi
+          .mocked(invoke)
+          .mock.calls.filter(
+            ([command]) => command === "read_server_properties",
+          ),
       ).toHaveLength(2);
     });
   });
@@ -105,8 +111,12 @@ describe("ServerPropertiesEditor", () => {
     expect(await screen.findByDisplayValue("Hello")).toBeInTheDocument();
     expect(screen.getByDisplayValue("25565")).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: "gamemode" })).toHaveTextContent("survival");
-      expect(screen.getByRole("combobox", { name: "difficulty" })).toHaveTextContent("hard");
+      expect(
+        screen.getByRole("combobox", { name: "gamemode" }),
+      ).toHaveTextContent("survival");
+      expect(
+        screen.getByRole("combobox", { name: "difficulty" }),
+      ).toHaveTextContent("hard");
     });
     expect(screen.getByDisplayValue("20")).toBeInTheDocument();
     expect(screen.getByDisplayValue("12")).toBeInTheDocument();
@@ -145,7 +155,9 @@ describe("ServerPropertiesEditor", () => {
 
     renderEditor();
 
-    expect(await screen.findByText("No server.properties file yet")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No server.properties file yet"),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -231,8 +243,12 @@ describe("ServerPropertiesEditor", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /save properties/i }));
 
-    expect(await screen.findByText("Enter a port from 1 to 65535")).toBeInTheDocument();
-    expect(invoke).not.toHaveBeenCalledWith("save_server_properties", expect.anything());
+    expect(
+      await screen.findByText("Enter a port from 1 to 65535"),
+    ).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith(
+      "save_server_properties",
+      expect.anything(),
+    );
   });
 });
-

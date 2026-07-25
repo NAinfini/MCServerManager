@@ -29,21 +29,30 @@ export function ServerOverviewWorkspace({
           aria-label={t("server.workspace.quickLinks")}
           className="server-overview-quick-links"
         >
-          <Button variant="secondary" onClick={() => onNavigate("players", "online")}>
+          <Button
+            variant="secondary"
+            onClick={() => onNavigate("players", "online")}
+          >
             <Users aria-hidden="true" size={16} />
             <span>
               <strong>{t("server.workspace.players")}</strong>
               <small>{t("server.workspace.quick.players")}</small>
             </span>
           </Button>
-          <Button variant="secondary" onClick={() => onNavigate("content", "installed")}>
+          <Button
+            variant="secondary"
+            onClick={() => onNavigate("content", "installed")}
+          >
             <Package aria-hidden="true" size={16} />
             <span>
               <strong>{t("server.workspace.content")}</strong>
               <small>{t("server.workspace.quick.content")}</small>
             </span>
           </Button>
-          <Button variant="secondary" onClick={() => onNavigate("data", "backups")}>
+          <Button
+            variant="secondary"
+            onClick={() => onNavigate("data", "backups")}
+          >
             <Archive aria-hidden="true" size={16} />
             <span>
               <strong>{t("server.workspace.data")}</strong>

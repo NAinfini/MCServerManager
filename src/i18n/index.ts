@@ -18,7 +18,10 @@ interface AppSettingsContextValue {
   language: Language;
   setLanguage: (language: Language) => void;
   setTheme: (theme: ThemeSetting) => void;
-  t: (key: string, values?: Record<string, string | number | null | undefined>) => string;
+  t: (
+    key: string,
+    values?: Record<string, string | number | null | undefined>,
+  ) => string;
   theme: ThemeSetting;
 }
 

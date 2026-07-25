@@ -49,7 +49,9 @@ export function ServerLogsView({ server }: { server: ServerProfile }) {
         </Button>
       </div>
 
-      {logsQuery.isLoading ? <LoadingState message={t("logs.loading")} /> : null}
+      {logsQuery.isLoading ? (
+        <LoadingState message={t("logs.loading")} />
+      ) : null}
 
       {logsQuery.error ? (
         <div className="list-state list-state-error" role="alert">
@@ -92,7 +94,8 @@ export function ServerLogsView({ server }: { server: ServerProfile }) {
                 <span>
                   <strong>{log.fileName}</strong>
                   <small>
-                    {formatBytes(log.sizeBytes)} - {formatDateTime(log.modifiedAt, language)}
+                    {formatBytes(log.sizeBytes)} -{" "}
+                    {formatDateTime(log.modifiedAt, language)}
                   </small>
                 </span>
               </button>

@@ -13,6 +13,7 @@
 ### Task 1: Java managed-runtime panel layout
 
 **Files:**
+
 - Modify: `src/features/java/JavaRuntimesView.test.tsx`
 - Modify: `src/features/java/JavaRuntimesView.tsx`
 - Modify: `src/styles.test.mjs`
@@ -48,6 +49,7 @@ git commit -m "fix: prevent java panel content clipping"
 ### Task 2: Theme contrast and success token
 
 **Files:**
+
 - Modify: `src/styles.test.mjs`
 - Modify: `src/styles.css`
 
@@ -81,6 +83,7 @@ git commit -m "fix: meet ui color contrast requirements"
 ### Task 3: View-toggle names and wizard semantics
 
 **Files:**
+
 - Modify: `src/components/layout/AppShell.test.tsx`
 - Modify: `src/components/layout/AppShell.tsx`
 - Modify: `src/features/servers/CreateServerWizard.test.tsx`
@@ -120,6 +123,7 @@ git commit -m "fix: improve wizard and view control semantics"
 ### Task 4: Sidebar context-menu keyboard behavior
 
 **Files:**
+
 - Modify: `src/components/layout/Sidebar.test.tsx`
 - Modify: `src/components/layout/Sidebar.tsx`
 
@@ -153,6 +157,7 @@ git commit -m "fix: support keyboard sidebar context menus"
 ### Task 5: Full regression and visual verification
 
 **Files:**
+
 - Verify: all modified files
 
 **Step 1: Run the focused regression suite**
@@ -180,4 +185,3 @@ Verify Java panel boundaries, Chinese and English text, both themes, wizard head
 **Step 5: Review the diff**
 
 Check requirement completeness, correctness, side effects, performance impact, security, and maintainability. Confirm performance polling/log work remains deferred and no server behavior changed.
-

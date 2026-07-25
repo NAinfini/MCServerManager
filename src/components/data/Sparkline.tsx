@@ -6,7 +6,8 @@ interface SparklineProps {
 
 export function Sparkline({ label, threshold, values }: SparklineProps) {
   const samples = values.filter(
-    (value): value is number => typeof value === "number" && Number.isFinite(value),
+    (value): value is number =>
+      typeof value === "number" && Number.isFinite(value),
   );
   if (samples.length === 0) {
     return (

@@ -47,9 +47,7 @@ function PlayerWorkspace({
   view: string;
 }) {
   const playerView =
-    view === "ops" || view === "whitelist" || view === "bans"
-      ? view
-      : "online";
+    view === "ops" || view === "whitelist" || view === "bans" ? view : "online";
   return <PlayersView server={server} view={playerView} />;
 }
 
@@ -114,9 +112,7 @@ export function ServerWorkspacePanel({
       panel =
         view === "files" ? (
           <ServerFilesView
-            onPathChange={(nextPath) =>
-              onNavigate("data", "files", nextPath)
-            }
+            onPathChange={(nextPath) => onNavigate("data", "files", nextPath)}
             path={path}
             server={server}
           />

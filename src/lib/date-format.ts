@@ -1,7 +1,4 @@
-export function formatDate(
-  value: string | null | undefined,
-  locale?: string,
-) {
+export function formatDate(value: string | null | undefined, locale?: string) {
   return formatDateValue(value, { dateStyle: "medium" }, locale);
 }
 
@@ -9,10 +6,14 @@ export function formatDateTime(
   value: string | null | undefined,
   locale?: string,
 ) {
-  return formatDateValue(value, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }, locale);
+  return formatDateValue(
+    value,
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+    locale,
+  );
 }
 
 function formatDateValue(

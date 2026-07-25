@@ -65,7 +65,11 @@ describe("local server-pack planning", () => {
 
     expect(plan).toMatchObject({
       source: { kind: "localModpackFile", path: archive },
-      pack: { format: "modrinth", name: "Automation Server", versionId: "pack-version" },
+      pack: {
+        format: "modrinth",
+        name: "Automation Server",
+        versionId: "pack-version",
+      },
       minecraftVersion: "1.21.4",
       loaderType: "fabric",
       loaderVersion: "0.16.10",
@@ -136,17 +140,29 @@ describe("local server-pack planning", () => {
     const plan = await planLocalPack(archive);
 
     expect(plan).toMatchObject({
-      pack: { format: "curseforge", name: "Forge Server Pack", versionId: "2.0.0" },
+      pack: {
+        format: "curseforge",
+        name: "Forge Server Pack",
+        versionId: "2.0.0",
+      },
       minecraftVersion: "1.20.1",
       loaderType: "forge",
       loaderVersion: "47.2.0",
       requiredJavaMajor: 17,
     });
     expect(plan.artifacts).toEqual([
-      expect.objectContaining({ provider: "curseforge", projectId: "10", fileId: "20" }),
+      expect.objectContaining({
+        provider: "curseforge",
+        projectId: "10",
+        fileId: "20",
+      }),
     ]);
     expect(plan.optionalFiles).toEqual([
-      expect.objectContaining({ provider: "curseforge", projectId: "11", fileId: "21" }),
+      expect.objectContaining({
+        provider: "curseforge",
+        projectId: "11",
+        fileId: "21",
+      }),
     ]);
     expect(plan.archiveLayers).toEqual([
       { prefix: "overrides/", stripPrefix: true },

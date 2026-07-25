@@ -2,9 +2,15 @@ const { provisioningError } = require("./contracts.cjs");
 
 function normalizeUpdates(updates) {
   if (Array.isArray(updates)) {
-    return updates.map((entry) => [String(entry?.key ?? ""), String(entry?.value ?? "")]);
+    return updates.map((entry) => [
+      String(entry?.key ?? ""),
+      String(entry?.value ?? ""),
+    ]);
   }
-  return Object.entries(updates || {}).map(([key, value]) => [key, String(value ?? "")]);
+  return Object.entries(updates || {}).map(([key, value]) => [
+    key,
+    String(value ?? ""),
+  ]);
 }
 
 function validateUpdate(key, value) {

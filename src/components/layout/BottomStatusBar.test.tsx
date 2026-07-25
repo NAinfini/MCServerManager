@@ -38,7 +38,9 @@ describe("BottomStatusBar", () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: /Java: not set/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Java: not set/ }),
+    );
 
     expect(onOpenJava).toHaveBeenCalledTimes(1);
   });

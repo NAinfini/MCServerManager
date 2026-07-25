@@ -45,24 +45,26 @@ interface TunnelProvidersViewProps {
 }
 
 async function pickTunnelApplication(): Promise<string | null> {
-  const result = await invokeDesktopCommandWithErrorHandling<{ path: string | null }>(
-    "show_open_dialog",
-    {
-      kind: "file",
-      filters: [
-        {
-          name: "Applications",
-          extensions: ["exe", "lnk", "bat", "cmd", "app", "AppImage", "sh"],
-        },
-      ],
-    },
-  );
+  const result = await invokeDesktopCommandWithErrorHandling<{
+    path: string | null;
+  }>("show_open_dialog", {
+    kind: "file",
+    filters: [
+      {
+        name: "Applications",
+        extensions: ["exe", "lnk", "bat", "cmd", "app", "AppImage", "sh"],
+      },
+    ],
+  });
   return result?.path ?? null;
 }
 
 function tunnelProviderDescription(
   provider: TunnelProvider,
-  t: (key: string, values?: Record<string, string | number | null | undefined>) => string,
+  t: (
+    key: string,
+    values?: Record<string, string | number | null | undefined>,
+  ) => string,
 ) {
   if (provider.kind === "application") {
     return provider.command
@@ -90,7 +92,9 @@ export function TunnelProvidersView({
   const [kind, setKind] = useState<CreateTunnelProviderInput["kind"]>("custom");
   const [command, setCommand] = useState("ngrok tcp 25565");
   const [pickerError, setPickerError] = useState<string | null>(null);
-  const [editingProviderId, setEditingProviderId] = useState<string | null>(null);
+  const [editingProviderId, setEditingProviderId] = useState<string | null>(
+    null,
+  );
   const [dangerAction, setDangerAction] = useState<{
     kind: "disable" | "delete";
     provider: TunnelProvider;
@@ -225,20 +229,29 @@ export function TunnelProvidersView({
       }
     } catch (error) {
       setPickerError(
-        error instanceof Error ? error.message : t("tunnels.application.selectError"),
+        error instanceof Error
+          ? error.message
+          : t("tunnels.application.selectError"),
       );
     }
   }
 
   return (
-    <section className={embedded ? "tunnel-settings-section" : "settings-page"} aria-labelledby="tunnels-title">
+    <section
+      className={embedded ? "tunnel-settings-section" : "settings-page"}
+      aria-labelledby="tunnels-title"
+    >
       {embedded ? (
         <div className="section-heading tunnel-settings-heading">
           <div>
             <h2 id="tunnels-title">{t("tunnels.settingsTitle")}</h2>
             <span>{t("tunnels.settingsDescription")}</span>
           </div>
-          <Button disabled={providersQuery.isFetching} variant="secondary" onClick={() => providersQuery.refetch()}>
+          <Button
+            disabled={providersQuery.isFetching}
+            variant="secondary"
+            onClick={() => providersQuery.refetch()}
+          >
             <RefreshCw aria-hidden="true" size={15} />
             {t("tunnels.refresh")}
           </Button>
@@ -249,7 +262,11 @@ export function TunnelProvidersView({
             <p className="eyebrow">{t("tunnels.eyebrow")}</p>
             <h1 id="tunnels-title">{t("tunnels.title")}</h1>
           </div>
-          <Button disabled={providersQuery.isFetching} variant="secondary" onClick={() => providersQuery.refetch()}>
+          <Button
+            disabled={providersQuery.isFetching}
+            variant="secondary"
+            onClick={() => providersQuery.refetch()}
+          >
             <RefreshCw aria-hidden="true" size={15} />
             {t("tunnels.refresh")}
           </Button>
@@ -257,276 +274,317 @@ export function TunnelProvidersView({
       )}
 
       <div className="tunnel-workbench">
-      <section
-        className="tunnel-workbench-section"
-        aria-labelledby="tunnel-create-title"
-      >
-        <div className="section-heading">
-          <h2 id="tunnel-create-title">
-            {editingProviderId ? t("tunnels.edit.title") : t("tunnels.add.title")}
-          </h2>
-          <span>{t("tunnels.form.description")}</span>
-        </div>
-        <form className="create-server-form" onSubmit={handleSubmit}>
-          <label>
-            {t("tunnels.form.name")}
-            <TextField
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </label>
-          <label>
-            {t("tunnels.form.type")}
-            <Select
-              ariaLabel={t("tunnels.form.type")}
-              options={tunnelKindOptions}
-              value={kind}
-              onValueChange={(value) =>
-                setKind(value as CreateTunnelProviderInput["kind"])
-              }
-            />
-          </label>
-          {kind === "custom" ? (
+        <section
+          className="tunnel-workbench-section"
+          aria-labelledby="tunnel-create-title"
+        >
+          <div className="section-heading">
+            <h2 id="tunnel-create-title">
+              {editingProviderId
+                ? t("tunnels.edit.title")
+                : t("tunnels.add.title")}
+            </h2>
+            <span>{t("tunnels.form.description")}</span>
+          </div>
+          <form className="create-server-form" onSubmit={handleSubmit}>
             <label>
-              {t("tunnels.form.command")}
+              {t("tunnels.form.name")}
               <TextField
-                value={command}
-                onChange={(event) => setCommand(event.target.value)}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
               />
             </label>
-          ) : null}
-          {kind === "application" ? (
             <label>
-              {t("tunnels.form.application")}
-              <span className="inline-field-row">
+              {t("tunnels.form.type")}
+              <Select
+                ariaLabel={t("tunnels.form.type")}
+                options={tunnelKindOptions}
+                value={kind}
+                onValueChange={(value) =>
+                  setKind(value as CreateTunnelProviderInput["kind"])
+                }
+              />
+            </label>
+            {kind === "custom" ? (
+              <label>
+                {t("tunnels.form.command")}
                 <TextField
                   value={command}
                   onChange={(event) => setCommand(event.target.value)}
                 />
+              </label>
+            ) : null}
+            {kind === "application" ? (
+              <label>
+                {t("tunnels.form.application")}
+                <span className="inline-field-row">
+                  <TextField
+                    value={command}
+                    onChange={(event) => setCommand(event.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleBrowseApplication}
+                  >
+                    <FolderOpen aria-hidden="true" size={15} />
+                    {t("tunnels.form.browse")}
+                  </Button>
+                </span>
+              </label>
+            ) : null}
+            {pickerError ? (
+              <p className="danger-text" role="alert">
+                {pickerError}
+              </p>
+            ) : null}
+            {createMutation.error || updateMutation.error ? (
+              <p className="danger-text" role="alert">
+                {(createMutation.error || updateMutation.error)?.message}
+              </p>
+            ) : null}
+            <div className="form-actions">
+              <Button
+                disabled={createMutation.isPending || updateMutation.isPending}
+                type="submit"
+                variant="primary"
+              >
+                <Plus aria-hidden="true" size={15} />
+                {editingProviderId
+                  ? t("tunnels.form.save")
+                  : t("tunnels.form.add")}
+              </Button>
+              {editingProviderId ? (
                 <Button
                   type="button"
                   variant="secondary"
-                  onClick={handleBrowseApplication}
+                  onClick={clearProviderForm}
                 >
-                  <FolderOpen aria-hidden="true" size={15} />
-                  {t("tunnels.form.browse")}
+                  {t("common.cancel")}
                 </Button>
-              </span>
-            </label>
-          ) : null}
-          {pickerError ? (
-            <p className="danger-text" role="alert">{pickerError}</p>
-          ) : null}
-          {createMutation.error || updateMutation.error ? (
-            <p className="danger-text" role="alert">
-              {(createMutation.error || updateMutation.error)?.message}
-            </p>
-          ) : null}
-          <div className="form-actions">
-            <Button
-              disabled={createMutation.isPending || updateMutation.isPending}
-              type="submit"
-              variant="primary"
-            >
-              <Plus aria-hidden="true" size={15} />
-              {editingProviderId ? t("tunnels.form.save") : t("tunnels.form.add")}
-            </Button>
-            {editingProviderId ? (
-              <Button type="button" variant="secondary" onClick={clearProviderForm}>
-                {t("common.cancel")}
-              </Button>
-            ) : null}
-          </div>
-        </form>
-      </section>
+              ) : null}
+            </div>
+          </form>
+        </section>
 
-      <section
-        className="tunnel-workbench-section"
-        aria-labelledby="tunnel-provider-list-title"
-      >
-        <div className="section-heading">
-          <h2 id="tunnel-provider-list-title">{t("tunnels.providers.title")}</h2>
-          <span>{t("tunnels.providers.configured", { count: providers.length })}</span>
-        </div>
-        {providersQuery.error ? (
-          <div className="list-state list-state-error" role="alert">
-            <strong>{t("tunnels.providers.loadError.title")}</strong>
-            <span>{providersQuery.error.message}</span>
-            <Button variant="secondary" onClick={() => providersQuery.refetch()}>
-              {t("common.retry")}
-            </Button>
+        <section
+          className="tunnel-workbench-section"
+          aria-labelledby="tunnel-provider-list-title"
+        >
+          <div className="section-heading">
+            <h2 id="tunnel-provider-list-title">
+              {t("tunnels.providers.title")}
+            </h2>
+            <span>
+              {t("tunnels.providers.configured", { count: providers.length })}
+            </span>
           </div>
-        ) : null}
-        {statusesQuery.error ? (
-          <div className="list-state list-state-error" role="alert">
-            <strong>{t("tunnels.statuses.loadError")}</strong>
-            <span>{statusesQuery.error.message}</span>
-            <Button variant="secondary" onClick={() => statusesQuery.refetch()}>
-              {t("common.retry")}
-            </Button>
-          </div>
-        ) : null}
-        {!providersQuery.error ? (
-          providers.length === 0 ? (
-            <EmptyState
-              illustration="/illustrations/no-tunnels.png"
-              title={t("tunnels.empty.title")}
-              description={t("tunnels.empty.description")}
-            />
-          ) : (
-            <div className="provider-list">
-            {providers.map((provider) => (
-              <div className="provider-row" key={provider.id}>
-                <TunnelProviderKindIcon kind={provider.kind} />
-                <div className="provider-row-main">
-                  <strong>
-                    {provider.name}
-                    <span
-                      className={
-                        provider.enabled
-                          ? "provider-status-pill provider-status-pill-enabled"
-                          : "provider-status-pill"
-                      }
-                    >
-                      {provider.enabled
-                        ? t("tunnels.status.enabled")
-                        : t("tunnels.status.disabled")}
-                    </span>
-                  </strong>
-                  <span>{tunnelProviderDescription(provider, t)}</span>
-                  {!statusesQuery.error ? (
-                    <small>
-                      {statusesByProvider.get(provider.id)?.status ??
-                        (provider.enabled
-                          ? t("tunnels.status.enabled")
-                          : t("tunnels.status.disabled"))}
-                      {statusesByProvider.get(provider.id)?.refCount
-                        ? ` / ${t("tunnels.status.refs", {
-                            count: statusesByProvider.get(provider.id)?.refCount,
-                          })}`
-                        : ""}
-                    </small>
-                  ) : null}
-                  {statusesByProvider.get(provider.id)?.lastError ? (
-                    <small className="danger-text">
-                      {statusesByProvider.get(provider.id)?.lastError}
-                    </small>
-                  ) : null}
-                  {currentServer ? (
-                    <div className="provider-server-binding">
-                      <span>
-                        {bindingsForCurrentServer.has(provider.id)
-                          ? t("tunnels.currentBinding.connected", { server: currentServer.name })
-                          : t("tunnels.currentBinding.disconnected", { server: currentServer.name })}
-                      </span>
-                      <Button
-                        disabled={bindMutation.isPending || unbindMutation.isPending}
-                        type="button"
-                        variant={bindingsForCurrentServer.has(provider.id) ? "secondary" : "primary"}
-                        onClick={() => {
-                          const binding = bindingsForCurrentServer.get(provider.id);
-                          if (binding) {
-                            unbindMutation.mutate({ providerId: provider.id, serverId: currentServer.id });
-                            return;
+          {providersQuery.error ? (
+            <div className="list-state list-state-error" role="alert">
+              <strong>{t("tunnels.providers.loadError.title")}</strong>
+              <span>{providersQuery.error.message}</span>
+              <Button
+                variant="secondary"
+                onClick={() => providersQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : null}
+          {statusesQuery.error ? (
+            <div className="list-state list-state-error" role="alert">
+              <strong>{t("tunnels.statuses.loadError")}</strong>
+              <span>{statusesQuery.error.message}</span>
+              <Button
+                variant="secondary"
+                onClick={() => statusesQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </div>
+          ) : null}
+          {!providersQuery.error ? (
+            providers.length === 0 ? (
+              <EmptyState
+                illustration="/illustrations/no-tunnels.png"
+                title={t("tunnels.empty.title")}
+                description={t("tunnels.empty.description")}
+              />
+            ) : (
+              <div className="provider-list">
+                {providers.map((provider) => (
+                  <div className="provider-row" key={provider.id}>
+                    <TunnelProviderKindIcon kind={provider.kind} />
+                    <div className="provider-row-main">
+                      <strong>
+                        {provider.name}
+                        <span
+                          className={
+                            provider.enabled
+                              ? "provider-status-pill provider-status-pill-enabled"
+                              : "provider-status-pill"
                           }
-                          bindMutation.mutate({ providerId: provider.id, serverId: currentServer.id });
+                        >
+                          {provider.enabled
+                            ? t("tunnels.status.enabled")
+                            : t("tunnels.status.disabled")}
+                        </span>
+                      </strong>
+                      <span>{tunnelProviderDescription(provider, t)}</span>
+                      {!statusesQuery.error ? (
+                        <small>
+                          {statusesByProvider.get(provider.id)?.status ??
+                            (provider.enabled
+                              ? t("tunnels.status.enabled")
+                              : t("tunnels.status.disabled"))}
+                          {statusesByProvider.get(provider.id)?.refCount
+                            ? ` / ${t("tunnels.status.refs", {
+                                count: statusesByProvider.get(provider.id)
+                                  ?.refCount,
+                              })}`
+                            : ""}
+                        </small>
+                      ) : null}
+                      {statusesByProvider.get(provider.id)?.lastError ? (
+                        <small className="danger-text">
+                          {statusesByProvider.get(provider.id)?.lastError}
+                        </small>
+                      ) : null}
+                      {currentServer ? (
+                        <div className="provider-server-binding">
+                          <span>
+                            {bindingsForCurrentServer.has(provider.id)
+                              ? t("tunnels.currentBinding.connected", {
+                                  server: currentServer.name,
+                                })
+                              : t("tunnels.currentBinding.disconnected", {
+                                  server: currentServer.name,
+                                })}
+                          </span>
+                          <Button
+                            disabled={
+                              bindMutation.isPending || unbindMutation.isPending
+                            }
+                            type="button"
+                            variant={
+                              bindingsForCurrentServer.has(provider.id)
+                                ? "secondary"
+                                : "primary"
+                            }
+                            onClick={() => {
+                              const binding = bindingsForCurrentServer.get(
+                                provider.id,
+                              );
+                              if (binding) {
+                                unbindMutation.mutate({
+                                  providerId: provider.id,
+                                  serverId: currentServer.id,
+                                });
+                                return;
+                              }
+                              bindMutation.mutate({
+                                providerId: provider.id,
+                                serverId: currentServer.id,
+                              });
+                            }}
+                          >
+                            {bindingsForCurrentServer.has(provider.id)
+                              ? t("tunnels.currentBinding.disconnect")
+                              : t("tunnels.currentBinding.connect")}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="provider-row-actions">
+                      {provider.kind === "application" ? (
+                        <Button
+                          disabled={openApplicationMutation.isPending}
+                          type="button"
+                          variant="secondary"
+                          onClick={() =>
+                            openApplicationMutation.mutate(provider.id)
+                          }
+                        >
+                          <Play aria-hidden="true" size={15} />
+                          {t("tunnels.actions.open")}
+                        </Button>
+                      ) : null}
+                      <Button
+                        disabled={updateMutation.isPending}
+                        type="button"
+                        variant="secondary"
+                        onClick={() => editProvider(provider)}
+                      >
+                        <Pencil aria-hidden="true" size={15} />
+                        {t("tunnels.actions.edit")}
+                      </Button>
+                      <Button
+                        disabled={updateMutation.isPending}
+                        type="button"
+                        variant="secondary"
+                        onClick={() => toggleProvider(provider)}
+                      >
+                        {provider.enabled ? (
+                          <PowerOff aria-hidden="true" size={15} />
+                        ) : (
+                          <Power aria-hidden="true" size={15} />
+                        )}
+                        {provider.enabled
+                          ? t("tunnels.actions.disable")
+                          : t("tunnels.actions.enable")}
+                      </Button>
+                      <Button
+                        disabled={deleteMutation.isPending}
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          deleteMutation.reset();
+                          setDangerAction({ kind: "delete", provider });
                         }}
                       >
-                        {bindingsForCurrentServer.has(provider.id)
-                          ? t("tunnels.currentBinding.disconnect")
-                          : t("tunnels.currentBinding.connect")}
+                        <Trash2 aria-hidden="true" size={15} />
+                        {t("tunnels.actions.delete")}
                       </Button>
                     </div>
-                  ) : null}
-                </div>
-                <div className="provider-row-actions">
-                  {provider.kind === "application" ? (
-                    <Button
-                      disabled={openApplicationMutation.isPending}
-                      type="button"
-                      variant="secondary"
-                      onClick={() => openApplicationMutation.mutate(provider.id)}
-                    >
-                      <Play aria-hidden="true" size={15} />
-                      {t("tunnels.actions.open")}
-                    </Button>
-                  ) : null}
-                  <Button
-                    disabled={updateMutation.isPending}
-                    type="button"
-                    variant="secondary"
-                    onClick={() => editProvider(provider)}
-                  >
-                    <Pencil aria-hidden="true" size={15} />
-                    {t("tunnels.actions.edit")}
-                  </Button>
-                  <Button
-                    disabled={updateMutation.isPending}
-                    type="button"
-                    variant="secondary"
-                    onClick={() => toggleProvider(provider)}
-                  >
-                    {provider.enabled ? (
-                      <PowerOff aria-hidden="true" size={15} />
-                    ) : (
-                      <Power aria-hidden="true" size={15} />
-                    )}
-                    {provider.enabled
-                      ? t("tunnels.actions.disable")
-                      : t("tunnels.actions.enable")}
-                  </Button>
-                  <Button
-                    disabled={deleteMutation.isPending}
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      deleteMutation.reset();
-                      setDangerAction({ kind: "delete", provider });
-                    }}
-                  >
-                    <Trash2 aria-hidden="true" size={15} />
-                    {t("tunnels.actions.delete")}
-                  </Button>
-                </div>
+                  </div>
+                ))}
               </div>
-            ))}
-            </div>
-          )
+            )
+          ) : null}
+        </section>
+        {openApplicationMutation.error || deleteMutation.error ? (
+          <p className="danger-text" role="alert">
+            {(openApplicationMutation.error || deleteMutation.error)?.message}
+          </p>
         ) : null}
-      </section>
-      {openApplicationMutation.error || deleteMutation.error ? (
-        <p className="danger-text" role="alert">
-          {(openApplicationMutation.error || deleteMutation.error)?.message}
-        </p>
-      ) : null}
 
-      {!embedded && bindingsQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("tunnels.bindings.loadError")}</strong>
-          <span>{bindingsQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => bindingsQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
-      ) : !embedded ? (
-        <TunnelBindingEditor
-          bindings={bindings}
-          providers={providers}
-          servers={servers}
-          isSaving={bindMutation.isPending || unbindMutation.isPending}
-          onBind={(providerId, serverId) =>
-            bindMutation.mutate({ providerId, serverId })
-          }
-          onUnbind={(providerId, serverId) =>
-            unbindMutation.mutate({ providerId, serverId })
-          }
-        />
-      ) : null}
-      {bindMutation.error || unbindMutation.error ? (
-        <p className="danger-text" role="alert">
-          {(bindMutation.error || unbindMutation.error)?.message}
-        </p>
-      ) : null}
+        {!embedded && bindingsQuery.error ? (
+          <div className="list-state list-state-error" role="alert">
+            <strong>{t("tunnels.bindings.loadError")}</strong>
+            <span>{bindingsQuery.error.message}</span>
+            <Button variant="secondary" onClick={() => bindingsQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </div>
+        ) : !embedded ? (
+          <TunnelBindingEditor
+            bindings={bindings}
+            providers={providers}
+            servers={servers}
+            isSaving={bindMutation.isPending || unbindMutation.isPending}
+            onBind={(providerId, serverId) =>
+              bindMutation.mutate({ providerId, serverId })
+            }
+            onUnbind={(providerId, serverId) =>
+              unbindMutation.mutate({ providerId, serverId })
+            }
+          />
+        ) : null}
+        {bindMutation.error || unbindMutation.error ? (
+          <p className="danger-text" role="alert">
+            {(bindMutation.error || unbindMutation.error)?.message}
+          </p>
+        ) : null}
       </div>
       <ConfirmDangerDialog
         confirmLabel={
@@ -545,8 +603,8 @@ export function TunnelProvidersView({
         }
         error={
           dangerAction?.kind === "delete"
-            ? deleteMutation.error?.message ?? null
-            : updateMutation.error?.message ?? null
+            ? (deleteMutation.error?.message ?? null)
+            : (updateMutation.error?.message ?? null)
         }
         isConfirming={deleteMutation.isPending || updateMutation.isPending}
         isOpen={dangerAction !== null}

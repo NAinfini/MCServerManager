@@ -36,12 +36,27 @@ const notificationPreferenceRows: Array<{
 }> = [
   { key: "desktopEnabled", labelKey: "settings.notifications.desktop" },
   { key: "crashEnabled", labelKey: "settings.notifications.crash" },
-  { key: "restartFailedEnabled", labelKey: "settings.notifications.restartFailed" },
-  { key: "backupFailedEnabled", labelKey: "settings.notifications.backupFailed" },
+  {
+    key: "restartFailedEnabled",
+    labelKey: "settings.notifications.restartFailed",
+  },
+  {
+    key: "backupFailedEnabled",
+    labelKey: "settings.notifications.backupFailed",
+  },
   { key: "taskFailedEnabled", labelKey: "settings.notifications.taskFailed" },
-  { key: "updateAvailableEnabled", labelKey: "settings.notifications.updateAvailable" },
-  { key: "tunnelStoppedEnabled", labelKey: "settings.notifications.tunnelStopped" },
-  { key: "informationalEnabled", labelKey: "settings.notifications.informational" },
+  {
+    key: "updateAvailableEnabled",
+    labelKey: "settings.notifications.updateAvailable",
+  },
+  {
+    key: "tunnelStoppedEnabled",
+    labelKey: "settings.notifications.tunnelStopped",
+  },
+  {
+    key: "informationalEnabled",
+    labelKey: "settings.notifications.informational",
+  },
 ];
 
 export function NotificationSettings() {
@@ -68,7 +83,7 @@ export function NotificationSettings() {
       invokeDesktopCommandWithErrorHandling<NotificationPreferences>(
         "save_notification_preferences",
         { preferences },
-    ),
+      ),
     onSuccess: async (saved) => {
       setDraftPreferences(saved);
       await queryClient.invalidateQueries({
@@ -98,7 +113,10 @@ export function NotificationSettings() {
   }
 
   return (
-    <section className="settings-panel" aria-label={t("settings.notifications.title")}>
+    <section
+      className="settings-panel"
+      aria-label={t("settings.notifications.title")}
+    >
       <div className="section-heading">
         <h2>{t("settings.notifications.title")}</h2>
         <Bell aria-hidden="true" size={18} />
@@ -133,7 +151,9 @@ export function NotificationSettings() {
             : ""}
       </span>
       {preferencesQuery.isLoading ? (
-        <LoadingState message={t("settings.notifications.preferencesLoading")} />
+        <LoadingState
+          message={t("settings.notifications.preferencesLoading")}
+        />
       ) : preferences ? (
         <div className="settings-grid">
           {notificationPreferenceRows.map((row) => (
@@ -179,7 +199,8 @@ export function NotificationSettings() {
               <span>
                 {event.desktopDelivered
                   ? t("settings.notifications.desktopSent")
-                  : t("settings.notifications.inlineOnly")}{" - "}
+                  : t("settings.notifications.inlineOnly")}
+                {" - "}
                 {formatDateTime(event.createdAt, language)}
               </span>
             </div>

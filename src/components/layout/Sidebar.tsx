@@ -34,10 +34,7 @@ import { ServerCover } from "../ui/server-cover";
 import type { ServerProfile } from "../../domain/server";
 import type { ManagedProcessStatus } from "../../features/process/api";
 import { LoaderPill } from "../../features/loaders/LoaderIdentity";
-import {
-  type SidebarServerGroup,
-  useSidebarStore,
-} from "./sidebarStore";
+import { type SidebarServerGroup, useSidebarStore } from "./sidebarStore";
 
 export type PrimaryPage = "servers" | "java" | "logger" | "settings";
 
@@ -108,7 +105,9 @@ function ServerDropZone({ testId, onDropServer }: ServerDropZoneProps) {
   return (
     <div
       aria-hidden="true"
-      className={active ? "server-drop-zone server-drop-zone-active" : "server-drop-zone"}
+      className={
+        active ? "server-drop-zone server-drop-zone-active" : "server-drop-zone"
+      }
       data-testid={testId}
       onDragEnter={(event) => {
         event.preventDefault();
@@ -146,7 +145,9 @@ export function Sidebar({
   const rootItems = useSidebarStore((s) => s.rootItems);
   const addServerToGroup = useSidebarStore((s) => s.addServerToGroup);
   const createGroupFromServer = useSidebarStore((s) => s.createGroupFromServer);
-  const createGroupWithServers = useSidebarStore((s) => s.createGroupWithServers);
+  const createGroupWithServers = useSidebarStore(
+    (s) => s.createGroupWithServers,
+  );
   const disbandGroup = useSidebarStore((s) => s.disbandGroup);
   const moveServerAfter = useSidebarStore((s) => s.moveServerAfter);
   const moveServerBefore = useSidebarStore((s) => s.moveServerBefore);
@@ -160,16 +161,21 @@ export function Sidebar({
   const reduceMotion = useReducedMotion();
   const [draggingServerId, setDraggingServerId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [renameTarget, setRenameTarget] = useState<SidebarServerGroup | null>(null);
+  const [renameTarget, setRenameTarget] = useState<SidebarServerGroup | null>(
+    null,
+  );
   const [renameValue, setRenameValue] = useState("");
   const sidebarRef = useRef<HTMLElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement | null>(null);
-  const contextMenuTargetRef = useRef<
-    Omit<ContextMenuState, "x" | "y"> | null
-  >(null);
+  const contextMenuTargetRef = useRef<Omit<ContextMenuState, "x" | "y"> | null>(
+    null,
+  );
   const restoreContextMenuFocusRef = useRef(false);
-  const serverIds = useMemo(() => servers.map((server) => server.id), [servers]);
+  const serverIds = useMemo(
+    () => servers.map((server) => server.id),
+    [servers],
+  );
   const serverIdKey = serverIds.join("|");
   const serverById = useMemo(
     () => new Map(servers.map((server) => [server.id, server])),
@@ -272,7 +278,10 @@ export function Sidebar({
   );
 
   const openContextMenu = useCallback(
-    (event: MouseEvent<HTMLElement>, menu: Omit<ContextMenuState, "x" | "y">) => {
+    (
+      event: MouseEvent<HTMLElement>,
+      menu: Omit<ContextMenuState, "x" | "y">,
+    ) => {
       event.preventDefault();
       event.stopPropagation();
       showContextMenu(event.currentTarget, menu, event.clientX, event.clientY);
@@ -404,9 +413,10 @@ export function Sidebar({
           }
           transition={{
             layout: { duration: reduceMotion ? 0 : 0.18 },
-            rotate: isDragging && !reduceMotion
-              ? { duration: 0.38, repeat: Infinity }
-              : { duration: 0.16 },
+            rotate:
+              isDragging && !reduceMotion
+                ? { duration: 0.38, repeat: Infinity }
+                : { duration: 0.16 },
             scale: { duration: 0.16 },
           }}
         >
@@ -476,9 +486,9 @@ export function Sidebar({
                   </span>
                 </span>
               )}
-              {!collapsed &&
-                status !== "stopped" &&
-                status !== "running" && <StatusBadge compact status={status} />}
+              {!collapsed && status !== "stopped" && status !== "running" && (
+                <StatusBadge compact status={status} />
+              )}
             </button>
           </NavTooltip>
         </motion.div>
@@ -502,7 +512,11 @@ export function Sidebar({
 
   const renderServerEntry = useCallback(
     (server: ServerProfile, options: { grouped?: boolean } = {}) => (
-      <motion.div key={`entry-${server.id}`} className="server-nav-entry" layout>
+      <motion.div
+        key={`entry-${server.id}`}
+        className="server-nav-entry"
+        layout
+      >
         <ServerDropZone
           testId={`drop-before-${server.id}`}
           onDropServer={(serverId) => moveServerBefore(serverId, server.id)}
@@ -557,7 +571,11 @@ export function Sidebar({
           >
             <ChevronDown
               aria-hidden="true"
-              className={group.collapsed ? "server-nav-group-chevron collapsed" : "server-nav-group-chevron"}
+              className={
+                group.collapsed
+                  ? "server-nav-group-chevron collapsed"
+                  : "server-nav-group-chevron"
+              }
               size={15}
             />
             <FolderOpen aria-hidden="true" size={16} />
@@ -623,7 +641,13 @@ export function Sidebar({
           onClick={() => onSelectPage("servers")}
         >
           <span className="app-mark">
-            <img alt="" aria-hidden="true" height="28" src="./app-icon.png" width="28" />
+            <img
+              alt=""
+              aria-hidden="true"
+              height="28"
+              src="./app-icon.png"
+              width="28"
+            />
           </span>
           {!collapsed && (
             <div className="sidebar-brand-copy">
@@ -670,7 +694,10 @@ export function Sidebar({
         </NavTooltip>
       </nav>
 
-      <section className="server-nav-section" aria-label={t("nav.serverProfiles")}>
+      <section
+        className="server-nav-section"
+        aria-label={t("nav.serverProfiles")}
+      >
         {!collapsed && (
           <div className="sidebar-section-label">{t("nav.servers")}</div>
         )}
@@ -687,7 +714,10 @@ export function Sidebar({
         </div>
       </section>
 
-      <nav aria-label={t("nav.primary")} className="primary-nav sidebar-footer-nav">
+      <nav
+        aria-label={t("nav.primary")}
+        className="primary-nav sidebar-footer-nav"
+      >
         {primaryItems.map((item) => (
           <NavTooltip
             key={item.id}
@@ -891,7 +921,8 @@ export function Sidebar({
           value={renameValue}
           onChange={(event) => setRenameValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || !renameTarget || !renameValue.trim()) return;
+            if (event.key !== "Enter" || !renameTarget || !renameValue.trim())
+              return;
             renameGroup(renameTarget.id, renameValue.trim());
             setRenameTarget(null);
           }}

@@ -116,9 +116,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
     },
   });
   const updateMutation = useMutation({
-    mutationFn: (
-      input: TaskFormInput & { id: string; enabled?: boolean },
-    ) =>
+    mutationFn: (input: TaskFormInput & { id: string; enabled?: boolean }) =>
       invokeDesktopCommandWithErrorHandling<ScheduledTask>(
         "update_scheduled_task",
         { input },
@@ -194,13 +192,19 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         </Button>
       ) : null}
       {createMutation.error ? (
-        <p className="danger-text" role="alert">{createMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {createMutation.error.message}
+        </p>
       ) : null}
       {updateMutation.error ? (
-        <p className="danger-text" role="alert">{updateMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {updateMutation.error.message}
+        </p>
       ) : null}
       {deleteMutation.error ? (
-        <p className="danger-text" role="alert">{deleteMutation.error.message}</p>
+        <p className="danger-text" role="alert">
+          {deleteMutation.error.message}
+        </p>
       ) : null}
       {tasksQuery.error ? (
         <div className="list-state list-state-error" role="alert">
@@ -229,8 +233,14 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
                 </span>
               </div>
               <div className="task-item-meta">
-                <span>{t("tasks.everyMinutes", { minutes: task.intervalMinutes })}</span>
-                <span>{t("tasks.next", { date: formatDateTime(task.nextRunAt, language) })}</span>
+                <span>
+                  {t("tasks.everyMinutes", { minutes: task.intervalMinutes })}
+                </span>
+                <span>
+                  {t("tasks.next", {
+                    date: formatDateTime(task.nextRunAt, language),
+                  })}
+                </span>
                 <span>
                   {task.enabled
                     ? t("tasks.status.enabled")
@@ -284,20 +294,20 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         </div>
       ) : null}
       {!runsQuery.error && runs.length > 0 ? (
-          <div className="task-runs-section">
-            <p className="task-runs-heading">{t("tasks.recentRuns")}</p>
-            {runs.slice(0, 5).map((run) => (
-              <div className="task-run-item" key={run.id}>
-                <span className={runStatusClass(run.status)}>
-                  {runStatusLabel(run.status, t)}
-                </span>
-                <span className="task-run-message">{run.message}</span>
-                <span className="task-run-time">
-                  {formatDateTime(run.startedAt, language)}
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="task-runs-section">
+          <p className="task-runs-heading">{t("tasks.recentRuns")}</p>
+          {runs.slice(0, 5).map((run) => (
+            <div className="task-run-item" key={run.id}>
+              <span className={runStatusClass(run.status)}>
+                {runStatusLabel(run.status, t)}
+              </span>
+              <span className="task-run-message">{run.message}</span>
+              <span className="task-run-time">
+                {formatDateTime(run.startedAt, language)}
+              </span>
+            </div>
+          ))}
+        </div>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteTask")}

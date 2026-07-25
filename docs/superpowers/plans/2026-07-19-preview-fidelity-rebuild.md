@@ -13,6 +13,7 @@
 ## Task 1: Establish the visual system and stable application shell
 
 **Files:**
+
 - Create: `src/styles/preview/tokens.css`
 - Create: `src/styles/preview/shell.css`
 - Create: `src/styles/preview/components.css`
@@ -32,6 +33,7 @@
 ## Task 2: Rebuild the server workspace and application logger
 
 **Files:**
+
 - Modify: `src/features/servers/ServerDetail.tsx`
 - Modify: `src/features/servers/ServerDetail.test.tsx`
 - Modify: `src/features/console/ConsoleView.tsx`
@@ -51,6 +53,7 @@
 ## Task 3: Rebuild create-server and marketplace flows
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerWizard.tsx`
 - Modify: `src/features/servers/CreateServerWizard.test.tsx`
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx`
@@ -71,6 +74,7 @@
 ## Task 4: Rebuild Java, settings, themes, and shared responsive details
 
 **Files:**
+
 - Modify: `src/features/java/JavaRuntimesView.tsx`
 - Modify: `src/features/java/JavaRuntimesView.test.tsx`
 - Modify: `src/features/settings/SettingsView.tsx`
@@ -90,6 +94,7 @@
 ## Task 5: Whole-application verification and visual acceptance
 
 **Files:**
+
 - Modify only files directly implicated by verified defects.
 
 1. Run all unit tests with `pnpm vitest run`.

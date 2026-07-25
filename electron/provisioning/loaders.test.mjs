@@ -25,14 +25,31 @@ describe("trusted loader adapters", () => {
   it("discovers versions through each loader's approved metadata host", async () => {
     const { createLoaderRegistry } = require("./loaders.cjs");
     const fetchJson = vi.fn(async (url) => {
-      if (url === "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json") {
-        return { versions: [{ id: "1.21.4", type: "release", url: "https://piston-meta.mojang.com/v1.21.4.json" }] };
+      if (
+        url ===
+        "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+      ) {
+        return {
+          versions: [
+            {
+              id: "1.21.4",
+              type: "release",
+              url: "https://piston-meta.mojang.com/v1.21.4.json",
+            },
+          ],
+        };
       }
       if (url === "https://fill.papermc.io/v3/projects/paper") {
-        return { versions: { "1.21": ["1.21.4"] } };
+        return { versions: { 1.21: ["1.21.4"] } };
       }
-      if (url === "https://fill.papermc.io/v3/projects/paper/versions/1.21.4/builds") {
-        return [{ id: 120, channel: "STABLE" }, { id: 119, channel: "BETA" }];
+      if (
+        url ===
+        "https://fill.papermc.io/v3/projects/paper/versions/1.21.4/builds"
+      ) {
+        return [
+          { id: 120, channel: "STABLE" },
+          { id: 119, channel: "BETA" },
+        ];
       }
       if (url === "https://meta.fabricmc.net/v2/versions/game") {
         return [{ version: "1.21.4", stable: true }];
@@ -60,9 +77,7 @@ describe("trusted loader adapters", () => {
     const registry = createLoaderRegistry({ fetchJson, fetchText });
 
     for (const loaderType of registry.types()) {
-      const minecraft = await registry
-        .get(loaderType)
-        .listMinecraftVersions();
+      const minecraft = await registry.get(loaderType).listMinecraftVersions();
       expect(minecraft[0].value).toBe("1.21.4");
       const loaders = await registry
         .get(loaderType)
@@ -150,9 +165,11 @@ describe("trusted loader adapters", () => {
       });
 
       expect(plan.artifacts[0].destination).toBe(destination);
-      expect(plan.artifacts.every((artifact) =>
-        adapter.approvedHosts.includes(new URL(artifact.url).hostname),
-      )).toBe(true);
+      expect(
+        plan.artifacts.every((artifact) =>
+          adapter.approvedHosts.includes(new URL(artifact.url).hostname),
+        ),
+      ).toBe(true);
 
       await adapter.install(plan, { javaPath: "C:\\Java\\bin\\java.exe" });
       expect(download).toHaveBeenCalled();
@@ -234,7 +251,10 @@ describe("trusted loader adapters", () => {
 
   it("keeps legacy Forge in direct jar launch mode", async () => {
     const { createLoaderRegistry } = require("./loaders.cjs");
-    const registry = createLoaderRegistry({ fetchJson: vi.fn(), fetchText: vi.fn() });
+    const registry = createLoaderRegistry({
+      fetchJson: vi.fn(),
+      fetchText: vi.fn(),
+    });
     const plan = await registry.get("forge").buildInstallPlan({
       minecraftVersion: "1.16.5",
       loaderVersion: "36.2.42",

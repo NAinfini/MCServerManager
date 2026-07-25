@@ -49,10 +49,18 @@ export function DropImportReviewDialog({
       description={t("dropImport.review.description")}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => onOpenChange(false)}
+          >
             {t("common.cancel")}
           </Button>
-          <Button disabled={paths.length !== 1} type="button" onClick={onContinue}>
+          <Button
+            disabled={paths.length !== 1}
+            type="button"
+            onClick={onContinue}
+          >
             {t("dropImport.review.continue")}
           </Button>
         </>
@@ -76,32 +84,32 @@ export function DropImportReviewDialog({
         </div>
       )}
     >
-          <div className="drop-import-review-body">
-            <div className="drop-import-detected">
-              <span className="drop-import-detected-icon">
-                <Icon aria-hidden="true" size={24} />
-              </span>
-              <div>
-                <strong>{basename(primaryPath)}</strong>
-                <span>{t(`dropImport.kind.${kind}`)}</span>
-              </div>
-            </div>
-            <div className="drop-import-review-grid">
-              <div>
-                <span>{t("dropImport.review.confidence")}</span>
-                <strong>{t("dropImport.review.confidenceValue")}</strong>
-              </div>
-              <div>
-                <span>{t("dropImport.review.action")}</span>
-                <strong>{t(`dropImport.action.${kind}`)}</strong>
-              </div>
-            </div>
-            <p className="drop-import-review-note">
-              {paths.length > 1
-                ? t("provisioning.wizard.dropSingle")
-                : t("dropImport.review.note")}
-            </p>
+      <div className="drop-import-review-body">
+        <div className="drop-import-detected">
+          <span className="drop-import-detected-icon">
+            <Icon aria-hidden="true" size={24} />
+          </span>
+          <div>
+            <strong>{basename(primaryPath)}</strong>
+            <span>{t(`dropImport.kind.${kind}`)}</span>
           </div>
+        </div>
+        <div className="drop-import-review-grid">
+          <div>
+            <span>{t("dropImport.review.confidence")}</span>
+            <strong>{t("dropImport.review.confidenceValue")}</strong>
+          </div>
+          <div>
+            <span>{t("dropImport.review.action")}</span>
+            <strong>{t(`dropImport.action.${kind}`)}</strong>
+          </div>
+        </div>
+        <p className="drop-import-review-note">
+          {paths.length > 1
+            ? t("provisioning.wizard.dropSingle")
+            : t("dropImport.review.note")}
+        </p>
+      </div>
     </DialogSurface>
   );
 }

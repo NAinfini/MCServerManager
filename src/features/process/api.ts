@@ -36,11 +36,15 @@ export interface RestartCountdownResult {
 }
 
 export function startServer(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<ManagedProcess>("start_server", { serverId });
+  return invokeDesktopCommandWithErrorHandling<ManagedProcess>("start_server", {
+    serverId,
+  });
 }
 
 export function stopServer(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<void>("stop_server", { serverId });
+  return invokeDesktopCommandWithErrorHandling<void>("stop_server", {
+    serverId,
+  });
 }
 
 export function sendServerCommand(serverId: string, command: string) {
@@ -51,7 +55,10 @@ export function sendServerCommand(serverId: string, command: string) {
 }
 
 export function restartServer(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<ManagedProcess>("restart_server", { serverId });
+  return invokeDesktopCommandWithErrorHandling<ManagedProcess>(
+    "restart_server",
+    { serverId },
+  );
 }
 
 export function restartServerWithCountdown(serverId: string) {
@@ -71,11 +78,16 @@ export function getServerProcessStatus(serverId: string) {
 }
 
 export function listProcessEvents(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<ProcessEvent[]>("list_process_events", {
-    serverId,
-  });
+  return invokeDesktopCommandWithErrorHandling<ProcessEvent[]>(
+    "list_process_events",
+    {
+      serverId,
+    },
+  );
 }
 
 export function getProcessSummary() {
-  return invokeDesktopCommandWithErrorHandling<ProcessSummary>("get_process_summary");
+  return invokeDesktopCommandWithErrorHandling<ProcessSummary>(
+    "get_process_summary",
+  );
 }

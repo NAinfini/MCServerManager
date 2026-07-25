@@ -142,16 +142,25 @@ describe("TunnelProvidersView", () => {
       updatedAt: "2026-07-01T00:00:00Z",
     };
     const user = userEvent.setup();
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
     render(
       <QueryClientProvider client={queryClient}>
         <TunnelProvidersView embedded servers={[currentServer]} />
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { level: 2, name: "Network and connections" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", {
+        level: 2,
+        name: "Network and connections",
+      }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole("button", { name: "Connect this server" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Connect this server" }),
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("bind_tunnel_to_server", {
         input: { providerId: provider.id, serverId: currentServer.id },

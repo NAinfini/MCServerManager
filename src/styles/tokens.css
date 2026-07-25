@@ -54,10 +54,11 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --console-warning: #efb747;
   --console-error: #f2747a;
 
-  --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
-    system-ui, sans-serif;
-  --font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono",
-    ui-monospace, monospace;
+  --font-sans:
+    "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui,
+    sans-serif;
+  --font-mono:
+    "Cascadia Code", "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
 
   --radius-xs: 3px;
   --radius-sm: 6px;

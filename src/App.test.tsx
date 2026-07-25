@@ -82,14 +82,27 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByRole("status")).toHaveTextContent("unfinished server installation");
-    expect(screen.getByRole("button", { name: "Resume installation" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clean up files" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Clean up files" }));
-    expect(invokeDesktopCommand).toHaveBeenCalledWith("cancel_provisioning_job", {
-      input: { jobId: "job-recovery" },
-    });
-    await userEvent.click(screen.getByRole("button", { name: "Resume installation" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "unfinished server installation",
+    );
+    expect(
+      screen.getByRole("button", { name: "Resume installation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Clean up files" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Clean up files" }),
+    );
+    expect(invokeDesktopCommand).toHaveBeenCalledWith(
+      "cancel_provisioning_job",
+      {
+        input: { jobId: "job-recovery" },
+      },
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Resume installation" }),
+    );
 
     expect(invokeDesktopCommand).toHaveBeenCalledWith("run_provisioning_job", {
       input: { jobId: "job-recovery" },

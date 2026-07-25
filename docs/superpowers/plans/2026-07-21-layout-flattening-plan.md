@@ -33,6 +33,7 @@ for what is a single vertical flow.
 ## Changes
 
 ### 1. Delete the TopRuntimeBar row
+
 - Remove `<TopRuntimeBar …>` from `AppShell.tsx`; delete
   `src/components/layout/TopRuntimeBar.tsx`.
 - Move the running/crashed badges into `BottomStatusBar` (left group, before
@@ -54,6 +55,7 @@ for what is a single vertical flow.
   `.app-body` min-height/grid contracts otherwise intact.
 
 ### 2. Merge the two detail headers into one
+
 - `AppShell.tsx`: when `selectedServer` is set, do NOT render the generic
   `.page-header` section. Render `<ServerDetail server onBack={openServersOverview} />`
   directly (no `.server-detail-panel` wrapper div).
@@ -71,6 +73,7 @@ for what is a single vertical flow.
   the panel surface (bg, radius, shadow) previously on the wrapper.
 
 ### 3. Flatten the dashboard overview
+
 - `AppShell.tsx`: replace
   `.dashboard-workbench > aside.dashboard-status-rail > .summary-strip` and
   `.dashboard-primary` with a flat sequence inside the page:
@@ -85,6 +88,7 @@ for what is a single vertical flow.
   the deleted rail selector onto `.summary-strip > div`).
 
 ### 4. Do NOT touch
+
 - Window titlebar / bottom status bar rows of `.app-shell`.
 - The wizard page header block in AppShell (`.create-server-page`), the
   Java/Logger/Settings views (they own their headers already), and the
@@ -92,16 +96,18 @@ for what is a single vertical flow.
 - Electron/backend code, i18n keys other than usages noted above.
 
 ## Test/verification requirements (implementer must run all)
+
 1. `pnpm tsc` — zero errors.
 2. `pnpm vitest run` — full suite green. Expect to update:
    - `src/styles.test.mjs` responsive-shell contract (runtime-bar selector).
    - `src/components/layout/AppShell.test.tsx` if it queries the removed
      generic detail page-header or TopRuntimeBar output.
-   Update assertions to describe the NEW structure; do not delete tests.
+     Update assertions to describe the NEW structure; do not delete tests.
 3. `pnpm build` — production build passes.
 4. Do not start dev servers or Electron; visual review happens afterwards.
 
 ## Constraints
+
 - Surgical changes only; no unrelated refactors or reformatting.
 - No silent fallbacks; if something in this plan conflicts with reality,
   stop and report rather than improvising a workaround.

@@ -52,7 +52,8 @@ export const MC_COMMANDS: McCommand[] = [
   },
   {
     command: "data",
-    description: "Get, merge, modify, and remove block, entity, and storage data.",
+    description:
+      "Get, merge, modify, and remove block, entity, and storage data.",
     usage: "data (get|merge|modify|remove) ...",
   },
   {
@@ -303,7 +304,8 @@ export const MC_COMMANDS: McCommand[] = [
   {
     command: "spreadplayers",
     description: "Teleport entities to random locations.",
-    usage: "spreadplayers <center> <spreadDistance> <maxRange> <respectTeams> <targets>",
+    usage:
+      "spreadplayers <center> <spreadDistance> <maxRange> <respectTeams> <targets>",
   },
   {
     command: "stop",

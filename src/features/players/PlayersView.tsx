@@ -17,7 +17,10 @@ import { navigateTo } from "../../app/router";
 import { LoadingState } from "../../components/ui/loading-state";
 import { StatusBadge } from "../../components/ui/status-badge";
 import { TextField } from "../../components/ui/text-field";
-import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/data/DataTable";
 import { useAppSettings } from "../../i18n";
 import { processKeys } from "../process/queries";
 import type { ServerProfile } from "../../domain/server";
@@ -41,20 +44,39 @@ interface PendingAction {
   action: PlayerAction;
 }
 
-const playerActionDefinitions: Record<PlayerAction, {
-  action: PlayerAction;
-  labelKey: string;
-  icon: typeof Shield;
-}> = {
+const playerActionDefinitions: Record<
+  PlayerAction,
+  {
+    action: PlayerAction;
+    labelKey: string;
+    icon: typeof Shield;
+  }
+> = {
   op: { action: "op", labelKey: "players.action.op", icon: Shield },
   deop: { action: "deop", labelKey: "players.action.deop", icon: ShieldOff },
   ban: { action: "ban", labelKey: "players.action.ban", icon: UserX },
-  pardon: { action: "pardon", labelKey: "players.action.pardon", icon: UserMinus },
+  pardon: {
+    action: "pardon",
+    labelKey: "players.action.pardon",
+    icon: UserMinus,
+  },
   kick: { action: "kick", labelKey: "players.action.kick", icon: X },
-  whitelistAdd: { action: "whitelistAdd", labelKey: "players.action.whitelistAdd", icon: ShieldCheck },
-  whitelistRemove: { action: "whitelistRemove", labelKey: "players.action.whitelistRemove", icon: ShieldOff },
+  whitelistAdd: {
+    action: "whitelistAdd",
+    labelKey: "players.action.whitelistAdd",
+    icon: ShieldCheck,
+  },
+  whitelistRemove: {
+    action: "whitelistRemove",
+    labelKey: "players.action.whitelistRemove",
+    icon: ShieldOff,
+  },
   banIp: { action: "banIp", labelKey: "players.action.banIp", icon: UserX },
-  pardonIp: { action: "pardonIp", labelKey: "players.action.pardonIp", icon: UserMinus },
+  pardonIp: {
+    action: "pardonIp",
+    labelKey: "players.action.pardonIp",
+    icon: UserMinus,
+  },
 };
 
 function actionsFor(player: PlayerSummary): PlayerAction[] {
@@ -162,9 +184,52 @@ export function PlayersView({ server, view }: PlayersViewProps) {
           </span>
         ),
     },
-    { id: "uuid", header: t("players.table.uuid"), cell: (player) => player.uuid ?? t("players.state.unknown") },
-    { id: "state", header: t("players.table.state"), cell: (player) => statusText(player, t) },
-    { id: "actions", header: t("players.table.actions"), cell: (player) => <div className="player-actions">{actionsFor(player).map((action) => { const { labelKey, icon: Icon } = playerActionDefinitions[action]; const label = t(labelKey); const disabled = !canApplyActions || actionMutation.isPending || (action === "kick" && processStatus !== "running"); return <Button key={action} aria-label={`${label} ${player.username}`} className="icon-button" disabled={disabled} title={disabled ? t("players.action.disabledTitle") : label} variant={action === "ban" || action === "banIp" || action === "kick" ? "danger" : "ghost"} onClick={() => { actionMutation.reset(); setPendingAction({ player, action }); }}><Icon aria-hidden="true" size={14} /></Button>; })}</div> },
+    {
+      id: "uuid",
+      header: t("players.table.uuid"),
+      cell: (player) => player.uuid ?? t("players.state.unknown"),
+    },
+    {
+      id: "state",
+      header: t("players.table.state"),
+      cell: (player) => statusText(player, t),
+    },
+    {
+      id: "actions",
+      header: t("players.table.actions"),
+      cell: (player) => (
+        <div className="player-actions">
+          {actionsFor(player).map((action) => {
+            const { labelKey, icon: Icon } = playerActionDefinitions[action];
+            const label = t(labelKey);
+            const disabled =
+              !canApplyActions ||
+              actionMutation.isPending ||
+              (action === "kick" && processStatus !== "running");
+            return (
+              <Button
+                key={action}
+                aria-label={`${label} ${player.username}`}
+                className="icon-button"
+                disabled={disabled}
+                title={disabled ? t("players.action.disabledTitle") : label}
+                variant={
+                  action === "ban" || action === "banIp" || action === "kick"
+                    ? "danger"
+                    : "ghost"
+                }
+                onClick={() => {
+                  actionMutation.reset();
+                  setPendingAction({ player, action });
+                }}
+              >
+                <Icon aria-hidden="true" size={14} />
+              </Button>
+            );
+          })}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -172,7 +237,11 @@ export function PlayersView({ server, view }: PlayersViewProps) {
       <div className="players-toolbar">
         <div>
           <strong>{t("players.knownCount", { count: players.length })}</strong>
-          <span>{processStatus === "running" ? t("players.actionsThroughStdin") : t("players.offlineChange")}</span>
+          <span>
+            {processStatus === "running"
+              ? t("players.actionsThroughStdin")
+              : t("players.offlineChange")}
+          </span>
         </div>
         <div className="players-toolbar-actions">
           {view && view !== "online" ? (
@@ -202,7 +271,11 @@ export function PlayersView({ server, view }: PlayersViewProps) {
                 value={newPlayer}
                 onChange={(event) => setNewPlayer(event.target.value)}
               />
-              <Button disabled={!newPlayer.trim()} type="submit" variant="secondary">
+              <Button
+                disabled={!newPlayer.trim()}
+                type="submit"
+                variant="secondary"
+              >
                 <Plus aria-hidden="true" size={14} />
                 {t("players.add.submit")}
               </Button>
@@ -271,7 +344,13 @@ export function PlayersView({ server, view }: PlayersViewProps) {
         />
       ) : (
         <div className="players-table-scroll">
-          <DataTable caption={t("players.title")} className="players-table" columns={columns} getRowKey={(player) => player.uuid ?? player.username} rows={players} />
+          <DataTable
+            caption={t("players.title")}
+            className="players-table"
+            columns={columns}
+            getRowKey={(player) => player.uuid ?? player.username}
+            rows={players}
+          />
         </div>
       )}
     </section>

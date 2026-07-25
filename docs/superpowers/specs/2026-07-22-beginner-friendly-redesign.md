@@ -4,34 +4,36 @@ Authored by Fable from a live-app audit. **This spec supersedes MASTER.md and al
 design guidelines in this repo.** Where they conflict, this document wins.
 
 Goal: anyone who can use a computer can run a Minecraft server with this app.
-Every page must answer three questions at a glance: *What is this? What's the one
-thing I probably want to do? Where do I go next?*
+Every page must answer three questions at a glance: _What is this? What's the one
+thing I probably want to do? Where do I go next?_
 
 ---
 
 ## 1. Design tokens (styles.css `:root` rework)
 
 ### 1.1 Neutral ramp — ONE gray family, no tint drift
+
 The current UI mixes green-tinted and neutral grays ("app gray is off"). Replace all
 surface colors with a single neutral ramp:
 
-| Token | Dark | Usage |
-|---|---|---|
-| `--bg-app` | `#131417` | window/page background (darkest large area) |
-| `--bg-raised` | `#1b1d22` | sidebar, panels, cards — ALL raised surfaces share this |
-| `--bg-inset` | `#0f1012` | terminal, code viewers, text inputs |
-| `--bg-hover` | `#23252c` | hover rows/items |
-| `--border-subtle` | `#282b33` | the only decorative border color |
-| `--border-strong` | `#3a3e48` | focus/hover borders, dividers that must read |
-| `--text-primary` | `#e8eaed` | |
-| `--text-secondary` | `#a0a6b1` | |
-| `--text-muted` | `#6d7380` | |
+| Token              | Dark      | Usage                                                   |
+| ------------------ | --------- | ------------------------------------------------------- |
+| `--bg-app`         | `#131417` | window/page background (darkest large area)             |
+| `--bg-raised`      | `#1b1d22` | sidebar, panels, cards — ALL raised surfaces share this |
+| `--bg-inset`       | `#0f1012` | terminal, code viewers, text inputs                     |
+| `--bg-hover`       | `#23252c` | hover rows/items                                        |
+| `--border-subtle`  | `#282b33` | the only decorative border color                        |
+| `--border-strong`  | `#3a3e48` | focus/hover borders, dividers that must read            |
+| `--text-primary`   | `#e8eaed` |                                                         |
+| `--text-secondary` | `#a0a6b1` |                                                         |
+| `--text-muted`     | `#6d7380` |                                                         |
 
 Accent mint `#3ecf8e` stays for primary actions, active nav, success. Status colors:
 running = accent, stopped = `--text-muted`, crashed = `#f0565f`, warning = `#e5a13c`.
 Light theme: keep existing hue direction but apply the same "one ramp" discipline.
 
 ### 1.2 Surface rules — kill card-on-card
+
 - Max TWO surface levels visible in any view: page (`--bg-app`) + panel (`--bg-raised`).
   Inputs/terminals inside a panel use `--bg-inset`.
 - A component gets **one** border, on its outermost edge only. Inside a panel, separate
@@ -47,7 +49,7 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 
 - `.page`, `.server-detail-workspace`, `.detail-tab-content`, and each tab panel become
   `display:flex; flex-direction:column; flex:1; min-height:0`.
-- The scroll container is the *content region inside* a panel, not the page.
+- The scroll container is the _content region inside_ a panel, not the page.
 - Every detail tab (Console, Files, Content, Backups, Settings, Activity) fills the
   viewport height; no dead space below panels.
 
@@ -57,7 +59,7 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 
 - **Remove the left accent bar and any inner track outline.** One card = one 1px
   `--border-subtle` border on `--bg-raised`, radius 10px. Status is conveyed by badge
-  + dot, never by extra borders.
+  - dot, never by extra borders.
 - **Add cover art**: 48×48 rounded (8px) tile at card left. Deterministic gradient
   derived from the loader type (paper→teal, fabric→amber, forge→orange, neoforge→red,
   vanilla/other→slate) with the loader glyph (existing loader icon assets) centered,
@@ -99,10 +101,10 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 ## 6. Content tab — one search, not three
 
 - Panel with two internal tabs: **Installed** | **Browse**.
-- *Installed*: table (name, type, version, actions), toolbar `Check updates` `Update all`
-  + primary `Add content ▾` (menu: Browse online / Import file…). **Import uses the
-  native file picker** (`show_open_dialog`) — no typed paths anywhere on this page.
-- *Browse*: ONE search row: source select (Modrinth / Hangar / BBSMC), query input,
+- _Installed_: table (name, type, version, actions), toolbar `Check updates` `Update all`
+  - primary `Add content ▾` (menu: Browse online / Import file…). **Import uses the
+    native file picker** (`show_open_dialog`) — no typed paths anywhere on this page.
+- _Browse_: ONE search row: source select (Modrinth / Hangar / BBSMC), query input,
   loader + sort selects, `Search` button. Results as a grid/list below (icon, name,
   description, downloads, `Install` button) filling remaining height with scroll.
   CurseForge becomes an `Import downloaded file…` secondary button with file picker
@@ -112,7 +114,7 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 ## 7. Backups tab — action first, config later
 
 - Hero row (not a giant form): primary `Backup Now` + `Last backup: <relative time> ·
-  <size>` (or "No backups yet").
+<size>` (or "No backups yet").
 - The red stdin banner becomes a neutral info note with plain language: "If the server
   is running, the app pauses world saving for a moment so the backup is safe." Style:
   info (blue-gray), small, with ⓘ icon.
@@ -127,7 +129,7 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 ## 8. Server Settings tab — sectioned, progressive disclosure
 
 - Sticky chip nav at panel top: `Setup · General · Properties · Gamerules · Network ·
-  Updates · Advanced` (anchor scroll within the panel).
+Updates · Advanced` (anchor scroll within the panel).
 - Setup checklist: items needing action render expanded with a **direct action button**
   (Java missing → `Open Java Runtimes` navigates there). Done items collapse to one
   compact `✓ label` row each.
@@ -139,6 +141,7 @@ Replace floating fixed-height boxes with flex chains that reach the viewport:
 ## 9. Beginner copy pass (en.json + zh-CN.json)
 
 Rewrite user-facing jargon (keep domain-standard terms like port/RAM/mod):
+
 - "Retention count" → "Backups to keep"; include/exclude labels get examples.
 - Quick command labels per §4; tooltips carry the technical command.
 - Status bar `Java: unset` → `Java: not set` and the whole segment becomes a button

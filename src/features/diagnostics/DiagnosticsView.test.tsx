@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerProfile } from "../../domain/server";
@@ -138,4 +132,3 @@ describe("DiagnosticsView", () => {
     expect(screen.queryByText("warn")).not.toBeInTheDocument();
   });
 });
-

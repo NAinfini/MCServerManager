@@ -53,7 +53,9 @@ export interface JavaScanResult {
 }
 
 export async function listJavaRuntimes() {
-  return invokeDesktopCommandWithErrorHandling<JavaScanResult>("list_java_runtimes");
+  return invokeDesktopCommandWithErrorHandling<JavaScanResult>(
+    "list_java_runtimes",
+  );
 }
 
 export function planJavaRuntime(majorVersion: number) {

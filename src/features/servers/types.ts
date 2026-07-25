@@ -1,7 +1,4 @@
-import type {
-  LoaderType,
-  RestartPolicy,
-} from "../../domain/server";
+import type { LoaderType, RestartPolicy } from "../../domain/server";
 
 export type {
   CompatibilityWarning,

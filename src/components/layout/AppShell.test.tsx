@@ -159,10 +159,13 @@ vi.mock("../../lib/desktop-runtime", () => ({
   }),
 }));
 
-function renderShell(processSummary: {
-  runningCount: number;
-  crashedCount: number;
-} | null = { runningCount: 1, crashedCount: 0 }, hash = "#/dashboard") {
+function renderShell(
+  processSummary: {
+    runningCount: number;
+    crashedCount: number;
+  } | null = { runningCount: 1, crashedCount: 0 },
+  hash = "#/dashboard",
+) {
   window.history.replaceState(null, "", hash);
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -213,16 +216,21 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /java runtimes/i }),
     ).toHaveAttribute("aria-label", "Java Runtimes");
-    expect(
-      screen.getByRole("button", { name: /^logger$/i }),
-    ).toHaveAttribute("aria-label", "Logger");
+    expect(screen.getByRole("button", { name: /^logger$/i })).toHaveAttribute(
+      "aria-label",
+      "Logger",
+    );
   });
 
   it("renders the overview as a native server workbench", async () => {
     const { container } = renderShell();
 
-    expect(await screen.findByRole("heading", { name: "Servers" })).toBeInTheDocument();
-    expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(0);
+    expect(
+      await screen.findByRole("heading", { name: "Servers" }),
+    ).toBeInTheDocument();
+    expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(
+      0,
+    );
     expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
     expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
     expect(container.querySelector(".dashboard-servers")).not.toBeNull();
@@ -257,9 +265,7 @@ describe("AppShell", () => {
     expect(
       await screen.findByRole("heading", { name: "Survival SMP" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Console" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Console" })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /^servers$/i }));
 
@@ -350,12 +356,14 @@ describe("AppShell", () => {
     expect(
       await screen.findByRole("heading", { name: "Survival SMP" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Players" }),
-    ).toHaveAttribute("aria-current", "page");
-    expect(
-      screen.getByRole("button", { name: "Whitelist" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Players" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "Whitelist" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 
   it("renders the create wizard progress inside the main content header", async () => {
@@ -413,9 +421,7 @@ describe("AppShell", () => {
       within(main).queryByRole("navigation", { name: "Wizard progress" }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(
-      within(main).getByRole("button", { name: "Back" }),
-    );
+    await userEvent.click(within(main).getByRole("button", { name: "Back" }));
 
     expect(
       main.querySelector(".create-server-wizard-header"),

@@ -6,7 +6,9 @@ const { provisioningError } = require("./contracts.cjs");
 const SCRIPT_PATTERN = /(?:^|\/)[^/]+\.(?:bat|cmd|ps1|sh)$/i;
 
 function requiredJavaMajorForMinecraft(minecraftVersion) {
-  const match = String(minecraftVersion || "").match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+  const match = String(minecraftVersion || "").match(
+    /^(\d+)\.(\d+)(?:\.(\d+))?/,
+  );
   if (!match) return null;
   const major = Number.parseInt(match[1], 10);
   const minor = Number.parseInt(match[2], 10);
@@ -73,10 +75,15 @@ function planModrinth(packPath, inspection, index) {
     archiveLayers.push({ prefix: "server-overrides/", stripPrefix: true });
   }
   const warnings = [];
-  if (declaredFiles.length > 0 && artifacts.length === 0 && optionalFiles.length === 0) {
+  if (
+    declaredFiles.length > 0 &&
+    artifacts.length === 0 &&
+    optionalFiles.length === 0
+  ) {
     warnings.push({
       code: "PACK_CLIENT_ONLY",
-      message: "The Modrinth pack declares no files that can run on a dedicated server.",
+      message:
+        "The Modrinth pack declares no files that can run on a dedicated server.",
       requiresAcknowledgement: true,
     });
   }
@@ -87,10 +94,14 @@ function planModrinth(packPath, inspection, index) {
     source: { kind: "localModpackFile", path: packPath },
     pack: {
       format: "modrinth",
-      name: String(index.name || path.basename(packPath, path.extname(packPath))),
+      name: String(
+        index.name || path.basename(packPath, path.extname(packPath)),
+      ),
       versionId: index.versionId ? String(index.versionId) : null,
     },
-    minecraftVersion: dependencies.minecraft ? String(dependencies.minecraft) : null,
+    minecraftVersion: dependencies.minecraft
+      ? String(dependencies.minecraft)
+      : null,
     loaderType,
     loaderVersion,
     requiredJavaMajor: requiredJavaMajorForMinecraft(dependencies.minecraft),
@@ -102,20 +113,25 @@ function planModrinth(packPath, inspection, index) {
     integrity: { status: hashesPresent ? "verified" : "unverified" },
     estimatedBytes:
       inspection.uncompressedBytes +
-      [...artifacts, ...optionalFiles].reduce((sum, artifact) => sum + artifact.size, 0),
+      [...artifacts, ...optionalFiles].reduce(
+        (sum, artifact) => sum + artifact.size,
+        0,
+      ),
   };
 }
 
 function curseForgeLoader(manifest) {
-  const configured = (manifest?.minecraft?.modLoaders || []).find((loader) => loader.primary)
-    || manifest?.minecraft?.modLoaders?.[0];
+  const configured =
+    (manifest?.minecraft?.modLoaders || []).find((loader) => loader.primary) ||
+    manifest?.minecraft?.modLoaders?.[0];
   const id = String(configured?.id || "");
   const match = id.match(/^(neoforge|neo-forge|forge|fabric|quilt)[-_](.+)$/i);
   if (!match) return { loaderType: "vanilla", loaderVersion: null };
   const normalized = match[1].toLowerCase();
-  const loaderType = normalized === "neoforge" || normalized === "neo-forge"
-    ? "neoForge"
-    : normalized;
+  const loaderType =
+    normalized === "neoforge" || normalized === "neo-forge"
+      ? "neoForge"
+      : normalized;
   return { loaderType, loaderVersion: match[2] };
 }
 
@@ -136,9 +152,16 @@ function planCurseForge(packPath, inspection, manifest) {
     );
   }
   const { loaderType, loaderVersion } = curseForgeLoader(manifest);
-  const artifacts = manifest.files.filter((file) => file.required !== false).map(curseForgeArtifact);
-  const optionalFiles = manifest.files.filter((file) => file.required === false).map(curseForgeArtifact);
-  const overridePrefix = String(manifest.overrides || "overrides").replace(/[\\/]+$/, "");
+  const artifacts = manifest.files
+    .filter((file) => file.required !== false)
+    .map(curseForgeArtifact);
+  const optionalFiles = manifest.files
+    .filter((file) => file.required === false)
+    .map(curseForgeArtifact);
+  const overridePrefix = String(manifest.overrides || "overrides").replace(
+    /[\\/]+$/,
+    "",
+  );
   const hasOverrides = inspection.entries.some((entry) =>
     entry.path.startsWith(`${overridePrefix}/`),
   );
@@ -146,13 +169,17 @@ function planCurseForge(packPath, inspection, manifest) {
     source: { kind: "localModpackFile", path: packPath },
     pack: {
       format: "curseforge",
-      name: String(manifest.name || path.basename(packPath, path.extname(packPath))),
+      name: String(
+        manifest.name || path.basename(packPath, path.extname(packPath)),
+      ),
       versionId: manifest.version ? String(manifest.version) : null,
     },
     minecraftVersion: String(manifest.minecraft.version),
     loaderType,
     loaderVersion,
-    requiredJavaMajor: requiredJavaMajorForMinecraft(manifest.minecraft.version),
+    requiredJavaMajor: requiredJavaMajorForMinecraft(
+      manifest.minecraft.version,
+    ),
     artifacts,
     optionalFiles,
     archiveLayers: hasOverrides
@@ -195,8 +222,15 @@ function planGeneric(packPath, inspection) {
 
 async function planLocalPack(packPath) {
   const resolvedPath = path.resolve(String(packPath || ""));
-  if (!packPath || !fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
-    throw provisioningError("PACK_NOT_FOUND", "The selected modpack file does not exist.");
+  if (
+    !packPath ||
+    !fs.existsSync(resolvedPath) ||
+    !fs.statSync(resolvedPath).isFile()
+  ) {
+    throw provisioningError(
+      "PACK_NOT_FOUND",
+      "The selected modpack file does not exist.",
+    );
   }
   const inspection = await inspectZip(resolvedPath);
   const paths = new Set(inspection.entries.map((entry) => entry.path));

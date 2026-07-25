@@ -28,7 +28,9 @@ export function DialogSurface({
   onOpenChange,
 }: DialogSurfaceProps) {
   const titleNode = <Dialog.Title>{title}</Dialog.Title>;
-  const descriptionNode = <Dialog.Description>{description}</Dialog.Description>;
+  const descriptionNode = (
+    <Dialog.Description>{description}</Dialog.Description>
+  );
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

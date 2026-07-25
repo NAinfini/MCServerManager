@@ -18,17 +18,23 @@ export interface ServerTextFile {
 }
 
 export function listServerFiles(serverId: string, relativePath = "") {
-  return invokeDesktopCommandWithErrorHandling<ServerFileEntry[]>("list_server_files", {
-    serverId,
-    relativePath,
-  });
+  return invokeDesktopCommandWithErrorHandling<ServerFileEntry[]>(
+    "list_server_files",
+    {
+      serverId,
+      relativePath,
+    },
+  );
 }
 
 export function readServerTextFile(serverId: string, relativePath: string) {
-  return invokeDesktopCommandWithErrorHandling<ServerTextFile>("read_server_text_file", {
-    serverId,
-    relativePath,
-  });
+  return invokeDesktopCommandWithErrorHandling<ServerTextFile>(
+    "read_server_text_file",
+    {
+      serverId,
+      relativePath,
+    },
+  );
 }
 
 export function writeServerTextFile(
@@ -36,11 +42,14 @@ export function writeServerTextFile(
   relativePath: string,
   content: string,
 ) {
-  return invokeDesktopCommandWithErrorHandling<ServerTextFile>("write_server_text_file", {
-    serverId,
-    relativePath,
-    content,
-  });
+  return invokeDesktopCommandWithErrorHandling<ServerTextFile>(
+    "write_server_text_file",
+    {
+      serverId,
+      relativePath,
+      content,
+    },
+  );
 }
 
 export function openServerFolder(serverId: string) {

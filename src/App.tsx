@@ -63,11 +63,7 @@ function AppErrorFallback({
         <h1>{t("app.error.title")}</h1>
         <p>{error.message}</p>
       </div>
-      <button
-        className="button button-primary"
-        type="button"
-        onClick={onRetry}
-      >
+      <button className="button button-primary" type="button" onClick={onRetry}>
         {t("app.error.retry")}
       </button>
     </div>
@@ -246,14 +242,22 @@ function ProvisioningRecoveryNotice() {
     queryFn: listRecoverableProvisioningJobs,
   });
   const actionMutation = useMutation({
-    mutationFn: async ({ action, job }: { action: "resume" | "cleanup"; job: ProvisioningJob }) => {
+    mutationFn: async ({
+      action,
+      job,
+    }: {
+      action: "resume" | "cleanup";
+      job: ProvisioningJob;
+    }) => {
       if (action === "cleanup") return cancelProvisioningJob(job.id);
       return job.stage === "failed"
         ? retryProvisioningJob(job.id)
         : runProvisioningJob(job.id);
     },
     onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.provisioning.recoverable });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.provisioning.recoverable,
+      });
       if (result.stage === "ready") {
         await queryClient.invalidateQueries({ queryKey: serverKeys.profiles });
       }
@@ -275,27 +279,41 @@ function ProvisioningRecoveryNotice() {
     <aside className="provisioning-recovery-notice" role="status">
       <div className="provisioning-recovery-list">
         <strong>{t("provisioning.recovery.title")}</strong>
-        {actionMutation.error ? <span className="danger-text">{actionMutation.error.message}</span> : null}
+        {actionMutation.error ? (
+          <span className="danger-text">{actionMutation.error.message}</span>
+        ) : null}
         {jobs.map((job) => {
           const committed = job.progress?.committed === true;
           return (
             <div className="provisioning-recovery-job" key={job.id}>
-              <span>{t("provisioning.recovery.description", { target: job.targetDir })}</span>
+              <span>
+                {t("provisioning.recovery.description", {
+                  target: job.targetDir,
+                })}
+              </span>
               <div className="provisioning-recovery-actions">
                 <button
                   className="button button-primary"
                   disabled={actionMutation.isPending}
                   type="button"
-                  onClick={() => actionMutation.mutate({ action: "resume", job })}
+                  onClick={() =>
+                    actionMutation.mutate({ action: "resume", job })
+                  }
                 >
                   {t("provisioning.recovery.resume")}
                 </button>
                 <button
                   className="button button-secondary"
                   disabled={actionMutation.isPending || committed}
-                  title={committed ? t("provisioning.recovery.cleanupCommitted") : undefined}
+                  title={
+                    committed
+                      ? t("provisioning.recovery.cleanupCommitted")
+                      : undefined
+                  }
                   type="button"
-                  onClick={() => actionMutation.mutate({ action: "cleanup", job })}
+                  onClick={() =>
+                    actionMutation.mutate({ action: "cleanup", job })
+                  }
                 >
                   {t("provisioning.recovery.cleanup")}
                 </button>

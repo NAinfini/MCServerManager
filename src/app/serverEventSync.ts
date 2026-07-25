@@ -56,10 +56,11 @@ export function applyDesktopServerEvent(
   const payload = event.payload;
   queryClient.setQueryData<ProcessEvent[]>(
     processKeys.events(event.serverId),
-    (current) => [
-      ...(current ?? []).filter((item) => item.id !== payload.id),
-      payload,
-    ].slice(-1_000),
+    (current) =>
+      [
+        ...(current ?? []).filter((item) => item.id !== payload.id),
+        payload,
+      ].slice(-1_000),
   );
 
   if (event.kind === "lifecycle") {

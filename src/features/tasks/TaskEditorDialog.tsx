@@ -69,7 +69,10 @@ export function TaskEditorDialog({
     { value: "world_backup", label: t("tasks.kind.worldBackup") },
     { value: "command", label: t("tasks.kind.command") },
     { value: "server_update_check", label: t("tasks.kind.serverUpdateCheck") },
-    { value: "content_update_check", label: t("tasks.kind.contentUpdateCheck") },
+    {
+      value: "content_update_check",
+      label: t("tasks.kind.contentUpdateCheck"),
+    },
   ] as const;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {

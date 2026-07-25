@@ -38,15 +38,21 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
   const historyQuery = useQuery({
     queryKey: queryKeys.diagnostics.runs(server.id),
     queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<DiagnosticRun[]>("list_diagnostic_runs", {
-        serverId: server.id,
-      }),
+      invokeDesktopCommandWithErrorHandling<DiagnosticRun[]>(
+        "list_diagnostic_runs",
+        {
+          serverId: server.id,
+        },
+      ),
   });
   const runMutation = useMutation({
     mutationFn: () =>
-      invokeDesktopCommandWithErrorHandling<DiagnosticRun>("run_server_diagnostics", {
-        serverId: server.id,
-      }),
+      invokeDesktopCommandWithErrorHandling<DiagnosticRun>(
+        "run_server_diagnostics",
+        {
+          serverId: server.id,
+        },
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: queryKeys.diagnostics.runs(server.id),
@@ -87,7 +93,9 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
           <div className="update-status-grid">
             <div>
               <span>{t("diagnostics.status")}</span>
-              <strong className={`diagnostic-status diagnostic-status-${latest.status}`}>
+              <strong
+                className={`diagnostic-status diagnostic-status-${latest.status}`}
+              >
                 {diagnosticStatusLabel(latest.status, t)}
               </strong>
             </div>
@@ -99,7 +107,9 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
           <div className="compatibility-list">
             {latest.results.map((result) => (
               <div className="diagnostic-result" key={result.name}>
-                <strong className={`diagnostic-status diagnostic-status-${result.status}`}>
+                <strong
+                  className={`diagnostic-status diagnostic-status-${result.status}`}
+                >
                   {diagnosticStatusLabel(result.status, t)}
                 </strong>
                 <span>{result.message}</span>

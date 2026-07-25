@@ -4,7 +4,14 @@ import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import * as Toolbar from "@radix-ui/react-toolbar";
 import * as Separator from "@radix-ui/react-separator";
-import { Copy, Eraser, PanelRightOpen, RefreshCw, Users, X } from "lucide-react";
+import {
+  Copy,
+  Eraser,
+  PanelRightOpen,
+  RefreshCw,
+  Users,
+  X,
+} from "lucide-react";
 import {
   sendServerCommand,
   listProcessEvents,
@@ -91,9 +98,10 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
           },
         });
         terminal.open(terminalElementRef.current);
-        const terminalInput = terminalElementRef.current.querySelector<HTMLTextAreaElement>(
-          ".xterm-helper-textarea",
-        );
+        const terminalInput =
+          terminalElementRef.current.querySelector<HTMLTextAreaElement>(
+            ".xterm-helper-textarea",
+          );
         if (terminalInput) {
           terminalInput.id = terminalInputId;
           terminalInput.name = "serverConsoleTerminalInput";
@@ -344,7 +352,10 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
         <div className="xterm-host" ref={terminalElementRef} />
       </div>
 
-      <div className="command-template-bar" aria-label={t("console.templates.aria")}>
+      <div
+        className="command-template-bar"
+        aria-label={t("console.templates.aria")}
+      >
         {quickCommands.map((template) => (
           <Button
             key={template.command}

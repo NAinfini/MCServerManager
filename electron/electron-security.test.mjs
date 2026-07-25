@@ -45,7 +45,9 @@ describe("Electron window security", () => {
     const main = fs.readFileSync("electron/main.cjs", "utf8");
 
     expect(main).toContain("CLOSE_RESPONSE_TIMEOUT_MS");
-    expect(main).toMatch(/rendererGone \|\| mainWindow\?\.webContents\.isCrashed\(\)/);
+    expect(main).toMatch(
+      /rendererGone \|\| mainWindow\?\.webContents\.isCrashed\(\)/,
+    );
   });
 
   it("rejects unsupported preload commands before IPC dispatch", () => {

@@ -22,7 +22,9 @@ describe("dialog and feedback foundation", () => {
       />,
     );
 
-    expect(screen.getByRole("dialog", { name: "Discard changes?" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("dialog", { name: "Discard changes?" }),
+    ).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -40,7 +42,9 @@ describe("dialog and feedback foundation", () => {
       />,
     );
 
-    expect(screen.getByRole("textbox", { name: "Server directory" })).toBeDisabled();
+    expect(
+      screen.getByRole("textbox", { name: "Server directory" }),
+    ).toBeDisabled();
     expect(screen.getByRole("button", { name: "Browse" })).toBeDisabled();
   });
 
@@ -56,7 +60,9 @@ describe("dialog and feedback foundation", () => {
       </>,
     );
 
-    expect(screen.getByLabelText("Save actions")).toHaveClass("sticky-action-bar");
+    expect(screen.getByLabelText("Save actions")).toHaveClass(
+      "sticky-action-bar",
+    );
     expect(screen.getByRole("alert")).toHaveTextContent("Restart required");
     expect(screen.getByRole("status")).toHaveTextContent("正在加载…");
     expect(container.querySelector(".loading-skeleton")).toBeInTheDocument();

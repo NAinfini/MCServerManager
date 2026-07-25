@@ -143,7 +143,10 @@ describe("resumable provisioning jobs", () => {
     const { executor } = makeExecutor({
       handlers: {
         [stage]: async () => {
-          throw Object.assign(new Error(`${stage} failed`), { code, retryable: true });
+          throw Object.assign(new Error(`${stage} failed`), {
+            code,
+            retryable: true,
+          });
         },
       },
     });
@@ -225,10 +228,12 @@ describe("resumable provisioning jobs", () => {
     fs.mkdirSync(targetDir);
     const { executor } = makeExecutor();
 
-    expect(() =>
-      executor.createJob(validPlan(targetDir)),
-    ).toThrowError(expect.objectContaining({ code: "JOB_TARGET_EXISTS" }));
-    expect(fs.readdirSync(path.dirname(targetDir))).toEqual([path.basename(targetDir)]);
+    expect(() => executor.createJob(validPlan(targetDir))).toThrowError(
+      expect.objectContaining({ code: "JOB_TARGET_EXISTS" }),
+    );
+    expect(fs.readdirSync(path.dirname(targetDir))).toEqual([
+      path.basename(targetDir),
+    ]);
   });
 
   it("keeps committed files when startup fails", async () => {
@@ -279,7 +284,9 @@ describe("resumable provisioning jobs", () => {
     });
     const failed = executor.getJob(job.id);
     expect(fs.existsSync(targetDir)).toBe(false);
-    expect(fs.existsSync(path.join(failed.stagingDir, "server.jar"))).toBe(true);
+    expect(fs.existsSync(path.join(failed.stagingDir, "server.jar"))).toBe(
+      true,
+    );
     expect(failed.error).toMatchObject({
       stage: "committing",
       cleanupRequired: true,
@@ -401,7 +408,9 @@ describe("resumable provisioning jobs", () => {
     [
       "a validated Java runtime",
       (targetDir) =>
-        validPlan(targetDir, { javaRuntime: { path: "java", validated: false } }),
+        validPlan(targetDir, {
+          javaRuntime: { path: "java", validated: false },
+        }),
       "JAVA_RUNTIME_INVALID",
     ],
     [

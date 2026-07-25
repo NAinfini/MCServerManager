@@ -41,7 +41,10 @@ function modeLabel(mode: BackupProfileMode, t: (key: string) => string) {
 
 function profileSummary(
   profile: BackupProfile,
-  t: (key: string, values?: Record<string, string | number | null | undefined>) => string,
+  t: (
+    key: string,
+    values?: Record<string, string | number | null | undefined>,
+  ) => string,
 ) {
   const retention = profile.retentionCount
     ? t("backups.profiles.keep", { count: profile.retentionCount })
@@ -66,7 +69,9 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
   const [retentionCount, setRetentionCount] = useState("5");
   const [confirmFullServer, setConfirmFullServer] = useState(false);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  const [deleteProfile, setDeleteProfile] = useState<BackupProfile | null>(null);
+  const [deleteProfile, setDeleteProfile] = useState<BackupProfile | null>(
+    null,
+  );
   const profilesQuery = useQuery({
     queryKey: backupKeys.profiles(server.id),
     queryFn: () => listBackupProfiles(server.id),
@@ -177,7 +182,9 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
     setMode(profile.mode);
     setIncludePaths(profile.includePaths);
     setExcludePaths(profile.excludePaths);
-    setRetentionCount(profile.retentionCount ? String(profile.retentionCount) : "");
+    setRetentionCount(
+      profile.retentionCount ? String(profile.retentionCount) : "",
+    );
     setConfirmFullServer(profile.mode === "fullServer");
   }
 

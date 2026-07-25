@@ -21,4 +21,3 @@ export function detectServerVersion(rootDir: string) {
     { rootDir },
   );
 }
-

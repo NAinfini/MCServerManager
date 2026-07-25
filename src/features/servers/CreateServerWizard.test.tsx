@@ -30,9 +30,10 @@ vi.mock("./api", () => ({
   suggestServerPort: vi.fn(),
 }));
 vi.mock("./provisioningApi", async () => {
-  const actual = await vi.importActual<typeof import("./provisioningApi")>(
-    "./provisioningApi",
-  );
+  const actual =
+    await vi.importActual<typeof import("./provisioningApi")>(
+      "./provisioningApi",
+    );
   return {
     ...actual,
     planServerProvisioning: vi.fn(),
@@ -46,7 +47,11 @@ vi.mock("./provisioningApi", async () => {
   };
 });
 vi.mock("./CreateServerMarketplaceBrowser", () => ({
-  CreateServerMarketplaceBrowser: ({ onSelect }: { onSelect: (value: unknown) => void }) => (
+  CreateServerMarketplaceBrowser: ({
+    onSelect,
+  }: {
+    onSelect: (value: unknown) => void;
+  }) => (
     <button
       type="button"
       onClick={() =>
@@ -88,7 +93,9 @@ const sourcePlan = {
   },
 };
 
-function job(stage: provisioningApi.ProvisioningStage): provisioningApi.ProvisioningJob {
+function job(
+  stage: provisioningApi.ProvisioningStage,
+): provisioningApi.ProvisioningJob {
   return {
     id: "job-1",
     serverId: stage === "ready" ? "server-1" : null,
@@ -103,7 +110,9 @@ function job(stage: provisioningApi.ProvisioningStage): provisioningApi.Provisio
   };
 }
 
-function renderWizard(props: Partial<React.ComponentProps<typeof CreateServerWizard>> = {}) {
+function renderWizard(
+  props: Partial<React.ComponentProps<typeof CreateServerWizard>> = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -129,15 +138,23 @@ describe("CreateServerWizard unified provisioning flow", () => {
       { value: "0.16.10", label: "0.16.10", stable: true },
     ]);
     vi.mocked(suggestServerPort).mockResolvedValue({ port: 25565, taken: [] });
-    vi.mocked(provisioningApi.planServerProvisioning).mockResolvedValue(sourcePlan);
+    vi.mocked(provisioningApi.planServerProvisioning).mockResolvedValue(
+      sourcePlan,
+    );
     vi.mocked(provisioningApi.planJavaRuntime).mockResolvedValue({
       action: "reuse",
       majorVersion: 21,
       runtime: { path: "C:/Java/bin/java.exe", majorVersion: 21 },
     });
-    vi.mocked(provisioningApi.createProvisioningJob).mockResolvedValue(job("planned"));
-    vi.mocked(provisioningApi.runProvisioningJob).mockResolvedValue(job("ready"));
-    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([]);
+    vi.mocked(provisioningApi.createProvisioningJob).mockResolvedValue(
+      job("planned"),
+    );
+    vi.mocked(provisioningApi.runProvisioningJob).mockResolvedValue(
+      job("ready"),
+    );
+    vi.mocked(
+      provisioningApi.listRecoverableProvisioningJobs,
+    ).mockResolvedValue([]);
   });
 
   afterEach(cleanup);
@@ -147,7 +164,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
     renderWizard();
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(provisioningApi.listRecoverableProvisioningJobs).not.toHaveBeenCalled();
+    expect(
+      provisioningApi.listRecoverableProvisioningJobs,
+    ).not.toHaveBeenCalled();
   });
 
   it("publishes the initial wizard progress to its host", async () => {
@@ -166,7 +185,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
       }),
     );
     expect(progress.steps).toHaveLength(6);
-    expect(progress.steps.every(({ label }) => label.trim().length > 0)).toBe(true);
+    expect(progress.steps.every(({ label }) => label.trim().length > 0)).toBe(
+      true,
+    );
     expect(progress.steps.map(({ label }) => label)).toEqual([
       "Source",
       "Compatibility",
@@ -183,7 +204,9 @@ describe("CreateServerWizard unified provisioning flow", () => {
   it("does not render the step indicator inside the wizard body", () => {
     const { container } = renderWizard({ onProgressChange: vi.fn() });
 
-    expect(container.querySelector(".create-server-panel .wizard-steps")).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".create-server-panel .wizard-steps"),
+    ).not.toBeInTheDocument();
   });
 
   it("publishes the next step after the user advances from source selection", async () => {
@@ -197,11 +220,14 @@ describe("CreateServerWizard unified provisioning flow", () => {
     await waitFor(() => {
       expect(
         onProgressChange.mock.calls.some(
-          ([value]) => (value as CreateServerWizardProgress | null)?.currentStep === 0,
+          ([value]) =>
+            (value as CreateServerWizardProgress | null)?.currentStep === 0,
         ),
       ).toBe(true);
     });
-    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open modpack file/i }),
+    );
 
     await waitFor(() => {
       const progressValues = onProgressChange.mock.calls
@@ -220,18 +246,30 @@ describe("CreateServerWizard unified provisioning flow", () => {
     });
     renderWizard({ onCreated, onLifecycleChange });
 
-    await waitFor(() => expect(onLifecycleChange).toHaveBeenCalledWith("draft"));
+    await waitFor(() =>
+      expect(onLifecycleChange).toHaveBeenCalledWith("draft"),
+    );
 
-    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open modpack file/i }),
+    );
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
       prepareInstall: true,
       source: { kind: "localModpackFile", path: "C:/Packs/server.mrpack" },
     });
-    expect(await screen.findByText("This pack is not marked as a dedicated server pack.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "This pack is not marked as a dedicated server pack.",
+      ),
+    ).toBeInTheDocument();
 
     const compatibilityNext = screen.getByRole("button", { name: "Next" });
     expect(compatibilityNext).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox", { name: /accept this compatibility warning/i }));
+    await userEvent.click(
+      screen.getByRole("checkbox", {
+        name: /accept this compatibility warning/i,
+      }),
+    );
     await userEvent.click(compatibilityNext);
 
     expect(await screen.findByText(/Java 21/i)).toBeInTheDocument();
@@ -240,22 +278,36 @@ describe("CreateServerWizard unified provisioning flow", () => {
     await userEvent.clear(screen.getByLabelText("Max memory MB"));
     await userEvent.type(screen.getByLabelText("Max memory MB"), "6144");
     await userEvent.clear(screen.getByLabelText("Message of the day"));
-    await userEvent.type(screen.getByLabelText("Message of the day"), "Pack server");
+    await userEvent.type(
+      screen.getByLabelText("Message of the day"),
+      "Pack server",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    const eula = screen.getByRole("checkbox", { name: /I accept the Minecraft EULA/i });
+    const eula = screen.getByRole("checkbox", {
+      name: /I accept the Minecraft EULA/i,
+    });
     expect(eula).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Install and start" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Install and start" }),
+    ).toBeDisabled();
     await userEvent.click(eula);
-    await userEvent.click(screen.getByRole("button", { name: "Install and start" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Install and start" }),
+    );
 
-    await waitFor(() => expect(provisioningApi.createProvisioningJob).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(provisioningApi.createProvisioningJob).toHaveBeenCalled(),
+    );
     expect(provisioningApi.createProvisioningJob).toHaveBeenCalledWith(
       expect.objectContaining({
         targetDir: "C:/Servers/Server Pack",
         acknowledgedWarningCodes: ["PACK_UNVERIFIED"],
         eula: expect.objectContaining({ accepted: true }),
-        configuration: expect.objectContaining({ maxMemoryMb: 6144, motd: "Pack server" }),
+        configuration: expect.objectContaining({
+          maxMemoryMb: 6144,
+          motd: "Pack server",
+        }),
       }),
     );
     expect(provisioningApi.runProvisioningJob).toHaveBeenCalledWith("job-1");
@@ -293,14 +345,26 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
   it("passes the user-entered name through the blank-server planning path", async () => {
     renderWizard();
-    await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
-    expect(screen.getByRole("heading", { name: "What are you building?" })).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "New blank server" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "What are you building?" }),
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText("Loader")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Plugins" }));
     await userEvent.type(screen.getByLabelText("Name"), "Quilt Realm");
-    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
-    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
-    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.16.10");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Minecraft version"),
+      "1.21.4",
+    );
+    await waitFor(() =>
+      expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Loader version"),
+      "0.16.10",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
@@ -325,12 +389,22 @@ describe("CreateServerWizard unified provisioning flow", () => {
     );
 
     renderWizard();
-    await userEvent.click(screen.getByRole("button", { name: "New blank server" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "New blank server" }),
+    );
     await userEvent.click(screen.getByRole("button", { name: /advanced/i }));
     await userEvent.type(screen.getByLabelText("Name"), "Fabric Realm");
-    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
-    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"));
-    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "1.1");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Minecraft version"),
+      "1.21.4",
+    );
+    await waitFor(() =>
+      expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Loader version"),
+      "1.1",
+    );
 
     // Switching the loader invalidates the Paper build number that is still
     // selected. It must not survive: the refetched Fabric list replaces it with
@@ -342,9 +416,17 @@ describe("CreateServerWizard unified provisioning flow", () => {
     );
 
     // The only path forward is re-picking Minecraft and a real Fabric version.
-    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "26.1.1");
-    await waitFor(() => expect(listLoaderVersions).toHaveBeenCalledWith("fabric", "26.1.1"));
-    await userEvent.selectOptions(screen.getByLabelText("Loader version"), "0.19.3");
+    await userEvent.selectOptions(
+      screen.getByLabelText("Minecraft version"),
+      "26.1.1",
+    );
+    await waitFor(() =>
+      expect(listLoaderVersions).toHaveBeenCalledWith("fabric", "26.1.1"),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Loader version"),
+      "0.19.3",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
@@ -361,9 +443,13 @@ describe("CreateServerWizard unified provisioning flow", () => {
   });
 
   it("routes existing folders and marketplace packs through the same planner", async () => {
-    vi.mocked(invokeDesktopCommand).mockResolvedValueOnce({ path: "C:/Servers/Existing" });
+    vi.mocked(invokeDesktopCommand).mockResolvedValueOnce({
+      path: "C:/Servers/Existing",
+    });
     renderWizard();
-    await userEvent.click(screen.getByRole("button", { name: "Import existing folder" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Import existing folder" }),
+    );
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
       source: { kind: "existingFolder" },
       rootDir: "C:/Servers/Existing",
@@ -371,8 +457,12 @@ describe("CreateServerWizard unified provisioning flow", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
-    await userEvent.click(screen.getByRole("button", { name: "Browse marketplace" }));
-    await userEvent.click(screen.getByRole("button", { name: "Select marketplace fixture" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Browse marketplace" }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Select marketplace fixture" }),
+    );
     expect(provisioningApi.planServerProvisioning).toHaveBeenLastCalledWith({
       source: {
         kind: "marketplaceModpack",
@@ -391,16 +481,25 @@ describe("CreateServerWizard unified provisioning flow", () => {
     const onHeaderBackChange = vi.fn();
     const { container } = renderWizard({ onHeaderBackChange });
 
-    await userEvent.click(screen.getByRole("button", { name: "Browse marketplace" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Browse marketplace" }),
+    );
 
-    expect(container.querySelector(".wizard-marketplace-step")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Back" })).not.toBeInTheDocument();
+    expect(
+      container.querySelector(".wizard-marketplace-step"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
     expect(onHeaderBackChange).toHaveBeenLastCalledWith(expect.any(Function));
   });
 
   it("warns for unverified archives but allows an explicit compatible runtime selection", async () => {
     const unverifiedPlan = {
-      source: { kind: "localModpackFile" as const, path: "C:/Packs/unknown.zip" },
+      source: {
+        kind: "localModpackFile" as const,
+        path: "C:/Packs/unknown.zip",
+      },
       pack: { format: "generic-zip", name: "Unknown Pack" },
       minecraftVersion: null,
       loaderType: null,
@@ -414,20 +513,37 @@ describe("CreateServerWizard unified provisioning flow", () => {
         },
       ],
     };
-    vi.mocked(invokeDesktopCommand).mockResolvedValue({ path: "C:/Packs/unknown.zip" });
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({
+      path: "C:/Packs/unknown.zip",
+    });
     vi.mocked(provisioningApi.planServerProvisioning)
       .mockResolvedValueOnce(unverifiedPlan)
       .mockResolvedValueOnce(sourcePlan);
     renderWizard();
 
-    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
-    expect(await screen.findByText(/does not contain enough trusted server metadata/i)).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /open modpack file/i }),
+    );
+    expect(
+      await screen.findByText(
+        /does not contain enough trusted server metadata/i,
+      ),
+    ).toBeInTheDocument();
     const next = screen.getByRole("button", { name: "Next" });
     expect(next).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox", { name: /accept this compatibility warning/i }));
+    await userEvent.click(
+      screen.getByRole("checkbox", {
+        name: /accept this compatibility warning/i,
+      }),
+    );
     expect(next).toBeDisabled();
-    await userEvent.selectOptions(screen.getByLabelText("Minecraft version"), "1.21.4");
-    await userEvent.click(screen.getByRole("button", { name: "Prepare server runtime" }));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Minecraft version"),
+      "1.21.4",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Prepare server runtime" }),
+    );
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -437,11 +553,17 @@ describe("CreateServerWizard unified provisioning flow", () => {
         prepareInstall: true,
       }),
     );
-    expect(await screen.findByText("This pack is not marked as a dedicated server pack.")).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        "This pack is not marked as a dedicated server pack.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("requires explicit consent before installing a managed Java runtime", async () => {
-    vi.mocked(invokeDesktopCommand).mockResolvedValue({ path: "C:/Packs/server.mrpack" });
+    vi.mocked(invokeDesktopCommand).mockResolvedValue({
+      path: "C:/Packs/server.mrpack",
+    });
     vi.mocked(provisioningApi.planJavaRuntime).mockResolvedValue({
       action: "install",
       majorVersion: 21,
@@ -453,13 +575,23 @@ describe("CreateServerWizard unified provisioning flow", () => {
       majorVersion: 21,
     });
     renderWizard();
-    await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
-    await userEvent.click(await screen.findByRole("checkbox", { name: /accept this compatibility warning/i }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /open modpack file/i }),
+    );
+    await userEvent.click(
+      await screen.findByRole("checkbox", {
+        name: /accept this compatibility warning/i,
+      }),
+    );
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    const install = await screen.findByRole("button", { name: "Install Java 21" });
+    const install = await screen.findByRole("button", {
+      name: "Install Java 21",
+    });
     expect(install).toBeDisabled();
-    await userEvent.click(screen.getByRole("checkbox", { name: /allow the app to download/i }));
+    await userEvent.click(
+      screen.getByRole("checkbox", { name: /allow the app to download/i }),
+    );
     await userEvent.click(install);
     expect(provisioningApi.installJavaRuntime).toHaveBeenCalledWith(
       expect.objectContaining({ action: "install" }),
@@ -480,13 +612,21 @@ describe("CreateServerWizard unified provisioning flow", () => {
         cleanupRequired: true,
       },
     };
-    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([failed]);
-    vi.mocked(provisioningApi.retryProvisioningJob).mockResolvedValue(job("ready"));
+    vi.mocked(
+      provisioningApi.listRecoverableProvisioningJobs,
+    ).mockResolvedValue([failed]);
+    vi.mocked(provisioningApi.retryProvisioningJob).mockResolvedValue(
+      job("ready"),
+    );
     renderWizard({ onLifecycleChange });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Download interrupted");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Download interrupted",
+    );
     expect(onLifecycleChange).toHaveBeenCalledWith("running");
-    await userEvent.click(screen.getByRole("button", { name: "Retry installation" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Retry installation" }),
+    );
     expect(provisioningApi.retryProvisioningJob).toHaveBeenCalledWith("job-1");
     await waitFor(() =>
       expect(onLifecycleChange).toHaveBeenLastCalledWith("complete"),
@@ -496,16 +636,26 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
   it("keeps the completed installation in place and exposes four next steps", async () => {
     const onCompletionAction = vi.fn();
-    vi.mocked(provisioningApi.listRecoverableProvisioningJobs).mockResolvedValue([
-      job("ready"),
-    ]);
+    vi.mocked(
+      provisioningApi.listRecoverableProvisioningJobs,
+    ).mockResolvedValue([job("ready")]);
     renderWizard({ onCompletionAction });
 
-    expect(await screen.findByRole("heading", { name: "Your server is ready" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start and open server" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Invite friends" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Browse content" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Invite friends" }));
+    expect(
+      await screen.findByRole("heading", { name: "Your server is ready" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Start and open server" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Invite friends" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Browse content" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Invite friends" }),
+    );
     expect(onCompletionAction).toHaveBeenCalledWith("server-1", "invite");
   });
 });

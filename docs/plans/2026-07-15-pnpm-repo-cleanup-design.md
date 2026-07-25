@@ -47,4 +47,3 @@ The one-time cleanup should reclaim roughly 7–8 GiB. Future installs should no
 longer place the pnpm store inside the OneDrive repository or force a second
 copied dependency tree. The project remains pnpm-only and build behavior stays
 unchanged.
-

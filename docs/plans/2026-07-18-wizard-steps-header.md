@@ -13,6 +13,7 @@
 ### Task 1: Publish wizard progress without moving wizard state
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerWizard.tsx:30-145`
 - Test: `src/features/servers/CreateServerWizard.test.tsx`
 
@@ -80,6 +81,7 @@ git commit -m "refactor: publish create wizard progress"
 ### Task 2: Render progress inside the dialog header
 
 **Files:**
+
 - Modify: `src/components/layout/AppShell.tsx:1-90,340-415`
 - Test: `src/components/layout/AppShell.test.tsx`
 
@@ -142,6 +144,7 @@ git commit -m "feat: place wizard steps in dialog header"
 ### Task 3: Compact the header-specific progress layout
 
 **Files:**
+
 - Modify: `src/styles.css:3043-3076,3214-3304,3480-3500`
 - Test: `src/styles.test.mjs`
 
@@ -209,6 +212,7 @@ git commit -m "style: compact wizard steps in header"
 ### Task 4: Verify the complete application
 
 **Files:**
+
 - Review only: all files changed above
 
 **Step 1: Run the full test suite**

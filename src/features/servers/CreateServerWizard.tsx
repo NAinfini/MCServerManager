@@ -54,7 +54,11 @@ import {
   type ProvisioningJob,
   type SourceProvisioningPlan,
 } from "./provisioningApi";
-import type { GuidedServerConfiguration, LoaderType, ValidatedJavaRuntime } from "./types";
+import type {
+  GuidedServerConfiguration,
+  LoaderType,
+  ValidatedJavaRuntime,
+} from "./types";
 import { serverKeys } from "./queries";
 import { createWorldBackup } from "../backups/backupApi";
 import { startServer } from "../process/api";
@@ -70,10 +74,7 @@ export interface CreateServerWizardProgress {
 }
 
 export type CreateServerCompletionAction =
-  | "overview"
-  | "invite"
-  | "content"
-  | "backup";
+  "overview" | "invite" | "content" | "backup";
 
 interface CreateServerWizardProps {
   onCreated?: () => void;
@@ -81,7 +82,10 @@ interface CreateServerWizardProps {
   onHeaderBackChange?: (handler: (() => void) | null) => void;
   onHeaderHiddenChange?: (hidden: boolean) => void;
   onProgressChange?: (progress: CreateServerWizardProgress | null) => void;
-  onRouteStateChange?: (state: { step: WizardStep; jobId?: string | null }) => void;
+  onRouteStateChange?: (state: {
+    step: WizardStep;
+    jobId?: string | null;
+  }) => void;
   onCompletionAction?: (
     serverId: string,
     action: CreateServerCompletionAction,
@@ -155,7 +159,9 @@ export function CreateServerWizard({
   const queryClient = useQueryClient();
   const [step, setStep] = useState<WizardStep>(0);
   const [sourceView, setSourceView] = useState<SourceView>("choices");
-  const [sourcePlan, setSourcePlan] = useState<SourceProvisioningPlan | null>(null);
+  const [sourcePlan, setSourcePlan] = useState<SourceProvisioningPlan | null>(
+    null,
+  );
   const [name, setName] = useState("");
   const [rootDir, setRootDir] = useState("");
   const [loaderType, setLoaderType] = useState<LoaderType>("paper");
@@ -165,11 +171,17 @@ export function CreateServerWizard({
   /* Kept as the full options rather than bare strings so the newest stable
      release can be preselected and marked: the list runs back to 1.0 and a
      beginner has no basis for picking one out of a hundred. */
-  const [minecraftOptions, setMinecraftOptions] = useState<LoaderVersionOption[]>([]);
+  const [minecraftOptions, setMinecraftOptions] = useState<
+    LoaderVersionOption[]
+  >([]);
   const [loaderOptions, setLoaderOptions] = useState<LoaderVersionOption[]>([]);
-  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<string[]>([]);
+  const [acknowledgedWarnings, setAcknowledgedWarnings] = useState<string[]>(
+    [],
+  );
   const [javaPlan, setJavaPlan] = useState<JavaRuntimePlan | null>(null);
-  const [javaRuntime, setJavaRuntime] = useState<ValidatedJavaRuntime | null>(null);
+  const [javaRuntime, setJavaRuntime] = useState<ValidatedJavaRuntime | null>(
+    null,
+  );
   const [javaConsent, setJavaConsent] = useState(false);
   const [configuration, setConfiguration] =
     useState<GuidedServerConfiguration>(initialConfiguration);
@@ -219,13 +231,10 @@ export function CreateServerWizard({
     onLifecycleChange?.(lifecycle.current);
   }, [onLifecycleChange]);
 
-  const publishLifecycle = useCallback(
-    (next: CreateServerWizardLifecycle) => {
-      lifecycle.current = next;
-      lifecycleCallback.current?.(next);
-    },
-    [],
-  );
+  const publishLifecycle = useCallback((next: CreateServerWizardLifecycle) => {
+    lifecycle.current = next;
+    lifecycleCallback.current?.(next);
+  }, []);
 
   /* The source step spans three full screens, so the counter alone sat at
      "Step 1 of 6" while the user made three decisions and read as no progress
@@ -283,16 +292,14 @@ export function CreateServerWizard({
     loadJob
       .then((jobs) => {
         const recovered = jobs[0];
-        if (
-          active &&
-          recovered &&
-          recoveredJobIdRef.current !== recovered.id
-        ) {
+        if (active && recovered && recoveredJobIdRef.current !== recovered.id) {
           recoveredJobIdRef.current = recovered.id;
           setJob(recovered);
           setIsRecoveredJob(true);
           setStep(5);
-          publishLifecycle(recovered.stage === "ready" ? "complete" : "running");
+          publishLifecycle(
+            recovered.stage === "ready" ? "complete" : "running",
+          );
         }
       })
       .catch((caught) => active && setError(errorMessage(caught)));
@@ -364,7 +371,8 @@ export function CreateServerWizard({
   }, [loaderType, needsBlankMetadata, needsRuntimeMetadata, metadataAttempt]);
 
   useEffect(() => {
-    if ((!needsBlankMetadata && !needsRuntimeMetadata) || !minecraftVersion) return;
+    if ((!needsBlankMetadata && !needsRuntimeMetadata) || !minecraftVersion)
+      return;
     let active = true;
     listLoaderVersions(loaderType, minecraftVersion)
       .then((options) => {
@@ -418,25 +426,31 @@ export function CreateServerWizard({
     };
   }, [javaPlan, javaRuntime, sourcePlan, step]);
 
-  const applyPlan = useCallback(async (plan: SourceProvisioningPlan, existingRoot?: string) => {
-    setSourcePlan(plan);
-    setAcknowledgedWarnings([]);
-    setEulaAccepted(false);
-    setJavaPlan(null);
-    setJavaRuntime(null);
-    setJavaConsent(false);
-    const nextName = plan.pack?.name || name || "Minecraft Server";
-    setName(nextName);
-    if (plan.loaderType) setLoaderType(plan.loaderType);
-    if (plan.minecraftVersion) setMinecraftVersion(plan.minecraftVersion);
-    if (plan.loaderVersion) setLoaderVersion(plan.loaderVersion);
-    setRootDir(existingRoot || (await getDefaultServerRoot(nextName)));
-    setSourceView("choices");
-    setStep(1);
-  }, [name]);
+  const applyPlan = useCallback(
+    async (plan: SourceProvisioningPlan, existingRoot?: string) => {
+      setSourcePlan(plan);
+      setAcknowledgedWarnings([]);
+      setEulaAccepted(false);
+      setJavaPlan(null);
+      setJavaRuntime(null);
+      setJavaConsent(false);
+      const nextName = plan.pack?.name || name || "Minecraft Server";
+      setName(nextName);
+      if (plan.loaderType) setLoaderType(plan.loaderType);
+      if (plan.minecraftVersion) setMinecraftVersion(plan.minecraftVersion);
+      if (plan.loaderVersion) setLoaderVersion(plan.loaderVersion);
+      setRootDir(existingRoot || (await getDefaultServerRoot(nextName)));
+      setSourceView("choices");
+      setStep(1);
+    },
+    [name],
+  );
 
   const planSource = useCallback(
-    async (input: Parameters<typeof planServerProvisioning>[0], existingRoot?: string) => {
+    async (
+      input: Parameters<typeof planServerProvisioning>[0],
+      existingRoot?: string,
+    ) => {
       setError(null);
       setBusy(true);
       try {
@@ -456,12 +470,15 @@ export function CreateServerWizard({
   const chooseLocalFile = async () => {
     const selected = await pick("file");
     if (selected) {
-      await planSource({ source: { kind: "localModpackFile", path: selected } });
+      await planSource({
+        source: { kind: "localModpackFile", path: selected },
+      });
     }
   };
 
   useEffect(() => {
-    if (!initialSourcePath || plannedInitialPath.current === initialSourcePath) return;
+    if (!initialSourcePath || plannedInitialPath.current === initialSourcePath)
+      return;
     plannedInitialPath.current = initialSourcePath;
     void planSource({
       source: { kind: "localModpackFile", path: initialSourcePath },
@@ -471,7 +488,10 @@ export function CreateServerWizard({
   const chooseExistingFolder = async () => {
     const selected = await pick("folder");
     if (selected) {
-      await planSource({ source: { kind: "existingFolder" }, rootDir: selected }, selected);
+      await planSource(
+        { source: { kind: "existingFolder" }, rootDir: selected },
+        selected,
+      );
     }
   };
 
@@ -491,7 +511,9 @@ export function CreateServerWizard({
     [planSource, t],
   );
 
-  const handleMarketplaceSelect = async (selection: MarketplaceCreateSelection) => {
+  const handleMarketplaceSelect = async (
+    selection: MarketplaceCreateSelection,
+  ) => {
     await planSource({
       source: {
         kind: "marketplaceModpack",
@@ -505,12 +527,13 @@ export function CreateServerWizard({
     });
   };
 
-  const requiredWarnings = sourcePlan?.warnings.filter(
-    (warning) => warning.requiresAcknowledgement,
-  ) || [];
-  const compatibilityReady = requiredWarnings.every((warning) =>
-    acknowledgedWarnings.includes(warning.code),
-  ) && Boolean(sourcePlan?.launchSpec);
+  const requiredWarnings =
+    sourcePlan?.warnings.filter((warning) => warning.requiresAcknowledgement) ||
+    [];
+  const compatibilityReady =
+    requiredWarnings.every((warning) =>
+      acknowledgedWarnings.includes(warning.code),
+    ) && Boolean(sourcePlan?.launchSpec);
 
   const prepareUnverifiedRuntime = async () => {
     if (!sourcePlan || !minecraftVersion) return;
@@ -518,7 +541,8 @@ export function CreateServerWizard({
       {
         source: sourcePlan.source,
         name,
-        rootDir: sourcePlan.source.kind === "existingFolder" ? rootDir : undefined,
+        rootDir:
+          sourcePlan.source.kind === "existingFolder" ? rootDir : undefined,
         loaderType,
         minecraftVersion,
         loaderVersion: loaderVersion || undefined,
@@ -597,7 +621,8 @@ export function CreateServerWizard({
   };
 
   const installServer = async () => {
-    if (!sourcePlan || !javaRuntime || !sourcePlan.launchSpec || !eulaAccepted) return;
+    if (!sourcePlan || !javaRuntime || !sourcePlan.launchSpec || !eulaAccepted)
+      return;
     setBusy(true);
     setError(null);
     const finalPlan: FinalProvisioningPlan = {
@@ -719,7 +744,10 @@ export function CreateServerWizard({
   };
 
   return (
-    <section aria-label={t("createServer.title")} className="create-server-panel">
+    <section
+      aria-label={t("createServer.title")}
+      className="create-server-panel"
+    >
       {showHeading ? <h2>{t("createServer.title")}</h2> : null}
 
       <div className="wizard-step-content unified-provisioning-wizard">
@@ -888,27 +916,74 @@ export function CreateServerWizard({
                 {serverIntent === "advanced" ? (
                   <label>
                     <span>{t("profileSettings.loader")}</span>
-                    <select aria-label={t("profileSettings.loader")} className="field-control" name="server-loader" value={loaderType} onChange={(event) => { setLoaderType(event.target.value as LoaderType); setMinecraftVersion(""); setLoaderVersion(""); }}>
-                      {loaders.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
+                    <select
+                      aria-label={t("profileSettings.loader")}
+                      className="field-control"
+                      name="server-loader"
+                      value={loaderType}
+                      onChange={(event) => {
+                        setLoaderType(event.target.value as LoaderType);
+                        setMinecraftVersion("");
+                        setLoaderVersion("");
+                      }}
+                    >
+                      {loaders.map((loader) => (
+                        <option key={loader} value={loader}>
+                          {loader}
+                        </option>
+                      ))}
                     </select>
                   </label>
                 ) : null}
                 <label>
                   <span>{t("profileSettings.minecraftVersion")}</span>
-                  <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" name="minecraft-version" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
+                  <select
+                    aria-label={t("profileSettings.minecraftVersion")}
+                    className="field-control"
+                    name="minecraft-version"
+                    value={minecraftVersion}
+                    onChange={(event) => {
+                      setMinecraftVersion(event.target.value);
+                      setLoaderVersion("");
+                    }}
+                  >
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedMinecraftIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
+                    {minecraftOptions.map((option, index) => (
+                      <option key={option.value} value={option.value}>
+                        {index === recommendedMinecraftIndex
+                          ? t("provisioning.wizard.recommendedOption", {
+                              label: option.label,
+                            })
+                          : option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   <span>{t("profileSettings.loaderVersion")}</span>
-                  <select aria-label={t("profileSettings.loaderVersion")} className="field-control" name="loader-version" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
+                  <select
+                    aria-label={t("profileSettings.loaderVersion")}
+                    className="field-control"
+                    name="loader-version"
+                    value={loaderVersion}
+                    onChange={(event) => setLoaderVersion(event.target.value)}
+                  >
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {loaderOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedLoaderIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
+                    {loaderOptions.map((option, index) => (
+                      <option key={option.value} value={option.value}>
+                        {index === recommendedLoaderIndex
+                          ? t("provisioning.wizard.recommendedOption", {
+                              label: option.label,
+                            })
+                          : option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <Button
-                  disabled={busy || !name || !minecraftVersion || !loaderVersion}
+                  disabled={
+                    busy || !name || !minecraftVersion || !loaderVersion
+                  }
                   onClick={() =>
                     planSource({
                       source: { kind: "blank" },
@@ -934,25 +1009,72 @@ export function CreateServerWizard({
                 <p>{t("provisioning.wizard.runtimeMetadataRequired")}</p>
                 <label>
                   <span>{t("profileSettings.loader")}</span>
-                  <select aria-label={t("profileSettings.loader")} className="field-control" value={loaderType} onChange={(event) => { setLoaderType(event.target.value as LoaderType); setMinecraftVersion(""); setLoaderVersion(""); }}>
-                    {loaders.map((loader) => <option key={loader} value={loader}>{loader}</option>)}
+                  <select
+                    aria-label={t("profileSettings.loader")}
+                    className="field-control"
+                    value={loaderType}
+                    onChange={(event) => {
+                      setLoaderType(event.target.value as LoaderType);
+                      setMinecraftVersion("");
+                      setLoaderVersion("");
+                    }}
+                  >
+                    {loaders.map((loader) => (
+                      <option key={loader} value={loader}>
+                        {loader}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   <span>{t("profileSettings.minecraftVersion")}</span>
-                  <select aria-label={t("profileSettings.minecraftVersion")} className="field-control" value={minecraftVersion} onChange={(event) => { setMinecraftVersion(event.target.value); setLoaderVersion(""); }}>
+                  <select
+                    aria-label={t("profileSettings.minecraftVersion")}
+                    className="field-control"
+                    value={minecraftVersion}
+                    onChange={(event) => {
+                      setMinecraftVersion(event.target.value);
+                      setLoaderVersion("");
+                    }}
+                  >
                     <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedMinecraftIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
+                    {minecraftOptions.map((option, index) => (
+                      <option key={option.value} value={option.value}>
+                        {index === recommendedMinecraftIndex
+                          ? t("provisioning.wizard.recommendedOption", {
+                              label: option.label,
+                            })
+                          : option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label>
                   <span>{t("profileSettings.loaderVersion")}</span>
-                  <select aria-label={t("profileSettings.loaderVersion")} className="field-control" value={loaderVersion} onChange={(event) => setLoaderVersion(event.target.value)}>
-                    <option value="">{t("provisioning.wizard.autoSelectLoader")}</option>
-                    {loaderOptions.map((option, index) => <option key={option.value} value={option.value}>{index === recommendedLoaderIndex ? t("provisioning.wizard.recommendedOption", { label: option.label }) : option.label}</option>)}
+                  <select
+                    aria-label={t("profileSettings.loaderVersion")}
+                    className="field-control"
+                    value={loaderVersion}
+                    onChange={(event) => setLoaderVersion(event.target.value)}
+                  >
+                    <option value="">
+                      {t("provisioning.wizard.autoSelectLoader")}
+                    </option>
+                    {loaderOptions.map((option, index) => (
+                      <option key={option.value} value={option.value}>
+                        {index === recommendedLoaderIndex
+                          ? t("provisioning.wizard.recommendedOption", {
+                              label: option.label,
+                            })
+                          : option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <Button disabled={busy || !minecraftVersion} onClick={prepareUnverifiedRuntime}>
+                <Button
+                  disabled={busy || !minecraftVersion}
+                  onClick={prepareUnverifiedRuntime}
+                >
                   {t("provisioning.wizard.prepareRuntime")}
                 </Button>
               </div>
@@ -996,7 +1118,9 @@ export function CreateServerWizard({
               sourcePlan.warnings.map((warning) => (
                 <label
                   className="provisioning-warning"
-                  data-blocking={warning.requiresAcknowledgement ? "true" : "false"}
+                  data-blocking={
+                    warning.requiresAcknowledgement ? "true" : "false"
+                  }
                   key={warning.code}
                 >
                   <span className="provisioning-warning-message">
@@ -1032,7 +1156,11 @@ export function CreateServerWizard({
 
         {step === 2 ? (
           <div className="provisioning-java-step">
-            <h3>{t("provisioning.wizard.javaTitle", { version: sourcePlan?.requiredJavaMajor || 21 })}</h3>
+            <h3>
+              {t("provisioning.wizard.javaTitle", {
+                version: sourcePlan?.requiredJavaMajor || 21,
+              })}
+            </h3>
             {busy && !javaRuntime ? (
               <p className="provisioning-step-hint">
                 {t("provisioning.wizard.javaPlanning")}
@@ -1057,11 +1185,16 @@ export function CreateServerWizard({
                   </div>
                   <div>
                     <dt>{t("provisioning.wizard.javaVersion")}</dt>
-                    <dd>{javaPlan.version || `Java ${javaPlan.majorVersion}`}</dd>
+                    <dd>
+                      {javaPlan.version || `Java ${javaPlan.majorVersion}`}
+                    </dd>
                   </div>
                 </dl>
                 {javaPlan.licenseUrl ? (
-                  <a className="provisioning-java-license" href={javaPlan.licenseUrl}>
+                  <a
+                    className="provisioning-java-license"
+                    href={javaPlan.licenseUrl}
+                  >
                     {t("provisioning.wizard.javaLicense")}
                   </a>
                 ) : null}
@@ -1074,8 +1207,13 @@ export function CreateServerWizard({
                   />
                   {t("provisioning.wizard.javaConsent")}
                 </label>
-                <Button disabled={!javaConsent || busy} onClick={installManagedJava}>
-                  {t("provisioning.wizard.installJava", { version: javaPlan.majorVersion })}
+                <Button
+                  disabled={!javaConsent || busy}
+                  onClick={installManagedJava}
+                >
+                  {t("provisioning.wizard.installJava", {
+                    version: javaPlan.majorVersion,
+                  })}
                 </Button>
                 {/* Both this button and Next start disabled, and nothing else on
                     the step says which action unlocks which. Without this the
@@ -1092,42 +1230,200 @@ export function CreateServerWizard({
 
         {step === 3 ? (
           <div className="provisioning-configuration-step">
-            <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
-              <label className="field-span-2"><span>{t("profileSettings.name")}</span><TextField aria-label={t("profileSettings.name")} maxLength={MAX_SERVER_NAME_LENGTH} value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <ConfigSection
+              icon={Server}
+              title={t("provisioning.config.section.identity")}
+            >
+              <label className="field-span-2">
+                <span>{t("profileSettings.name")}</span>
+                <TextField
+                  aria-label={t("profileSettings.name")}
+                  maxLength={MAX_SERVER_NAME_LENGTH}
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </label>
             </ConfigSection>
-            <ConfigSection icon={Gamepad2} title={t("provisioning.config.section.gameplay")}>
-              <label><span>{t("provisioning.config.difficulty")}</span><select aria-label={t("provisioning.config.difficulty")} className="field-control" value={configuration.difficulty} onChange={(event) => setConfiguration((current) => ({ ...current, difficulty: event.target.value }))}><option value="peaceful">{t("provisioning.config.difficulty.peaceful")}</option><option value="easy">{t("provisioning.config.difficulty.easy")}</option><option value="normal">{t("provisioning.config.difficulty.normal")}</option><option value="hard">{t("provisioning.config.difficulty.hard")}</option></select></label>
-              <BooleanField label={t("provisioning.config.whiteList")} checked={configuration.whiteList === true} onChange={(checked) => setConfiguration((current) => ({ ...current, whiteList: checked }))} />
+            <ConfigSection
+              icon={Gamepad2}
+              title={t("provisioning.config.section.gameplay")}
+            >
+              <label>
+                <span>{t("provisioning.config.difficulty")}</span>
+                <select
+                  aria-label={t("provisioning.config.difficulty")}
+                  className="field-control"
+                  value={configuration.difficulty}
+                  onChange={(event) =>
+                    setConfiguration((current) => ({
+                      ...current,
+                      difficulty: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="peaceful">
+                    {t("provisioning.config.difficulty.peaceful")}
+                  </option>
+                  <option value="easy">
+                    {t("provisioning.config.difficulty.easy")}
+                  </option>
+                  <option value="normal">
+                    {t("provisioning.config.difficulty.normal")}
+                  </option>
+                  <option value="hard">
+                    {t("provisioning.config.difficulty.hard")}
+                  </option>
+                </select>
+              </label>
+              <BooleanField
+                label={t("provisioning.config.whiteList")}
+                checked={configuration.whiteList === true}
+                onChange={(checked) =>
+                  setConfiguration((current) => ({
+                    ...current,
+                    whiteList: checked,
+                  }))
+                }
+              />
             </ConfigSection>
 
             <details className="provisioning-advanced-settings">
               <summary>{t("provisioning.config.advanced")}</summary>
               <p>{t("provisioning.config.advancedDescription")}</p>
-              <ConfigSection icon={HardDrive} title={t("provisioning.config.section.location")}>
-                <label className="field-span-2"><span>{t("profileSettings.serverFolder")}</span><TextField aria-label={t("profileSettings.serverFolder")} value={rootDir} onChange={(event) => setRootDir(event.target.value)} /></label>
+              <ConfigSection
+                icon={HardDrive}
+                title={t("provisioning.config.section.location")}
+              >
+                <label className="field-span-2">
+                  <span>{t("profileSettings.serverFolder")}</span>
+                  <TextField
+                    aria-label={t("profileSettings.serverFolder")}
+                    value={rootDir}
+                    onChange={(event) => setRootDir(event.target.value)}
+                  />
+                </label>
               </ConfigSection>
-              <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
-                <NumberField label={t("profileSettings.minMemoryMb")} value={configuration.minMemoryMb} onChange={(value) => setNumber("minMemoryMb", value)} />
-                <NumberField label={t("profileSettings.maxMemoryMb")} value={configuration.maxMemoryMb} onChange={(value) => setNumber("maxMemoryMb", value)} />
+              <ConfigSection
+                icon={Cpu}
+                title={t("provisioning.config.section.resources")}
+              >
+                <NumberField
+                  label={t("profileSettings.minMemoryMb")}
+                  value={configuration.minMemoryMb}
+                  onChange={(value) => setNumber("minMemoryMb", value)}
+                />
+                <NumberField
+                  label={t("profileSettings.maxMemoryMb")}
+                  value={configuration.maxMemoryMb}
+                  onChange={(value) => setNumber("maxMemoryMb", value)}
+                />
                 <label className="field-span-2 provisioning-port-field">
-                  <NumberField label={t("profileSettings.port")} value={configuration.serverPort} onChange={(value) => setNumber("serverPort", value)} />
+                  <NumberField
+                    label={t("profileSettings.port")}
+                    value={configuration.serverPort}
+                    onChange={(value) => setNumber("serverPort", value)}
+                  />
                   {takenPorts.includes(configuration.serverPort) ? (
-                    <small role="status">{t("provisioning.config.portTaken")}</small>
+                    <small role="status">
+                      {t("provisioning.config.portTaken")}
+                    </small>
                   ) : null}
                 </label>
-                <NumberField label={t("provisioning.config.maxPlayers")} value={configuration.maxPlayers || 20} onChange={(value) => setNumber("maxPlayers", value)} />
-                <NumberField label={t("provisioning.config.viewDistance")} value={configuration.viewDistance || 10} onChange={(value) => setNumber("viewDistance", value)} />
-                <NumberField label={t("provisioning.config.simulationDistance")} value={configuration.simulationDistance || 10} onChange={(value) => setNumber("simulationDistance", value)} />
+                <NumberField
+                  label={t("provisioning.config.maxPlayers")}
+                  value={configuration.maxPlayers || 20}
+                  onChange={(value) => setNumber("maxPlayers", value)}
+                />
+                <NumberField
+                  label={t("provisioning.config.viewDistance")}
+                  value={configuration.viewDistance || 10}
+                  onChange={(value) => setNumber("viewDistance", value)}
+                />
+                <NumberField
+                  label={t("provisioning.config.simulationDistance")}
+                  value={configuration.simulationDistance || 10}
+                  onChange={(value) => setNumber("simulationDistance", value)}
+                />
               </ConfigSection>
-              <ConfigSection icon={Gamepad2} title={t("provisioning.config.advancedGameplay")}>
-                <label className="field-span-2"><span>{t("provisioning.config.motd")}</span><TextField aria-label={t("provisioning.config.motd")} value={configuration.motd} onChange={(event) => setConfiguration((current) => ({ ...current, motd: event.target.value }))} /></label>
-                <label><span>{t("provisioning.config.gameMode")}</span><select aria-label={t("provisioning.config.gameMode")} className="field-control" value={configuration.gameMode} onChange={(event) => setConfiguration((current) => ({ ...current, gameMode: event.target.value }))}><option value="survival">{t("provisioning.config.gameMode.survival")}</option><option value="creative">{t("provisioning.config.gameMode.creative")}</option><option value="adventure">{t("provisioning.config.gameMode.adventure")}</option><option value="spectator">{t("provisioning.config.gameMode.spectator")}</option></select></label>
-                <BooleanField label={t("provisioning.config.onlineMode")} checked={configuration.onlineMode !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, onlineMode: checked }))} />
-                <BooleanField label={t("provisioning.config.pvp")} checked={configuration.pvp !== false} onChange={(checked) => setConfiguration((current) => ({ ...current, pvp: checked }))} />
+              <ConfigSection
+                icon={Gamepad2}
+                title={t("provisioning.config.advancedGameplay")}
+              >
+                <label className="field-span-2">
+                  <span>{t("provisioning.config.motd")}</span>
+                  <TextField
+                    aria-label={t("provisioning.config.motd")}
+                    value={configuration.motd}
+                    onChange={(event) =>
+                      setConfiguration((current) => ({
+                        ...current,
+                        motd: event.target.value,
+                      }))
+                    }
+                  />
+                </label>
+                <label>
+                  <span>{t("provisioning.config.gameMode")}</span>
+                  <select
+                    aria-label={t("provisioning.config.gameMode")}
+                    className="field-control"
+                    value={configuration.gameMode}
+                    onChange={(event) =>
+                      setConfiguration((current) => ({
+                        ...current,
+                        gameMode: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="survival">
+                      {t("provisioning.config.gameMode.survival")}
+                    </option>
+                    <option value="creative">
+                      {t("provisioning.config.gameMode.creative")}
+                    </option>
+                    <option value="adventure">
+                      {t("provisioning.config.gameMode.adventure")}
+                    </option>
+                    <option value="spectator">
+                      {t("provisioning.config.gameMode.spectator")}
+                    </option>
+                  </select>
+                </label>
+                <BooleanField
+                  label={t("provisioning.config.onlineMode")}
+                  checked={configuration.onlineMode !== false}
+                  onChange={(checked) =>
+                    setConfiguration((current) => ({
+                      ...current,
+                      onlineMode: checked,
+                    }))
+                  }
+                />
+                <BooleanField
+                  label={t("provisioning.config.pvp")}
+                  checked={configuration.pvp !== false}
+                  onChange={(checked) =>
+                    setConfiguration((current) => ({
+                      ...current,
+                      pvp: checked,
+                    }))
+                  }
+                />
               </ConfigSection>
-              <ConfigSection icon={RefreshCw} title={t("provisioning.config.section.lifecycle")}>
-                <BooleanField label={t("provisioning.config.restart")} checked={restartEnabled} onChange={setRestartEnabled} />
-                <BooleanField label={t("provisioning.config.autoStart")} checked={autoStart} onChange={setAutoStart} />
+              <ConfigSection
+                icon={RefreshCw}
+                title={t("provisioning.config.section.lifecycle")}
+              >
+                <BooleanField
+                  label={t("provisioning.config.restart")}
+                  checked={restartEnabled}
+                  onChange={setRestartEnabled}
+                />
+                <BooleanField
+                  label={t("provisioning.config.autoStart")}
+                  checked={autoStart}
+                  onChange={setAutoStart}
+                />
               </ConfigSection>
             </details>
           </div>
@@ -1142,26 +1438,65 @@ export function CreateServerWizard({
           <div className="wizard-review-step">
             <h3>{t("provisioning.wizard.reviewTitle")}</h3>
             <div className="wizard-review-groups">
-              <ConfigSection icon={Server} title={t("provisioning.config.section.identity")}>
+              <ConfigSection
+                icon={Server}
+                title={t("provisioning.config.section.identity")}
+              >
                 <dl className="wizard-review-fields">
-                  <div><dt>{t("profileSettings.name")}</dt><dd>{name}</dd></div>
-                  <div><dt>{t("profileSettings.loader")}</dt><dd>{loaderType} {loaderVersion}</dd></div>
-                  <div><dt>{t("profileSettings.minecraftVersion")}</dt><dd>{minecraftVersion}</dd></div>
+                  <div>
+                    <dt>{t("profileSettings.name")}</dt>
+                    <dd>{name}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("profileSettings.loader")}</dt>
+                    <dd>
+                      {loaderType} {loaderVersion}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t("profileSettings.minecraftVersion")}</dt>
+                    <dd>{minecraftVersion}</dd>
+                  </div>
                 </dl>
               </ConfigSection>
-              <ConfigSection icon={HardDrive} title={t("provisioning.config.section.location")}>
+              <ConfigSection
+                icon={HardDrive}
+                title={t("provisioning.config.section.location")}
+              >
                 <dl className="wizard-review-fields">
-                  <div><dt>{t("profileSettings.serverFolder")}</dt><dd><code>{rootDir}</code></dd></div>
+                  <div>
+                    <dt>{t("profileSettings.serverFolder")}</dt>
+                    <dd>
+                      <code>{rootDir}</code>
+                    </dd>
+                  </div>
                   {javaRuntime ? (
-                    <div><dt>{t("provisioning.wizard.detectedJava")}</dt><dd><code>{javaRuntime.path}</code></dd></div>
+                    <div>
+                      <dt>{t("provisioning.wizard.detectedJava")}</dt>
+                      <dd>
+                        <code>{javaRuntime.path}</code>
+                      </dd>
+                    </div>
                   ) : null}
                 </dl>
               </ConfigSection>
-              <ConfigSection icon={Cpu} title={t("provisioning.config.section.resources")}>
+              <ConfigSection
+                icon={Cpu}
+                title={t("provisioning.config.section.resources")}
+              >
                 <dl className="wizard-review-fields">
-                  <div><dt>{t("profileSettings.maxMemoryMb")}</dt><dd>{configuration.maxMemoryMb} MB</dd></div>
-                  <div><dt>{t("profileSettings.port")}</dt><dd>{configuration.serverPort}</dd></div>
-                  <div><dt>{t("provisioning.config.maxPlayers")}</dt><dd>{configuration.maxPlayers || 20}</dd></div>
+                  <div>
+                    <dt>{t("profileSettings.maxMemoryMb")}</dt>
+                    <dd>{configuration.maxMemoryMb} MB</dd>
+                  </div>
+                  <div>
+                    <dt>{t("profileSettings.port")}</dt>
+                    <dd>{configuration.serverPort}</dd>
+                  </div>
+                  <div>
+                    <dt>{t("provisioning.config.maxPlayers")}</dt>
+                    <dd>{configuration.maxPlayers || 20}</dd>
+                  </div>
                 </dl>
               </ConfigSection>
             </div>
@@ -1173,8 +1508,10 @@ export function CreateServerWizard({
                 onChange={(event) => setEulaAccepted(event.target.checked)}
               />
               <span>
-                {t("provisioning.wizard.eulaAccept")} {" "}
-                <a href="https://aka.ms/MinecraftEULA">{t("provisioning.wizard.eulaLink")}</a>
+                {t("provisioning.wizard.eulaAccept")}{" "}
+                <a href="https://aka.ms/MinecraftEULA">
+                  {t("provisioning.wizard.eulaLink")}
+                </a>
               </span>
             </label>
           </div>
@@ -1203,19 +1540,34 @@ export function CreateServerWizard({
                   <p>{t("provisioning.complete.description")}</p>
                 </div>
                 <div className="provisioning-complete-action-grid">
-                  <Button disabled={busy} onClick={() => void runCompletionAction("overview")}>
+                  <Button
+                    disabled={busy}
+                    onClick={() => void runCompletionAction("overview")}
+                  >
                     <Rocket aria-hidden="true" size={15} />
                     {t("provisioning.complete.start")}
                   </Button>
-                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("invite")}>
+                  <Button
+                    disabled={busy}
+                    variant="secondary"
+                    onClick={() => void runCompletionAction("invite")}
+                  >
                     <UsersRound aria-hidden="true" size={15} />
                     {t("provisioning.complete.invite")}
                   </Button>
-                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("content")}>
+                  <Button
+                    disabled={busy}
+                    variant="secondary"
+                    onClick={() => void runCompletionAction("content")}
+                  >
                     <Boxes aria-hidden="true" size={15} />
                     {t("provisioning.complete.content")}
                   </Button>
-                  <Button disabled={busy} variant="secondary" onClick={() => void runCompletionAction("backup")}>
+                  <Button
+                    disabled={busy}
+                    variant="secondary"
+                    onClick={() => void runCompletionAction("backup")}
+                  >
                     <Archive aria-hidden="true" size={15} />
                     {t("provisioning.complete.backup")}
                   </Button>
@@ -1249,15 +1601,35 @@ export function CreateServerWizard({
       {step === 0 && sourceView === "marketplace" ? null : (
         <div className="wizard-nav-bar">
           {step > 0 && !(step === 5 && job?.stage !== "ready") ? (
-            <Button variant="ghost" onClick={goBack}>{t("wizard.nav.back")}</Button>
+            <Button variant="ghost" onClick={goBack}>
+              {t("wizard.nav.back")}
+            </Button>
           ) : sourceView !== "choices" && step === 0 ? (
-            <Button variant="ghost" onClick={() => setSourceView("choices")}>{t("wizard.nav.back")}</Button>
+            <Button variant="ghost" onClick={() => setSourceView("choices")}>
+              {t("wizard.nav.back")}
+            </Button>
           ) : null}
           <div className="wizard-nav-spacer" />
-          {step === 1 ? <Button disabled={!compatibilityReady} onClick={() => goToStep(2)}>{t("wizard.nav.next")}</Button> : null}
-          {step === 2 ? <Button disabled={!javaRuntime || busy} onClick={() => goToStep(3)}>{t("wizard.nav.next")}</Button> : null}
-          {step === 3 ? <Button disabled={!configurationReady} onClick={() => goToStep(4)}>{t("wizard.nav.next")}</Button> : null}
-          {step === 4 ? <Button disabled={!eulaAccepted || busy} onClick={installServer}>{t("provisioning.wizard.install")}</Button> : null}
+          {step === 1 ? (
+            <Button disabled={!compatibilityReady} onClick={() => goToStep(2)}>
+              {t("wizard.nav.next")}
+            </Button>
+          ) : null}
+          {step === 2 ? (
+            <Button disabled={!javaRuntime || busy} onClick={() => goToStep(3)}>
+              {t("wizard.nav.next")}
+            </Button>
+          ) : null}
+          {step === 3 ? (
+            <Button disabled={!configurationReady} onClick={() => goToStep(4)}>
+              {t("wizard.nav.next")}
+            </Button>
+          ) : null}
+          {step === 4 ? (
+            <Button disabled={!eulaAccepted || busy} onClick={installServer}>
+              {t("provisioning.wizard.install")}
+            </Button>
+          ) : null}
         </div>
       )}
     </section>
@@ -1296,7 +1668,13 @@ function NumberField({
   return (
     <label>
       <span>{label}</span>
-      <TextField aria-label={label} min={1} type="number" value={value} onChange={(event) => onChange(event.target.value)} />
+      <TextField
+        aria-label={label}
+        min={1}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
     </label>
   );
 }
@@ -1312,7 +1690,12 @@ function BooleanField({
 }) {
   return (
     <label className="checkbox-row">
-      <input aria-label={label} checked={checked} type="checkbox" onChange={(event) => onChange(event.target.checked)} />
+      <input
+        aria-label={label}
+        checked={checked}
+        type="checkbox"
+        onChange={(event) => onChange(event.target.checked)}
+      />
       <span>{label}</span>
     </label>
   );

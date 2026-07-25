@@ -31,6 +31,7 @@
 ### Task 1: 项目头部与统计带
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx:540-660`
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.test.tsx:300-430`
 - Modify: `src/i18n/locales/en.json:645-665`
@@ -40,6 +41,7 @@
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `selectedDetails: ProjectDetails | null`、`provider: "Modrinth" | "BBSMC"`、`versions: ProjectVersion[]`。
 - Produces: `.marketplace-project-hero`、`.marketplace-project-stats`、`.marketplace-project-stat`，供后续主体布局复用。
 
@@ -49,9 +51,15 @@
 
 ```tsx
 const details = await screen.findByRole("article", { name: /lazy survival/i });
-expect(details.querySelector("header.marketplace-project-hero")).toBeInTheDocument();
-expect(within(details).getByRole("heading", { level: 2, name: /lazy survival/i })).toBeInTheDocument();
-expect(within(details).getByLabelText(/project statistics/i)).toBeInTheDocument();
+expect(
+  details.querySelector("header.marketplace-project-hero"),
+).toBeInTheDocument();
+expect(
+  within(details).getByRole("heading", { level: 2, name: /lazy survival/i }),
+).toBeInTheDocument();
+expect(
+  within(details).getByLabelText(/project statistics/i),
+).toBeInTheDocument();
 expect(within(details).getByText("6.9K")).toBeInTheDocument();
 expect(within(details).getByText("47")).toBeInTheDocument();
 ```
@@ -139,6 +147,7 @@ Expected: PASS。
 ### Task 2: 截图画廊与正文阅读体验
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx:610-635`
 - Modify: `src/features/marketplace/MarketplaceMarkdown.tsx:350-415`
 - Modify: `src/i18n/locales/en.json:655-665`
@@ -149,6 +158,7 @@ Expected: PASS。
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: `projectGallery(selectedDetails): string[]`、`MarketplaceMarkdown source: string`。
 - Produces: `.marketplace-project-section`、`.marketplace-project-gallery-grid`、`.marketplace-project-about`。
 
@@ -157,9 +167,15 @@ Expected: PASS。
 为 Modrinth 详情 fixture 加入两张 gallery 图片，然后验证：
 
 ```tsx
-expect(within(details).getByRole("region", { name: /screenshots/i })).toBeInTheDocument();
-expect(within(details).getByRole("region", { name: /about this project/i })).toBeInTheDocument();
-expect(within(details).getAllByRole("img", { name: /project screenshot/i })).toHaveLength(2);
+expect(
+  within(details).getByRole("region", { name: /screenshots/i }),
+).toBeInTheDocument();
+expect(
+  within(details).getByRole("region", { name: /about this project/i }),
+).toBeInTheDocument();
+expect(
+  within(details).getAllByRole("img", { name: /project screenshot/i }),
+).toHaveLength(2);
 ```
 
 - [ ] **Step 2: 运行测试并确认失败**
@@ -218,6 +234,7 @@ Expected: PASS。
 ### Task 3: 版本栏、响应式与完整验证
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx:635-705`
 - Modify: `src/styles.css:4115-4260`
 - Modify: `src/styles.css:7180-7290`
@@ -225,15 +242,20 @@ Expected: PASS。
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: 现有 `versionInstallability`、`versionHasServerPack`、`selectVersion`。
 - Produces: `.marketplace-version-rail` 和低于 1100 px 的单栏布局；不改变 `onSelect` payload。
 
 - [ ] **Step 1: 写版本栏行为失败测试**
 
 ```tsx
-const versionRail = within(details).getByRole("complementary", { name: /versions/i });
+const versionRail = within(details).getByRole("complementary", {
+  name: /versions/i,
+});
 expect(within(versionRail).getByText("1")).toBeInTheDocument();
-const versionButton = within(versionRail).getByRole("button", { name: /1\.0\.0/i });
+const versionButton = within(versionRail).getByRole("button", {
+  name: /1\.0\.0/i,
+});
 expect(versionButton).toHaveClass("marketplace-install-version");
 ```
 
@@ -244,10 +266,19 @@ expect(versionButton).toHaveClass("marketplace-install-version");
 ```js
 const grid = extractCssBlock(css, ".marketplace-pack-detail-grid");
 const narrow = extractCssBlock(css, "@media (max-width: 1100px)");
-const focus = extractCssBlock(css, ".marketplace-install-version:focus-visible");
-expect(grid).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(300px,\s*340px\)/);
-expect(narrow).toMatch(/\.marketplace-pack-detail-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s);
-expect(narrow).toMatch(/\.marketplace-pack-version-sidebar\s*\{[^}]*order:\s*-1/s);
+const focus = extractCssBlock(
+  css,
+  ".marketplace-install-version:focus-visible",
+);
+expect(grid).toMatch(
+  /grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(300px,\s*340px\)/,
+);
+expect(narrow).toMatch(
+  /\.marketplace-pack-detail-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/s,
+);
+expect(narrow).toMatch(
+  /\.marketplace-pack-version-sidebar\s*\{[^}]*order:\s*-1/s,
+);
 expect(focus).toMatch(/border-color:\s*var\(--accent\)/);
 ```
 

@@ -116,7 +116,10 @@ describe("ServerProfileSettings", () => {
         }),
       );
     });
-    expect(invoke).not.toHaveBeenCalledWith("restart_server", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "restart_server",
+      expect.anything(),
+    );
     expect(await screen.findByText(/restart.*required/i)).toBeInTheDocument();
   });
 });

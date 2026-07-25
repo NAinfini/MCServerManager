@@ -8,25 +8,55 @@
         "role": "primary",
         "displayName": "Command Blue",
         "canonical": "#3478f6",
-        "tonalRamp": ["#0d1b33", "#172b4d", "#234d91", "#3478f6", "#72a2ff", "#dce8ff"]
+        "tonalRamp": [
+          "#0d1b33",
+          "#172b4d",
+          "#234d91",
+          "#3478f6",
+          "#72a2ff",
+          "#dce8ff"
+        ]
       },
       "operational-green": {
         "role": "secondary",
         "displayName": "Operational Green",
         "canonical": "#55c66a",
-        "tonalRamp": ["#102518", "#173b23", "#2b773e", "#55c66a", "#91dfa0", "#e2f7e6"]
+        "tonalRamp": [
+          "#102518",
+          "#173b23",
+          "#2b773e",
+          "#55c66a",
+          "#91dfa0",
+          "#e2f7e6"
+        ]
       },
       "incident-red": {
         "role": "tertiary",
         "displayName": "Incident Red",
         "canonical": "#ed5c62",
-        "tonalRamp": ["#351c24", "#5a242c", "#a83e46", "#ed5c62", "#f49a9e", "#fde8e9"]
+        "tonalRamp": [
+          "#351c24",
+          "#5a242c",
+          "#a83e46",
+          "#ed5c62",
+          "#f49a9e",
+          "#fde8e9"
+        ]
       },
       "graphite-canvas": {
         "role": "neutral",
         "displayName": "Graphite Canvas",
         "canonical": "#111823",
-        "tonalRamp": ["#090f17", "#0d131c", "#101722", "#111823", "#151e2a", "#1b2634", "#34435a", "#eef4fb"]
+        "tonalRamp": [
+          "#090f17",
+          "#0d131c",
+          "#101722",
+          "#111823",
+          "#151e2a",
+          "#1b2634",
+          "#34435a",
+          "#eef4fb"
+        ]
       }
     },
     "typographyMeta": {

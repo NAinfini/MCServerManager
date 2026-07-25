@@ -23,6 +23,7 @@
 ### Task 1: Theme Tokens and App Shell
 
 **Files:**
+
 - Modify: `src/styles.css`
 - Modify: `src/components/layout/AppShell.tsx`
 - Modify: `src/components/layout/Sidebar.tsx`
@@ -30,6 +31,7 @@
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: existing `ThemeSetting`, `activePage`, `selectedServerId`, `useSidebarStore`.
 - Produces: semantic CSS variables, stable `.app-shell/.app-body/.page` grid, global navigation without marketplace.
 
@@ -42,7 +44,9 @@ it("renders only the approved global destinations", () => {
   expect(screen.getByRole("button", { name: /java/i })).toBeVisible();
   expect(screen.getByRole("button", { name: /logs/i })).toBeVisible();
   expect(screen.getByRole("button", { name: /settings/i })).toBeVisible();
-  expect(screen.queryByRole("button", { name: /market/i })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /market/i }),
+  ).not.toBeInTheDocument();
 });
 ```
 
@@ -107,6 +111,7 @@ git commit -m "feat: establish Overworld Studio app shell"
 ### Task 2: Dashboard and Server Workspace
 
 **Files:**
+
 - Modify: `src/components/layout/AppShell.tsx`
 - Modify: `src/features/servers/ServerCardView.tsx`
 - Modify: `src/features/servers/ServerList.tsx`
@@ -119,6 +124,7 @@ git commit -m "feat: establish Overworld Studio app shell"
 - Test: `src/features/console/CommandSuggestions.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `ServerProfile`, `ServerDetailTab`, `MC_COMMANDS`, process queries.
 - Produces: fixed server identity header, six-tab workspace, console side rail, keyboard-complete command picker.
 
@@ -127,7 +133,14 @@ git commit -m "feat: establish Overworld Studio app shell"
 ```tsx
 it("keeps all six server workspaces available", () => {
   render(<ServerDetail server={server} />);
-  for (const name of [/console/i, /files/i, /content/i, /backups/i, /settings/i, /activity/i]) {
+  for (const name of [
+    /console/i,
+    /files/i,
+    /content/i,
+    /backups/i,
+    /settings/i,
+    /activity/i,
+  ]) {
     expect(screen.getByRole("tab", { name })).toBeVisible();
   }
 });
@@ -190,6 +203,7 @@ Expected: PASS.
 ### Task 3: Create Wizard and Contextual Marketplace
 
 **Files:**
+
 - Modify: `src/features/servers/CreateServerWizard.tsx`
 - Modify: `src/features/servers/CreateServerMarketplaceBrowser.tsx`
 - Modify: `src/features/marketplace/ServerMarketplaceView.tsx`
@@ -203,6 +217,7 @@ Expected: PASS.
 - Test: `src/features/marketplace/MarketplaceMarkdown.test.tsx`
 
 **Interfaces:**
+
 - Consumes: existing `MarketplaceCreateSelection`, provider queries, BBSMC installability fields, wizard lifecycle.
 - Produces: contextual market tabs, big-card results, safe detail layout, unchanged provisioning selection contract.
 
@@ -218,7 +233,9 @@ it("renders marketplace as a source inside the create wizard", async () => {
 
 it("keeps external-only BBSMC versions unavailable", () => {
   renderMarketplaceWith(bbsmcExternalVersion);
-  expect(screen.getByRole("button", { name: /manual download/i })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: /manual download/i }),
+  ).toBeDisabled();
 });
 ```
 
@@ -272,6 +289,7 @@ Expected: PASS.
 ### Task 4: Settings Side Menu and Themes
 
 **Files:**
+
 - Modify: `src/features/settings/SettingsView.tsx`
 - Modify: `src/features/settings/SettingsView.test.tsx`
 - Modify: `src/i18n/index.ts`
@@ -279,6 +297,7 @@ Expected: PASS.
 - Modify: `src/styles.css`
 
 **Interfaces:**
+
 - Consumes: existing `SettingsSection`, preferences persistence, `ThemeSetting`.
 - Produces: permanent local side menu, visual theme cards, unchanged saved preference payload.
 
@@ -288,7 +307,9 @@ Expected: PASS.
 it("uses a secondary side navigation for settings categories", () => {
   render(<SettingsView />);
   const nav = screen.getByRole("navigation", { name: /settings categories/i });
-  expect(within(nav).getByRole("button", { name: /appearance/i })).toBeVisible();
+  expect(
+    within(nav).getByRole("button", { name: /appearance/i }),
+  ).toBeVisible();
   expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
 });
 ```
@@ -304,7 +325,10 @@ Expected: FAIL until navigation semantics and visual selectors match the approve
 ```tsx
 <nav className="settings-nav" aria-label={t("settings.nav.aria")}>
   {NAV_ITEMS.map(({ key, icon: Icon, labelKey }) => (
-    <button aria-current={activeSection === key ? "page" : undefined} onClick={() => setActiveSection(key)}>
+    <button
+      aria-current={activeSection === key ? "page" : undefined}
+      onClick={() => setActiveSection(key)}
+    >
       <Icon aria-hidden="true" />
       <span>{t(labelKey)}</span>
     </button>
@@ -321,6 +345,7 @@ Expected: PASS.
 ### Task 5: Java Runtimes and App Logs
 
 **Files:**
+
 - Modify: `src/features/java/JavaRuntimesView.tsx`
 - Modify: `src/features/java/JavaRuntimesView.test.tsx`
 - Modify: `src/features/logger/AppLoggerView.tsx`
@@ -330,6 +355,7 @@ Expected: PASS.
 - Modify: `src/i18n/locales/zh-CN.json`
 
 **Interfaces:**
+
 - Consumes: existing runtime queries and install mutations, logger query/filter/clear commands.
 - Produces: runtime compatibility dashboard and three-pane grouped log experience without backend contract changes.
 
@@ -345,7 +371,9 @@ it("keeps managed install consent and official Java link distinct", () => {
 it("opens the selected long log message in a detail pane", async () => {
   render(<AppLoggerView />);
   await user.click(screen.getByText(longError));
-  expect(screen.getByRole("complementary", { name: /log details/i })).toHaveTextContent(longError);
+  expect(
+    screen.getByRole("complementary", { name: /log details/i }),
+  ).toHaveTextContent(longError);
 });
 ```
 
@@ -359,7 +387,8 @@ Expected: FAIL because logger detail selection and revised runtime structure are
 
 ```ts
 const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
-const selectedEntry = entries.find((entry) => entry.id === selectedEntryId) ?? entries[0] ?? null;
+const selectedEntry =
+  entries.find((entry) => entry.id === selectedEntryId) ?? entries[0] ?? null;
 ```
 
 Group only entries with the same level, source, message, and stack signature; otherwise preserve separate rows.
@@ -390,6 +419,7 @@ Expected: PASS.
 ### Task 6: Safety States, Accessibility, and Responsive Contracts
 
 **Files:**
+
 - Modify: `src/components/ui/ConfirmDangerDialog.tsx`
 - Modify: `src/features/servers/CreateServerWizard.tsx`
 - Modify: `src/styles.css`
@@ -398,6 +428,7 @@ Expected: PASS.
 - Test: `src/components/ui/ConfirmDangerDialog.test.tsx`
 
 **Interfaces:**
+
 - Consumes: existing draft/running/complete lifecycle and Radix Dialog focus management.
 - Produces: explicit EULA gating, draft-exit confirmation, background-task messaging, focus-visible contracts.
 
@@ -406,9 +437,13 @@ Expected: PASS.
 ```tsx
 it("does not enable installation before explicit EULA consent", async () => {
   renderWizardAtReview();
-  expect(screen.getByRole("button", { name: /install and start/i })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: /install and start/i }),
+  ).toBeDisabled();
   await user.click(screen.getByRole("checkbox", { name: /EULA/i }));
-  expect(screen.getByRole("button", { name: /install and start/i })).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: /install and start/i }),
+  ).toBeEnabled();
 });
 ```
 
@@ -421,15 +456,21 @@ Expected: FAIL for missing new safety and style contracts.
 - [ ] **Step 3: Implement safety copy and CSS contracts**
 
 ```css
-:where(button, a, input, select, textarea):focus { outline: none; }
+:where(button, a, input, select, textarea):focus {
+  outline: none;
+}
 :where(button, a, input, select, textarea):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 @media (max-width: 1100px) {
-  .marketplace-card-grid { grid-template-columns: 1fr; }
-  .marketplace-detail-grid { grid-template-columns: 1fr; }
+  .marketplace-card-grid {
+    grid-template-columns: 1fr;
+  }
+  .marketplace-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }
 ```
 
@@ -442,10 +483,12 @@ Expected: PASS.
 ### Task 7: Full Regression and Electron Visual Smoke
 
 **Files:**
+
 - Modify only files required by failures proven in this task.
 - Test: all existing Vitest and Electron smoke suites.
 
 **Interfaces:**
+
 - Consumes: all previous task outputs.
 - Produces: verified production build and desktop behavior.
 

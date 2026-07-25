@@ -68,8 +68,13 @@ const levelTypeOptions: readonly SelectOption[] = [
 const optionalInteger = z.string().regex(/^$|^\d+$/, "Enter a whole number");
 const optionalPort = z
   .string()
-  .regex(/^$|^([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$/, "Enter a port from 1 to 65535");
-const optionalDistance = z.string().regex(/^$|^(?:[2-9]|[12]\d|3[0-2])$/, "Enter a value from 2 to 32");
+  .regex(
+    /^$|^([1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$/,
+    "Enter a port from 1 to 65535",
+  );
+const optionalDistance = z
+  .string()
+  .regex(/^$|^(?:[2-9]|[12]\d|3[0-2])$/, "Enter a value from 2 to 32");
 
 export const serverPropertiesSchema = z.object({
   motd: z.string().max(256, "Keep the message under 256 characters"),
@@ -103,14 +108,18 @@ export const serverPropertiesSchema = z.object({
   "max-tick-time": optionalInteger,
   "max-world-size": optionalInteger,
   "entity-broadcast-range-percentage": optionalInteger,
-  "network-compression-threshold": z.string().regex(/^$|^-?\d+$/, "Enter a whole number"),
+  "network-compression-threshold": z
+    .string()
+    .regex(/^$|^-?\d+$/, "Enter a whole number"),
   "sync-chunk-writes": z.enum(["", "true", "false"]),
   "server-ip": z.string().max(255, "Keep the address under 255 characters"),
   "enable-query": z.enum(["", "true", "false"]),
   "query.port": optionalPort,
   "enable-rcon": z.enum(["", "true", "false"]),
   "rcon.port": optionalPort,
-  "rcon.password": z.string().max(255, "Keep the password under 255 characters"),
+  "rcon.password": z
+    .string()
+    .max(255, "Keep the password under 255 characters"),
   "prevent-proxy-connections": z.enum(["", "true", "false"]),
   "hide-online-players": z.enum(["", "true", "false"]),
   "rate-limit": optionalInteger,
@@ -164,7 +173,9 @@ const propertyGroups: readonly PropertyGroup[] = [
   "network",
 ];
 
-export function serverPropertiesDefaultValues(entries: ServerPropertyEntry[]): ServerPropertiesForm {
+export function serverPropertiesDefaultValues(
+  entries: ServerPropertyEntry[],
+): ServerPropertiesForm {
   const byKey = new Map(entries.map((entry) => [entry.key, entry.value]));
   return Object.fromEntries(
     propertyDefinitions.map(({ key }) => [key, byKey.get(key) ?? ""]),
@@ -179,7 +190,8 @@ export function filterPropertyGroups(search: string) {
       definitions: propertyDefinitions.filter(
         (definition) =>
           definition.group === group &&
-          (!normalizedSearch || definition.key.toLowerCase().includes(normalizedSearch)),
+          (!normalizedSearch ||
+            definition.key.toLowerCase().includes(normalizedSearch)),
       ),
     }))
     .filter(({ definitions }) => definitions.length > 0);
@@ -200,13 +212,17 @@ function selectOptions(kind: PropertyDefinition["kind"]) {
   }
 }
 
-export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) {
+export function ServerPropertiesEditor({
+  server,
+}: ServerPropertiesEditorProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [restartRequired, setRestartRequired] = useState(false);
   const baselineRef = useRef<ServerPropertiesForm | null>(null);
-  const [values, setValues] = useState<ServerPropertiesForm>(() => serverPropertiesDefaultValues([]));
+  const [values, setValues] = useState<ServerPropertiesForm>(() =>
+    serverPropertiesDefaultValues([]),
+  );
   const form = useForm<ServerPropertiesForm>({
     defaultValues: serverPropertiesDefaultValues([]),
     resolver: zodResolver(serverPropertiesSchema),
@@ -214,22 +230,30 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
   const propertiesQuery = useQuery({
     queryKey: queryKeys.properties.server(server.id),
     queryFn: () =>
-      invokeDesktopCommandWithErrorHandling<ServerPropertiesDocument>("read_server_properties", {
-        serverId: server.id,
-      }),
+      invokeDesktopCommandWithErrorHandling<ServerPropertiesDocument>(
+        "read_server_properties",
+        {
+          serverId: server.id,
+        },
+      ),
   });
   const saveMutation = useMutation({
     mutationFn: (updates: ServerPropertyEntry[]) =>
-      invokeDesktopCommandWithErrorHandling<ServerPropertiesDocument>("save_server_properties", {
-        input: { serverId: server.id, updates },
-      }),
+      invokeDesktopCommandWithErrorHandling<ServerPropertiesDocument>(
+        "save_server_properties",
+        {
+          input: { serverId: server.id, updates },
+        },
+      ),
     onSuccess: async (saved) => {
       const nextValues = serverPropertiesDefaultValues(saved.entries);
       baselineRef.current = nextValues;
       setValues(nextValues);
       form.reset(nextValues);
       setRestartRequired(saved.restartRequired === true);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.properties.server(server.id) });
+      await queryClient.invalidateQueries({
+        queryKey: queryKeys.properties.server(server.id),
+      });
     },
   });
 
@@ -237,7 +261,9 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
     if (!propertiesQuery.data) {
       return;
     }
-    const nextValues = serverPropertiesDefaultValues(propertiesQuery.data.entries);
+    const nextValues = serverPropertiesDefaultValues(
+      propertiesQuery.data.entries,
+    );
     if (!baselineRef.current || !form.formState.isDirty) {
       baselineRef.current = nextValues;
       setValues(nextValues);
@@ -258,12 +284,19 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
 
   const hasPropertiesFile = Boolean(
     propertiesQuery.data &&
-      (propertiesQuery.data.raw.length > 0 || propertiesQuery.data.entries.length > 0),
+    (propertiesQuery.data.raw.length > 0 ||
+      propertiesQuery.data.entries.length > 0),
   );
   const groupedDefinitions = filterPropertyGroups(search);
-  const updateValue = <Key extends keyof ServerPropertiesForm>(key: Key, value: ServerPropertiesForm[Key]) => {
+  const updateValue = <Key extends keyof ServerPropertiesForm>(
+    key: Key,
+    value: ServerPropertiesForm[Key],
+  ) => {
     setValues((current) => ({ ...current, [key]: value }));
-    form.setValue(key, value as never, { shouldDirty: true, shouldValidate: true });
+    form.setValue(key, value as never, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   };
 
   return (
@@ -291,7 +324,8 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
         <form
           className="create-server-form"
           onSubmit={form.handleSubmit((values) => {
-            const baseline = baselineRef.current ?? serverPropertiesDefaultValues([]);
+            const baseline =
+              baselineRef.current ?? serverPropertiesDefaultValues([]);
             saveMutation.mutate(
               propertyDefinitions
                 .filter(({ key }) => values[key] !== baseline[key])
@@ -327,17 +361,26 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
                           options={options}
                           value={values[definition.key]}
                           onValueChange={(value) =>
-                            updateValue(definition.key, value as ServerPropertiesForm[typeof definition.key])
+                            updateValue(
+                              definition.key,
+                              value as ServerPropertiesForm[typeof definition.key],
+                            )
                           }
                         />
                       ) : (
                         <TextField
                           aria-invalid={Boolean(error)}
                           value={values[definition.key]}
-                          onChange={(event) => updateValue(definition.key, event.target.value)}
+                          onChange={(event) =>
+                            updateValue(definition.key, event.target.value)
+                          }
                         />
                       )}
-                      {error ? <small className="danger-text" role="alert">{error}</small> : null}
+                      {error ? (
+                        <small className="danger-text" role="alert">
+                          {error}
+                        </small>
+                      ) : null}
                     </label>
                   );
                 })}
@@ -348,12 +391,20 @@ export function ServerPropertiesEditor({ server }: ServerPropertiesEditorProps) 
             <p className="settings-notice">{t("properties.searchEmpty")}</p>
           ) : null}
           {saveMutation.error ? (
-            <p className="danger-text" role="alert">{saveMutation.error.message}</p>
+            <p className="danger-text" role="alert">
+              {saveMutation.error.message}
+            </p>
           ) : null}
           {restartRequired ? (
-            <p className="settings-notice" role="status">{t("properties.restartRequired")}</p>
+            <p className="settings-notice" role="status">
+              {t("properties.restartRequired")}
+            </p>
           ) : null}
-          <Button disabled={saveMutation.isPending || !form.formState.isDirty} type="submit" variant="primary">
+          <Button
+            disabled={saveMutation.isPending || !form.formState.isDirty}
+            type="submit"
+            variant="primary"
+          >
             <Save aria-hidden="true" size={15} />
             {t("properties.save")}
           </Button>

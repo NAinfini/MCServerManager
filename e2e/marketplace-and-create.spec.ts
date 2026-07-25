@@ -17,7 +17,9 @@ test.describe("marketplace and server creation", () => {
       .getByRole("button", { name: "Browse", exact: true })
       .click();
 
-    await page.getByRole("textbox", { name: "Search server packs" }).fill("fabric");
+    await page
+      .getByRole("textbox", { name: "Search server packs" })
+      .fill("fabric");
     await page.getByRole("button", { name: "Search", exact: true }).click();
     const result = page.getByRole("button", { name: /Fabric Essentials/ });
     await expect(result).toBeVisible();
@@ -41,15 +43,15 @@ test.describe("marketplace and server creation", () => {
     await expect(
       projects.getByRole("button", { name: /Fabric Essentials/ }),
     ).toBeVisible();
-    await projects
-      .getByRole("button", { name: /Fabric Essentials/ })
-      .click();
+    await projects.getByRole("button", { name: /Fabric Essentials/ }).click();
 
     const details = page.getByRole("region", {
       name: "Marketplace project details",
     });
     await expect(details).toContainText("Fabric Essentials");
-    await expect(details.getByRole("button", { name: /1\.4\.0/ })).toBeVisible();
+    await expect(
+      details.getByRole("button", { name: /1\.4\.0/ }),
+    ).toBeVisible();
     await page.getByRole("button", { name: "Back" }).click();
     await expect(projects).toBeVisible();
   });

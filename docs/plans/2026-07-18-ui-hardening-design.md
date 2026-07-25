@@ -62,4 +62,3 @@ Store the element that opened the menu, focus the first menu item after the menu
 - Changing wizard markup may disturb header layout. Preserve existing class names and run the wizard header layout and progress tests.
 - Stronger subtle text may reduce visual hierarchy. Change only the lowest text token and keep muted/main roles intact.
 - Menu focus management can conflict with outside-click closing. Centralize closure and explicitly distinguish focus restoration from ordinary outside clicks.
-

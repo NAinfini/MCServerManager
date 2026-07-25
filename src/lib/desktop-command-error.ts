@@ -35,7 +35,9 @@ export function normalizeDesktopCommandError(error: unknown): Error {
     );
   }
   if (isStaleDesktopRuntime(message)) {
-    return new Error(translate(readStoredLanguage(), "desktop.error.staleRuntime"));
+    return new Error(
+      translate(readStoredLanguage(), "desktop.error.staleRuntime"),
+    );
   }
   if (error instanceof Error) {
     return error;

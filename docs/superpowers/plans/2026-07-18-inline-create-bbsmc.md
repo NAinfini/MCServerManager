@@ -62,25 +62,29 @@ it("offers Modrinth and BBSMC discovery without CurseForge credentials", async (
   await userEvent.click(screen.getByRole("combobox", { name: /providers/i }));
   expect(screen.getByRole("option", { name: /modrinth/i })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /bbsmc/i })).toBeInTheDocument();
-  expect(screen.queryByRole("option", { name: /curseforge/i })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /curseforge/i }),
+  ).not.toBeInTheDocument();
 });
 
 it("routes BBSMC search, details, and versions through BBSMC commands", async () => {
   renderBrowser();
   await selectProvider(/bbsmc/i);
-  await userEvent.click(await screen.findByRole("button", { name: /public pack/i }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: /public pack/i }),
+  );
   expect(invokeDesktopCommand).toHaveBeenCalledWith(
     "search_bbsmc_projects",
-    expect.objectContaining({ input: expect.objectContaining({ projectType: "modpack" }) }),
+    expect.objectContaining({
+      input: expect.objectContaining({ projectType: "modpack" }),
+    }),
   );
-  expect(invokeDesktopCommand).toHaveBeenCalledWith(
-    "get_bbsmc_project",
-    { input: { projectId: "bbsmc-pack-1" } },
-  );
-  expect(invokeDesktopCommand).toHaveBeenCalledWith(
-    "list_bbsmc_versions",
-    { input: { projectId: "bbsmc-pack-1" } },
-  );
+  expect(invokeDesktopCommand).toHaveBeenCalledWith("get_bbsmc_project", {
+    input: { projectId: "bbsmc-pack-1" },
+  });
+  expect(invokeDesktopCommand).toHaveBeenCalledWith("list_bbsmc_versions", {
+    input: { projectId: "bbsmc-pack-1" },
+  });
 });
 ```
 
@@ -123,7 +127,10 @@ function getProviderProject(provider: MarketplaceProvider, projectId: string) {
     : getModrinthProject(projectId);
 }
 
-function listProviderVersions(provider: MarketplaceProvider, projectId: string) {
+function listProviderVersions(
+  provider: MarketplaceProvider,
+  projectId: string,
+) {
   return provider === "BBSMC"
     ? listBbsmcVersions(projectId)
     : listModrinthVersions("create-server", projectId);
@@ -139,20 +146,33 @@ it("requires acknowledgement before selecting a public BBSMC file", async () => 
   const onSelect = vi.fn();
   renderBrowser(onSelect);
   await selectProvider(/bbsmc/i);
-  await userEvent.click(await screen.findByRole("button", { name: /public pack/i }));
-  await userEvent.click(await screen.findByRole("button", { name: /1\.0\.0/i }));
+  await userEvent.click(
+    await screen.findByRole("button", { name: /public pack/i }),
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: /1\.0\.0/i }),
+  );
   expect(onSelect).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole("button", { name: /use unverified archive/i }));
+  await userEvent.click(
+    screen.getByRole("button", { name: /use unverified archive/i }),
+  );
   expect(onSelect).toHaveBeenCalledWith(
-    expect.objectContaining({ provider: "BBSMC", versionId: "bbsmc-version-1" }),
+    expect.objectContaining({
+      provider: "BBSMC",
+      versionId: "bbsmc-version-1",
+    }),
   );
 });
 
 it("disables BBSMC versions that only expose external disk links", async () => {
   renderBrowser();
   await selectProvider(/bbsmc/i);
-  await userEvent.click(await screen.findByRole("button", { name: /disk pack/i }));
-  const version = await screen.findByRole("button", { name: /external download required/i });
+  await userEvent.click(
+    await screen.findByRole("button", { name: /disk pack/i }),
+  );
+  const version = await screen.findByRole("button", {
+    name: /external download required/i,
+  });
   expect(version).toBeDisabled();
 });
 ```
@@ -239,13 +259,15 @@ it("plans a public BBSMC archive as an unverified marketplace pack", async () =>
       version_number: "1.0.0",
       loaders: ["quilt"],
       game_versions: ["1.21.4"],
-      files: [{
-        filename: "bbsmc-pack.mrpack",
-        size: 2048,
-        primary: true,
-        url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
-        hashes: { sha1: "abc" },
-      }],
+      files: [
+        {
+          filename: "bbsmc-pack.mrpack",
+          size: 2048,
+          primary: true,
+          url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
+          hashes: { sha1: "abc" },
+        },
+      ],
     });
   });
   try {
@@ -263,16 +285,20 @@ it("plans a public BBSMC archive as an unverified marketplace pack", async () =>
       pack: { format: "bbsmc", versionId: "bbsmc-version-1" },
       minecraftVersion: "1.21.4",
       loaderType: "quilt",
-      artifacts: [{
-        provider: "bbsmc",
-        filename: "bbsmc-pack.mrpack",
-        url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
-      }],
+      artifacts: [
+        {
+          provider: "bbsmc",
+          filename: "bbsmc-pack.mrpack",
+          url: "https://cdn.bbsmc.net/files/bbsmc-pack.mrpack",
+        },
+      ],
       integrity: { status: "unverified" },
-      warnings: [expect.objectContaining({
-        code: "PACK_UNVERIFIED",
-        requiresAcknowledgement: true,
-      })],
+      warnings: [
+        expect.objectContaining({
+          code: "PACK_UNVERIFIED",
+          requiresAcknowledgement: true,
+        }),
+      ],
     });
   } finally {
     backend.close();
@@ -327,22 +353,26 @@ async function planBbsmcMarketplacePack(source) {
     loaderType: normalizeMarketplaceLoaderType(version.loaders),
     loaderVersion: null,
     requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
-    artifacts: [{
-      provider: "bbsmc",
-      projectId: version.projectId,
-      versionId: version.id,
-      filename: file.filename,
-      size: file.size,
-      url,
-      hashes: file.hashes || {},
-      environment: "server",
-    }],
+    artifacts: [
+      {
+        provider: "bbsmc",
+        projectId: version.projectId,
+        versionId: version.id,
+        filename: file.filename,
+        size: file.size,
+        url,
+        hashes: file.hashes || {},
+        environment: "server",
+      },
+    ],
     optionalFiles: [],
     archiveLayers: [],
     properties: {},
-    warnings: [unverifiedMarketplaceWarning(
-      "BBSMC does not identify this archive as a dedicated server pack.",
-    )],
+    warnings: [
+      unverifiedMarketplaceWarning(
+        "BBSMC does not identify this archive as a dedicated server pack.",
+      ),
+    ],
     integrity: { status: "unverified" },
     estimatedBytes: file.size || 0,
   };
@@ -359,32 +389,59 @@ if (provider === "bbsmc") return planBbsmcMarketplacePack(source);
 
 ```js
 it.each([
-  [{ disk_only: true, disk_urls: [{ platform: "baidu", url: "https://pan.baidu.com/s/1" }], files: [] }, /external disk/i],
-  [{ files: [{ filename: "pack.zip", primary: true, url: "https://example.com/pack.zip" }] }, /not approved|external disk|direct public/i],
-])("rejects an unsafe BBSMC marketplace source", async (versionFields, expected) => {
-  const backend = createTestBackend();
-  globalThis.fetch = vi.fn(async () => jsonResponse({
-    id: "unsafe-version",
-    project_id: "bbsmc-pack-1",
-    name: "Unsafe Pack",
-    version_number: "1.0.0",
-    loaders: ["fabric"],
-    game_versions: ["1.20.1"],
-    ...versionFields,
-  }));
-  try {
-    await expect(backend.handle("plan_server_provisioning", {
-      input: { source: {
-        kind: "marketplaceModpack",
-        provider: "BBSMC",
-        projectId: "bbsmc-pack-1",
-        versionId: "unsafe-version",
-      } },
-    })).rejects.toThrow(expected);
-  } finally {
-    backend.close();
-  }
-});
+  [
+    {
+      disk_only: true,
+      disk_urls: [{ platform: "baidu", url: "https://pan.baidu.com/s/1" }],
+      files: [],
+    },
+    /external disk/i,
+  ],
+  [
+    {
+      files: [
+        {
+          filename: "pack.zip",
+          primary: true,
+          url: "https://example.com/pack.zip",
+        },
+      ],
+    },
+    /not approved|external disk|direct public/i,
+  ],
+])(
+  "rejects an unsafe BBSMC marketplace source",
+  async (versionFields, expected) => {
+    const backend = createTestBackend();
+    globalThis.fetch = vi.fn(async () =>
+      jsonResponse({
+        id: "unsafe-version",
+        project_id: "bbsmc-pack-1",
+        name: "Unsafe Pack",
+        version_number: "1.0.0",
+        loaders: ["fabric"],
+        game_versions: ["1.20.1"],
+        ...versionFields,
+      }),
+    );
+    try {
+      await expect(
+        backend.handle("plan_server_provisioning", {
+          input: {
+            source: {
+              kind: "marketplaceModpack",
+              provider: "BBSMC",
+              projectId: "bbsmc-pack-1",
+              versionId: "unsafe-version",
+            },
+          },
+        }),
+      ).rejects.toThrow(expected);
+    } finally {
+      backend.close();
+    }
+  },
+);
 ```
 
 - [ ] **步骤 5：运行 BBSMC 后端测试并确认通过**
@@ -431,14 +488,24 @@ it("publishes draft, running, and complete lifecycle states", async () => {
     expect(onLifecycleChange).toHaveBeenLastCalledWith("draft");
   });
 
-  await userEvent.click(screen.getByRole("button", { name: /open modpack file/i }));
-  await userEvent.click(screen.getByRole("checkbox", { name: /accept this compatibility warning/i }));
+  await userEvent.click(
+    screen.getByRole("button", { name: /open modpack file/i }),
+  );
+  await userEvent.click(
+    screen.getByRole("checkbox", {
+      name: /accept this compatibility warning/i,
+    }),
+  );
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
   await screen.findByText(/Java 21/i);
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
   await userEvent.click(screen.getByRole("button", { name: "Next" }));
-  await userEvent.click(screen.getByRole("checkbox", { name: /I accept the Minecraft EULA/i }));
-  await userEvent.click(screen.getByRole("button", { name: /install and start/i }));
+  await userEvent.click(
+    screen.getByRole("checkbox", { name: /I accept the Minecraft EULA/i }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: /install and start/i }),
+  );
   await waitFor(() => {
     expect(onLifecycleChange).toHaveBeenCalledWith("running");
   });
@@ -506,9 +573,15 @@ it("renders server creation in the main content area without a modal", async () 
   renderShell();
   await userEvent.click(screen.getByRole("button", { name: /create server/i }));
   const main = screen.getByRole("main");
-  expect(within(main).getByRole("heading", { name: "Create server" })).toBeInTheDocument();
-  expect(within(main).getByRole("navigation", { name: "Wizard progress" })).toBeInTheDocument();
-  expect(screen.queryByRole("dialog", { name: "Create server" })).not.toBeInTheDocument();
+  expect(
+    within(main).getByRole("heading", { name: "Create server" }),
+  ).toBeInTheDocument();
+  expect(
+    within(main).getByRole("navigation", { name: "Wizard progress" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("dialog", { name: "Create server" }),
+  ).not.toBeInTheDocument();
   expect(document.querySelector(".dialog-backdrop")).toBeNull();
 });
 ```
@@ -522,14 +595,24 @@ it("requires confirmation before leaving a creation draft", async () => {
   renderShell();
   await userEvent.click(screen.getByRole("button", { name: /create server/i }));
   await userEvent.click(screen.getByRole("button", { name: /^settings$/i }));
-  const confirm = screen.getByRole("alertdialog", { name: /discard server creation/i });
+  const confirm = screen.getByRole("alertdialog", {
+    name: /discard server creation/i,
+  });
   expect(confirm).toBeInTheDocument();
-  await userEvent.click(within(confirm).getByRole("button", { name: /cancel/i }));
-  expect(screen.getByRole("heading", { name: "Create server" })).toBeInTheDocument();
+  await userEvent.click(
+    within(confirm).getByRole("button", { name: /cancel/i }),
+  );
+  expect(
+    screen.getByRole("heading", { name: "Create server" }),
+  ).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole("button", { name: /^settings$/i }));
-  await userEvent.click(screen.getByRole("button", { name: /discard creation/i }));
-  expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+  await userEvent.click(
+    screen.getByRole("button", { name: /discard creation/i }),
+  );
+  expect(
+    await screen.findByRole("dialog", { name: "Settings" }),
+  ).toBeInTheDocument();
 });
 ```
 
@@ -549,8 +632,9 @@ pnpm vitest run src/components/layout/AppShell.test.tsx
 const [isCreateServerActive, setCreateServerActive] = useState(false);
 const [createServerLifecycle, setCreateServerLifecycle] =
   useState<CreateServerWizardLifecycle>("draft");
-const [pendingCreateExit, setPendingCreateExit] =
-  useState<(() => void) | null>(null);
+const [pendingCreateExit, setPendingCreateExit] = useState<(() => void) | null>(
+  null,
+);
 
 const resetCreateServer = useCallback(() => {
   setCreateServerActive(false);
@@ -561,70 +645,77 @@ const resetCreateServer = useCallback(() => {
   setCreateServerLifecycle("draft");
 }, []);
 
-const requestCreateServerExit = useCallback((destination: () => void) => {
-  if (!isCreateServerActive) {
+const requestCreateServerExit = useCallback(
+  (destination: () => void) => {
+    if (!isCreateServerActive) {
+      destination();
+      return;
+    }
+    if (createServerLifecycle === "draft") {
+      setPendingCreateExit(() => destination);
+      return;
+    }
+    resetCreateServer();
     destination();
-    return;
-  }
-  if (createServerLifecycle === "draft") {
-    setPendingCreateExit(() => destination);
-    return;
-  }
-  resetCreateServer();
-  destination();
-}, [createServerLifecycle, isCreateServerActive, resetCreateServer]);
+  },
+  [createServerLifecycle, isCreateServerActive, resetCreateServer],
+);
 ```
 
 所有侧栏页面和服务器选择入口先调用 `requestCreateServerExit`。创建页面直接在 `<main>` 中渲染：
 
 ```tsx
-{isCreateServerActive ? (
-  <section
-    aria-labelledby="create-server-page-title"
-    className="create-server-page"
-  >
-    <div className="create-server-page-header create-server-wizard-header">
-      <div className="create-server-dialog-title-row">
-        {createServerHeaderBack ? (
-          <Button variant="ghost" onClick={createServerHeaderBack}>
-            <ChevronLeft aria-hidden="true" size={15} />
-            {t("wizard.nav.back")}
-          </Button>
-        ) : null}
-        <div>
-          <h1 id="create-server-page-title">{t("servers.create.title")}</h1>
-          <p>{t("servers.create.description")}</p>
+{
+  isCreateServerActive ? (
+    <section
+      aria-labelledby="create-server-page-title"
+      className="create-server-page"
+    >
+      <div className="create-server-page-header create-server-wizard-header">
+        <div className="create-server-dialog-title-row">
+          {createServerHeaderBack ? (
+            <Button variant="ghost" onClick={createServerHeaderBack}>
+              <ChevronLeft aria-hidden="true" size={15} />
+              {t("wizard.nav.back")}
+            </Button>
+          ) : null}
+          <div>
+            <h1 id="create-server-page-title">{t("servers.create.title")}</h1>
+            <p>{t("servers.create.description")}</p>
+          </div>
         </div>
+        {createServerProgress ? (
+          <WizardStepIndicator
+            currentStep={createServerProgress.currentStep}
+            steps={createServerProgress.steps}
+          />
+        ) : null}
+        <Button
+          aria-label={t("servers.create.close")}
+          className="icon-button"
+          variant="ghost"
+          onClick={() => requestCreateServerExit(openServersOverview)}
+        >
+          <X aria-hidden="true" size={16} />
+        </Button>
       </div>
-      {createServerProgress ? (
-        <WizardStepIndicator
-          currentStep={createServerProgress.currentStep}
-          steps={createServerProgress.steps}
-        />
-      ) : null}
-      <Button
-        aria-label={t("servers.create.close")}
-        className="icon-button"
-        variant="ghost"
-        onClick={() => requestCreateServerExit(openServersOverview)}
-      >
-        <X aria-hidden="true" size={16} />
-      </Button>
-    </div>
-    <CreateServerWizard
-      initialSourcePath={createServerSourcePath}
-      showHeading={false}
-      onHeaderHiddenChange={setCreateServerHeaderHidden}
-      onHeaderBackChange={handleCreateServerHeaderBackChange}
-      onLifecycleChange={setCreateServerLifecycle}
-      onProgressChange={setCreateServerProgress}
-      onCreated={() => {
-        resetCreateServer();
-        openServersOverview();
-      }}
-    />
-  </section>
-) : existingPageContent}
+      <CreateServerWizard
+        initialSourcePath={createServerSourcePath}
+        showHeading={false}
+        onHeaderHiddenChange={setCreateServerHeaderHidden}
+        onHeaderBackChange={handleCreateServerHeaderBackChange}
+        onLifecycleChange={setCreateServerLifecycle}
+        onProgressChange={setCreateServerProgress}
+        onCreated={() => {
+          resetCreateServer();
+          openServersOverview();
+        }}
+      />
+    </section>
+  ) : (
+    existingPageContent
+  );
+}
 ```
 
 页面的 `aria-labelledby` 和 className 必须根据创建状态切换。移除创建流程的 `Dialog.Root`、`Dialog.Portal`、`Dialog.Overlay` 和 `Dialog.Content`。
@@ -700,8 +791,12 @@ git commit -m "feat: show server creation in main content"
 在 `styles.test.mjs` 中断言：
 
 ```js
-expect(styles).toMatch(/\.page-create-server\s*\{[^}]*overflow:\s*hidden;[^}]*padding:\s*0;/s);
-expect(styles).toMatch(/\.create-server-page\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*0;[^}]*height:\s*100%;/s);
+expect(styles).toMatch(
+  /\.page-create-server\s*\{[^}]*overflow:\s*hidden;[^}]*padding:\s*0;/s,
+);
+expect(styles).toMatch(
+  /\.create-server-page\s*\{[^}]*display:\s*flex;[^}]*min-height:\s*0;[^}]*height:\s*100%;/s,
+);
 expect(styles).not.toMatch(/\.create-server-dialog\s*\{/);
 ```
 
@@ -755,8 +850,14 @@ const inlineState = await window.webContents.executeJavaScript(`(() => ({
   createDialog: Boolean(document.querySelector('[role="dialog"] .create-server-panel')),
   backdrop: Boolean(document.querySelector(".dialog-backdrop")),
 }))()`);
-if (!inlineState.createPage || inlineState.createDialog || inlineState.backdrop) {
-  throw new Error(`Create server is not inline: ${JSON.stringify(inlineState)}`);
+if (
+  !inlineState.createPage ||
+  inlineState.createDialog ||
+  inlineState.backdrop
+) {
+  throw new Error(
+    `Create server is not inline: ${JSON.stringify(inlineState)}`,
+  );
 }
 ```
 

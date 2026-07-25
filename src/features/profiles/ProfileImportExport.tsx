@@ -116,9 +116,9 @@ export function ProfileImportExport({
   const canImport =
     Boolean(
       documentJson &&
-        targetRootDir &&
-        preview &&
-        previewedDocumentJson === documentJson,
+      targetRootDir &&
+      preview &&
+      previewedDocumentJson === documentJson,
     ) &&
     preview?.warnings.length === 0 &&
     !importMutation.isPending;
@@ -147,7 +147,9 @@ export function ProfileImportExport({
       setDocument(null);
       setPreview(null);
       setDocumentError(
-        error instanceof Error ? error.message : t("profileImport.invalidDocument"),
+        error instanceof Error
+          ? error.message
+          : t("profileImport.invalidDocument"),
       );
     }
   }
@@ -198,7 +200,9 @@ export function ProfileImportExport({
       ) : null}
       {documentError ? <p className="danger-text">{documentError}</p> : null}
       {pickerError ? (
-        <p className="danger-text" role="alert">{pickerError}</p>
+        <p className="danger-text" role="alert">
+          {pickerError}
+        </p>
       ) : null}
 
       <div className="profile-document-actions">

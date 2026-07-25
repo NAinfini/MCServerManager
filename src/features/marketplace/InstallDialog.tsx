@@ -43,13 +43,15 @@ export function InstallDialog({
       onOpenChange={(open) => !open && onCancel()}
       footer={
         <>
-          <Button disabled={isInstalling} variant="secondary" onClick={onCancel}>
+          <Button
+            disabled={isInstalling}
+            variant="secondary"
+            onClick={onCancel}
+          >
             {t("common.cancel")}
           </Button>
           <Button
-            disabled={
-              isInstalling || (requiresInstallAnyway && !installAnyway)
-            }
+            disabled={isInstalling || (requiresInstallAnyway && !installAnyway)}
             variant="primary"
             onClick={onInstall}
           >
@@ -59,37 +61,37 @@ export function InstallDialog({
         </>
       }
     >
-          {version.dependencies.length > 0 ? (
-            <div className="marketplace-install-note">
-              <strong>{t("marketplace.install.dependencies")}</strong>
-              <span>
-                {version.dependencies
-                  .map(
-                    (dependency) =>
-                      `${dependency.dependencyType}: ${
-                        dependency.projectId ?? t("common.unknown")
-                      }`,
-                  )
-                  .join("; ")}
-              </span>
-            </div>
-          ) : null}
-          {requiresInstallAnyway ? (
-            <label className="marketplace-install-confirm">
-              <Checkbox
-                checked={installAnyway}
-                disabled={isInstalling}
-                onCheckedChange={(checked) =>
-                  onInstallAnywayChange(checked === true)
-                }
-              />
-              <span>{t("marketplace.install.reviewWarnings")}</span>
-            </label>
-          ) : null}
-          {version.warnings.length > 0 ? (
-            <p className="danger-text">{version.warnings.join("; ")}</p>
-          ) : null}
-          {error ? <p className="danger-text">{error}</p> : null}
+      {version.dependencies.length > 0 ? (
+        <div className="marketplace-install-note">
+          <strong>{t("marketplace.install.dependencies")}</strong>
+          <span>
+            {version.dependencies
+              .map(
+                (dependency) =>
+                  `${dependency.dependencyType}: ${
+                    dependency.projectId ?? t("common.unknown")
+                  }`,
+              )
+              .join("; ")}
+          </span>
+        </div>
+      ) : null}
+      {requiresInstallAnyway ? (
+        <label className="marketplace-install-confirm">
+          <Checkbox
+            checked={installAnyway}
+            disabled={isInstalling}
+            onCheckedChange={(checked) =>
+              onInstallAnywayChange(checked === true)
+            }
+          />
+          <span>{t("marketplace.install.reviewWarnings")}</span>
+        </label>
+      ) : null}
+      {version.warnings.length > 0 ? (
+        <p className="danger-text">{version.warnings.join("; ")}</p>
+      ) : null}
+      {error ? <p className="danger-text">{error}</p> : null}
     </DialogSurface>
   );
 }

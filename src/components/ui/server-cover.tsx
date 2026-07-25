@@ -33,7 +33,10 @@ export function ServerCover({
           aria-hidden="true"
           className="server-cover-glyph"
           src={branding.iconSrc}
-          style={{ width: Math.round(size * 0.58), height: Math.round(size * 0.58) }}
+          style={{
+            width: Math.round(size * 0.58),
+            height: Math.round(size * 0.58),
+          }}
         />
       ) : (
         <span className="server-cover-fallback">{branding.shortLabel}</span>

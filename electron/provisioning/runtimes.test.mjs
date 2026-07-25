@@ -79,12 +79,17 @@ describe("managed Temurin runtimes", () => {
       fetchJson,
     });
 
-    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+    const plan = await manager.plan({
+      majorVersion: 21,
+      installedRuntimes: [],
+    });
 
     expect(fetchJson).toHaveBeenCalledWith(
       expect.stringContaining("architecture=x64"),
     );
-    expect(fetchJson).toHaveBeenCalledWith(expect.stringContaining("os=windows"));
+    expect(fetchJson).toHaveBeenCalledWith(
+      expect.stringContaining("os=windows"),
+    );
     expect(plan).toMatchObject({
       action: "install",
       vendor: "Eclipse Temurin",
@@ -120,7 +125,9 @@ describe("managed Temurin runtimes", () => {
           },
         },
       ]),
-      download: vi.fn(async (_url, target) => fs.writeFileSync(target, archive)),
+      download: vi.fn(async (_url, target) =>
+        fs.writeFileSync(target, archive),
+      ),
       extractArchive: vi.fn(async (_archivePath, target) => {
         const executable = path.join(target, "jdk-21", "bin", "java.exe");
         fs.mkdirSync(path.dirname(executable), { recursive: true });
@@ -134,9 +141,14 @@ describe("managed Temurin runtimes", () => {
         architecture: "x64",
       })),
     });
-    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+    const plan = await manager.plan({
+      majorVersion: 21,
+      installedRuntimes: [],
+    });
 
-    await expect(manager.install(plan, { consent: false })).rejects.toMatchObject({
+    await expect(
+      manager.install(plan, { consent: false }),
+    ).rejects.toMatchObject({
       code: "JAVA_CONSENT_REQUIRED",
     });
     const runtime = await manager.install(plan, { consent: true });
@@ -174,9 +186,14 @@ describe("managed Temurin runtimes", () => {
       extractArchive: vi.fn(),
       inspectJava: vi.fn(),
     });
-    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+    const plan = await manager.plan({
+      majorVersion: 21,
+      installedRuntimes: [],
+    });
 
-    await expect(manager.install(plan, { consent: true })).rejects.toMatchObject({
+    await expect(
+      manager.install(plan, { consent: true }),
+    ).rejects.toMatchObject({
       code: "JAVA_CHECKSUM_MISMATCH",
     });
     const parent = path.dirname(plan.targetDir);
@@ -211,7 +228,9 @@ describe("managed Temurin runtimes", () => {
           },
         },
       ]),
-      download: vi.fn(async (_url, target) => fs.writeFileSync(target, archive)),
+      download: vi.fn(async (_url, target) =>
+        fs.writeFileSync(target, archive),
+      ),
       extractArchive: vi.fn(async (_archivePath, target) => {
         const executable = path.join(target, "jdk-21", "bin", "java.exe");
         fs.mkdirSync(path.dirname(executable), { recursive: true });
@@ -230,7 +249,10 @@ describe("managed Temurin runtimes", () => {
   it("commits the runtime after a transient EPERM on the staging rename", async () => {
     const root = tempRoot();
     const manager = lockableManager(root);
-    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+    const plan = await manager.plan({
+      majorVersion: 21,
+      installedRuntimes: [],
+    });
 
     const realRename = fs.renameSync.bind(fs);
     let attempts = 0;
@@ -257,7 +279,10 @@ describe("managed Temurin runtimes", () => {
   it("reports a locked target when the rename never clears", async () => {
     const root = tempRoot();
     const manager = lockableManager(root);
-    const plan = await manager.plan({ majorVersion: 21, installedRuntimes: [] });
+    const plan = await manager.plan({
+      majorVersion: 21,
+      installedRuntimes: [],
+    });
 
     const previousBudget = process.env.MCSM_FS_RETRY_MS;
     process.env.MCSM_FS_RETRY_MS = "120";
@@ -353,7 +378,13 @@ describe("managed Temurin runtimes", () => {
           url: "http://127.0.0.1/runtime.zip",
           filename: "runtime.zip",
           checksum: "0".repeat(64),
-          targetDir: path.join(root, "runtimes", "temurin", "21", "windows-x64"),
+          targetDir: path.join(
+            root,
+            "runtimes",
+            "temurin",
+            "21",
+            "windows-x64",
+          ),
         },
         { consent: true },
       ),

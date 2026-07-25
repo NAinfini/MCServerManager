@@ -20,10 +20,12 @@
 ### Task 1: Responsive Logger Workspace Sizing
 
 **Files:**
+
 - Modify: `src/styles.css`
 - Test: `src/styles.test.mjs`
 
 **Interfaces:**
+
 - Consumes: Existing `.logger-page`, `.app-log-workspace`, `.app-log-list`, `.app-log-detail-pane`, and `@media (max-width: 1100px)` selectors.
 - Produces: A definite-height logger workspace with internal list scrolling and responsive stacked fallback.
 
@@ -34,13 +36,17 @@ Add a test that extracts the logger selectors and asserts:
 ```js
 expect(page).toMatch(/height:\s*100%/);
 expect(page).toMatch(/grid-template-rows:\s*auto\s+auto\s+minmax\(0,\s*1fr\)/);
-expect(workspace).toMatch(/grid-template-columns:\s*minmax\(0,\s*3fr\)\s+minmax\(320px,\s*2fr\)/);
+expect(workspace).toMatch(
+  /grid-template-columns:\s*minmax\(0,\s*3fr\)\s+minmax\(320px,\s*2fr\)/,
+);
 expect(workspace).toMatch(/min-height:\s*0/);
 expect(list).toMatch(/height:\s*100%/);
 expect(list).toMatch(/max-height:\s*none/);
 expect(detail).toMatch(/height:\s*100%/);
 expect(narrow).toMatch(/\.logger-page\s*\{[^}]*height:\s*auto/);
-expect(narrow).toMatch(/\.app-log-list\s*\{[^}]*height:\s*auto[^}]*max-height:\s*340px/s);
+expect(narrow).toMatch(
+  /\.app-log-list\s*\{[^}]*height:\s*auto[^}]*max-height:\s*340px/s,
+);
 ```
 
 - [ ] **Step 2: Run the test and confirm the current fixed-height layout fails**

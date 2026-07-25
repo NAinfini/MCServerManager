@@ -172,7 +172,10 @@ export function AppLoggerView() {
                 <Info aria-hidden="true" size={14} />
                 {t("logger.level.debug")}
               </ToggleGroup.Item>
-              <ToggleGroup.Item className="severity-filter-item" value="warning">
+              <ToggleGroup.Item
+                className="severity-filter-item"
+                value="warning"
+              >
                 <AlertTriangle aria-hidden="true" size={14} />
                 {t("logger.level.warning")}
               </ToggleGroup.Item>
@@ -252,7 +255,9 @@ export function AppLoggerView() {
                 </div>
                 <div>
                   <dt>{t("logger.time")}</dt>
-                  <dd>{formatDateTime(selectedGroup.entry.createdAt, language)}</dd>
+                  <dd>
+                    {formatDateTime(selectedGroup.entry.createdAt, language)}
+                  </dd>
                 </div>
               </dl>
               {selectedGroup.count > 1 ? (

@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { PlayersView } from "./PlayersView";
@@ -234,7 +228,9 @@ describe("PlayersView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => {
       expect(
-        vi.mocked(invoke).mock.calls.filter(([command]) => command === "list_players"),
+        vi
+          .mocked(invoke)
+          .mock.calls.filter(([command]) => command === "list_players"),
       ).toHaveLength(2);
     });
     expect(invoke).not.toHaveBeenCalledWith("read_player_lists", {
@@ -269,7 +265,11 @@ describe("PlayersView", () => {
     });
 
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
         <ServerRuntimeProvider serverId={server.id}>
           <PlayersView server={server} view="whitelist" />
         </ServerRuntimeProvider>
@@ -309,7 +309,11 @@ describe("PlayersView", () => {
     });
 
     render(
-      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
         <ServerRuntimeProvider serverId={server.id}>
           <PlayersView server={server} view="whitelist" />
         </ServerRuntimeProvider>
@@ -320,4 +324,3 @@ describe("PlayersView", () => {
     expect(screen.queryByText("Whitelist is off")).not.toBeInTheDocument();
   });
 });
-

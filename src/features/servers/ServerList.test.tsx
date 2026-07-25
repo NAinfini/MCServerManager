@@ -52,7 +52,9 @@ const server: ServerProfile = {
   },
 };
 
-function renderList(props: Partial<React.ComponentProps<typeof ServerList>> = {}) {
+function renderList(
+  props: Partial<React.ComponentProps<typeof ServerList>> = {},
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });

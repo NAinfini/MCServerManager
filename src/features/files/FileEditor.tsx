@@ -90,7 +90,9 @@ export function FileEditor({
   });
 
   if (isLoading) {
-    return <div className="files-editor-empty">{t("files.editor.loading")}</div>;
+    return (
+      <div className="files-editor-empty">{t("files.editor.loading")}</div>
+    );
   }
 
   if (!file) {

@@ -72,19 +72,27 @@ export interface PlayerListsState {
 }
 
 export function listPlayers(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<PlayerState>("list_players", { serverId });
+  return invokeDesktopCommandWithErrorHandling<PlayerState>("list_players", {
+    serverId,
+  });
 }
 
 export function applyPlayerChange(input: PlayerActionInput) {
-  return invokeDesktopCommandWithErrorHandling<PlayerActionResult>("apply_player_change", {
-    input,
-  });
+  return invokeDesktopCommandWithErrorHandling<PlayerActionResult>(
+    "apply_player_change",
+    {
+      input,
+    },
+  );
 }
 
 export function readPlayerLists(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<PlayerListsState>("read_player_lists", {
-    serverId,
-  });
+  return invokeDesktopCommandWithErrorHandling<PlayerListsState>(
+    "read_player_lists",
+    {
+      serverId,
+    },
+  );
 }
 
 export function savePlayerList(input: {
@@ -92,5 +100,8 @@ export function savePlayerList(input: {
   listType: string;
   entries: PlayerListEntry[];
 }) {
-  return invokeDesktopCommandWithErrorHandling<PlayerListDocument>("save_player_list", { input });
+  return invokeDesktopCommandWithErrorHandling<PlayerListDocument>(
+    "save_player_list",
+    { input },
+  );
 }

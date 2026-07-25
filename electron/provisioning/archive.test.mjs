@@ -59,21 +59,27 @@ describe("provisioning ZIP archive safety", () => {
     expect(inspection.entries.map((entry) => entry.path)).toContain(
       "server-overrides/config/server.txt",
     );
-    await expect(readJsonEntry(archive, "modrinth.index.json")).resolves.toEqual({
+    await expect(
+      readJsonEntry(archive, "modrinth.index.json"),
+    ).resolves.toEqual({
       game: "minecraft",
       formatVersion: 1,
     });
 
-    const destination = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-zip-output-"));
+    const destination = fs.mkdtempSync(
+      path.join(os.tmpdir(), "mcsm-zip-output-"),
+    );
     await extractZipLayers(archive, destination, [
       { prefix: "overrides/", stripPrefix: true },
       { prefix: "server-overrides/", stripPrefix: true },
     ]);
 
-    expect(fs.readFileSync(path.join(destination, "config", "common.txt"), "utf8"))
-      .toBe("common");
-    expect(fs.readFileSync(path.join(destination, "config", "server.txt"), "utf8"))
-      .toBe("server");
+    expect(
+      fs.readFileSync(path.join(destination, "config", "common.txt"), "utf8"),
+    ).toBe("common");
+    expect(
+      fs.readFileSync(path.join(destination, "config", "server.txt"), "utf8"),
+    ).toBe("server");
     expect(fs.existsSync(path.join(destination, "options.txt"))).toBe(false);
   });
 
@@ -115,7 +121,10 @@ describe("provisioning ZIP archive safety", () => {
       inspectZip(archive, { ...DEFAULT_ARCHIVE_LIMITS, maxEntries: 1 }),
     ).rejects.toMatchObject({ code: "ARCHIVE_TOO_MANY_ENTRIES" });
     await expect(
-      inspectZip(archive, { ...DEFAULT_ARCHIVE_LIMITS, maxUncompressedBytes: 7 }),
+      inspectZip(archive, {
+        ...DEFAULT_ARCHIVE_LIMITS,
+        maxUncompressedBytes: 7,
+      }),
     ).rejects.toMatchObject({ code: "ARCHIVE_TOO_LARGE" });
   });
 
@@ -125,7 +134,10 @@ describe("provisioning ZIP archive safety", () => {
     ]);
 
     await expect(
-      inspectZip(archive, { ...DEFAULT_ARCHIVE_LIMITS, maxCompressionRatio: 2 }),
+      inspectZip(archive, {
+        ...DEFAULT_ARCHIVE_LIMITS,
+        maxCompressionRatio: 2,
+      }),
     ).rejects.toMatchObject({ code: "ARCHIVE_SUSPICIOUS_RATIO" });
   });
 

@@ -101,59 +101,59 @@ export function ServerSetupChecklist({
           ) : null}
 
           {setupQuery.error ? (
-        <div
-          aria-label={t("server.setupChecklist.loadError")}
-          className="list-state list-state-error"
-          role="alert"
-        >
-          <strong>{t("server.setupChecklist.loadError")}</strong>
-          <span>{setupQuery.error.message}</span>
-          <Button
-            disabled={setupQuery.isFetching}
-            variant="secondary"
-            onClick={() => setupQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("common.retry")}
-          </Button>
-        </div>
+            <div
+              aria-label={t("server.setupChecklist.loadError")}
+              className="list-state list-state-error"
+              role="alert"
+            >
+              <strong>{t("server.setupChecklist.loadError")}</strong>
+              <span>{setupQuery.error.message}</span>
+              <Button
+                disabled={setupQuery.isFetching}
+                variant="secondary"
+                onClick={() => setupQuery.refetch()}
+              >
+                <RefreshCw aria-hidden="true" size={15} />
+                {t("common.retry")}
+              </Button>
+            </div>
           ) : null}
 
           {setupQuery.data ? (
-        <div className="server-setup-checks" role="list">
-          {setupQuery.data.checks.map((check) => {
-            const showJavaAction =
-              check.id === "java" &&
-              check.status === "actionRequired" &&
-              Boolean(onOpenJava);
-            return (
-              <article
-                className={`server-setup-check server-setup-check-${check.status}`}
-                key={check.id}
-                role="listitem"
-              >
-                <span className="server-setup-check-icon">
-                  <CheckIcon status={check.status} />
-                </span>
-                <div className="server-setup-check-content">
-                  <div className="server-setup-check-heading">
-                    <strong>{t(checkLabelKey(check.id))}</strong>
-                    <span>{t(statusLabelKey(check.status))}</span>
-                  </div>
-                  <p>{t(checkMessageKey(check))}</p>
-                  {showJavaAction ? (
-                    <div className="server-setup-check-actions">
-                      <Button variant="primary" onClick={onOpenJava}>
-                        <Coffee aria-hidden="true" size={15} />
-                        {t("server.setupChecklist.openJava")}
-                      </Button>
+            <div className="server-setup-checks" role="list">
+              {setupQuery.data.checks.map((check) => {
+                const showJavaAction =
+                  check.id === "java" &&
+                  check.status === "actionRequired" &&
+                  Boolean(onOpenJava);
+                return (
+                  <article
+                    className={`server-setup-check server-setup-check-${check.status}`}
+                    key={check.id}
+                    role="listitem"
+                  >
+                    <span className="server-setup-check-icon">
+                      <CheckIcon status={check.status} />
+                    </span>
+                    <div className="server-setup-check-content">
+                      <div className="server-setup-check-heading">
+                        <strong>{t(checkLabelKey(check.id))}</strong>
+                        <span>{t(statusLabelKey(check.status))}</span>
+                      </div>
+                      <p>{t(checkMessageKey(check))}</p>
+                      {showJavaAction ? (
+                        <div className="server-setup-check-actions">
+                          <Button variant="primary" onClick={onOpenJava}>
+                            <Coffee aria-hidden="true" size={15} />
+                            {t("server.setupChecklist.openJava")}
+                          </Button>
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                  </article>
+                );
+              })}
+            </div>
           ) : null}
         </div>
       </details>

@@ -28,10 +28,7 @@ export function render(ui: ReactElement, options: AppRenderOptions = {}) {
       <AppSettingsProvider>{content}</AppSettingsProvider>
     </QueryClientProvider>
   );
-  const result = testingLibraryRender(
-    wrap(ui),
-    renderOptions,
-  );
+  const result = testingLibraryRender(wrap(ui), renderOptions);
   const baseRerender = result.rerender;
   return {
     ...result,

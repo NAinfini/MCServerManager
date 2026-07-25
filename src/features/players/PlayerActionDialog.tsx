@@ -68,7 +68,9 @@ export function PlayerActionDialog({
             }
             onClick={onConfirm}
           >
-            {isSubmitting ? t("players.dialog.sending") : t(actionLabelKeys[action])}
+            {isSubmitting
+              ? t("players.dialog.sending")
+              : t(actionLabelKeys[action])}
           </Button>
         </>
       }

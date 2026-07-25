@@ -156,9 +156,7 @@ function defaultInspectJava(javaPath) {
     path: javaPath,
     version,
     majorVersion: Number.parseInt(majorMatch[1], 10),
-    vendor: /temurin|adoptium/i.test(output)
-      ? "Eclipse Temurin"
-      : "OpenJDK",
+    vendor: /temurin|adoptium/i.test(output) ? "Eclipse Temurin" : "OpenJDK",
     architecture: process.arch,
   };
 }
@@ -174,7 +172,9 @@ function createRuntimeManager(dependencies = {}) {
   const extractArchive = dependencies.extractArchive || extractZipArchive;
   const inspectJava = dependencies.inspectJava || defaultInspectJava;
   if (!dependencies.userDataDir || typeof fetchJson !== "function") {
-    throw new Error("runtime user-data directory and metadata client are required");
+    throw new Error(
+      "runtime user-data directory and metadata client are required",
+    );
   }
 
   return {
@@ -233,7 +233,10 @@ function createRuntimeManager(dependencies = {}) {
     async install(plan, options = {}) {
       if (plan?.action === "reuse") return plan.runtime;
       if (plan?.action !== "install") {
-        throw provisioningError("JAVA_PLAN_INVALID", "Managed Java plan is invalid.");
+        throw provisioningError(
+          "JAVA_PLAN_INVALID",
+          "Managed Java plan is invalid.",
+        );
       }
       if (options.consent !== true) {
         throw provisioningError(

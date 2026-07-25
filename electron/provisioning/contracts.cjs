@@ -30,7 +30,11 @@ const JOB_STAGES = Object.freeze([
 // mcsmCode exists alongside code because Node's own errors (ENOENT, EACCES)
 // already use `code`, and only our codes may be translated.
 function codedError(code, message, details = {}) {
-  return Object.assign(new Error(message), { code, mcsmCode: code, ...details });
+  return Object.assign(new Error(message), {
+    code,
+    mcsmCode: code,
+    ...details,
+  });
 }
 
 const provisioningError = codedError;

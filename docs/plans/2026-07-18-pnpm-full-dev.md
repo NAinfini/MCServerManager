@@ -13,6 +13,7 @@
 ### Task 1: Define and implement the development-script contract
 
 **Files:**
+
 - Modify: `docs.test.mjs`
 - Modify: `package.json`
 
@@ -57,6 +58,7 @@ Expected: PASS.
 ### Task 2: Update both development-command guides
 
 **Files:**
+
 - Modify: `docs.test.mjs`
 - Modify: `README.md`
 - Modify: `README.zh-CN.md`
@@ -87,6 +89,7 @@ Expected: PASS.
 ### Task 3: Verify integration and review the change
 
 **Files:**
+
 - Review: `package.json`
 - Review: `README.md`
 - Review: `README.zh-CN.md`

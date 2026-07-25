@@ -32,11 +32,16 @@ describe("ProvisioningProgress", () => {
       </AppSettingsProvider>,
     );
 
-    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "44");
+    expect(screen.getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "44",
+    );
     // The stage name appears twice: once as the heading subtitle, once in the
     // checklist that marks it as the running stage.
     expect(screen.getAllByText("Installing server loader")).toHaveLength(2);
-    await userEvent.click(screen.getByRole("button", { name: "Cancel installation" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Cancel installation" }),
+    );
     expect(onCancel).toHaveBeenCalledWith("job-1");
   });
 
@@ -55,7 +60,12 @@ describe("ProvisioningProgress", () => {
     // the current stage so index ordering marks it done too.
     expect(states.slice(0, 4)).toEqual(["done", "done", "done", "done"]);
     expect(states[4]).toBe("current");
-    expect(states.slice(5)).toEqual(["pending", "pending", "pending", "pending"]);
+    expect(states.slice(5)).toEqual([
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ]);
   });
 
   it("keeps failures visible and exposes retry only when retryable", async () => {
@@ -81,8 +91,12 @@ describe("ProvisioningProgress", () => {
       </AppSettingsProvider>,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Connection interrupted");
-    await userEvent.click(screen.getByRole("button", { name: "Retry installation" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Connection interrupted",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Retry installation" }),
+    );
     expect(onRetry).toHaveBeenCalledWith("job-1");
   });
 });

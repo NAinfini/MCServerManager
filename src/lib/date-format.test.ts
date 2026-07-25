@@ -13,8 +13,6 @@ describe("date formatting", () => {
   });
 
   it("uses the selected application locale", () => {
-    expect(formatDate("2026-07-23T15:00:00.000Z", "zh-CN")).toContain(
-      "2026年",
-    );
+    expect(formatDate("2026-07-23T15:00:00.000Z", "zh-CN")).toContain("2026年");
   });
 });

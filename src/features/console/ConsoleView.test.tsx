@@ -1,10 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -69,7 +64,10 @@ describe("ConsoleView", () => {
     expect(
       screen.getByText(/start the server before sending console commands/i),
     ).toBeInTheDocument();
-    expect(invoke).not.toHaveBeenCalledWith("send_server_command", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith(
+      "send_server_command",
+      expect.anything(),
+    );
   });
 
   it("fills the command input from a template before sending", async () => {
@@ -81,7 +79,9 @@ describe("ConsoleView", () => {
 
     renderConsole();
 
-    await userEvent.click(await screen.findByRole("button", { name: /save world/i }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: /save world/i }),
+    );
     expect(screen.getByLabelText(/^command$/i)).toHaveValue("save-all flush");
 
     await userEvent.click(screen.getByRole("button", { name: /^send$/i }));
@@ -111,4 +111,3 @@ describe("ConsoleView", () => {
     expect(input).toHaveValue("/whitelist");
   });
 });
-

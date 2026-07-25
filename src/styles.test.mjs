@@ -38,7 +38,16 @@ describe("single design system", () => {
   });
 
   it("exports the agreed spacing, type, control and breakpoint scales", () => {
-    for (const value of ["4px", "8px", "12px", "16px", "20px", "24px", "32px", "40px"]) {
+    for (const value of [
+      "4px",
+      "8px",
+      "12px",
+      "16px",
+      "20px",
+      "24px",
+      "32px",
+      "40px",
+    ]) {
       expect(tokens).toContain(value);
     }
     expect(tokens).toMatch(/--control-width-number:\s*112px/);
@@ -63,7 +72,9 @@ describe("interaction and responsive contracts", () => {
     const widths = [...css.matchAll(/@media\s*\(max-width:\s*(\d+)px\)/g)].map(
       (match) => Number(match[1]),
     );
-    expect(widths.every((width) => [720, 880, 1100, 1280].includes(width))).toBe(true);
+    expect(
+      widths.every((width) => [720, 880, 1100, 1280].includes(width)),
+    ).toBe(true);
     expect(new Set(widths)).toEqual(new Set([720, 880, 1100]));
   });
 

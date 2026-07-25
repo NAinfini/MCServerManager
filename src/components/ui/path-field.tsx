@@ -16,7 +16,12 @@ export function PathField({
   return (
     <div className="path-field">
       <TextField disabled={disabled} {...inputProps} />
-      <Button disabled={disabled} type="button" variant="secondary" onClick={onBrowse}>
+      <Button
+        disabled={disabled}
+        type="button"
+        variant="secondary"
+        onClick={onBrowse}
+      >
         {browseLabel}
       </Button>
     </div>

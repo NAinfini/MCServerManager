@@ -51,12 +51,16 @@ describe("UpdateStatus", () => {
     const user = userEvent.setup();
     renderUpdateStatus();
 
-    await user.click(await screen.findByRole("button", { name: /install update/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /install update/i }),
+    );
     expect(invoke).not.toHaveBeenCalledWith("install_app_update", {
       input: { channel: "stable" },
     });
 
-    await user.click(screen.getByRole("button", { name: "Install app update" }));
+    await user.click(
+      screen.getByRole("button", { name: "Install app update" }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("install_app_update", {

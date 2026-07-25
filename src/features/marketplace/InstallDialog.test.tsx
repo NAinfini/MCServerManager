@@ -74,4 +74,3 @@ describe("InstallDialog", () => {
     expect(onInstall).toHaveBeenCalledTimes(1);
   });
 });
-

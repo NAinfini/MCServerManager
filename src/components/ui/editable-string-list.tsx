@@ -84,7 +84,9 @@ export function EditableStringList({
           onKeyDown={handlePendingKeyDown}
         />
         <Button
-          disabled={!pendingValue.trim() || values.includes(pendingValue.trim())}
+          disabled={
+            !pendingValue.trim() || values.includes(pendingValue.trim())
+          }
           variant="secondary"
           onClick={addValue}
         >

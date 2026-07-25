@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -99,7 +93,9 @@ describe("ProfileImportExport", () => {
     expect(
       screen.getByRole("button", { name: /copy exported profile/i }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: /profile json/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: /profile json/i }),
+    ).not.toBeInTheDocument();
     expect(invoke).toHaveBeenCalledWith("export_server_profile", {
       input: {
         serverId: server.id,
@@ -214,4 +210,3 @@ describe("ProfileImportExport", () => {
     );
   });
 });
-

@@ -406,17 +406,16 @@ export async function handleFakeDesktopCommand(
         readOnly: false,
         warning: null,
       };
-    case "read_server_properties":
-      {
-        const raw = state.files["server.properties"] ?? "";
-        return {
-          serverId: "server-1",
-          path: "server.properties",
-          entries: parseServerProperties(raw),
-          raw,
-          warnings: [],
-        };
-      }
+    case "read_server_properties": {
+      const raw = state.files["server.properties"] ?? "";
+      return {
+        serverId: "server-1",
+        path: "server.properties",
+        entries: parseServerProperties(raw),
+        raw,
+        warnings: [],
+      };
+    }
     case "save_server_properties": {
       const currentEntries = parseServerProperties(
         state.files["server.properties"] ?? "",
@@ -508,7 +507,13 @@ export async function handleFakeDesktopCommand(
         warnings: [],
       };
     case "install_content_update":
-      return { content: await handleFakeDesktopCommand(state, "enable_installed_content", args) };
+      return {
+        content: await handleFakeDesktopCommand(
+          state,
+          "enable_installed_content",
+          args,
+        ),
+      };
     case "install_all_content_updates":
       return { serverId: "server-1", installed: [], warnings: [] };
     case "search_modrinth_projects":
@@ -626,7 +631,7 @@ export async function handleFakeDesktopCommand(
     case "read_server_log":
       return {
         relativePath: args?.relativePath,
-        content: "[Server thread/INFO]: Done (1.234s)! For help, type \"help\"",
+        content: '[Server thread/INFO]: Done (1.234s)! For help, type "help"',
         sizeBytes: 58,
         modifiedAt: now,
         compressed: false,
@@ -813,7 +818,10 @@ export async function handleFakeDesktopCommand(
       state.preferences = {
         ...state.preferences,
         ...clone(input),
-        logging: { ...state.preferences.logging, ...clone(input.logging ?? {}) },
+        logging: {
+          ...state.preferences.logging,
+          ...clone(input.logging ?? {}),
+        },
         serverDefaults: {
           ...state.preferences.serverDefaults,
           ...clone(input.serverDefaults ?? {}),

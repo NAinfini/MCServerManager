@@ -25,7 +25,10 @@ interface Breadcrumb {
   path: string;
 }
 
-function buildBreadcrumbs(currentPath: string, rootLabel: string): Breadcrumb[] {
+function buildBreadcrumbs(
+  currentPath: string,
+  rootLabel: string,
+): Breadcrumb[] {
   const crumbs: Breadcrumb[] = [{ label: rootLabel, path: "" }];
   const segments = currentPath.split("/").filter(Boolean);
   let accumulated = "";
@@ -102,7 +105,10 @@ export function ServerFilesView({
   return (
     <section className="files-panel" aria-label={t("files.aria")}>
       <div className="files-toolbar">
-        <nav className="files-breadcrumb" aria-label={t("files.breadcrumb.aria")}>
+        <nav
+          className="files-breadcrumb"
+          aria-label={t("files.breadcrumb.aria")}
+        >
           {breadcrumbs.map((crumb, index) => (
             <span className="files-breadcrumb-item" key={crumb.path || "root"}>
               {index > 0 ? (
@@ -165,7 +171,9 @@ export function ServerFilesView({
           onRetry={() => filesQuery.refetch()}
         />
         <FileEditor
-          error={saveMutation.error?.message ?? fileQuery.error?.message ?? null}
+          error={
+            saveMutation.error?.message ?? fileQuery.error?.message ?? null
+          }
           file={fileQuery.data ?? null}
           isLoading={fileQuery.isLoading}
           isSaving={saveMutation.isPending}

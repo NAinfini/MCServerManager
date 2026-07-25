@@ -50,9 +50,7 @@ export function WizardStepIndicator({
                 <div
                   aria-hidden="true"
                   className={`wizard-step-connector${
-                    index <= currentStep
-                      ? " wizard-step-connector-active"
-                      : ""
+                    index <= currentStep ? " wizard-step-connector-active" : ""
                   }`}
                 />
               ) : null}

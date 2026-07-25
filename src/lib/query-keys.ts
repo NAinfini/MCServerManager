@@ -1,13 +1,11 @@
 export const queryKeys = {
   servers: {
     profiles: ["serverProfiles"] as const,
-    setupStatus: (serverId: string) =>
-      ["serverSetupStatus", serverId] as const,
+    setupStatus: (serverId: string) => ["serverSetupStatus", serverId] as const,
   },
   process: {
     summary: ["processSummary"] as const,
-    status: (serverId: string) =>
-      ["serverProcessStatus", serverId] as const,
+    status: (serverId: string) => ["serverProcessStatus", serverId] as const,
     events: (serverId: string) => ["processEvents", serverId] as const,
   },
   backups: {
@@ -20,8 +18,7 @@ export const queryKeys = {
     list: (serverId: string) => ["players", serverId] as const,
   },
   content: {
-    installed: (serverId: string) =>
-      ["installedContent", serverId] as const,
+    installed: (serverId: string) => ["installedContent", serverId] as const,
     updatePolicy: (serverId: string, contentId: string | null = null) =>
       ["contentUpdatePolicy", serverId, contentId] as const,
   },
@@ -44,11 +41,8 @@ export const queryKeys = {
       ["hangarSearch", contentType, query] as const,
     project: (provider: string, projectId?: string | null) =>
       ["marketplaceProject", provider, projectId] as const,
-    versions: (
-      provider: string,
-      serverId: string,
-      projectId?: string | null,
-    ) => ["marketplaceVersions", provider, serverId, projectId] as const,
+    versions: (provider: string, serverId: string, projectId?: string | null) =>
+      ["marketplaceVersions", provider, serverId, projectId] as const,
     createSearch: (
       provider: string,
       query: string,
@@ -107,7 +101,8 @@ export const queryKeys = {
     server: (serverId: string) => ["properties", serverId] as const,
   },
   tasks: {
-    definitions: (serverId: string) => ["tasks", serverId, "definitions"] as const,
+    definitions: (serverId: string) =>
+      ["tasks", serverId, "definitions"] as const,
     runs: (serverId: string) => ["tasks", serverId, "runs"] as const,
   },
   updates: {

@@ -72,43 +72,61 @@ export interface ContentUpdateCandidate {
 }
 
 export function listInstalledContent(serverId: string) {
-  return invokeDesktopCommandWithErrorHandling<InstalledContent[]>("list_installed_content", {
-    serverId,
-  });
+  return invokeDesktopCommandWithErrorHandling<InstalledContent[]>(
+    "list_installed_content",
+    {
+      serverId,
+    },
+  );
 }
 
 export function importLocalContent(serverId: string, sourcePath: string) {
-  return invokeDesktopCommandWithErrorHandling<InstalledContent>("import_local_content", {
-    input: { serverId, sourcePath },
-  });
+  return invokeDesktopCommandWithErrorHandling<InstalledContent>(
+    "import_local_content",
+    {
+      input: { serverId, sourcePath },
+    },
+  );
 }
 
 export function disableInstalledContent(serverId: string, contentId: string) {
-  return invokeDesktopCommandWithErrorHandling<InstalledContent>("disable_installed_content", {
-    input: { serverId, contentId },
-  });
+  return invokeDesktopCommandWithErrorHandling<InstalledContent>(
+    "disable_installed_content",
+    {
+      input: { serverId, contentId },
+    },
+  );
 }
 
 export function enableInstalledContent(serverId: string, contentId: string) {
-  return invokeDesktopCommandWithErrorHandling<InstalledContent>("enable_installed_content", {
-    input: { serverId, contentId },
-  });
+  return invokeDesktopCommandWithErrorHandling<InstalledContent>(
+    "enable_installed_content",
+    {
+      input: { serverId, contentId },
+    },
+  );
 }
 
 export function uninstallInstalledContent(serverId: string, contentId: string) {
-  return invokeDesktopCommandWithErrorHandling<void>("uninstall_installed_content", {
-    input: { serverId, contentId },
-  });
+  return invokeDesktopCommandWithErrorHandling<void>(
+    "uninstall_installed_content",
+    {
+      input: { serverId, contentId },
+    },
+  );
 }
 
 export function getContentUpdatePolicy(
   serverId: string,
   contentId?: string | null,
 ) {
-  return invokeDesktopCommandWithErrorHandling<ContentUpdatePolicy>("get_content_update_policy", {
-    serverId,
-    contentId: contentId ?? null,
-  });
+  return invokeDesktopCommandWithErrorHandling<ContentUpdatePolicy>(
+    "get_content_update_policy",
+    {
+      serverId,
+      contentId: contentId ?? null,
+    },
+  );
 }
 
 export function saveContentUpdatePolicy(
@@ -120,15 +138,18 @@ export function saveContentUpdatePolicy(
     ignoredUpdate?: string | null;
   } = {},
 ) {
-  return invokeDesktopCommandWithErrorHandling<ContentUpdatePolicy>("save_content_update_policy", {
-    input: {
-      serverId,
-      contentId: options.contentId ?? null,
-      policy,
-      pinnedVersion: options.pinnedVersion ?? null,
-      ignoredUpdate: options.ignoredUpdate ?? null,
+  return invokeDesktopCommandWithErrorHandling<ContentUpdatePolicy>(
+    "save_content_update_policy",
+    {
+      input: {
+        serverId,
+        contentId: options.contentId ?? null,
+        policy,
+        pinnedVersion: options.pinnedVersion ?? null,
+        ignoredUpdate: options.ignoredUpdate ?? null,
+      },
     },
-  });
+  );
 }
 
 export function planContentUpdates(
@@ -139,14 +160,17 @@ export function planContentUpdates(
     confirmBatch?: boolean;
   } = {},
 ) {
-  return invokeDesktopCommandWithErrorHandling<ContentUpdatePlan>("plan_content_updates", {
-    input: {
-      serverId,
-      availableUpdates: options.availableUpdates ?? [],
-      installAnyway: options.installAnyway ?? false,
-      confirmBatch: options.confirmBatch ?? false,
+  return invokeDesktopCommandWithErrorHandling<ContentUpdatePlan>(
+    "plan_content_updates",
+    {
+      input: {
+        serverId,
+        availableUpdates: options.availableUpdates ?? [],
+        installAnyway: options.installAnyway ?? false,
+        confirmBatch: options.confirmBatch ?? false,
+      },
     },
-  });
+  );
 }
 
 export function checkContentUpdates(serverId: string) {

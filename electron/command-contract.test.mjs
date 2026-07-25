@@ -70,8 +70,8 @@ describe("Electron command contract", () => {
       [...fake.matchAll(/case "([a-z0-9_]+)":/g)].map((match) => match[1]),
     );
 
-    expect(rendererCommands().filter((command) => !covered.has(command))).toEqual(
-      [],
-    );
+    expect(
+      rendererCommands().filter((command) => !covered.has(command)),
+    ).toEqual([]);
   });
 });

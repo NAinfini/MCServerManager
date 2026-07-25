@@ -18,7 +18,10 @@ const gameruleOptions = [
   { value: "doDaylightCycle", labelKey: "gamerules.doDaylightCycle" },
   { value: "doWeatherCycle", labelKey: "gamerules.doWeatherCycle" },
   { value: "doImmediateRespawn", labelKey: "gamerules.doImmediateRespawn" },
-  { value: "playersSleepingPercentage", labelKey: "gamerules.playersSleepingPercentage" },
+  {
+    value: "playersSleepingPercentage",
+    labelKey: "gamerules.playersSleepingPercentage",
+  },
   { value: "randomTickSpeed", labelKey: "gamerules.randomTickSpeed" },
   { value: "spawnRadius", labelKey: "gamerules.spawnRadius" },
 ] as const;

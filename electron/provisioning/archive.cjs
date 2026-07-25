@@ -113,7 +113,9 @@ function validateEntry(entry, state, limits) {
 
 function mapYauzlError(error) {
   if (
-    /invalid relative path|absolute path|backslash/i.test(String(error?.message || ""))
+    /invalid relative path|absolute path|backslash/i.test(
+      String(error?.message || ""),
+    )
   ) {
     return unsafePathError("unknown", error);
   }
@@ -187,7 +189,11 @@ async function readJsonEntry(archivePath, requestedPath, requestedLimits = {}) {
       const { entryPath } = validateEntry(entry, state, limits);
       if (entryPath !== wanted || entryPath.endsWith("/")) continue;
       const stream = await zip.openReadStreamPromise(entry);
-      const buffer = await streamToBuffer(stream, limits.maxJsonBytes, entryPath);
+      const buffer = await streamToBuffer(
+        stream,
+        limits.maxJsonBytes,
+        entryPath,
+      );
       try {
         return JSON.parse(buffer.toString("utf8"));
       } catch (cause) {
@@ -226,9 +232,10 @@ async function extractLayer(archivePath, destination, layer, limits) {
     for await (const entry of zip.eachEntry()) {
       const { entryPath } = validateEntry(entry, state, limits);
       if (prefix && !entryPath.startsWith(prefix)) continue;
-      const relativePath = prefix && layer.stripPrefix
-        ? entryPath.slice(prefix.length)
-        : entryPath;
+      const relativePath =
+        prefix && layer.stripPrefix
+          ? entryPath.slice(prefix.length)
+          : entryPath;
       if (!relativePath) continue;
       const target = destinationPath(destination, relativePath);
       if (entryPath.endsWith("/")) {

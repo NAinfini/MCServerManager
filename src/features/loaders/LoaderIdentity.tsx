@@ -25,10 +25,7 @@ export function LoaderIcon({
   }
 
   return (
-    <span
-      aria-hidden="true"
-      className={`${className} loader-icon-fallback`}
-    >
+    <span aria-hidden="true" className={`${className} loader-icon-fallback`}>
       {branding.shortLabel}
     </span>
   );
@@ -39,10 +36,7 @@ interface LoaderPillProps {
   minecraftVersion?: string | null;
 }
 
-export function LoaderPill({
-  loaderType,
-  minecraftVersion,
-}: LoaderPillProps) {
+export function LoaderPill({ loaderType, minecraftVersion }: LoaderPillProps) {
   const branding = getLoaderBranding(loaderType);
   const label = [branding.label, minecraftVersion].filter(Boolean).join(" ");
 

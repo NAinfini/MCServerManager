@@ -62,11 +62,25 @@ const NAV_ITEMS: Array<{
 }> = [
   { key: "general", icon: Cog, labelKey: "settings.nav.general" },
   { key: "appearance", icon: Palette, labelKey: "settings.nav.appearance" },
-  { key: "defaults", icon: Server, labelKey: "settings.nav.defaults", groupStart: true },
-  { key: "marketplace", icon: ShoppingBag, labelKey: "settings.nav.marketplaceSources" },
+  {
+    key: "defaults",
+    icon: Server,
+    labelKey: "settings.nav.defaults",
+    groupStart: true,
+  },
+  {
+    key: "marketplace",
+    icon: ShoppingBag,
+    labelKey: "settings.nav.marketplaceSources",
+  },
   { key: "notifications", icon: Bell, labelKey: "settings.nav.notifications" },
   { key: "storage", icon: Database, labelKey: "settings.nav.storage" },
-  { key: "updates", icon: Download, labelKey: "settings.nav.updates", groupStart: true },
+  {
+    key: "updates",
+    icon: Download,
+    labelKey: "settings.nav.updates",
+    groupStart: true,
+  },
   { key: "about", icon: Info, labelKey: "settings.nav.about" },
 ];
 
@@ -76,7 +90,11 @@ type SettingsSectionProps = {
   onError: (message: string) => void;
 };
 
-function GeneralSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function GeneralSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
 
   return (
@@ -174,7 +192,11 @@ function SettingsNumberField({
   );
 }
 
-function AppearanceSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function AppearanceSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const appearance = preferences.appearance;
 
@@ -183,7 +205,9 @@ function AppearanceSection({ preferences, onUpdate, onError }: SettingsSectionPr
       <ThemeSettings />
       <LocalizationSettings />
       <div className="settings-plain-section">
-        <h2 className="settings-section-title">{t("settings.appearance.behavior")}</h2>
+        <h2 className="settings-section-title">
+          {t("settings.appearance.behavior")}
+        </h2>
         <div className="settings-row">
           <div className="settings-row-label">
             <strong>{t("settings.appearance.compactMode")}</strong>
@@ -207,7 +231,10 @@ function AppearanceSection({ preferences, onUpdate, onError }: SettingsSectionPr
             value={appearance.motion}
             options={[
               { value: "full", label: t("settings.appearance.motionFull") },
-              { value: "reduced", label: t("settings.appearance.motionReduced") },
+              {
+                value: "reduced",
+                label: t("settings.appearance.motionReduced"),
+              },
               { value: "off", label: t("settings.appearance.motionOff") },
             ]}
             onValueChange={(value) =>
@@ -241,17 +268,24 @@ function AppearanceSection({ preferences, onUpdate, onError }: SettingsSectionPr
   );
 }
 
-function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function LoggingSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const logging = preferences.logging;
   const [diagnosticsExported, setDiagnosticsExported] = useState(false);
 
   const exportDiagnostics = async () => {
     try {
-      const result = await invokeDesktopCommand<{ path?: string }>("show_save_dialog", {
-        defaultPath: "mc-server-manager-diagnostics.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
+      const result = await invokeDesktopCommand<{ path?: string }>(
+        "show_save_dialog",
+        {
+          defaultPath: "mc-server-manager-diagnostics.json",
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        },
+      );
       if (!result.path) {
         return;
       }
@@ -265,7 +299,9 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
   return (
     <div>
       <h2 className="settings-section-title">{t("settings.logging.title")}</h2>
-      <p className="settings-section-description">{t("settings.logging.description")}</p>
+      <p className="settings-section-description">
+        {t("settings.logging.description")}
+      </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.logging.level")}</strong>
@@ -325,7 +361,9 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.logging.logsFolder")}</strong>
-          {diagnosticsExported ? <span>{t("settings.logging.exported")}</span> : null}
+          {diagnosticsExported ? (
+            <span>{t("settings.logging.exported")}</span>
+          ) : null}
         </div>
         <div className="settings-action-group">
           <Button
@@ -347,7 +385,11 @@ function LoggingSection({ preferences, onUpdate, onError }: SettingsSectionProps
   );
 }
 
-function ServerDefaultsSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function ServerDefaultsSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const defaults = preferences.serverDefaults;
 
@@ -367,12 +409,18 @@ function ServerDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
 
   return (
     <div>
-      <h2 className="settings-section-title">{t("settings.serverDefaults.title")}</h2>
-      <p className="settings-section-description">{t("settings.serverDefaults.description")}</p>
+      <h2 className="settings-section-title">
+        {t("settings.serverDefaults.title")}
+      </h2>
+      <p className="settings-section-description">
+        {t("settings.serverDefaults.description")}
+      </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.paths.serverDefault")}</strong>
-          <span className="settings-path-value">{preferences.defaultServerDir}</span>
+          <span className="settings-path-value">
+            {preferences.defaultServerDir}
+          </span>
         </div>
         <Button variant="secondary" onClick={() => void pickServerFolder()}>
           {t("profileSettings.browse")}
@@ -387,12 +435,18 @@ function ServerDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
           value={defaults.javaStrategy}
           options={[
             { value: "auto", label: t("settings.serverDefaults.javaAuto") },
-            { value: "latest-lts", label: t("settings.serverDefaults.javaLatestLts") },
+            {
+              value: "latest-lts",
+              label: t("settings.serverDefaults.javaLatestLts"),
+            },
             { value: "manual", label: t("settings.serverDefaults.javaManual") },
           ]}
           onValueChange={(value) =>
             void onUpdate({
-              serverDefaults: { ...defaults, javaStrategy: value as JavaStrategy },
+              serverDefaults: {
+                ...defaults,
+                javaStrategy: value as JavaStrategy,
+              },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
@@ -435,7 +489,11 @@ function ServerDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
   );
 }
 
-function BackupDefaultsSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function BackupDefaultsSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const defaults = preferences.backupDefaults;
 
@@ -455,12 +513,18 @@ function BackupDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
 
   return (
     <div>
-      <h2 className="settings-section-title">{t("settings.backupDefaults.title")}</h2>
-      <p className="settings-section-description">{t("settings.backupDefaults.description")}</p>
+      <h2 className="settings-section-title">
+        {t("settings.backupDefaults.title")}
+      </h2>
+      <p className="settings-section-description">
+        {t("settings.backupDefaults.description")}
+      </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.paths.backupDefault")}</strong>
-          <span className="settings-path-value">{preferences.defaultBackupDir}</span>
+          <span className="settings-path-value">
+            {preferences.defaultBackupDir}
+          </span>
         </div>
         <Button variant="secondary" onClick={() => void pickBackupFolder()}>
           {t("profileSettings.browse")}
@@ -495,9 +559,18 @@ function BackupDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
           ariaLabel={t("settings.backupDefaults.frequency")}
           value={defaults.frequency}
           options={[
-            { value: "manual", label: t("settings.backupDefaults.frequencyManual") },
-            { value: "daily", label: t("settings.backupDefaults.frequencyDaily") },
-            { value: "weekly", label: t("settings.backupDefaults.frequencyWeekly") },
+            {
+              value: "manual",
+              label: t("settings.backupDefaults.frequencyManual"),
+            },
+            {
+              value: "daily",
+              label: t("settings.backupDefaults.frequencyDaily"),
+            },
+            {
+              value: "weekly",
+              label: t("settings.backupDefaults.frequencyWeekly"),
+            },
           ]}
           onValueChange={(value) =>
             void onUpdate({
@@ -531,7 +604,11 @@ function BackupDefaultsSection({ preferences, onUpdate, onError }: SettingsSecti
   );
 }
 
-function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function MarketplaceSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const marketplace = preferences.marketplace;
   const [cacheCleared, setCacheCleared] = useState(false);
@@ -547,8 +624,12 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
 
   return (
     <div>
-      <h2 className="settings-section-title">{t("settings.marketplace.title")}</h2>
-      <p className="settings-section-description">{t("settings.marketplace.description")}</p>
+      <h2 className="settings-section-title">
+        {t("settings.marketplace.title")}
+      </h2>
+      <p className="settings-section-description">
+        {t("settings.marketplace.description")}
+      </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.marketplace.defaultProvider")}</strong>
@@ -602,7 +683,9 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.marketplace.cacheSizeMb")}</strong>
-          {cacheCleared ? <span>{t("settings.paths.cacheCleared")}</span> : null}
+          {cacheCleared ? (
+            <span>{t("settings.paths.cacheCleared")}</span>
+          ) : null}
         </div>
         <div className="settings-action-group">
           <SettingsNumberField
@@ -627,7 +710,11 @@ function MarketplaceSection({ preferences, onUpdate, onError }: SettingsSectionP
   );
 }
 
-function ProvidersSection({ preferences, onUpdate, onError }: SettingsSectionProps) {
+function ProvidersSection({
+  preferences,
+  onUpdate,
+  onError,
+}: SettingsSectionProps) {
   const { t } = useAppSettings();
   const providers = preferences.providers;
   const updateProvider = (
@@ -643,7 +730,9 @@ function ProvidersSection({ preferences, onUpdate, onError }: SettingsSectionPro
 
   return (
     <div>
-      <h2 className="settings-section-title">{t("settings.providers.title")}</h2>
+      <h2 className="settings-section-title">
+        {t("settings.providers.title")}
+      </h2>
       <p className="settings-section-description">
         {t("settings.providers.title")}
       </p>
@@ -786,10 +875,13 @@ function DataManagementSection({
 
   const exportSettings = async () => {
     try {
-      const result = await invokeDesktopCommand<{ path?: string }>("show_save_dialog", {
-        defaultPath: "mc-server-manager-settings.json",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
+      const result = await invokeDesktopCommand<{ path?: string }>(
+        "show_save_dialog",
+        {
+          defaultPath: "mc-server-manager-settings.json",
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        },
+      );
       if (!result.path) {
         return;
       }
@@ -802,10 +894,13 @@ function DataManagementSection({
 
   const importSettings = async () => {
     try {
-      const result = await invokeDesktopCommand<{ path?: string }>("show_open_dialog", {
-        kind: "file",
-        filters: [{ name: "JSON", extensions: ["json"] }],
-      });
+      const result = await invokeDesktopCommand<{ path?: string }>(
+        "show_open_dialog",
+        {
+          kind: "file",
+          filters: [{ name: "JSON", extensions: ["json"] }],
+        },
+      );
       if (!result.path) {
         return;
       }
@@ -841,7 +936,9 @@ function DataManagementSection({
   return (
     <div>
       <h2 className="settings-section-title">{t("settings.data.title")}</h2>
-      <p className="settings-section-description">{t("settings.data.description")}</p>
+      <p className="settings-section-description">
+        {t("settings.data.description")}
+      </p>
       <div className="settings-row">
         <div className="settings-row-label">
           <strong>{t("settings.data.settingsFile")}</strong>
@@ -1062,14 +1159,13 @@ export function SettingsView({
   };
 
   return (
-    <section
-      aria-labelledby="settings-title"
-      className="settings-page"
-    >
+    <section aria-labelledby="settings-title" className="settings-page">
       <div className="page-header">
         <div>
           <p className="eyebrow">{t("settings.page.eyebrow")}</p>
-          <h1 id="settings-title" tabIndex={-1}>{t("settings.page.title")}</h1>
+          <h1 id="settings-title" tabIndex={-1}>
+            {t("settings.page.title")}
+          </h1>
         </div>
         <span className="settings-save-state" aria-live="polite">
           {saveState === "saving"
@@ -1086,15 +1182,29 @@ export function SettingsView({
             className="settings-nav"
             aria-label={t("settings.page.title")}
             onKeyDown={(event) => {
-              if (!["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+              if (
+                !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(
+                  event.key,
+                )
+              )
+                return;
               const items = Array.from(
-                event.currentTarget.querySelectorAll<HTMLButtonElement>(".settings-nav-item"),
+                event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                  ".settings-nav-item",
+                ),
               );
-              const currentIndex = items.indexOf(document.activeElement as HTMLButtonElement);
+              const currentIndex = items.indexOf(
+                document.activeElement as HTMLButtonElement,
+              );
               if (currentIndex < 0) return;
-              const direction = event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+              const direction =
+                event.key === "ArrowDown" || event.key === "ArrowRight"
+                  ? 1
+                  : -1;
               event.preventDefault();
-              items[(currentIndex + direction + items.length) % items.length]?.focus();
+              items[
+                (currentIndex + direction + items.length) % items.length
+              ]?.focus();
             }}
           >
             {NAV_ITEMS.map((item) => {

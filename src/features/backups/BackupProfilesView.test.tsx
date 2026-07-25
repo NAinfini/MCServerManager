@@ -1,11 +1,5 @@
 ﻿import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "../../test/render";
+import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -205,7 +199,9 @@ describe("BackupProfilesView", () => {
       profileId: "profile-1",
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete backup profile" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete backup profile" }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_backup_profile", {
@@ -227,12 +223,15 @@ describe("BackupProfilesView", () => {
         name: /could not load backup profiles/i,
       }),
     ).toHaveTextContent("profiles unavailable");
-    expect(screen.queryByText("No backup profiles yet.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No backup profiles yet."),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Retry" }));
 
-    expect(await screen.findByText("No backup profiles yet.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No backup profiles yet."),
+    ).toBeInTheDocument();
     expect(invoke).toHaveBeenCalledTimes(2);
   });
 });
-

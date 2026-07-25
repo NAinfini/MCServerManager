@@ -124,7 +124,10 @@ export function ServerDetail({
   const queryClient = useQueryClient();
   const definition = workspaceDefinition(section);
   const activeView = normalizeWorkspaceView(section, view);
-  const playerViewCounts = usePlayerViewCounts(server.id, section === "players");
+  const playerViewCounts = usePlayerViewCounts(
+    server.id,
+    section === "players",
+  );
   const backupMutation = useMutation({
     mutationFn: () => createWorldBackup({ serverId: server.id }),
     onSuccess: async () => {
@@ -164,7 +167,11 @@ export function ServerDetail({
               </div>
               <div className="detail-panel-meta">
                 <LoaderPill loaderType={server.loaderType} />
-                <span>{t("server.meta.mc", { version: server.minecraftVersion ?? "?" })}</span>
+                <span>
+                  {t("server.meta.mc", {
+                    version: server.minecraftVersion ?? "?",
+                  })}
+                </span>
                 <span>
                   {t("server.meta.port", {
                     port: server.serverPort ?? t("server.meta.unset"),
@@ -262,7 +269,10 @@ export function ServerDetail({
                       {/* Decorative: the panel below announces the same totals,
                           and a changing accessible name would be unstable. */}
                       {count === undefined ? null : (
-                        <span aria-hidden="true" className="workspace-view-count">
+                        <span
+                          aria-hidden="true"
+                          className="workspace-view-count"
+                        >
                           {count}
                         </span>
                       )}

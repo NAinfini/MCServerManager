@@ -496,11 +496,7 @@ export function MarketplaceMarkdown({ source }: MarketplaceMarkdownProps) {
     // never fire a fresh `error` event, so reconcile them directly.
     for (const image of Array.from(root.querySelectorAll("img"))) {
       const remoteSrc = image.dataset.marketplaceImageSrc;
-      if (
-        !remoteSrc &&
-        image.complete &&
-        image.naturalWidth === 0
-      ) {
+      if (!remoteSrc && image.complete && image.naturalWidth === 0) {
         markFailed(image);
       }
     }

@@ -49,7 +49,9 @@ export function ProvisioningProgress({
           <strong>{t("provisioning.progress.title")}</strong>
           <span>{t(`provisioning.stage.${displayedStage || "planned"}`)}</span>
         </div>
-        {job.stage === "ready" ? <CheckCircle2 aria-hidden="true" size={20} /> : null}
+        {job.stage === "ready" ? (
+          <CheckCircle2 aria-hidden="true" size={20} />
+        ) : null}
       </div>
       <progress
         aria-label={t("provisioning.progress.aria")}
@@ -105,12 +107,20 @@ export function ProvisioningProgress({
       ) : null}
       <div className="provisioning-progress-actions">
         {job.error?.retryable ? (
-          <Button disabled={busy} variant="primary" onClick={() => onRetry(job.id)}>
+          <Button
+            disabled={busy}
+            variant="primary"
+            onClick={() => onRetry(job.id)}
+          >
             {t("provisioning.action.retry")}
           </Button>
         ) : null}
         {canCancel ? (
-          <Button disabled={busy} variant="secondary" onClick={() => onCancel(job.id)}>
+          <Button
+            disabled={busy}
+            variant="secondary"
+            onClick={() => onCancel(job.id)}
+          >
             {t("provisioning.action.cancel")}
           </Button>
         ) : null}
