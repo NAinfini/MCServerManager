@@ -65,12 +65,22 @@ describe("Electron CI and release workflows", () => {
     expect(release).toContain("CSC_IDENTITY_AUTO_DISCOVERY: false");
   });
 
-  it("uses a CI test timeout that fits slower Windows runners", () => {
+  it("uses a test timeout that fits slower Windows runners", () => {
     const ci = readWorkspaceFile(".github/workflows/ci.yml");
     const release = readWorkspaceFile(".github/workflows/release.yml");
+    const viteConfig = readWorkspaceFile("vite.config.ts");
 
-    expect(ci).toContain("pnpm vitest run --testTimeout 15000");
-    expect(release).toContain("pnpm vitest run --testTimeout 15000");
+    // The budget used to be a magic number duplicated across both workflows,
+    // which meant a local run and CI disagreed and only CI could catch a
+    // timeout. It lives in the shared config now, so assert it there and assert
+    // neither workflow quietly overrides it back down.
+    const configured = /testTimeout:\s*([\d_]+)/.exec(viteConfig);
+    expect(configured).not.toBeNull();
+    expect(Number(configured[1].replaceAll("_", ""))).toBeGreaterThanOrEqual(
+      60_000,
+    );
+    expect(ci).not.toContain("--testTimeout");
+    expect(release).not.toContain("--testTimeout");
   });
 
   it("publishes unsigned artifacts without demanding certificates it does not have", () => {

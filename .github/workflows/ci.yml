@@ -48,4 +48,4 @@ jobs:
       - name: Run Electron UI smoke on Linux
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum pnpm test:electron-ui-smoke
-      - run: pnpm vitest run --testTimeout 15000
+      - run: pnpm vitest run

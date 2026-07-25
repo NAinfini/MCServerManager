@@ -81,6 +81,14 @@ export default defineConfig(async () => ({
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
+    // The backend tests do real filesystem work - provisioning, extraction,
+    // hashing, SQLite - and on a two-core Windows runner with Defender scanning
+    // every write, parallel workers starve each other badly enough that a test
+    // measured at 460ms locally can exceed 15s. That budget lived as a magic
+    // number duplicated across two workflow files and still failed a release
+    // build intermittently. One number, here, so a local run and CI agree.
+    // Lower it to catch genuinely slow tests; it is not hiding one today.
+    testTimeout: 60_000,
     include: [
       "src/**/*.test.{ts,tsx,mjs}",
       "electron/**/*.test.mjs",
