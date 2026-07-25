@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createBackend } = require("./backend.cjs");
 const { createApplicationUpdater } = require("./app-updater.cjs");
+const { codedError } = require("./provisioning/contracts.cjs");
 
 let mainWindow = null;
 let isQuitting = false;
@@ -87,12 +88,7 @@ function reportFatalMainError(scope, error) {
   const details =
     error instanceof Error ? error.stack || error.message : String(error);
   originalConsole.error(`[${scope}]`, details);
-  writeMainLog(
-    "error",
-    scope,
-    "Unhandled main-process failure.",
-    details,
-  );
+  writeMainLog("error", scope, "Unhandled main-process failure.", details);
   // Surfaced once per session so a background failure cannot leave the app
   // silently half-working. Every later occurrence still reaches the app log.
   if (reportedFatalError) {
@@ -110,7 +106,10 @@ function reportFatalMainError(scope, error) {
   }
 }
 
-function applyLaunchAtLoginPreference(preferences, { reportFailure = false } = {}) {
+function applyLaunchAtLoginPreference(
+  preferences,
+  { reportFailure = false } = {},
+) {
   if (isDev) {
     return;
   }
@@ -179,7 +178,10 @@ function isRendererNavigation(url) {
 
 async function openExternalUrl(url) {
   if (!isSafeExternalUrl(url)) {
-    throw new Error("Only http, https, and mailto links can be opened externally.");
+    throw codedError(
+      "EXTERNAL_LINK_SCHEME_BLOCKED",
+      "Only http, https, and mailto links can be opened externally.",
+    );
   }
 
   await shell.openExternal(String(url));
@@ -324,12 +326,14 @@ async function showOpenDialogForRenderer(event, args) {
     throw new Error("show_open_dialog requires kind 'file' or 'folder'.");
   }
 
-  const parentWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+  const parentWindow =
+    BrowserWindow.fromWebContents(event.sender) || mainWindow;
   const options = {
     properties:
       kind === "folder" ? ["openDirectory", "createDirectory"] : ["openFile"],
   };
-  const filters = kind === "file" ? normalizeDialogFilters(args?.filters) : undefined;
+  const filters =
+    kind === "file" ? normalizeDialogFilters(args?.filters) : undefined;
   if (filters && filters.length > 0) {
     options.filters = filters;
   }
@@ -342,7 +346,8 @@ async function showOpenDialogForRenderer(event, args) {
 }
 
 async function showSaveDialogForRenderer(event, args) {
-  const parentWindow = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+  const parentWindow =
+    BrowserWindow.fromWebContents(event.sender) || mainWindow;
   const options = {
     defaultPath:
       typeof args?.defaultPath === "string" ? args.defaultPath : undefined,
@@ -362,11 +367,11 @@ async function showSaveDialogForRenderer(event, args) {
 async function openBackendFolder(command) {
   const result = backend?.handle(command);
   if (!result?.path) {
-    throw new Error("folder path is unavailable");
+    throw codedError("FOLDER_PATH_UNAVAILABLE", "folder path is unavailable");
   }
   const failure = await shell.openPath(result.path);
   if (failure) {
-    throw new Error(`failed to open folder: ${failure}`);
+    throw codedError("OPEN_FOLDER_FAILED", `failed to open folder: ${failure}`);
   }
   return result;
 }
@@ -374,7 +379,7 @@ async function openBackendFolder(command) {
 async function openServerFolder(args) {
   const serverId = args?.serverId;
   if (typeof serverId !== "string" || serverId.trim().length === 0) {
-    throw new Error("server id is required");
+    throw codedError("SERVER_ID_REQUIRED", "server id is required");
   }
   // Resolve the folder in the main process so the renderer can only ever open
   // a managed server's root directory, never an arbitrary path.
@@ -383,11 +388,14 @@ async function openServerFolder(args) {
     ? profiles.find((item) => item?.id === serverId)
     : null;
   if (!profile?.rootDir) {
-    throw new Error(`server profile not found: ${serverId}`);
+    throw codedError(
+      "SERVER_PROFILE_NOT_FOUND",
+      `server profile not found: ${serverId}`,
+    );
   }
   const failure = await shell.openPath(profile.rootDir);
   if (failure) {
-    throw new Error(`failed to open folder: ${failure}`);
+    throw codedError("OPEN_FOLDER_FAILED", `failed to open folder: ${failure}`);
   }
   return null;
 }
@@ -397,17 +405,26 @@ async function openTunnelApplication(args) {
     input: { providerId: args?.input?.providerId || args?.providerId },
   });
   if (!provider) {
-    throw new Error("tunnel provider not found");
+    throw codedError("TUNNEL_PROVIDER_NOT_FOUND", "tunnel provider not found");
   }
   if (provider.kind !== "application") {
-    throw new Error("selected tunnel provider is not an application launcher");
+    throw codedError(
+      "TUNNEL_PROVIDER_NOT_LAUNCHER",
+      "selected tunnel provider is not an application launcher",
+    );
   }
   if (!provider.command) {
-    throw new Error("tunnel application path is missing");
+    throw codedError(
+      "TUNNEL_APPLICATION_PATH_MISSING",
+      "tunnel application path is missing",
+    );
   }
   const failure = await shell.openPath(provider.command);
   if (failure) {
-    throw new Error(`failed to open tunnel application: ${failure}`);
+    throw codedError(
+      "OPEN_TUNNEL_APPLICATION_FAILED",
+      `failed to open tunnel application: ${failure}`,
+    );
   }
   return null;
 }
@@ -417,9 +434,11 @@ function startScheduledTaskRunner() {
     return;
   }
   scheduledTaskTimer = setInterval(() => {
-    Promise.resolve(backend?.handle("run_due_scheduled_tasks")).catch((error) => {
-      console.error("scheduled task runner failed", error);
-    });
+    Promise.resolve(backend?.handle("run_due_scheduled_tasks")).catch(
+      (error) => {
+        console.error("scheduled task runner failed", error);
+      },
+    );
   }, 60_000);
 }
 

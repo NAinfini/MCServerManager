@@ -94,9 +94,10 @@ describe("Electron CI and release workflows", () => {
       "APPLE_APP_SPECIFIC_PASSWORD",
       "APPLE_TEAM_ID",
     ]) {
-      expect(release, `${secret} is not available to this repository`).not.toContain(
-        secret,
-      );
+      expect(
+        release,
+        `${secret} is not available to this repository`,
+      ).not.toContain(secret);
     }
 
     // Without this electron-builder searches the runner keychain for an identity
@@ -119,7 +120,9 @@ describe("Electron CI and release workflows", () => {
       "electron electron/ui-smoke.cjs",
     );
     expect(ci).toContain("pnpm test:electron-ui-smoke");
-    expect(ci).toContain("xvfb-run --auto-servernum pnpm test:electron-ui-smoke");
+    expect(ci).toContain(
+      "xvfb-run --auto-servernum pnpm test:electron-ui-smoke",
+    );
     expect(release).toContain("pnpm test:electron-ui-smoke");
     expect(release).toContain(
       "xvfb-run --auto-servernum pnpm test:electron-ui-smoke",

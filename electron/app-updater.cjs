@@ -1,7 +1,12 @@
+const { codedError } = require("./provisioning/contracts.cjs");
+
 function validateUpdateRequest(args) {
   const channel = args?.input?.channel || "stable";
   if (channel !== "stable") {
-    throw new Error("stable is the only supported update channel");
+    throw codedError(
+      "UPDATE_CHANNEL_UNSUPPORTED",
+      "stable is the only supported update channel",
+    );
   }
   return channel;
 }
@@ -22,7 +27,12 @@ function createApplicationUpdater({
   setQuitting = () => undefined,
   getRunningServerCount = async () => 0,
 }) {
-  function appUpdateStatus(updateAvailable, info, message, runningServerCount = 0) {
+  function appUpdateStatus(
+    updateAvailable,
+    info,
+    message,
+    runningServerCount = 0,
+  ) {
     const installBlockedByRunningServers = runningServerCount > 0;
     return {
       currentVersion: app.getVersion(),
@@ -44,7 +54,8 @@ function createApplicationUpdater({
       return;
     }
 
-    throw new Error(
+    throw codedError(
+      "UPDATE_REQUIRES_PACKAGED_BUILD",
       "App update checks require a packaged Electron build with GitHub Releases update metadata.",
     );
   }
@@ -118,10 +129,14 @@ function createApplicationUpdater({
   async function installApplicationUpdate(args) {
     const status = await checkForApplicationUpdate(args);
     if (!status.updateAvailable) {
-      throw new Error("no app update is available from GitHub Releases");
+      throw codedError(
+        "NO_APP_UPDATE_AVAILABLE",
+        "no app update is available from GitHub Releases",
+      );
     }
     if (status.installBlockedByRunningServers) {
-      throw new Error(
+      throw codedError(
+        "UPDATE_BLOCKED_BY_RUNNING_SERVERS",
         `app update install is blocked while ${status.runningServerCount} running server(s) are active`,
       );
     }
@@ -130,7 +145,8 @@ function createApplicationUpdater({
     const runningServerCountAfterDownload =
       Number(await getRunningServerCount()) || 0;
     if (runningServerCountAfterDownload > 0) {
-      throw new Error(
+      throw codedError(
+        "UPDATE_BLOCKED_BY_RUNNING_SERVERS",
         `app update install is blocked while ${runningServerCountAfterDownload} running server(s) are active`,
       );
     }

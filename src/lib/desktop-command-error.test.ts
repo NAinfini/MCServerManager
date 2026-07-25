@@ -44,6 +44,19 @@ describe("normalizeDesktopCommandError", () => {
     expect(error.message).toBe("请先停止服务器，再还原世界备份。");
   });
 
+  it("translates required-field codes the backend derives from the message", () => {
+    localStorage.setItem("mcsm.language", "zh-CN");
+
+    // trimRequired turns "server name is required" into SERVER_NAME_REQUIRED
+    // rather than passing a code literal, so this is the one path where the
+    // backend and the locale file could drift apart without either side saying so.
+    const error = normalizeDesktopCommandError(
+      new Error("[MCSM:SERVER_NAME_REQUIRED] server name is required"),
+    );
+
+    expect(error.message).toBe("服务器需要填写名称。");
+  });
+
   it("keeps the backend's own detail inside the translated message", () => {
     const error = normalizeDesktopCommandError(
       new Error("[MCSM:SERVER_PORT_IN_USE] Port 25565 is already in use."),

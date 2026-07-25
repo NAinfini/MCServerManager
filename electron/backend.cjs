@@ -6,9 +6,7 @@ const { spawn, spawnSync } = require("node:child_process");
 const { createServer: createNetServer, isIP } = require("node:net");
 const { DatabaseSync } = require("node:sqlite");
 const zlib = require("node:zlib");
-const {
-  createCommandRegistry,
-} = require("./backend/command-registry.cjs");
+const { createCommandRegistry } = require("./backend/command-registry.cjs");
 const { createBackendContext } = require("./backend/context.cjs");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
@@ -379,8 +377,7 @@ function createCommandHandlers(context) {
     get_server_source: (args) =>
       getServerSource(db, args?.input?.serverId || args?.serverId),
     create_server_profile: (args) => createServerProfile(db, args?.input),
-    get_server_setup_status: (args) =>
-      getServerSetupStatus(db, args?.serverId),
+    get_server_setup_status: (args) => getServerSetupStatus(db, args?.serverId),
     get_default_server_root: (args) => ({
       path: managedServerRoot(db, args?.input?.name || "server", false),
     }),
@@ -426,8 +423,7 @@ function createCommandHandlers(context) {
         args?.relativePath,
         args?.content,
       ),
-    read_server_properties: (args) =>
-      readServerProperties(db, args?.serverId),
+    read_server_properties: (args) => readServerProperties(db, args?.serverId),
     save_server_properties: (args) =>
       saveServerProperties(
         db,
@@ -450,13 +446,11 @@ function createCommandHandlers(context) {
     apply_player_change: (args) => applyPlayerChange(db, args?.input),
     read_player_lists: (args) => readPlayerLists(db, args?.serverId),
     save_player_list: (args) => savePlayerList(db, args?.input),
-    list_installed_content: (args) =>
-      listInstalledContent(db, args?.serverId),
+    list_installed_content: (args) => listInstalledContent(db, args?.serverId),
     import_local_content: (args) => importLocalContent(db, args?.input),
     disable_installed_content: (args) =>
       disableInstalledContent(db, args?.input),
-    enable_installed_content: (args) =>
-      enableInstalledContent(db, args?.input),
+    enable_installed_content: (args) => enableInstalledContent(db, args?.input),
     uninstall_installed_content: (args) =>
       uninstallInstalledContent(db, args?.input),
     get_content_update_policy: (args) => getContentUpdatePolicy(db, args),
@@ -491,14 +485,12 @@ function createCommandHandlers(context) {
     get_performance_history: (args) =>
       getPerformanceHistory(db, args?.serverId),
     sample_server_metrics: (args) => sampleServerMetrics(db, args?.serverId),
-    run_server_diagnostics: (args) =>
-      runServerDiagnostics(db, args?.serverId),
+    run_server_diagnostics: (args) => runServerDiagnostics(db, args?.serverId),
     list_diagnostic_runs: (args) => listDiagnosticRuns(db, args?.serverId),
     export_server_profile: (args) => exportServerProfile(db, args?.input),
     preview_profile_import: (args) => previewProfileImport(args?.input),
     import_profile: (args) => importProfile(db, args?.input),
-    preview_modpack_import_command: (args) =>
-      previewModpackImport(args?.input),
+    preview_modpack_import_command: (args) => previewModpackImport(args?.input),
     plan_server_provisioning: (args) => planServerProvisioning(args?.input),
     create_provisioning_job: (args) =>
       provisioningExecutorFor(db).createJob(args?.input?.plan || args?.input),
@@ -508,9 +500,7 @@ function createCommandHandlers(context) {
     list_recoverable_provisioning_jobs: () =>
       provisioningExecutorFor(db).listRecoverableJobs(),
     run_provisioning_job: (args) =>
-      provisioningExecutorFor(db).executeJob(
-        args?.input?.jobId || args?.jobId,
-      ),
+      provisioningExecutorFor(db).executeJob(args?.input?.jobId || args?.jobId),
     retry_provisioning_job: (args) =>
       provisioningExecutorFor(db).retryJob(args?.input?.jobId || args?.jobId),
     cancel_provisioning_job: (args) =>
@@ -522,19 +512,15 @@ function createCommandHandlers(context) {
     search_modrinth_projects: (args) => searchModrinthProjects(args?.input),
     get_modrinth_project: (args) => getModrinthProject(args?.input),
     list_modrinth_versions: (args) => listModrinthVersions(args?.input),
-    install_modrinth_version: (args) =>
-      installModrinthVersion(db, args?.input),
+    install_modrinth_version: (args) => installModrinthVersion(db, args?.input),
     search_hangar_projects: (args) => searchHangarProjects(args?.query),
     list_hangar_versions: (args) => listHangarVersions(args?.input),
     install_hangar_version: (args) => installHangarVersion(db, args?.input),
-    search_curseforge_projects: (args) =>
-      searchCurseForgeProjects(args?.input),
+    search_curseforge_projects: (args) => searchCurseForgeProjects(args?.input),
     get_curseforge_project: (args) => getCurseForgeProject(args?.input),
     list_curseforge_files: (args) => listCurseForgeFiles(args?.input),
-    install_curseforge_file: (args) =>
-      installCurseForgeFile(db, args?.input),
-    import_curseforge_manual: (args) =>
-      importCurseForgeManual(db, args?.input),
+    install_curseforge_file: (args) => installCurseForgeFile(db, args?.input),
+    import_curseforge_manual: (args) => importCurseForgeManual(db, args?.input),
     search_bbsmc_projects: (args) => searchBbsmcProjects(args?.input),
     get_bbsmc_project: (args) => getBbsmcProject(args?.input),
     fetch_marketplace_image: (args) => fetchMarketplaceImage(args?.input),
@@ -613,7 +599,10 @@ function migrateLegacyServersTable(db) {
     `);
     const violations = db.prepare("PRAGMA foreign_key_check").all();
     if (violations.length > 0) {
-      throw new Error("database migration would violate foreign keys");
+      throw codedError(
+        "DB_MIGRATION_FOREIGN_KEY_VIOLATION",
+        "database migration would violate foreign keys",
+      );
     }
     db.exec("PRAGMA user_version = 2; COMMIT");
   } catch (error) {
@@ -631,7 +620,8 @@ function migrateLegacyServersTable(db) {
 function migrateDatabase(db) {
   const version = databaseSchemaVersion(db);
   if (version > currentSchemaVersion) {
-    throw new Error(
+    throw codedError(
+      "DB_SCHEMA_TOO_NEW",
       `database schema version ${version} is newer than supported version ${currentSchemaVersion}`,
     );
   }
@@ -647,16 +637,31 @@ function migrateDatabase(db) {
   }
 }
 
+// Every message these two helpers are given reads "<field> is required", so the
+// error code is just the field: "server name is required" -> SERVER_NAME_REQUIRED.
+// Deriving it leaves the thirty-odd call sites untouched while still giving the
+// renderer something to translate. electron/error-codes.test.mjs reads the call
+// sites and applies the same derivation, so a new field without a locale entry
+// fails the build rather than reaching a user in English.
+function requiredFieldCode(message) {
+  const field = /^(.+) is required$/.exec(message);
+  // Not the documented shape. Surface it untranslated rather than inventing a
+  // code no locale file has.
+  if (!field) return null;
+  return `${field[1].replace(/\s+/g, "_").toUpperCase()}_REQUIRED`;
+}
+
+function requiredFieldError(message) {
+  const code = requiredFieldCode(message);
+  return code ? codedError(code, message) : new Error(message);
+}
+
 function trimRequired(value, message) {
   const trimmed = String(value || "").trim();
   if (!trimmed) {
-    throw new Error(message);
+    throw requiredFieldError(message);
   }
   return trimmed;
-}
-
-function unsupported(message) {
-  throw new Error(message);
 }
 
 function requireServerId(serverId) {
@@ -678,7 +683,7 @@ function safeFolderName(value, fallback = "server") {
 
 function stringFilePath(value, label) {
   if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${label} is required`);
+    throw requiredFieldError(`${label} is required`);
   }
   return path.resolve(value.trim());
 }
@@ -914,13 +919,19 @@ function getAppPreferences(db) {
       JSON.parse(fs.readFileSync(filePath, "utf8")),
     );
   } catch (error) {
-    throw new Error(`failed to read app preferences: ${error.message}`);
+    throw codedError(
+      "APP_PREFERENCES_READ_FAILED",
+      `failed to read app preferences: ${error.message}`,
+    );
   }
 }
 
 function saveAppPreferences(db, input = {}) {
   if (!input || typeof input !== "object") {
-    throw new Error("app preferences input is required");
+    throw codedError(
+      "APP_PREFERENCES_INPUT_REQUIRED",
+      "app preferences input is required",
+    );
   }
 
   const current = getAppPreferences(db);
@@ -974,7 +985,10 @@ function saveAppPreferences(db, input = {}) {
 function clearAppCache(db) {
   const cacheDir = path.resolve(getAppPreferences(db).cacheDir);
   if (path.parse(cacheDir).root === cacheDir) {
-    throw new Error("refusing to clear filesystem root cache directory");
+    throw codedError(
+      "CACHE_ROOT_REFUSED",
+      "refusing to clear filesystem root cache directory",
+    );
   }
 
   fs.rmSync(cacheDir, { recursive: true, force: true });
@@ -1014,13 +1028,19 @@ function exportAppSettings(db, input = {}) {
 function importAppSettings(db, input = {}) {
   const sourcePath = stringFilePath(input.path, "settings import path");
   if (!fs.existsSync(sourcePath)) {
-    throw new Error("settings import file does not exist");
+    throw codedError(
+      "SETTINGS_IMPORT_FILE_MISSING",
+      "settings import file does not exist",
+    );
   }
   let parsed;
   try {
     parsed = JSON.parse(fs.readFileSync(sourcePath, "utf8"));
   } catch (error) {
-    throw new Error(`failed to read settings import file: ${error.message}`);
+    throw codedError(
+      "SETTINGS_IMPORT_READ_FAILED",
+      `failed to read settings import file: ${error.message}`,
+    );
   }
   return saveAppPreferences(db, parsed);
 }
@@ -1051,7 +1071,7 @@ function truncateLogField(value, maxLength) {
 
 function writeAppLog(db, input = {}) {
   if (!input || typeof input !== "object") {
-    throw new Error("app log input is required");
+    throw codedError("APP_LOG_INPUT_REQUIRED", "app log input is required");
   }
 
   const entry = {
@@ -1175,7 +1195,10 @@ function clearAppLogs(db) {
 
 function managedServerRoot(db, name, isExistingFolderImport) {
   if (isExistingFolderImport) {
-    throw new Error("server root directory is required");
+    throw codedError(
+      "SERVER_ROOT_DIRECTORY_REQUIRED",
+      "server root directory is required",
+    );
   }
   const baseDir = getAppPreferences(db).defaultServerDir;
   const baseName = safeFolderName(name);
@@ -1281,7 +1304,10 @@ function parseServerJarName(fileName) {
 function detectServerVersion(rootDir) {
   const root = stringFilePath(rootDir, "server root directory");
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) {
-    throw new Error("server root path does not exist or is not a directory");
+    throw codedError(
+      "SERVER_ROOT_NOT_A_DIRECTORY",
+      "server root path does not exist or is not a directory",
+    );
   }
 
   const propertiesPath = path.join(root, "server.properties");
@@ -1413,16 +1439,25 @@ function addProcessEvent(db, serverId, level, message) {
 
 function validateRuntimeSettings(serverPort, minMemoryMb, maxMemoryMb) {
   if (serverPort != null && (serverPort < 1 || serverPort > 65535)) {
-    throw new Error("server port must be between 1 and 65535");
+    throw codedError(
+      "SERVER_PORT_OUT_OF_RANGE",
+      "server port must be between 1 and 65535",
+    );
   }
   if (
     (minMemoryMb != null && minMemoryMb <= 0) ||
     (maxMemoryMb != null && maxMemoryMb <= 0)
   ) {
-    throw new Error("memory values must be positive");
+    throw codedError(
+      "MEMORY_MUST_BE_POSITIVE",
+      "memory values must be positive",
+    );
   }
   if (minMemoryMb != null && maxMemoryMb != null && minMemoryMb > maxMemoryMb) {
-    throw new Error("minimum memory cannot be greater than maximum memory");
+    throw codedError(
+      "MIN_MEMORY_ABOVE_MAX",
+      "minimum memory cannot be greater than maximum memory",
+    );
   }
 }
 
@@ -1431,17 +1466,26 @@ function validateRestartPolicy(restartPolicy) {
     return;
   }
   if (restartPolicy.maxAttempts < 0) {
-    throw new Error("restart max attempts cannot be negative");
+    throw codedError(
+      "RESTART_ATTEMPTS_NEGATIVE",
+      "restart max attempts cannot be negative",
+    );
   }
   if (restartPolicy.cooldownSeconds < 0) {
-    throw new Error("restart cooldown seconds cannot be negative");
+    throw codedError(
+      "RESTART_COOLDOWN_NEGATIVE",
+      "restart cooldown seconds cannot be negative",
+    );
   }
 }
 
 function dbLoader(loaderType) {
   const loader = loaderToDb[loaderType];
   if (!loader) {
-    throw new Error(`unknown loader type: ${loaderType}`);
+    throw codedError(
+      "UNKNOWN_LOADER_TYPE",
+      `unknown loader type: ${loaderType}`,
+    );
   }
   return loader;
 }
@@ -1646,7 +1690,10 @@ function profileSelectSql(whereClause = "") {
 function getServerProfile(db, id) {
   const row = db.prepare(profileSelectSql("WHERE s.id = ?")).get(id);
   if (!row) {
-    throw new Error(`server profile not found: ${id}`);
+    throw codedError(
+      "SERVER_PROFILE_NOT_FOUND",
+      `server profile not found: ${id}`,
+    );
   }
   return mapProfile(row);
 }
@@ -1660,7 +1707,10 @@ function listServerProfiles(db) {
 
 function createServerProfile(db, input) {
   if (!input) {
-    throw new Error("server profile input is required");
+    throw codedError(
+      "SERVER_PROFILE_INPUT_REQUIRED",
+      "server profile input is required",
+    );
   }
   const name = trimRequired(input.name, "server name is required");
   const isExistingFolderImport = input.source?.kind === "existingFolder";
@@ -1668,7 +1718,7 @@ function createServerProfile(db, input) {
     ? input.rootDir.trim()
     : managedServerRoot(db, name, isExistingFolderImport);
   if (isExistingFolderImport && !fs.existsSync(rootDir)) {
-    throw new Error("import root path does not exist");
+    throw codedError("IMPORT_ROOT_MISSING", "import root path does not exist");
   }
   if (!isExistingFolderImport) {
     fs.mkdirSync(rootDir, { recursive: true });
@@ -1725,7 +1775,10 @@ function createServerProfile(db, input) {
 
 function updateServerProfile(db, input) {
   if (!input?.id) {
-    throw new Error("server profile id is required");
+    throw codedError(
+      "SERVER_PROFILE_ID_REQUIRED",
+      "server profile id is required",
+    );
   }
   const existing = getServerProfile(db, input.id);
   const name =
@@ -1741,7 +1794,10 @@ function updateServerProfile(db, input) {
   const serverPort =
     input.serverPort === undefined ? existing.serverPort : input.serverPort;
   if (input.serverPort === null) {
-    throw new Error("server port must be between 1 and 65535");
+    throw codedError(
+      "SERVER_PORT_OUT_OF_RANGE",
+      "server port must be between 1 and 65535",
+    );
   }
   const minMemoryMb =
     input.minMemoryMb === undefined ? existing.minMemoryMb : input.minMemoryMb;
@@ -1900,7 +1956,8 @@ function deleteServerProfile(db, id, deleteFromDisk = false) {
       processStatus === "running" ||
       processStatus === "externalRunning"
     ) {
-      throw new Error(
+      throw codedError(
+        "STOP_SERVER_BEFORE_DELETE",
         "Stop the server before deleting its files from disk.",
       );
     }
@@ -1913,7 +1970,10 @@ function deleteServerProfile(db, id, deleteFromDisk = false) {
 
   const result = db.prepare("DELETE FROM servers WHERE id = ?").run(serverId);
   if (result.changes === 0) {
-    throw new Error(`server profile not found: ${serverId}`);
+    throw codedError(
+      "SERVER_PROFILE_NOT_FOUND",
+      `server profile not found: ${serverId}`,
+    );
   }
   return null;
 }
@@ -1942,7 +2002,8 @@ function getProcessSummary(db) {
     .all();
   return rows.reduce(
     (summary, row) => {
-      const status = row.status === "external_running" ? "externalRunning" : row.status;
+      const status =
+        row.status === "external_running" ? "externalRunning" : row.status;
       if (status) summary.statuses[row.server_id] = status;
       summary.lastBackups[row.server_id] = row.last_backup_at || null;
       if (row.status === "crashed") {
@@ -2016,7 +2077,11 @@ function getAttentionItems(db) {
         )
         .get(server.id);
       const backupTime = backup ? new Date(backup.created_at).getTime() : 0;
-      if (!backup || !Number.isFinite(backupTime) || backupTime < staleBackupBefore) {
+      if (
+        !backup ||
+        !Number.isFinite(backupTime) ||
+        backupTime < staleBackupBefore
+      ) {
         items.push({
           id: `backup:${server.id}`,
           serverId: server.id,
@@ -2051,7 +2116,9 @@ function getLocalNetworkAddresses() {
       seen.add(entry.address);
       return true;
     })
-    .sort((left, right) => left.interfaceName.localeCompare(right.interfaceName));
+    .sort((left, right) =>
+      left.interfaceName.localeCompare(right.interfaceName),
+    );
 }
 
 function mapProcess(row) {
@@ -2072,7 +2139,7 @@ function mapProcess(row) {
 
 function getServerProcessStatus(db, serverId) {
   if (!serverId) {
-    throw new Error("server id is required");
+    throw codedError("SERVER_ID_REQUIRED", "server id is required");
   }
   return mapProcess(
     db
@@ -2088,7 +2155,7 @@ function getServerProcessStatus(db, serverId) {
 
 function listProcessEvents(db, serverId) {
   if (!serverId) {
-    throw new Error("server id is required");
+    throw codedError("SERVER_ID_REQUIRED", "server id is required");
   }
   return db
     .prepare(
@@ -2145,17 +2212,18 @@ function readServerLog(db, serverId, relativePath) {
     !normalizedPath.startsWith("logs/") ||
     !/\.log(\.gz)?$/i.test(normalizedPath)
   ) {
-    throw new Error(
+    throw codedError(
+      "LOG_PATH_OUTSIDE_LOGS_FOLDER",
       "log path must be a log file inside the server logs folder",
     );
   }
   const { target } = safeServerPath(db, serverId, normalizedPath);
   const stat = fs.statSync(target);
   if (!stat.isFile()) {
-    throw new Error("selected log path is not a file");
+    throw codedError("LOG_PATH_NOT_A_FILE", "selected log path is not a file");
   }
   if (stat.size > 10 * 1024 * 1024) {
-    throw new Error("log file is too large to open");
+    throw codedError("LOG_FILE_TOO_LARGE", "log file is too large to open");
   }
   const compressed = normalizedPath.endsWith(".gz");
   const content = compressed
@@ -2203,7 +2271,10 @@ function getNotificationPreferences(db) {
 
 function saveNotificationPreferences(db, input) {
   if (!input) {
-    throw new Error("notification preferences input is required");
+    throw codedError(
+      "NOTIFICATION_PREFERENCES_INPUT_REQUIRED",
+      "notification preferences input is required",
+    );
   }
   db.prepare(
     `UPDATE notification_preferences SET
@@ -2289,7 +2360,10 @@ function javaCandidateExists(javaPath) {
 
 function inspectJavaRuntime(candidate) {
   if (!javaCandidateExists(candidate.path)) {
-    throw new Error("Java executable does not exist");
+    throw codedError(
+      "JAVA_EXECUTABLE_MISSING",
+      "Java executable does not exist",
+    );
   }
 
   const result = spawnSync(candidate.path, ["-version"], {
@@ -2302,7 +2376,10 @@ function inspectJavaRuntime(candidate) {
     throw result.error;
   }
   if (result.status !== 0 && output.trim() === "") {
-    throw new Error(`java -version exited with status ${result.status}`);
+    throw codedError(
+      "JAVA_VERSION_PROBE_FAILED",
+      `java -version exited with status ${result.status}`,
+    );
   }
   const parsed = parseJavaVersionOutput(output);
   return {
@@ -2653,7 +2730,10 @@ const MAX_LAUNCH_ARGUMENT_LENGTH = 4096;
 const SHELL_LIKE_ARGUMENT = /(?:&&|\|\||[;&|<>`]|\$\()/;
 
 function invalidLaunchSpec(message) {
-  throw new Error(`Invalid launch specification: ${message}`);
+  throw codedError(
+    "INVALID_LAUNCH_SPECIFICATION",
+    `Invalid launch specification: ${message}`,
+  );
 }
 
 function validateLaunchArgument(argument) {
@@ -2766,7 +2846,8 @@ function structuredServerLaunch(profile) {
 function legacyServerLaunch(profile) {
   const serverJar = path.join(profile.rootDir, "server.jar");
   if (!fs.existsSync(serverJar)) {
-    throw new Error(
+    throw codedError(
+      "SERVER_JAR_MISSING",
       `server.jar does not exist: ${serverJar}. Install a server jar from Settings > Server updates before starting this profile.`,
     );
   }
@@ -2992,7 +3073,7 @@ function sendServerCommand(db, serverId, command) {
   const value = trimRequired(command, "server command is required");
   const managed = managedChildren.get(id);
   if (!managed) {
-    throw new Error("server process is not running");
+    throw codedError("SERVER_NOT_RUNNING", "server process is not running");
   }
   managed.child.stdin.write(`${value}\n`);
   addProcessEvent(db, id, "info", `> ${value}`);
@@ -3166,10 +3247,10 @@ function readServerTextFile(db, serverId, relativePath) {
   const { root, target } = safeServerPath(db, serverId, relativePath);
   const stat = fs.statSync(target);
   if (!stat.isFile()) {
-    throw new Error("selected path is not a file");
+    throw codedError("PATH_NOT_A_FILE", "selected path is not a file");
   }
   if (stat.size > 1024 * 1024) {
-    throw new Error("file is too large to edit");
+    throw codedError("FILE_TOO_LARGE_TO_EDIT", "file is too large to edit");
   }
   return {
     relativePath: path.relative(root, target).replace(/\\/g, "/"),
@@ -3211,7 +3292,10 @@ function saveServerProperties(db, serverId, entries) {
     portEntry &&
     (!Number.isInteger(nextPort) || nextPort < 1 || nextPort > 65535)
   ) {
-    throw new Error("server port must be between 1 and 65535");
+    throw codedError(
+      "SERVER_PORT_OUT_OF_RANGE",
+      "server port must be between 1 and 65535",
+    );
   }
   const fileExisted = fs.existsSync(filePath);
   const currentRaw = fs.existsSync(filePath)
@@ -3332,7 +3416,10 @@ function exportServerBackup(db, input) {
     throw codedError("BACKUP_NOT_FOUND", "backup not found");
   }
   if (!fs.existsSync(backup.archive_path)) {
-    throw new Error("backup archive folder does not exist");
+    throw codedError(
+      "BACKUP_ARCHIVE_FOLDER_MISSING",
+      "backup archive folder does not exist",
+    );
   }
   fs.mkdirSync(destinationRoot, { recursive: true });
   const exportedPath = path.join(
@@ -3435,7 +3522,7 @@ function updateBackupProfile(db, input) {
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(id);
   if (!existing) {
-    throw new Error("backup profile not found");
+    throw codedError("BACKUP_PROFILE_NOT_FOUND", "backup profile not found");
   }
   const now = nowIso();
   db.prepare(
@@ -3467,7 +3554,7 @@ function deleteBackupProfile(db, profileId) {
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(id);
   if (!existing) {
-    throw new Error("backup profile not found");
+    throw codedError("BACKUP_PROFILE_NOT_FOUND", "backup profile not found");
   }
   db.prepare("DELETE FROM backup_profiles WHERE id = ?").run(id);
   return null;
@@ -3478,7 +3565,7 @@ function createProfileBackup(db, input) {
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(input?.profileId);
   if (!profile) {
-    throw new Error("backup profile not found");
+    throw codedError("BACKUP_PROFILE_NOT_FOUND", "backup profile not found");
   }
   return createBackupRecord(
     db,
@@ -3685,14 +3772,17 @@ function applyPlayerChange(db, input) {
   };
   const command = actionCommands[action];
   if (!command) {
-    throw new Error("unsupported player action");
+    throw codedError("UNSUPPORTED_PLAYER_ACTION", "unsupported player action");
   }
   if (managed?.db === db) {
     sendServerCommand(db, serverId, command);
     return { method: "command", commandSent: command };
   }
   if (action === "kick") {
-    throw new Error("Start the server before kicking an online player.");
+    throw codedError(
+      "START_SERVER_BEFORE_KICK",
+      "Start the server before kicking an online player.",
+    );
   }
 
   const listByAction = {
@@ -3707,13 +3797,19 @@ function applyPlayerChange(db, input) {
   };
   const [listType, shouldAdd] = listByAction[action] || [];
   if (!listType) {
-    throw new Error("unsupported offline player action");
+    throw codedError(
+      "UNSUPPORTED_OFFLINE_PLAYER_ACTION",
+      "unsupported offline player action",
+    );
   }
   const list = readPlayerLists(db, serverId).lists.find(
     (entry) => entry.listType === listType,
   );
   if (!list || list.error) {
-    throw new Error(list?.error || "player list is unavailable");
+    throw codedError(
+      "PLAYER_LIST_UNAVAILABLE",
+      list?.error || "player list is unavailable",
+    );
   }
   const identityField = listType === "bannedIps" ? "ip" : "name";
   const matchesPlayer = (entry) =>
@@ -3731,7 +3827,8 @@ function applyPlayerChange(db, input) {
     } else {
       const uuid = playerIdentity(db, serverId, player, input?.uuid);
       if (!uuid) {
-        throw new Error(
+        throw codedError(
+          "PLAYER_UUID_UNKNOWN",
           "The player's UUID is unknown. Start the server once so Minecraft can cache it.",
         );
       }
@@ -3806,7 +3903,7 @@ function savePlayerList(db, input) {
     (entry) => entry.listType === input?.listType,
   );
   if (!item) {
-    throw new Error("unknown player list type");
+    throw codedError("UNKNOWN_PLAYER_LIST_TYPE", "unknown player list type");
   }
   fs.writeFileSync(
     item.path,
@@ -3892,7 +3989,10 @@ async function fetchJson(
     }),
   });
   if (!response.ok) {
-    throw new Error(`${message}: ${response.status}`);
+    throw codedError(
+      "MARKETPLACE_REQUEST_FAILED",
+      `${message}: ${response.status}`,
+    );
   }
   return response.json();
 }
@@ -3910,7 +4010,10 @@ async function fetchText(
     }),
   });
   if (!response.ok) {
-    throw new Error(`${message}: ${response.status}`);
+    throw codedError(
+      "REMOTE_METADATA_REQUEST_FAILED",
+      `${message}: ${response.status}`,
+    );
   }
   return response.text();
 }
@@ -3995,7 +4098,10 @@ function importLocalContent(db, input) {
     "content source path is required",
   );
   if (!fs.existsSync(sourcePath)) {
-    throw new Error("content source file does not exist");
+    throw codedError(
+      "CONTENT_SOURCE_FILE_MISSING",
+      "content source file does not exist",
+    );
   }
   const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
   fs.mkdirSync(targetDir, { recursive: true });
@@ -4030,13 +4136,20 @@ function disableInstalledContent(db, input) {
   const content = db
     .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
     .get(input?.contentId, input?.serverId);
-  if (!content) throw new Error("installed content not found");
+  if (!content)
+    throw codedError(
+      "INSTALLED_CONTENT_NOT_FOUND",
+      "installed content not found",
+    );
   if (content.installed_path.endsWith(".disabled")) {
     return mapInstalledContent(content);
   }
   const disabledPath = `${content.installed_path}.disabled`;
   if (fs.existsSync(disabledPath)) {
-    throw new Error("disabled content target already exists");
+    throw codedError(
+      "DISABLED_CONTENT_TARGET_EXISTS",
+      "disabled content target already exists",
+    );
   }
   fs.renameSync(content.installed_path, disabledPath);
   db.prepare(
@@ -4051,13 +4164,20 @@ function enableInstalledContent(db, input) {
   const content = db
     .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
     .get(input?.contentId, input?.serverId);
-  if (!content) throw new Error("installed content not found");
+  if (!content)
+    throw codedError(
+      "INSTALLED_CONTENT_NOT_FOUND",
+      "installed content not found",
+    );
   if (!content.installed_path.endsWith(".disabled")) {
     return mapInstalledContent(content);
   }
   const enabledPath = content.installed_path.slice(0, -".disabled".length);
   if (fs.existsSync(enabledPath)) {
-    throw new Error("enabled content target already exists");
+    throw codedError(
+      "ENABLED_CONTENT_TARGET_EXISTS",
+      "enabled content target already exists",
+    );
   }
   fs.renameSync(content.installed_path, enabledPath);
   db.prepare(
@@ -4072,7 +4192,11 @@ function uninstallInstalledContent(db, input) {
   const content = db
     .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
     .get(input?.contentId, input?.serverId);
-  if (!content) throw new Error("installed content not found");
+  if (!content)
+    throw codedError(
+      "INSTALLED_CONTENT_NOT_FOUND",
+      "installed content not found",
+    );
   fs.rmSync(content.installed_path, { force: true });
   db.prepare("DELETE FROM installed_content WHERE id = ?").run(content.id);
   return null;
@@ -4405,11 +4529,17 @@ async function installContentUpdate(db, input) {
     .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
     .get(input?.installedContentId, profile.id);
   if (!content) {
-    throw new Error("installed content not found");
+    throw codedError(
+      "INSTALLED_CONTENT_NOT_FOUND",
+      "installed content not found",
+    );
   }
   const update = await resolveContentUpdate(db, profile, content);
   if (!update || update.warning) {
-    throw new Error(update?.warning || "installed content is already current");
+    throw codedError(
+      "CONTENT_ALREADY_CURRENT",
+      update?.warning || "installed content is already current",
+    );
   }
   return installResolvedContentUpdate(db, content, update);
 }
@@ -4446,7 +4576,7 @@ function getTunnelProvider(db, providerId) {
       item.id === trimRequired(providerId, "tunnel provider id is required"),
   );
   if (!provider) {
-    throw new Error("tunnel provider not found");
+    throw codedError("TUNNEL_PROVIDER_NOT_FOUND", "tunnel provider not found");
   }
   return provider;
 }
@@ -4468,7 +4598,10 @@ function listTunnelStatuses(db) {
 function validateTunnelProviderInput(input) {
   const kind = input?.kind || "custom";
   if (!["custom", "application"].includes(kind)) {
-    throw new Error(`unsupported tunnel provider type: ${kind}`);
+    throw codedError(
+      "UNSUPPORTED_TUNNEL_PROVIDER_TYPE",
+      `unsupported tunnel provider type: ${kind}`,
+    );
   }
   if (kind === "custom") {
     trimRequired(input?.command, "tunnel command is required");
@@ -4479,7 +4612,10 @@ function validateTunnelProviderInput(input) {
       "tunnel application path is required",
     );
     if (!fs.existsSync(applicationPath)) {
-      throw new Error("tunnel application path does not exist");
+      throw codedError(
+        "TUNNEL_APPLICATION_PATH_MISSING",
+        "tunnel application path does not exist",
+      );
     }
   }
   return kind;
@@ -4651,7 +4787,11 @@ function createScheduledTask(db, input) {
   const id = randomUUID();
   const now = nowIso();
   const intervalMinutes = Number(input?.intervalMinutes || 0);
-  if (intervalMinutes <= 0) throw new Error("task interval must be positive");
+  if (intervalMinutes <= 0)
+    throw codedError(
+      "TASK_INTERVAL_NOT_POSITIVE",
+      "task interval must be positive",
+    );
   const nextRunAt = new Date(
     Date.now() + intervalMinutes * 60_000,
   ).toISOString();
@@ -4682,10 +4822,14 @@ function updateScheduledTask(db, input) {
     .prepare("SELECT * FROM scheduled_tasks WHERE id = ?")
     .get(id);
   if (!existing) {
-    throw new Error("scheduled task not found");
+    throw codedError("SCHEDULED_TASK_NOT_FOUND", "scheduled task not found");
   }
   const intervalMinutes = Number(input?.intervalMinutes || 0);
-  if (intervalMinutes <= 0) throw new Error("task interval must be positive");
+  if (intervalMinutes <= 0)
+    throw codedError(
+      "TASK_INTERVAL_NOT_POSITIVE",
+      "task interval must be positive",
+    );
   const now = nowIso();
   const enabled =
     input?.enabled === undefined
@@ -4727,7 +4871,7 @@ function deleteScheduledTask(db, taskId) {
     .prepare("SELECT * FROM scheduled_tasks WHERE id = ?")
     .get(id);
   if (!existing) {
-    throw new Error("scheduled task not found");
+    throw codedError("SCHEDULED_TASK_NOT_FOUND", "scheduled task not found");
   }
   db.prepare("DELETE FROM scheduled_tasks WHERE id = ?").run(id);
   return null;
@@ -4817,7 +4961,10 @@ async function runScheduledTaskAction(db, task) {
     case "content_update_check":
       return checkContentUpdates(db, { serverId: task.server_id });
     default:
-      throw new Error(`unsupported scheduled task kind: ${task.kind}`);
+      throw codedError(
+        "UNSUPPORTED_SCHEDULED_TASK_KIND",
+        `unsupported scheduled task kind: ${task.kind}`,
+      );
   }
 }
 
@@ -5137,7 +5284,8 @@ async function planServerProvisioning(input) {
       useExistingTarget: true,
     };
   } else {
-    throw new Error(
+    throw codedError(
+      "UNSUPPORTED_PROVISIONING_SOURCE",
       `unsupported provisioning source: ${source?.kind || "unknown"}`,
     );
   }
@@ -5156,7 +5304,8 @@ async function planServerProvisioning(input) {
       (await adapter.listLoaderVersions(minecraftVersion))[0]?.value || null;
   }
   if (!loaderVersion) {
-    throw new Error(
+    throw codedError(
+      "LOADER_UNAVAILABLE_FOR_VERSION",
       `No ${loaderType} server loader is available for Minecraft ${minecraftVersion}.`,
     );
   }
@@ -5354,7 +5503,10 @@ function provisioningTargetPath(rootDir, relativePath) {
     path.posix.isAbsolute(relative) ||
     /^[a-zA-Z]:/.test(relative)
   ) {
-    throw new Error("provisioning artifact path must be target-relative");
+    throw codedError(
+      "ARTIFACT_PATH_NOT_RELATIVE",
+      "provisioning artifact path must be target-relative",
+    );
   }
   const target = path.resolve(rootDir, ...relative.split("/"));
   const fromRoot = path.relative(rootDir, target);
@@ -5363,7 +5515,10 @@ function provisioningTargetPath(rootDir, relativePath) {
     fromRoot.startsWith(`..${path.sep}`) ||
     path.isAbsolute(fromRoot)
   ) {
-    throw new Error("provisioning artifact path escapes the staging directory");
+    throw codedError(
+      "ARTIFACT_PATH_ESCAPES_STAGING",
+      "provisioning artifact path escapes the staging directory",
+    );
   }
   return target;
 }
@@ -5465,7 +5620,10 @@ async function downloadProvisioningArtifact(
       path.join("mods", file.files[0]?.filename || fallbackName);
   }
   if (!url)
-    throw new Error(`No download URL is available for ${fallbackName}.`);
+    throw codedError(
+      "NO_DOWNLOAD_URL_AVAILABLE",
+      `No download URL is available for ${fallbackName}.`,
+    );
   url = validateProvisioningUrl(url, artifact.provider);
   const target = provisioningTargetPath(stagingDir, filename);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -5977,7 +6135,10 @@ async function installModrinthResolvedVersion(db, input, version, visited) {
 
   const file = selectInstallableModrinthFile(version);
   if (!file?.url) {
-    throw new Error(`Modrinth version ${version.id} has no downloadable file`);
+    throw codedError(
+      "MODRINTH_VERSION_NO_FILE",
+      `Modrinth version ${version.id} has no downloadable file`,
+    );
   }
   const content = await installRemoteContent(db, {
     serverId: input.serverId,
@@ -5994,7 +6155,11 @@ async function installModrinthResolvedVersion(db, input, version, visited) {
 async function installModrinthVersion(db, input) {
   const versions = await listModrinthVersions(input);
   const version = versions.find((item) => item.id === input?.versionId);
-  if (!version) throw new Error("Modrinth version not found");
+  if (!version)
+    throw codedError(
+      "MODRINTH_VERSION_NOT_FOUND",
+      "Modrinth version not found",
+    );
   return installModrinthResolvedVersion(db, input, version, new Set());
 }
 
@@ -6044,7 +6209,10 @@ async function listHangarVersions(input) {
 async function installHangarVersion(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
   if (profile.loaderType !== "paper") {
-    throw new Error("Hangar plugins can only be installed into Paper servers.");
+    throw codedError(
+      "HANGAR_REQUIRES_PAPER",
+      "Hangar plugins can only be installed into Paper servers.",
+    );
   }
   const projectId = trimRequired(
     input?.projectId,
@@ -6230,7 +6398,8 @@ async function planModrinthMarketplacePack(source) {
     version.files.find((candidate) => candidate.primary) ||
     version.files[0];
   if (!file?.url) {
-    throw new Error(
+    throw codedError(
+      "MODRINTH_VERSION_NO_PACK_FILE",
       `Modrinth version ${version.id} has no downloadable pack file`,
     );
   }
@@ -6300,13 +6469,18 @@ async function planCurseForgeMarketplacePack(source) {
   );
   const versions = await listCurseForgeFiles({ projectId });
   const selected = versions.find((version) => version.id === selectedId);
-  if (!selected) throw new Error("CurseForge file not found");
+  if (!selected)
+    throw codedError("CURSEFORGE_FILE_NOT_FOUND", "CurseForge file not found");
   const targetId = selected.serverPackFileId || selected.id;
   const target =
     versions.find((version) => version.id === targetId) ||
     (await getCurseForgeFile(projectId, targetId));
   const url = await curseForgeDownloadUrl(projectId, target.id);
-  if (!url) throw new Error("CurseForge did not provide a download URL");
+  if (!url)
+    throw codedError(
+      "CURSEFORGE_NO_DOWNLOAD_URL",
+      "CurseForge did not provide a download URL",
+    );
   const file = target.files[0];
   const minecraftVersion = target.gameVersions[0] || null;
   const warnings = target.isServerPack
@@ -6403,7 +6577,8 @@ async function planMarketplacePack(source) {
   if (provider === "modrinth") return planModrinthMarketplacePack(source);
   if (provider === "curseforge") return planCurseForgeMarketplacePack(source);
   if (provider === "bbsmc") return planBbsmcMarketplacePack(source);
-  throw new Error(
+  throw codedError(
+    "UNSUPPORTED_MARKETPLACE_PROVIDER",
     `unsupported marketplace provider: ${source.provider || "unknown"}`,
   );
 }
@@ -6441,7 +6616,10 @@ async function installCurseForgeFile(db, input) {
   );
   const downloadUrl = await curseForgeDownloadUrl(modId, fileId);
   if (!downloadUrl) {
-    throw new Error("CurseForge did not return a download URL for this file.");
+    throw codedError(
+      "CURSEFORGE_NO_DOWNLOAD_URL_FOR_FILE",
+      "CurseForge did not return a download URL for this file.",
+    );
   }
   return installRemoteContent(db, {
     serverId: input?.serverId,
@@ -6680,7 +6858,8 @@ function ensureBbsmcFileIsDirect(file, version) {
   const diskTargets = (version.diskUrls || [])
     .map((item) => `${item.platform || "external"}: ${item.url}`)
     .join(", ");
-  throw new Error(
+  throw codedError(
+    "BBSMC_NO_DIRECT_DOWNLOAD",
     diskTargets
       ? `BBSMC version ${version.versionNumber} uses external disk download links and cannot be installed automatically. Open the BBSMC page and import the downloaded file manually. Links: ${diskTargets}`
       : `BBSMC version ${version.versionNumber} does not expose a direct public file download URL.`,
@@ -6761,14 +6940,20 @@ function checkServerUpdate(db, input) {
 function installServerUpdate(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
   if (!input?.confirm) {
-    throw new Error("server jar installation requires explicit confirmation");
+    throw codedError(
+      "SERVER_JAR_INSTALL_NEEDS_CONFIRMATION",
+      "server jar installation requires explicit confirmation",
+    );
   }
   const sourceJar = trimRequired(
     input?.serverJarPath,
     "downloaded server jar path is required",
   );
   if (!fs.existsSync(sourceJar)) {
-    throw new Error(`downloaded server jar does not exist: ${sourceJar}`);
+    throw codedError(
+      "DOWNLOADED_SERVER_JAR_MISSING",
+      `downloaded server jar does not exist: ${sourceJar}`,
+    );
   }
   const actualSha256 = sha256File(sourceJar);
   const expectedSha256 = String(input?.serverJarSha256 || "").trim();
@@ -6776,7 +6961,10 @@ function installServerUpdate(db, input) {
     expectedSha256 &&
     actualSha256.toLowerCase() !== expectedSha256.toLowerCase()
   ) {
-    throw new Error("downloaded server jar checksum does not match");
+    throw codedError(
+      "SERVER_JAR_CHECKSUM_MISMATCH",
+      "downloaded server jar checksum does not match",
+    );
   }
 
   fs.mkdirSync(profile.rootDir, { recursive: true });

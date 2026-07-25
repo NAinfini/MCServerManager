@@ -24,7 +24,8 @@ function collectMainProcessRequires(dir, found = new Set()) {
     // Test files and the UI smoke are excluded from the package, so what they
     // require says nothing about what has to ship.
     if (!/\.(cjs|js|mjs)$/.test(entry.name)) continue;
-    if (/\.test\.mjs$/.test(entry.name) || entry.name === "ui-smoke.cjs") continue;
+    if (/\.test\.mjs$/.test(entry.name) || entry.name === "ui-smoke.cjs")
+      continue;
 
     const source = fs.readFileSync(full, "utf8");
     for (const match of source.matchAll(BARE_REQUIRE)) {
@@ -45,7 +46,9 @@ describe("packaged production dependencies", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(root, "package.json"), "utf8"),
     );
-    const required = [...collectMainProcessRequires(path.join(root, "electron"))];
+    const required = [
+      ...collectMainProcessRequires(path.join(root, "electron")),
+    ];
 
     expect(required.length).toBeGreaterThan(0);
     expect(Object.keys(manifest.dependencies).sort()).toEqual(required.sort());
@@ -66,7 +69,10 @@ describe("packaged production dependencies", () => {
       "motion",
       "zustand",
     ]) {
-      expect(manifest.dependencies, `${name} must not ship twice`).not.toHaveProperty(name);
+      expect(
+        manifest.dependencies,
+        `${name} must not ship twice`,
+      ).not.toHaveProperty(name);
       expect(manifest.devDependencies).toHaveProperty(name);
     }
   });

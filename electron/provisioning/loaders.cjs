@@ -1,4 +1,5 @@
 const path = require("node:path");
+const { codedError } = require("./contracts.cjs");
 
 const ENDPOINTS = Object.freeze({
   mojangManifest:
@@ -13,7 +14,11 @@ const ENDPOINTS = Object.freeze({
 });
 
 function versionOption(value, label = value, stable = true) {
-  return { value: String(value), label: String(label), stable: Boolean(stable) };
+  return {
+    value: String(value),
+    label: String(label),
+    stable: Boolean(stable),
+  };
 }
 
 function compareVersionsDesc(left, right) {
@@ -53,7 +58,9 @@ function neoForgeMinecraftVersion(artifactVersion) {
   const release = String(artifactVersion).split("-")[0];
   const parts = release.split(".");
   const major = Number(parts[0]);
-  return major <= 21 ? `1.${parts[0]}.${parts[1]}` : parts.slice(0, 3).join(".");
+  return major <= 21
+    ? `1.${parts[0]}.${parts[1]}`
+    : parts.slice(0, 3).join(".");
 }
 
 function neoForgeMatches(artifactVersion, minecraftVersion) {
@@ -113,7 +120,10 @@ function createAdapter(loaderType, approvedHosts, deps, methods) {
       for (const artifact of plan.artifacts) {
         const host = new URL(artifact.url).hostname;
         if (!approvedHosts.includes(host)) {
-          throw new Error(`unapproved ${loaderType} artifact host: ${host}`);
+          throw codedError(
+            "UNAPPROVED_ARTIFACT_HOST",
+            `unapproved ${loaderType} artifact host: ${host}`,
+          );
         }
         await deps.download(
           artifact.url,
@@ -134,7 +144,10 @@ function createAdapter(loaderType, approvedHosts, deps, methods) {
           shell: false,
         });
         if (result?.code !== 0) {
-          throw new Error(`${loaderType} installer exited with code ${result?.code}`);
+          throw codedError(
+            "LOADER_INSTALLER_FAILED",
+            `${loaderType} installer exited with code ${result?.code}`,
+          );
         }
       }
       return plan.launchSpec;
@@ -160,7 +173,10 @@ function createLoaderRegistry(dependencies = {}) {
     fileExists: dependencies.fileExists,
     platform: dependencies.platform || process.platform,
   };
-  if (typeof deps.fetchJson !== "function" || typeof deps.fetchText !== "function") {
+  if (
+    typeof deps.fetchJson !== "function" ||
+    typeof deps.fetchText !== "function"
+  ) {
     throw new Error("loader metadata clients are required");
   }
 
@@ -185,10 +201,18 @@ function createLoaderRegistry(dependencies = {}) {
         const selected = (manifest.versions || []).find(
           (version) => version.id === input.minecraftVersion,
         );
-        if (!selected?.url) throw new Error("Minecraft version metadata not found");
+        if (!selected?.url)
+          throw codedError(
+            "MINECRAFT_VERSION_METADATA_NOT_FOUND",
+            "Minecraft version metadata not found",
+          );
         const metadata = await deps.fetchJson(selected.url);
         const server = metadata.downloads?.server;
-        if (!server?.url) throw new Error("Minecraft server download not found");
+        if (!server?.url)
+          throw codedError(
+            "MINECRAFT_SERVER_DOWNLOAD_NOT_FOUND",
+            "Minecraft server download not found",
+          );
         return basePlan("vanilla", input, {
           artifacts: [
             {
@@ -233,11 +257,16 @@ function createLoaderRegistry(dependencies = {}) {
         const build = (Array.isArray(builds) ? builds : []).find(
           (candidate) => String(candidate.id) === String(input.loaderVersion),
         );
-        if (!build) throw new Error("Paper build not found");
+        if (!build)
+          throw codedError("PAPER_BUILD_NOT_FOUND", "Paper build not found");
         const download =
           build.downloads?.["server:default"] ||
           Object.values(build.downloads || {})[0];
-        if (!download?.url) throw new Error("Paper server download not found");
+        if (!download?.url)
+          throw codedError(
+            "PAPER_DOWNLOAD_NOT_FOUND",
+            "Paper server download not found",
+          );
         return basePlan("paper", input, {
           artifacts: [
             {
@@ -254,212 +283,218 @@ function createLoaderRegistry(dependencies = {}) {
     },
   );
 
-  const fabric = createAdapter(
-    "fabric",
-    ["meta.fabricmc.net"],
-    deps,
-    {
-      async listMinecraftVersions() {
-        const versions = await deps.fetchJson(`${ENDPOINTS.fabric}/versions/game`);
-        return versions
-          .filter((version) => version.stable)
-          .map((version) => versionOption(version.version, version.version, version.stable));
-      },
-      async listLoaderVersions(minecraftVersion) {
-        const versions = await deps.fetchJson(
-          `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(minecraftVersion)}`,
+  const fabric = createAdapter("fabric", ["meta.fabricmc.net"], deps, {
+    async listMinecraftVersions() {
+      const versions = await deps.fetchJson(
+        `${ENDPOINTS.fabric}/versions/game`,
+      );
+      return versions
+        .filter((version) => version.stable)
+        .map((version) =>
+          versionOption(version.version, version.version, version.stable),
         );
-        return versions
-          .map((entry) => entry.loader)
-          .filter((loader) => loader?.stable)
-          .map((loader) => versionOption(loader.version, loader.version, loader.stable));
-      },
-      async buildInstallPlan(input) {
-        const installers = await deps.fetchJson(`${ENDPOINTS.fabric}/versions/installer`);
-        const installerVersion =
-          input.installerVersion ||
-          installers.find((installer) => installer.stable)?.version ||
-          installers[0]?.version;
-        if (!installerVersion) throw new Error("Fabric installer version not found");
-        /* Fabric meta answers an unparseable loader version with a bare 400, so a
+    },
+    async listLoaderVersions(minecraftVersion) {
+      const versions = await deps.fetchJson(
+        `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(minecraftVersion)}`,
+      );
+      return versions
+        .map((entry) => entry.loader)
+        .filter((loader) => loader?.stable)
+        .map((loader) =>
+          versionOption(loader.version, loader.version, loader.stable),
+        );
+    },
+    async buildInstallPlan(input) {
+      const installers = await deps.fetchJson(
+        `${ENDPOINTS.fabric}/versions/installer`,
+      );
+      const installerVersion =
+        input.installerVersion ||
+        installers.find((installer) => installer.stable)?.version ||
+        installers[0]?.version;
+      if (!installerVersion)
+        throw codedError(
+          "FABRIC_INSTALLER_VERSION_NOT_FOUND",
+          "Fabric installer version not found",
+        );
+      /* Fabric meta answers an unparseable loader version with a bare 400, so a
            value the pack supplied but Fabric never published is checked here where
            we can still name it and list what is actually available. */
-        const published = await deps.fetchJson(
-          `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}`,
-        );
-        const known = published.map((entry) => entry.loader?.version).filter(Boolean);
-        if (!known.includes(input.loaderVersion)) {
-          throw Object.assign(
-            new Error(
-              `Fabric loader ${input.loaderVersion} is not published for Minecraft ${input.minecraftVersion}. Available: ${known.slice(0, 5).join(", ") || "none"}.`,
-            ),
-            { code: "LOADER_VERSION_UNAVAILABLE" },
-          );
-        }
-        const url = `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}/${encodeURIComponent(input.loaderVersion)}/${encodeURIComponent(installerVersion)}/server/jar`;
-        return basePlan("fabric", input, {
-          artifacts: [{ url, destination: "server.jar", hashes: {}, size: 0 }],
-          expectedOutputs: ["server.jar"],
-          launchSpec: jarLaunchSpec("server.jar", input.workingDirectory),
-        });
-      },
-    },
-  );
-
-  const forge = createAdapter(
-    "forge",
-    ["maven.minecraftforge.net"],
-    deps,
-    {
-      async listMinecraftVersions() {
-        const xml = await deps.fetchText(ENDPOINTS.forge);
-        return uniqueOptions(
-          parseMavenVersions(xml)
-            .map((version) => version.split("-")[0])
-            .sort(compareVersionsDesc)
-            .map((version) => versionOption(version)),
-        );
-      },
-      async listLoaderVersions(minecraftVersion) {
-        const xml = await deps.fetchText(ENDPOINTS.forge);
-        return parseMavenVersions(xml)
-          .filter((version) => version.startsWith(`${minecraftVersion}-`))
-          .map((version) => version.slice(`${minecraftVersion}-`.length))
-          .sort(compareVersionsDesc)
-          .map((version) => versionOption(version));
-      },
-      async buildInstallPlan(input) {
-        const coordinate = `${input.minecraftVersion}-${input.loaderVersion}`;
-        const installerJar = `forge-${coordinate}-installer.jar`;
-        const legacyJar = `forge-${coordinate}.jar`;
-        const modernArgs = `libraries/net/minecraftforge/forge/${coordinate}/${deps.platform === "win32" ? "win_args.txt" : "unix_args.txt"}`;
-        return basePlan("forge", input, {
-          artifacts: [
-            {
-              url: `https://maven.minecraftforge.net/net/minecraftforge/forge/${coordinate}/${installerJar}`,
-              destination: "forge-installer.jar",
-              hashes: {},
-              size: 0,
-            },
-          ],
-          installer: {
-            artifactDestination: "forge-installer.jar",
-            args: ["-jar", "{installer}", "--installServer"],
-          },
-          expectedOutputs: isLegacyForge(input.minecraftVersion)
-            ? [legacyJar]
-            : ["user_jvm_args.txt", modernArgs],
-          launchSpec: isLegacyForge(input.minecraftVersion)
-            ? jarLaunchSpec(legacyJar, input.workingDirectory)
-            : modernArgsLaunchSpec(modernArgs, input.workingDirectory),
-        });
-      },
-    },
-  );
-
-  const neoForge = createAdapter(
-    "neoForge",
-    ["maven.neoforged.net"],
-    deps,
-    {
-      async listMinecraftVersions() {
-        const xml = await deps.fetchText(ENDPOINTS.neoForge);
-        return uniqueOptions(
-          parseMavenVersions(xml)
-            .map(neoForgeMinecraftVersion)
-            .sort(compareVersionsDesc)
-            .map((version) => versionOption(version)),
-        );
-      },
-      async listLoaderVersions(minecraftVersion) {
-        const xml = await deps.fetchText(ENDPOINTS.neoForge);
-        return parseMavenVersions(xml)
-          .filter((version) => neoForgeMatches(version, minecraftVersion))
-          .sort(compareVersionsDesc)
-          .map((version) => versionOption(version));
-      },
-      async buildInstallPlan(input) {
-        const installerJar = `neoforge-${input.loaderVersion}-installer.jar`;
-        const argsFile = `libraries/net/neoforged/neoforge/${input.loaderVersion}/${deps.platform === "win32" ? "win_args.txt" : "unix_args.txt"}`;
-        return basePlan("neoForge", input, {
-          artifacts: [
-            {
-              url: `https://maven.neoforged.net/releases/net/neoforged/neoforge/${input.loaderVersion}/${installerJar}`,
-              destination: "neoforge-installer.jar",
-              hashes: {},
-              size: 0,
-            },
-          ],
-          installer: {
-            artifactDestination: "neoforge-installer.jar",
-            args: ["-jar", "{installer}", "--installServer"],
-          },
-          expectedOutputs: ["user_jvm_args.txt", argsFile],
-          launchSpec: modernArgsLaunchSpec(argsFile, input.workingDirectory),
-        });
-      },
-    },
-  );
-
-  const quilt = createAdapter(
-    "quilt",
-    ["maven.quiltmc.org"],
-    deps,
-    {
-      async listMinecraftVersions() {
-        const versions = await deps.fetchJson(`${ENDPOINTS.quilt}/versions/game`);
-        return versions
-          .filter((version) => version.stable !== false)
-          .map((version) => versionOption(version.version, version.version, version.stable !== false));
-      },
-      async listLoaderVersions(minecraftVersion) {
-        const versions = await deps.fetchJson(
-          `${ENDPOINTS.quilt}/versions/loader/${encodeURIComponent(minecraftVersion)}`,
-        );
-        return versions
-          .map((entry) => entry.loader || entry)
-          .filter((loader) => loader?.version)
-          .map((loader) => versionOption(loader.version));
-      },
-      async buildInstallPlan(input) {
-        let installerVersion = input.installerVersion;
-        if (!installerVersion) {
-          const installers = await deps.fetchJson(`${ENDPOINTS.quilt}/versions/installer`);
-          installerVersion = installers[0]?.version;
-        }
-        if (!installerVersion) throw new Error("Quilt installer version not found");
-        const installerJar = `quilt-installer-${installerVersion}.jar`;
-        return basePlan("quilt", input, {
-          artifacts: [
-            {
-              url: `https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/${installerVersion}/${installerJar}`,
-              destination: "quilt-installer.jar",
-              hashes: {},
-              size: 0,
-            },
-          ],
-          installer: {
-            artifactDestination: "quilt-installer.jar",
-            args: [
-              "-jar",
-              "{installer}",
-              "install",
-              "server",
-              input.minecraftVersion,
-              input.loaderVersion,
-              "--download-server",
-              "--install-dir=.",
-            ],
-          },
-          expectedOutputs: ["quilt-server-launch.jar"],
-          launchSpec: jarLaunchSpec(
-            "quilt-server-launch.jar",
-            input.workingDirectory,
+      const published = await deps.fetchJson(
+        `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}`,
+      );
+      const known = published
+        .map((entry) => entry.loader?.version)
+        .filter(Boolean);
+      if (!known.includes(input.loaderVersion)) {
+        throw Object.assign(
+          new Error(
+            `Fabric loader ${input.loaderVersion} is not published for Minecraft ${input.minecraftVersion}. Available: ${known.slice(0, 5).join(", ") || "none"}.`,
           ),
-        });
-      },
+          { code: "LOADER_VERSION_UNAVAILABLE" },
+        );
+      }
+      const url = `${ENDPOINTS.fabric}/versions/loader/${encodeURIComponent(input.minecraftVersion)}/${encodeURIComponent(input.loaderVersion)}/${encodeURIComponent(installerVersion)}/server/jar`;
+      return basePlan("fabric", input, {
+        artifacts: [{ url, destination: "server.jar", hashes: {}, size: 0 }],
+        expectedOutputs: ["server.jar"],
+        launchSpec: jarLaunchSpec("server.jar", input.workingDirectory),
+      });
     },
-  );
+  });
+
+  const forge = createAdapter("forge", ["maven.minecraftforge.net"], deps, {
+    async listMinecraftVersions() {
+      const xml = await deps.fetchText(ENDPOINTS.forge);
+      return uniqueOptions(
+        parseMavenVersions(xml)
+          .map((version) => version.split("-")[0])
+          .sort(compareVersionsDesc)
+          .map((version) => versionOption(version)),
+      );
+    },
+    async listLoaderVersions(minecraftVersion) {
+      const xml = await deps.fetchText(ENDPOINTS.forge);
+      return parseMavenVersions(xml)
+        .filter((version) => version.startsWith(`${minecraftVersion}-`))
+        .map((version) => version.slice(`${minecraftVersion}-`.length))
+        .sort(compareVersionsDesc)
+        .map((version) => versionOption(version));
+    },
+    async buildInstallPlan(input) {
+      const coordinate = `${input.minecraftVersion}-${input.loaderVersion}`;
+      const installerJar = `forge-${coordinate}-installer.jar`;
+      const legacyJar = `forge-${coordinate}.jar`;
+      const modernArgs = `libraries/net/minecraftforge/forge/${coordinate}/${deps.platform === "win32" ? "win_args.txt" : "unix_args.txt"}`;
+      return basePlan("forge", input, {
+        artifacts: [
+          {
+            url: `https://maven.minecraftforge.net/net/minecraftforge/forge/${coordinate}/${installerJar}`,
+            destination: "forge-installer.jar",
+            hashes: {},
+            size: 0,
+          },
+        ],
+        installer: {
+          artifactDestination: "forge-installer.jar",
+          args: ["-jar", "{installer}", "--installServer"],
+        },
+        expectedOutputs: isLegacyForge(input.minecraftVersion)
+          ? [legacyJar]
+          : ["user_jvm_args.txt", modernArgs],
+        launchSpec: isLegacyForge(input.minecraftVersion)
+          ? jarLaunchSpec(legacyJar, input.workingDirectory)
+          : modernArgsLaunchSpec(modernArgs, input.workingDirectory),
+      });
+    },
+  });
+
+  const neoForge = createAdapter("neoForge", ["maven.neoforged.net"], deps, {
+    async listMinecraftVersions() {
+      const xml = await deps.fetchText(ENDPOINTS.neoForge);
+      return uniqueOptions(
+        parseMavenVersions(xml)
+          .map(neoForgeMinecraftVersion)
+          .sort(compareVersionsDesc)
+          .map((version) => versionOption(version)),
+      );
+    },
+    async listLoaderVersions(minecraftVersion) {
+      const xml = await deps.fetchText(ENDPOINTS.neoForge);
+      return parseMavenVersions(xml)
+        .filter((version) => neoForgeMatches(version, minecraftVersion))
+        .sort(compareVersionsDesc)
+        .map((version) => versionOption(version));
+    },
+    async buildInstallPlan(input) {
+      const installerJar = `neoforge-${input.loaderVersion}-installer.jar`;
+      const argsFile = `libraries/net/neoforged/neoforge/${input.loaderVersion}/${deps.platform === "win32" ? "win_args.txt" : "unix_args.txt"}`;
+      return basePlan("neoForge", input, {
+        artifacts: [
+          {
+            url: `https://maven.neoforged.net/releases/net/neoforged/neoforge/${input.loaderVersion}/${installerJar}`,
+            destination: "neoforge-installer.jar",
+            hashes: {},
+            size: 0,
+          },
+        ],
+        installer: {
+          artifactDestination: "neoforge-installer.jar",
+          args: ["-jar", "{installer}", "--installServer"],
+        },
+        expectedOutputs: ["user_jvm_args.txt", argsFile],
+        launchSpec: modernArgsLaunchSpec(argsFile, input.workingDirectory),
+      });
+    },
+  });
+
+  const quilt = createAdapter("quilt", ["maven.quiltmc.org"], deps, {
+    async listMinecraftVersions() {
+      const versions = await deps.fetchJson(`${ENDPOINTS.quilt}/versions/game`);
+      return versions
+        .filter((version) => version.stable !== false)
+        .map((version) =>
+          versionOption(
+            version.version,
+            version.version,
+            version.stable !== false,
+          ),
+        );
+    },
+    async listLoaderVersions(minecraftVersion) {
+      const versions = await deps.fetchJson(
+        `${ENDPOINTS.quilt}/versions/loader/${encodeURIComponent(minecraftVersion)}`,
+      );
+      return versions
+        .map((entry) => entry.loader || entry)
+        .filter((loader) => loader?.version)
+        .map((loader) => versionOption(loader.version));
+    },
+    async buildInstallPlan(input) {
+      let installerVersion = input.installerVersion;
+      if (!installerVersion) {
+        const installers = await deps.fetchJson(
+          `${ENDPOINTS.quilt}/versions/installer`,
+        );
+        installerVersion = installers[0]?.version;
+      }
+      if (!installerVersion)
+        throw codedError(
+          "QUILT_INSTALLER_VERSION_NOT_FOUND",
+          "Quilt installer version not found",
+        );
+      const installerJar = `quilt-installer-${installerVersion}.jar`;
+      return basePlan("quilt", input, {
+        artifacts: [
+          {
+            url: `https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/${installerVersion}/${installerJar}`,
+            destination: "quilt-installer.jar",
+            hashes: {},
+            size: 0,
+          },
+        ],
+        installer: {
+          artifactDestination: "quilt-installer.jar",
+          args: [
+            "-jar",
+            "{installer}",
+            "install",
+            "server",
+            input.minecraftVersion,
+            input.loaderVersion,
+            "--download-server",
+            "--install-dir=.",
+          ],
+        },
+        expectedOutputs: ["quilt-server-launch.jar"],
+        launchSpec: jarLaunchSpec(
+          "quilt-server-launch.jar",
+          input.workingDirectory,
+        ),
+      });
+    },
+  });
 
   const adapters = new Map(
     [vanilla, paper, fabric, forge, neoForge, quilt].map((adapter) => [
@@ -471,7 +506,11 @@ function createLoaderRegistry(dependencies = {}) {
     types: () => [...adapters.keys()],
     get(loaderType) {
       const adapter = adapters.get(loaderType);
-      if (!adapter) throw new Error(`unsupported loader type: ${loaderType}`);
+      if (!adapter)
+        throw codedError(
+          "UNSUPPORTED_LOADER_TYPE",
+          `unsupported loader type: ${loaderType}`,
+        );
       return adapter;
     },
   };
