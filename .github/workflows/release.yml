@@ -14,14 +14,48 @@ permissions:
   contents: write
 
 jobs:
+  # electron-builder looks for an existing draft and creates one if it finds
+  # none, and it matches drafts by tag name. Two drafts carrying the same tag
+  # are indistinguishable to it, so it scatters assets between them: v0.2.0
+  # ended up with the installer in one draft and that installer's blockmap in
+  # the other, which leaves the auto-updater with no complete latest*.yml to
+  # read. Running the matrix one job at a time stops three jobs racing to create
+  # the first draft, but it cannot help once a stale draft from an earlier run
+  # of the same tag is already there. So the draft is created here, exactly
+  # once, after every older draft for the tag is removed - which also makes
+  # re-running a release idempotent.
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reset the draft release for this tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"$TAG\" and .draft == true) | .id" \
+            | while read -r id; do
+                echo "Removing stale draft $id for $TAG"
+                gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$id"
+              done
+          # A published release for this tag is never touched: re-releasing over
+          # something users already have must be a deliberate, manual act.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::$TAG is already published. Delete it by hand or bump the version."
+            exit 1
+          fi
+          # The tag already exists in both trigger modes, so the draft attaches
+          # to it and no --target is needed.
+          gh release create "$TAG" --draft --title "$TAG" --notes ""
+
   publish:
+    needs: prepare
     strategy:
       fail-fast: false
-      # electron-builder looks for an existing draft and creates one if it finds
-      # none. Three jobs publishing at once lose that race and split the release
-      # in two, which scatters the binaries and their latest*.yml manifests
-      # across separate drafts and leaves the auto-updater with nothing to read.
-      # One at a time is slower and correct.
+      # The single draft prepare created still has to be filled one job at a
+      # time: concurrent uploads of latest*.yml race each other.
       max-parallel: 1
       matrix:
         include:
