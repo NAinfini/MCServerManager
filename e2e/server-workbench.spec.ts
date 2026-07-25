@@ -2,7 +2,7 @@ import { expect, test } from "./support/fixtures";
 
 async function openServer(page: import("@playwright/test").Page) {
   await page
-    .getByRole("table", { name: "Server overview" })
+    .getByRole("list", { name: "Server overview" })
     .getByRole("button", { name: "Fabric Workshop", exact: true })
     .click();
   await expect(

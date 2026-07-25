@@ -1,14 +1,21 @@
+import { useQuery } from "@tanstack/react-query";
+import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import { ServerActions } from "./ServerActions";
 import { StatusBadge } from "../../components/ui/status-badge";
 import type { ManagedProcessStatus } from "../process/api";
 import type { ServerProfile } from "./types";
 import { LoaderPill } from "../loaders/LoaderIdentity";
+import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
+import { ServerCover } from "../../components/ui/server-cover";
+import { Sparkline } from "../../components/data/Sparkline";
+import { cn } from "../../lib/cn";
 import { useAppSettings } from "../../i18n";
-import { FolderOpen, Plus, RefreshCw } from "lucide-react";
-import { Button } from "../../components/ui/button";
-import { DataTable, type DataTableColumn } from "../../components/data/DataTable";
+import {
+  getPerformanceHistory,
+  performanceKeys,
+} from "../performance/performanceApi";
 
 interface ServerListProps {
   servers: ServerProfile[];
@@ -24,6 +31,12 @@ interface ServerListProps {
   /** True when a name filter hid every server, so the empty state must say so. */
   filtered?: boolean;
 }
+
+/** Statuses where the server is live enough to have metrics worth sampling. */
+const liveStatuses = new Set<ManagedProcessStatus>([
+  "running",
+  "externalRunning",
+]);
 
 function formatMemory(server: ServerProfile, unsetLabel: string) {
   if (!server.minMemoryMb && !server.maxMemoryMb) {
@@ -49,6 +62,129 @@ function ServerLastBackup({ createdAt }: { createdAt?: string | null }) {
   );
 }
 
+function metricValue(input: number | null | undefined, suffix = "") {
+  if (input === null || input === undefined) return "—";
+  return `${Number.isInteger(input) ? input : input.toFixed(1)}${suffix}`;
+}
+
+/**
+ * Live cards carry the numbers an operator checks first. The history is only
+ * requested for servers that are actually up, so an idle dashboard stays quiet.
+ */
+function ServerCardTelemetry({ serverId }: { serverId: string }) {
+  const { t } = useAppSettings();
+  const historyQuery = useQuery({
+    queryKey: performanceKeys.history(serverId),
+    queryFn: () => getPerformanceHistory(serverId),
+  });
+  const samples = historyQuery.data?.samples ?? [];
+  const latest = samples[0];
+  const cpuTrend = [...samples]
+    .reverse()
+    .map((sample) => sample.cpuPercent)
+    .filter((value): value is number => typeof value === "number");
+
+  return (
+    <div className="server-card-telemetry">
+      <span>
+        {t("performance.cpu")}
+        <b>{metricValue(latest?.cpuPercent, "%")}</b>
+      </span>
+      <span>
+        {t("performance.players")}
+        <b>{metricValue(latest?.playerCount)}</b>
+      </span>
+      <span>
+        {t("performance.tps")}
+        <b>{metricValue(latest?.tps)}</b>
+      </span>
+      {/* One sample is a reading, not a trend, and would draw an empty box. */}
+      {cpuTrend.length > 1 ? (
+        <Sparkline label={t("servers.card.cpuTrend")} values={cpuTrend} />
+      ) : null}
+    </div>
+  );
+}
+
+interface ServerCardProps {
+  server: ServerProfile;
+  status: ManagedProcessStatus;
+  lastBackup?: string | null;
+  selected: boolean;
+  onSelect?: (serverId: string) => void;
+}
+
+function ServerCard({
+  server,
+  status,
+  lastBackup,
+  selected,
+  onSelect,
+}: ServerCardProps) {
+  const { t } = useAppSettings();
+  const isLive = liveStatuses.has(status);
+
+  return (
+    <li
+      className={cn(
+        "server-card",
+        isLive && "server-card-live",
+        selected && "server-card-selected",
+      )}
+    >
+      <div className="server-card-top">
+        <ServerCover loaderType={server.loaderType} size={40} />
+        <div className="server-card-identity">
+          <h3 className="server-card-name">
+            {/* The button covers the whole card through ::after, so the card is
+                clickable without nesting the action buttons inside a control. */}
+            <button
+              className="server-card-open"
+              type="button"
+              onClick={() => onSelect?.(server.id)}
+            >
+              {server.name}
+            </button>
+          </h3>
+          <p className="server-card-meta">
+            <LoaderPill
+              loaderType={server.loaderType}
+              minecraftVersion={server.minecraftVersion}
+            />
+            <span>
+              {t("server.meta.port", {
+                port: server.serverPort ?? t("server.meta.unset"),
+              })}
+            </span>
+          </p>
+        </div>
+        <StatusBadge status={status} />
+      </div>
+
+      {isLive ? (
+        <ServerCardTelemetry serverId={server.id} />
+      ) : (
+        <dl className="server-card-facts">
+          <div>
+            <dt>{t("servers.card.memory")}</dt>
+            <dd>{formatMemory(server, t("server.meta.unset"))}</dd>
+          </div>
+          <div>
+            <dt>{t("servers.card.lastBackup")}</dt>
+            <dd>
+              <ServerLastBackup createdAt={lastBackup} />
+            </dd>
+          </div>
+        </dl>
+      )}
+
+      <div className="server-card-actions">
+        <ServerActions processStatus={status} server={server} />
+      </div>
+    </li>
+  );
+}
+
 export function ServerList({
   servers,
   isLoading = false,
@@ -63,15 +199,6 @@ export function ServerList({
   filtered = false,
 }: ServerListProps) {
   const { t } = useAppSettings();
-  const columns: DataTableColumn<ServerProfile>[] = [
-    { id: "name", header: t("servers.table.name"), rowHeader: true, sortValue: (server) => server.name, cell: (server) => <button className="table-link-button" type="button" onClick={() => onSelectServer?.(server.id)}>{server.name}</button> },
-    { id: "status", header: t("servers.table.status"), cell: (server) => <StatusBadge status={serverStatuses[server.id] ?? "stopped"} /> },
-    { id: "loader", header: t("servers.table.loader"), cell: (server) => <LoaderPill loaderType={server.loaderType} minecraftVersion={server.minecraftVersion} /> },
-    { id: "port", header: t("servers.table.port"), cell: (server) => server.serverPort ?? t("server.meta.unset") },
-    { id: "memory", header: t("servers.table.memory"), cell: (server) => formatMemory(server, t("server.meta.unset")) },
-    { id: "lastBackup", header: t("servers.table.lastBackup"), cell: (server) => <ServerLastBackup createdAt={lastBackups[server.id]} /> },
-    { id: "actions", header: t("servers.table.actions"), cell: (server) => <ServerActions compact processStatus={serverStatuses[server.id] ?? "stopped"} server={server} /> },
-  ];
 
   if (isLoading) {
     return <LoadingState message={t("servers.loadingProfiles")} />;
@@ -132,8 +259,34 @@ export function ServerList({
   }
 
   return (
-    <div className="server-table-scroll">
-      <DataTable caption={t("servers.table.aria")} className="server-table" columns={columns} getRowClassName={(server) => server.id === selectedServerId ? "server-row-selected" : undefined} getRowKey={(server) => server.id} onRowActivate={(server) => onSelectServer?.(server.id)} rows={servers} />
-    </div>
+    <ul aria-label={t("servers.grid.aria")} className="server-card-grid">
+      {servers.map((server) => (
+        <ServerCard
+          key={server.id}
+          lastBackup={lastBackups[server.id]}
+          selected={server.id === selectedServerId}
+          server={server}
+          status={serverStatuses[server.id] ?? "stopped"}
+          onSelect={onSelectServer}
+        />
+      ))}
+      {/* Hidden while filtering: a create tile next to "no matches" reads as a
+          search result rather than an action. */}
+      {onCreateServer && !filtered ? (
+        <li className="server-card-create-item">
+          <button
+            className="server-card-create"
+            type="button"
+            onClick={onCreateServer}
+          >
+            <span aria-hidden="true" className="server-card-create-mark">
+              <Plus size={18} />
+            </span>
+            <strong>{t("servers.card.createTitle")}</strong>
+            <span>{t("servers.card.createDescription")}</span>
+          </button>
+        </li>
+      ) : null}
+    </ul>
   );
 }

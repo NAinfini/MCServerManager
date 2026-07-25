@@ -225,9 +225,9 @@ describe("AppShell", () => {
     expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(0);
     expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
     expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
-    expect(container.querySelector(".server-table-panel")).not.toBeNull();
+    expect(container.querySelector(".dashboard-servers")).not.toBeNull();
+    expect(container.querySelector(".server-card-grid")).not.toBeNull();
     expect(container.querySelector(".summary-strip")).toBeNull();
-    expect(container.querySelector(".server-card-grid")).toBeNull();
     expect(container.querySelector(".server-view-toggle")).toBeNull();
     expect(container.querySelector(".batch-actions")).toBeNull();
     expect(container.querySelector(".dashboard-workbench")).toBeNull();
@@ -331,7 +331,7 @@ describe("AppShell", () => {
     await screen.findByRole("heading", { name: "Servers" });
 
     expect(
-      await screen.findByRole("table", { name: "Server overview" }),
+      await screen.findByRole("list", { name: "Server overview" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Card view" }),

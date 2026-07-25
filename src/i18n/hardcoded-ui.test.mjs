@@ -43,7 +43,33 @@ function isAllowedLiteral(text) {
   return allowedLiteralPatterns.some((pattern) => pattern.test(normalized));
 }
 
+/**
+ * JSON.parse silently keeps the last of a duplicated key, so a re-declared key
+ * quietly overrides the real translation and every key-set comparison still
+ * passes. Duplicates have to be found in the raw text.
+ */
+function findDuplicateKeys(localePath) {
+  const seen = new Set();
+  const duplicates = [];
+  for (const line of fs.readFileSync(localePath, "utf8").split("\n")) {
+    const match = /^\s*"((?:[^"\\]|\\.)*)"\s*:/.exec(line);
+    if (!match) continue;
+    if (seen.has(match[1])) duplicates.push(match[1]);
+    seen.add(match[1]);
+  }
+  return duplicates;
+}
+
 describe("i18n UI coverage", () => {
+  it("declares every translation key exactly once per locale", () => {
+    for (const [language, localePath] of Object.entries(localePaths)) {
+      expect({ language, duplicates: findDuplicateKeys(localePath) }).toEqual({
+        language,
+        duplicates: [],
+      });
+    }
+  });
+
   it("keeps every locale on the same complete key set", () => {
     const en = readLocale(localePaths.en);
     const zhCN = readLocale(localePaths.zhCN);

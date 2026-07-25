@@ -665,7 +665,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                 </AttentionBar>
               ) : null}
 
-              <div className="server-table-panel">
+              <div className="dashboard-servers">
                 <ServerList
                   error={profilesQuery.error}
                   filtered={normalizedServerFilter.length > 0}

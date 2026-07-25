@@ -989,14 +989,6 @@ select.field-control {
    Operations Grid & Panels
    -------------------------------------------------------------------------- */
 
-.server-table-panel {
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-panel);
-  overflow: hidden;
-}
-
 .section-heading {
   justify-content: space-between;
   gap: var(--space-3);
@@ -1009,93 +1001,6 @@ select.field-control {
   font-size: var(--text-base);
   font-weight: var(--weight-semibold);
   line-height: 24px;
-}
-
-/* --------------------------------------------------------------------------
-   Server Table
-   -------------------------------------------------------------------------- */
-
-.server-table-scroll {
-  overflow-x: auto;
-}
-
-.server-table {
-  width: 100%;
-  min-width: 770px;
-  border-collapse: collapse;
-}
-
-.server-table th,
-.server-table td {
-  height: 48px;
-  padding: 0 var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
-  text-align: left;
-  vertical-align: middle;
-}
-
-.server-table th:first-child,
-.server-table td:first-child {
-  padding-left: var(--space-5);
-}
-
-.server-table th:last-child,
-.server-table td:last-child {
-  padding-right: var(--space-5);
-}
-
-.server-table thead th {
-  height: 40px;
-  color: var(--text-subtle);
-  background: var(--bg-panel-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.server-table tbody tr {
-  transition: background-color 140ms ease;
-}
-
-.server-table tbody tr:hover th,
-.server-table tbody tr:hover td {
-  background: var(--bg-panel-muted);
-}
-
-.server-table tbody th {
-  font-weight: var(--weight-semibold);
-}
-
-.server-table tbody tr:last-child th,
-.server-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.server-row-selected th,
-.server-row-selected td {
-  background: var(--accent-soft);
-}
-
-.server-row-selected th:first-child,
-.server-row-selected td:first-child {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.table-link-button {
-  border: 0;
-  padding: 0;
-  color: var(--text-main);
-  background: transparent;
-  font: inherit;
-  font-weight: var(--weight-semibold);
-  text-align: left;
-  cursor: pointer;
-}
-
-.table-link-button:hover {
-  color: var(--accent);
 }
 
 /* --------------------------------------------------------------------------
@@ -6398,7 +6303,6 @@ select.field-control {
 }
 
 .icon-button.button,
-.table-link-button,
 .button-link,
 .marketplace-content-option,
 .settings-nav-item,
@@ -6413,7 +6317,6 @@ select.field-control {
 }
 
 .icon-button.button:hover:not(:disabled),
-.table-link-button:hover,
 .button-link:hover,
 .marketplace-content-option:hover,
 .settings-nav-item:hover,
@@ -6422,7 +6325,6 @@ select.field-control {
 }
 
 .icon-button.button:active:not(:disabled),
-.table-link-button:active,
 .button-link:active,
 .marketplace-content-option:active,
 .cmd-suggest-item:active {
@@ -6430,7 +6332,6 @@ select.field-control {
 }
 
 .icon-button.button:focus-visible,
-.table-link-button:focus-visible,
 .button-link:focus-visible,
 .marketplace-content-option:focus-visible,
 .settings-nav-item:focus-visible,
@@ -7621,7 +7522,6 @@ textarea:hover,
 }
 
 .panel,
-.server-table-panel,
 .settings-section {
   border-radius: var(--radius-panel);
   box-shadow: none;
@@ -8401,106 +8301,273 @@ textarea:hover,
   font-size: 11px;
 }
 
-.server-table-panel {
+.dashboard-servers {
   flex: 1 1 auto;
   min-height: 0;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
-  overflow: hidden;
 }
 
-.server-table-panel > .empty-state {
+/* The cards carry their own surface, so only the states that replace the grid
+   need panel chrome around them. */
+.dashboard-servers > .empty-state,
+.dashboard-servers > .list-state {
   min-height: 220px;
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.dashboard-servers > .empty-state {
   place-content: center start;
   justify-items: start;
   padding: 28px 30px;
   text-align: left;
 }
 
-.server-table-panel:has(> .empty-state) {
+.dashboard-servers:has(> .empty-state) {
   min-height: 220px;
   flex: 0 0 auto;
 }
 
-.server-table-panel:has(> .empty-state[role="alert"]) {
+.dashboard-servers:has(> .empty-state[role="alert"]) {
   min-height: 184px;
 }
 
-.server-table-panel > .empty-state .empty-state-illustration {
+.dashboard-servers > .empty-state .empty-state-illustration {
   place-self: start;
 }
 
-.server-table-panel > .empty-state .empty-state-actions {
+.dashboard-servers > .empty-state .empty-state-actions {
   justify-content: flex-start;
 }
 
-.server-table-scroll {
+/* --------------------------------------------------------------------------
+   Server cards
+   -------------------------------------------------------------------------- */
+
+.server-card-grid {
+  display: grid;
   height: 100%;
-  overflow: auto;
+  margin: 0;
+  padding: 0;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  align-content: start;
+  list-style: none;
+  overflow-y: auto;
 }
 
-.server-table {
-  min-width: 760px;
-  table-layout: auto;
+.server-card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  background: var(--bg-panel);
+  transition:
+    border-color var(--motion-medium) var(--ease-out-quart),
+    background-color var(--motion-medium) var(--ease-out-quart);
 }
 
-.server-table th,
-.server-table td {
-  height: 46px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 13px;
-  font-size: 12px;
+.server-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-elevated);
 }
 
-.server-table th:first-child,
-.server-table td:first-child {
-  width: 28%;
-  padding-left: 15px;
+/* A live server earns the only coloured edge on the dashboard. */
+.server-card-live {
+  border-top: 2px solid var(--running);
+  padding-top: calc(var(--space-4) - 1px);
 }
 
-.server-table th:last-child,
-.server-table td:last-child {
-  width: 1%;
-  padding-right: 8px;
-  white-space: nowrap;
-}
-
-.server-table thead th {
-  position: sticky;
-  z-index: 1;
-  top: 0;
-  height: 34px;
-  color: var(--text-subtle);
-  background: var(--bg-panel-muted);
-  font-family: var(--font-sans);
-  font-size: var(--text-compact);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.server-table tbody tr:hover th,
-.server-table tbody tr:hover td {
-  background: var(--bg-hover);
-}
-
-.server-row-selected th,
-.server-row-selected td {
+.server-card-selected {
+  border-color: var(--accent);
   background: var(--accent-soft);
 }
 
-.server-row-selected th:first-child,
-.server-row-selected td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent);
+.server-card-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
-.table-link-button {
-  max-width: min(360px, 30vw);
+.server-card-identity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.server-card-name {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  line-height: 18px;
+}
+
+.server-card-open {
+  display: block;
+  max-width: 100%;
   overflow: hidden;
-  font-weight: 600;
+  border: 0;
+  padding: 0;
+  color: var(--text-main);
+  background: none;
+  font: inherit;
+  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+}
+
+/* Stretches the name over the whole card so anywhere outside the action row
+   opens the server, without nesting buttons inside a button. */
+.server-card-open::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.server-card-open:hover {
+  color: var(--accent);
+}
+
+.server-card-open:focus-visible {
+  outline: none;
+}
+
+.server-card:has(.server-card-open:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.server-card-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.server-card-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-card-top > .status-badge {
+  margin-left: auto;
+}
+
+.server-card-telemetry {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.server-card-telemetry > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.server-card-telemetry b {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+}
+
+.server-card-telemetry .sparkline {
+  width: 72px;
+  height: 24px;
+  margin-left: auto;
+}
+
+.server-card-facts {
+  display: flex;
+  gap: var(--space-5);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.server-card-facts dt {
+  color: var(--text-subtle);
+}
+
+.server-card-facts dd {
+  margin: 2px 0 0;
+  color: var(--text-main);
+}
+
+.server-card-actions {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-3);
+}
+
+.server-card-actions .server-actions {
+  align-items: center;
+}
+
+.server-card-create-item {
+  display: flex;
+}
+
+.server-card-create {
+  display: flex;
+  width: 100%;
+  min-height: 140px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  color: var(--text-subtle);
+  background: none;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-medium) var(--ease-out-quart),
+    color var(--motion-medium) var(--ease-out-quart),
+    background-color var(--motion-medium) var(--ease-out-quart);
+}
+
+.server-card-create:hover {
+  border-color: var(--accent);
+  color: var(--text-main);
+  background: var(--bg-elevated);
+}
+
+.server-card-create-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-muted);
+}
+
+.server-card-create strong {
+  color: var(--text-main);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+}
+
+.server-card-create span {
+  max-width: 30ch;
+  font-size: var(--text-sm);
 }
 
 /* --------------------------------------------------------------------------

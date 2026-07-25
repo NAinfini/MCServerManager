@@ -20,7 +20,7 @@ test.describe("accessibility and idle performance", () => {
     await expectNoCriticalAxeViolations(page);
 
     await page
-      .getByRole("table", { name: "Server overview" })
+      .getByRole("list", { name: "Server overview" })
       .getByRole("button", { name: "Fabric Workshop", exact: true })
       .click();
     await expectNoCriticalAxeViolations(page);
@@ -36,12 +36,11 @@ test.describe("accessibility and idle performance", () => {
   test("supports a complete keyboard route through the workbench and settings", async ({
     appPage: page,
   }) => {
-    const firstRow = page
-      .getByRole("table", { name: "Server overview" })
-      .getByRole("row")
-      .nth(1);
-    await firstRow.focus();
-    await firstRow.press("Enter");
+    const firstCard = page
+      .getByRole("list", { name: "Server overview" })
+      .getByRole("button", { name: "Fabric Workshop", exact: true });
+    await firstCard.focus();
+    await firstCard.press("Enter");
     await expect(page).toHaveURL(/#\/servers\/server-1\/overview/);
 
     const workspaceNav = page.getByRole("navigation", {

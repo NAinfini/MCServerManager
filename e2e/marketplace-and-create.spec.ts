@@ -5,7 +5,7 @@ test.describe("marketplace and server creation", () => {
     appPage: page,
   }) => {
     await page
-      .getByRole("table", { name: "Server overview" })
+      .getByRole("list", { name: "Server overview" })
       .getByRole("button", { name: "Fabric Workshop", exact: true })
       .click();
     await page

@@ -9,6 +9,28 @@ vi.mock("./ServerActions", () => ({
   ServerActions: () => <button type="button">Actions</button>,
 }));
 
+vi.mock("../performance/performanceApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../performance/performanceApi")>()),
+  getPerformanceHistory: vi.fn(async (serverId: string) => ({
+    serverId,
+    events: [],
+    samples: [
+      {
+        id: "metric-1",
+        cpuPercent: 42,
+        memoryMb: 2048,
+        diskFreeMb: null,
+        uptimeSeconds: 60,
+        restartCount: 0,
+        playerCount: 3,
+        tps: 19.8,
+        unavailableReason: null,
+        sampledAt: "2026-07-23T11:00:00.000Z",
+      },
+    ],
+  })),
+}));
+
 const server: ServerProfile = {
   id: "survival",
   name: "Survival",
@@ -86,5 +108,24 @@ describe("ServerList states", () => {
     renderList({ servers: [server] });
 
     expect(await screen.findByText("No backups yet")).toBeInTheDocument();
+  });
+
+  it("swaps a running card's stored facts for live telemetry", async () => {
+    renderList({
+      servers: [server],
+      serverStatuses: { [server.id]: "running" },
+    });
+
+    expect(await screen.findByText("19.8")).toBeInTheDocument();
+    expect(screen.getByText("42%")).toBeInTheDocument();
+    expect(screen.queryByText("Last backup")).not.toBeInTheDocument();
+  });
+
+  it("drops the create tile while a name filter is active", async () => {
+    const onCreateServer = vi.fn();
+    renderList({ filtered: true, onCreateServer, servers: [server] });
+
+    expect(await screen.findByText("Survival")).toBeInTheDocument();
+    expect(screen.queryByText("New server")).not.toBeInTheDocument();
   });
 });

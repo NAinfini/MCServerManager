@@ -4,7 +4,7 @@ test.describe("application navigation", () => {
   test("opens every global application surface", async ({ appPage: page }) => {
     await expect(page.getByTestId("server-nav-row-server-1")).toBeVisible();
     await expect(
-      page.getByRole("table", { name: "Server overview" }),
+      page.getByRole("list", { name: "Server overview" }),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Java Runtimes" }).click();
