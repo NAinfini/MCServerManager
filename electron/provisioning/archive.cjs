@@ -215,6 +215,48 @@ async function readJsonEntry(archivePath, requestedPath, requestedLimits = {}) {
   );
 }
 
+/* Several small text entries in one pass. A mod jar declares itself in one of
+   half a dozen files depending on its loader, and which one it is cannot be
+   known before looking — opening the archive once per candidate would mean
+   reading the central directory six times for every jar on the server. */
+async function readTextEntries(
+  archivePath,
+  requestedPaths,
+  requestedLimits = {},
+) {
+  const limits = limitsWithDefaults(requestedLimits);
+  const wanted = new Set(
+    (requestedPaths || []).map((entryPath) =>
+      normalizeEntryPath(entryPath).toLowerCase(),
+    ),
+  );
+  const found = new Map();
+  const zip = await openZip(archivePath);
+  const state = { entryCount: 0, uncompressedBytes: 0 };
+  try {
+    for await (const entry of zip.eachEntry()) {
+      const { entryPath } = validateEntry(entry, state, limits);
+      const key = entryPath.toLowerCase();
+      if (!wanted.has(key) || found.has(key) || entryPath.endsWith("/")) {
+        continue;
+      }
+      const stream = await zip.openReadStreamPromise(entry);
+      const buffer = await streamToBuffer(
+        stream,
+        limits.maxJsonBytes,
+        entryPath,
+      );
+      found.set(key, buffer.toString("utf8"));
+      if (found.size === wanted.size) break;
+    }
+  } catch (error) {
+    throw mapYauzlError(error);
+  } finally {
+    zip.close();
+  }
+  return found;
+}
+
 function destinationPath(root, relativePath) {
   const target = path.resolve(root, ...relativePath.split("/"));
   const relative = path.relative(path.resolve(root), target);
@@ -300,4 +342,5 @@ module.exports = {
   extractZipLayers,
   inspectZip,
   readJsonEntry,
+  readTextEntries,
 };

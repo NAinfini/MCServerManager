@@ -99,6 +99,7 @@ const UNTRANSLATED_BY_DESIGN = {
   "electron/provisioning/jobs.cjs": ["job store and id generator are required"],
   "electron/provisioning/loaders.cjs": [
     "loader download function is not configured",
+    "loader directory reader is not configured",
     "loader process runner is not configured",
     "loader metadata clients are required",
   ],

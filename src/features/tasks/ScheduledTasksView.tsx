@@ -1,22 +1,39 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Power, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Power, Trash2, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/data/DataTable";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { formatDateTime } from "../../lib/date-format";
+import { formatMinutes } from "../../lib/format-units";
 import { queryKeys } from "../../lib/query-keys";
 import type { ServerProfile } from "../../domain/server";
-import { TaskEditorDialog, type ScheduledTaskKind } from "./TaskEditorDialog";
+import { listBackupProfiles } from "../backups/backupApi";
+import { backupKeys } from "../backups/queries";
+import {
+  TaskEditorDialog,
+  type ScheduleKind,
+  type ScheduledTaskKind,
+  type TaskFormInput,
+} from "./TaskEditorDialog";
+import "../files/operations.css";
 
 interface ScheduledTask {
   id: string;
   name: string;
   kind: ScheduledTaskKind;
+  scheduleKind: ScheduleKind;
   intervalMinutes: number;
+  timeOfDay: string | null;
+  weekdays: number[];
   command: string | null;
+  backupProfileId: string | null;
   enabled: number;
   nextRunAt: string;
   lastRunAt: string | null;
@@ -33,13 +50,6 @@ interface ScheduledTaskRun {
 
 interface ScheduledTasksViewProps {
   server: ServerProfile;
-}
-
-interface TaskFormInput {
-  name: string;
-  kind: ScheduledTaskKind;
-  intervalMinutes: number;
-  command?: string | null;
 }
 
 function runStatusClass(status: string) {
@@ -77,6 +87,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
   const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
   const [editingTask, setEditingTask] = useState<ScheduledTask | null>(null);
+  const [composing, setComposing] = useState(false);
   const [deleteTask, setDeleteTask] = useState<ScheduledTask | null>(null);
   const tasksQuery = useQuery({
     queryKey: queryKeys.tasks.definitions(server.id),
@@ -98,6 +109,10 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         },
       ),
   });
+  const profilesQuery = useQuery({
+    queryKey: backupKeys.profiles(server.id),
+    queryFn: () => listBackupProfiles(server.id),
+  });
   const createMutation = useMutation({
     mutationFn: (input: TaskFormInput) =>
       invokeDesktopCommandWithErrorHandling<ScheduledTask>(
@@ -110,6 +125,7 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
         },
       ),
     onSuccess: async () => {
+      setComposing(false);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.tasks.definitions(server.id),
       });
@@ -143,7 +159,9 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
   });
   const tasks = tasksQuery.data ?? [];
   const runs = runsQuery.data ?? [];
+  const profiles = Array.isArray(profilesQuery.data) ? profilesQuery.data : [];
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const editorOpen = composing || editingTask !== null;
 
   function handleTaskSubmit(input: TaskFormInput) {
     if (editingTask) {
@@ -162,34 +180,195 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       id: task.id,
       name: task.name,
       kind: task.kind,
+      scheduleKind: task.scheduleKind ?? "interval",
       intervalMinutes: task.intervalMinutes,
+      timeOfDay: task.timeOfDay ?? null,
+      weekdays: task.weekdays ?? [],
       command: task.command,
+      backupProfileId: task.backupProfileId ?? null,
       enabled: task.enabled === 0,
     });
   }
 
+  const profileNames = new Map(
+    profiles.map((profile) => [profile.id, profile.name]),
+  );
+  const scheduleLabel = (task: ScheduledTask) => {
+    if (task.scheduleKind === "weekly") {
+      const days = (task.weekdays ?? [])
+        .map((day) => t(`tasks.weekday.${day}`))
+        .join(t("tasks.weekday.separator"));
+      return t("tasks.weeklyAt", {
+        days,
+        time: task.timeOfDay ?? t("common.unknown"),
+      });
+    }
+    return t("tasks.every", {
+      interval: formatMinutes(task.intervalMinutes, t),
+    });
+  };
+  const columns: DataTableColumn<ScheduledTask>[] = [
+    {
+      id: "name",
+      header: t("tasks.table.task"),
+      rowHeader: true,
+      sortValue: (task) => task.name,
+      cell: (task) => (
+        <div className="task-table-name">
+          <strong>{task.name}</strong>
+          <span>{taskKindLabel(task.kind, t)}</span>
+          {task.backupProfileId ? (
+            <small>
+              {t("tasks.backup.profile", {
+                profile:
+                  profileNames.get(task.backupProfileId) ?? t("common.unknown"),
+              })}
+            </small>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "schedule",
+      header: t("tasks.table.schedule"),
+      cell: scheduleLabel,
+    },
+    {
+      id: "next",
+      header: t("tasks.table.next"),
+      sortValue: (task) => task.nextRunAt,
+      cell: (task) => formatDateTime(task.nextRunAt, language),
+    },
+    {
+      id: "status",
+      header: t("tasks.table.status"),
+      sortValue: (task) => task.enabled,
+      cell: (task) => (
+        <span
+          className={
+            task.enabled
+              ? "operation-status-enabled"
+              : "operation-status-disabled"
+          }
+        >
+          {task.enabled
+            ? t("tasks.status.enabled")
+            : t("tasks.status.disabled")}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: t("tasks.table.actions"),
+      cell: (task) => (
+        <div className="operation-table-actions">
+          <Button
+            aria-label={t("tasks.actions.editNamed", { name: task.name })}
+            className="icon-button"
+            disabled={isSaving}
+            title={t("tasks.actions.edit")}
+            variant="ghost"
+            onClick={() => {
+              updateMutation.reset();
+              setComposing(false);
+              setEditingTask(task);
+            }}
+          >
+            <Pencil aria-hidden="true" size={14} />
+          </Button>
+          <Button
+            aria-label={
+              task.enabled
+                ? t("tasks.actions.disableNamed", { name: task.name })
+                : t("tasks.actions.enableNamed", { name: task.name })
+            }
+            className="icon-button"
+            disabled={isSaving}
+            title={
+              task.enabled
+                ? t("tasks.actions.disable")
+                : t("tasks.actions.enable")
+            }
+            variant="ghost"
+            onClick={() => toggleTask(task)}
+          >
+            <Power aria-hidden="true" size={14} />
+          </Button>
+          <Button
+            aria-label={t("tasks.actions.deleteNamed", { name: task.name })}
+            className="icon-button"
+            disabled={deleteMutation.isPending}
+            title={t("tasks.actions.delete")}
+            variant="danger"
+            onClick={() => {
+              deleteMutation.reset();
+              setDeleteTask(task);
+            }}
+          >
+            <Trash2 aria-hidden="true" size={14} />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <section className="settings-panel" aria-label={t("tasks.aria")}>
       <div className="section-heading">
-        <h2>{t("tasks.title")}</h2>
-        <span>{t("tasks.description")}</span>
-      </div>
-      <TaskEditorDialog
-        key={editingTask?.id ?? "create-task"}
-        initialTask={editingTask ?? undefined}
-        isSaving={isSaving}
-        submitLabel={editingTask ? t("tasks.save") : t("tasks.add")}
-        onCreate={handleTaskSubmit}
-      />
-      {editingTask ? (
+        <div className="section-heading-copy">
+          <h2>{t("tasks.title")}</h2>
+          <span>{t("tasks.description")}</span>
+        </div>
         <Button
           disabled={isSaving}
-          variant="secondary"
-          onClick={() => setEditingTask(null)}
+          variant="primary"
+          onClick={() => {
+            createMutation.reset();
+            setEditingTask(null);
+            setComposing(true);
+          }}
         >
-          <X aria-hidden="true" size={15} />
-          {t("tasks.cancelEdit")}
+          <Plus aria-hidden="true" size={15} />
+          {t("tasks.new")}
         </Button>
+      </div>
+      {/* The editor used to sit permanently above the list, so the schedule the
+          user came to read started below the fold. It is a composer now, opened
+          on demand and closed again once the task is saved. */}
+      {editorOpen ? (
+        <div className="task-editor">
+          <div className="task-editor-head">
+            <strong>
+              {editingTask ? t("tasks.editTitle") : t("tasks.newTitle")}
+            </strong>
+            <Button
+              disabled={isSaving}
+              variant="ghost"
+              onClick={() => {
+                createMutation.reset();
+                updateMutation.reset();
+                setEditingTask(null);
+                setComposing(false);
+              }}
+            >
+              <X aria-hidden="true" size={15} />
+              {t("common.cancel")}
+            </Button>
+          </div>
+          <TaskEditorDialog
+            backupProfiles={profiles}
+            key={editingTask?.id ?? "create-task"}
+            initialTask={editingTask ?? undefined}
+            isSaving={isSaving}
+            submitLabel={editingTask ? t("tasks.save") : t("tasks.add")}
+            onCreate={handleTaskSubmit}
+          />
+          {profilesQuery.error ? (
+            <p className="danger-text" role="alert">
+              {t("backups.profiles.loadError")}: {profilesQuery.error.message}
+            </p>
+          ) : null}
+        </div>
       ) : null}
       {createMutation.error ? (
         <p className="danger-text" role="alert">
@@ -223,64 +402,14 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
           description={t("tasks.empty.description")}
         />
       ) : (
-        <div className="tasks-timeline">
-          {tasks.map((task) => (
-            <div className="task-item" key={task.id}>
-              <div className="task-item-header">
-                <span className="task-item-name">{task.name}</span>
-                <span className="task-item-kind">
-                  {taskKindLabel(task.kind, t)}
-                </span>
-              </div>
-              <div className="task-item-meta">
-                <span>
-                  {t("tasks.everyMinutes", { minutes: task.intervalMinutes })}
-                </span>
-                <span>
-                  {t("tasks.next", {
-                    date: formatDateTime(task.nextRunAt, language),
-                  })}
-                </span>
-                <span>
-                  {task.enabled
-                    ? t("tasks.status.enabled")
-                    : t("tasks.status.disabled")}
-                </span>
-                {task.command ? <span>{task.command}</span> : null}
-              </div>
-              <div className="task-item-actions">
-                <Button
-                  disabled={isSaving}
-                  variant="secondary"
-                  onClick={() => setEditingTask(task)}
-                >
-                  <Pencil aria-hidden="true" size={14} />
-                  {t("tasks.actions.edit")}
-                </Button>
-                <Button
-                  disabled={isSaving}
-                  variant="secondary"
-                  onClick={() => toggleTask(task)}
-                >
-                  <Power aria-hidden="true" size={14} />
-                  {task.enabled
-                    ? t("tasks.actions.disable")
-                    : t("tasks.actions.enable")}
-                </Button>
-                <Button
-                  disabled={deleteMutation.isPending}
-                  variant="danger"
-                  onClick={() => {
-                    deleteMutation.reset();
-                    setDeleteTask(task);
-                  }}
-                >
-                  <Trash2 aria-hidden="true" size={14} />
-                  {t("tasks.actions.delete")}
-                </Button>
-              </div>
-            </div>
-          ))}
+        <div className="operation-table-scroll tasks-table-scroll">
+          <DataTable
+            caption={t("tasks.title")}
+            className="operation-table tasks-table"
+            columns={columns}
+            getRowKey={(task) => task.id}
+            rows={tasks}
+          />
         </div>
       )}
 
@@ -301,6 +430,10 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
               <span className={runStatusClass(run.status)}>
                 {runStatusLabel(run.status, t)}
               </span>
+              <strong className="task-run-name">
+                {tasks.find((task) => task.id === run.taskId)?.name ??
+                  t("common.unknown")}
+              </strong>
               <span className="task-run-message">{run.message}</span>
               <span className="task-run-time">
                 {formatDateTime(run.startedAt, language)}

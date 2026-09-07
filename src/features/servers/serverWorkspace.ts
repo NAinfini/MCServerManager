@@ -2,7 +2,6 @@ import {
   Activity,
   Archive,
   Bot,
-  Gauge,
   Package,
   Settings,
   Terminal,
@@ -32,9 +31,17 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
       labelKey: "server.workspace.overview",
     },
     {
+      /* Live output and the log files on disk answer the same question — what
+         did the server say — so they sit behind one nav item instead of being
+         split across two sections. */
       id: "console",
       icon: Terminal,
       labelKey: "server.workspace.console",
+      defaultView: "terminal",
+      views: [
+        { id: "terminal", labelKey: "server.workspace.console.terminal" },
+        { id: "logs", labelKey: "server.workspace.console.logs" },
+      ],
     },
     {
       id: "players",
@@ -70,18 +77,6 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
       ],
     },
     {
-      id: "monitor",
-      icon: Gauge,
-      labelKey: "server.workspace.monitor",
-      defaultView: "performance",
-      views: [
-        { id: "performance", labelKey: "server.workspace.monitor.performance" },
-        { id: "logs", labelKey: "server.workspace.monitor.logs" },
-        { id: "events", labelKey: "server.workspace.monitor.events" },
-        { id: "diagnostics", labelKey: "server.workspace.monitor.diagnostics" },
-      ],
-    },
-    {
       id: "automation",
       icon: Bot,
       labelKey: "server.workspace.automation",
@@ -91,12 +86,13 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
       icon: Settings,
       labelKey: "server.workspace.settings",
       defaultView: "general",
+      /* Version upgrade moved to the header's more menu — it is a rare, risky
+         operation, not somewhere to browse to. Content update policy moved next
+         to the updates it governs, under Content. */
       views: [
         { id: "general", labelKey: "server.workspace.settings.general" },
         { id: "properties", labelKey: "server.workspace.settings.properties" },
         { id: "network", labelKey: "server.workspace.settings.network" },
-        { id: "updates", labelKey: "server.workspace.settings.updates" },
-        { id: "transfer", labelKey: "server.workspace.settings.transfer" },
       ],
     },
   ] as const;

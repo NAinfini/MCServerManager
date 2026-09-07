@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import { Save, Trash2 } from "lucide-react";
@@ -13,7 +13,9 @@ import { StickyActionBar } from "../../components/ui/sticky-action-bar";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
+import { queryKeys } from "../../lib/query-keys";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
+import { listJavaRuntimes } from "../java/javaApi";
 import { deleteServerProfile, updateServerProfile } from "./api";
 import { serverKeys } from "./queries";
 import type { LoaderType, ServerProfile } from "./types";
@@ -21,6 +23,12 @@ import type { LoaderType, ServerProfile } from "./types";
 interface ServerProfileSettingsProps {
   server: ServerProfile;
 }
+
+/* Radix rejects an empty option value, so the two choices that are not a path
+   carry sentinels. They never reach the profile: both are translated back
+   before the form value changes. */
+const SYSTEM_JAVA = "__system__";
+const CUSTOM_JAVA = "__custom__";
 
 const loaderOptions = [
   { value: "vanilla", label: "Vanilla" },
@@ -114,12 +122,17 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
   const [folderPickerError, setFolderPickerError] = useState<string | null>(
     null,
   );
+  const [customJavaPath, setCustomJavaPath] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [deleteFromDisk, setDeleteFromDisk] = useState(false);
   const [restartRequired, setRestartRequired] = useState(false);
   const form = useForm<ServerProfileForm>({
     defaultValues: profileDefaults(server),
     resolver: zodResolver(profileSchema),
+  });
+  const javaQuery = useQuery({
+    queryKey: queryKeys.java.runtimes,
+    queryFn: listJavaRuntimes,
   });
 
   useEffect(() => {
@@ -136,6 +149,37 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
 
   const validationMessage = (message?: string) =>
     message ? t(`profileSettings.validation.${message}`) : null;
+
+  /* Empty means the profile launches whatever `java` the PATH resolves to —
+     the backend falls back to the bare command — so that is a real choice with
+     a name, not a blank field. */
+  const javaOptions = (current: string) => {
+    const runtimes = javaQuery.data?.runtimes ?? [];
+    const options = [
+      { value: SYSTEM_JAVA, label: t("profileSettings.javaSystem") },
+      ...runtimes.map((runtime) => ({
+        value: runtime.path,
+        label: [
+          `Java ${runtime.majorVersion}`,
+          runtime.vendor,
+          runtime.architecture,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })),
+    ];
+    /* A path the scan did not find is still what this server runs on today.
+       Dropping it from the list would silently repoint the server on the next
+       save. */
+    if (current && !runtimes.some((runtime) => runtime.path === current)) {
+      options.push({ value: current, label: current });
+    }
+    options.push({
+      value: CUSTOM_JAVA,
+      label: t("profileSettings.javaCustom"),
+    });
+    return options;
+  };
 
   const pickServerFolder = async () => {
     setFolderPickerError(null);
@@ -230,142 +274,192 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
       <form
         onSubmit={form.handleSubmit((input) => updateMutation.mutate(input))}
       >
-        <div className="settings-grid">
-          <label>
-            {t("profileSettings.name")}
-            <TextField
-              aria-invalid={Boolean(form.formState.errors.name)}
-              {...form.register("name")}
-            />
-            {form.formState.errors.name ? (
-              <span className="danger-text">
-                {validationMessage(form.formState.errors.name.message)}
-              </span>
-            ) : null}
-          </label>
-          <label>
-            {t("profileSettings.serverFolder")}
-            <PathField
-              browseLabel={t("profileSettings.browse")}
-              readOnly
-              {...form.register("rootDir")}
-              onBrowse={pickServerFolder}
-            />
-            {folderPickerError ? (
-              <span className="danger-text">{folderPickerError}</span>
-            ) : null}
-          </label>
-          <label>
-            {t("profileSettings.loader")}
-            <Controller
-              control={form.control}
-              name="loaderType"
-              render={({ field }) => (
-                <Select
-                  ariaLabel={t("profileSettings.loader")}
-                  name={field.name}
-                  options={loaderOptions}
-                  value={field.value}
-                  onValueChange={(value) => field.onChange(value as LoaderType)}
+        {/* Twelve fields in one column made the operator scroll past the whole
+            form to reach the save bar. Grouped by what they govern, in as many
+            columns as the panel is wide enough for. */}
+        <div className="settings-group">
+          <h3>{t("profileSettings.group.identity")}</h3>
+          <div className="settings-grid">
+            <label>
+              {t("profileSettings.name")}
+              <TextField
+                aria-invalid={Boolean(form.formState.errors.name)}
+                {...form.register("name")}
+              />
+              {form.formState.errors.name ? (
+                <span className="danger-text">
+                  {validationMessage(form.formState.errors.name.message)}
+                </span>
+              ) : null}
+            </label>
+            <label>
+              {t("profileSettings.serverFolder")}
+              <PathField
+                browseLabel={t("profileSettings.browse")}
+                readOnly
+                {...form.register("rootDir")}
+                onBrowse={pickServerFolder}
+              />
+              {folderPickerError ? (
+                <span className="danger-text">{folderPickerError}</span>
+              ) : null}
+            </label>
+          </div>
+        </div>
+        <div className="settings-group">
+          <h3>{t("profileSettings.group.runtime")}</h3>
+          <div className="settings-grid">
+            <label>
+              {t("profileSettings.loader")}
+              <Controller
+                control={form.control}
+                name="loaderType"
+                render={({ field }) => (
+                  <Select
+                    ariaLabel={t("profileSettings.loader")}
+                    name={field.name}
+                    options={loaderOptions}
+                    value={field.value}
+                    onValueChange={(value) =>
+                      field.onChange(value as LoaderType)
+                    }
+                  />
+                )}
+              />
+            </label>
+            <label>
+              {t("profileSettings.minecraftVersion")}
+              <TextField {...form.register("minecraftVersion")} />
+            </label>
+            <label>
+              {t("profileSettings.loaderVersion")}
+              <TextField {...form.register("loaderVersion")} />
+            </label>
+            {/* A bare text box asked the operator to know a path Windows hides
+                in three different places. The scan already found them, so this
+                offers what is installed and keeps typing for the case the scan
+                cannot reach. */}
+            <label>
+              {t("profileSettings.javaPath")}
+              <Controller
+                control={form.control}
+                name="javaPath"
+                render={({ field }) => (
+                  <Select
+                    ariaLabel={t("profileSettings.javaPath")}
+                    name={field.name}
+                    options={javaOptions(field.value)}
+                    value={
+                      customJavaPath ? CUSTOM_JAVA : field.value || SYSTEM_JAVA
+                    }
+                    onValueChange={(value) => {
+                      if (value === CUSTOM_JAVA) {
+                        setCustomJavaPath(true);
+                        return;
+                      }
+                      setCustomJavaPath(false);
+                      field.onChange(value === SYSTEM_JAVA ? "" : value);
+                    }}
+                  />
+                )}
+              />
+              {customJavaPath ? (
+                <TextField
+                  aria-label={t("profileSettings.javaCustom")}
+                  placeholder={t("profileSettings.javaCustomPlaceholder")}
+                  {...form.register("javaPath")}
                 />
-              )}
-            />
-          </label>
-          <label>
-            {t("profileSettings.minecraftVersion")}
-            <TextField {...form.register("minecraftVersion")} />
-          </label>
-          <label>
-            {t("profileSettings.loaderVersion")}
-            <TextField {...form.register("loaderVersion")} />
-          </label>
-          <label>
-            {t("profileSettings.javaPath")}
-            <TextField {...form.register("javaPath")} />
-          </label>
-          <label>
-            {t("profileSettings.port")}
-            <TextField
-              aria-invalid={Boolean(form.formState.errors.serverPort)}
-              min="1"
-              max="65535"
-              type="number"
-              {...form.register("serverPort")}
-            />
-            {form.formState.errors.serverPort ? (
-              <span className="danger-text">
-                {validationMessage(form.formState.errors.serverPort.message)}
-              </span>
-            ) : null}
-          </label>
-          <label>
-            {t("profileSettings.minMemoryMb")}
-            <TextField
-              min="0"
-              type="number"
-              {...form.register("minMemoryMb")}
-            />
-          </label>
-          <label>
-            {t("profileSettings.maxMemoryMb")}
-            <TextField
-              aria-invalid={Boolean(form.formState.errors.maxMemoryMb)}
-              min="0"
-              type="number"
-              {...form.register("maxMemoryMb")}
-            />
-            {form.formState.errors.maxMemoryMb ? (
-              <span className="danger-text">
-                {validationMessage(form.formState.errors.maxMemoryMb.message)}
-              </span>
-            ) : null}
-          </label>
-          <label className="checkbox-row">
-            <Controller
-              control={form.control}
-              name="autoStart"
-              render={({ field }) => (
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={(checked) =>
-                    field.onChange(checked === true)
-                  }
-                />
-              )}
-            />
-            {t("profileSettings.autoStart")}
-          </label>
-          <label className="checkbox-row">
-            <Controller
-              control={form.control}
-              name="restartEnabled"
-              render={({ field }) => (
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={(checked) =>
-                    field.onChange(checked === true)
-                  }
-                />
-              )}
-            />
-            {t("profileSettings.restartAfterCrashes")}
-          </label>
-          <label>
-            {t("profileSettings.restartAttempts")}
-            <TextField
-              min="0"
-              type="number"
-              {...form.register("restartAttempts")}
-            />
-          </label>
-          <label>
-            {t("profileSettings.restartCooldownSeconds")}
-            <TextField
-              min="0"
-              type="number"
-              {...form.register("restartCooldown")}
-            />
-          </label>
+              ) : null}
+            </label>
+            <label>
+              {t("profileSettings.port")}
+              <TextField
+                aria-invalid={Boolean(form.formState.errors.serverPort)}
+                min="1"
+                max="65535"
+                type="number"
+                {...form.register("serverPort")}
+              />
+              {form.formState.errors.serverPort ? (
+                <span className="danger-text">
+                  {validationMessage(form.formState.errors.serverPort.message)}
+                </span>
+              ) : null}
+            </label>
+          </div>
+        </div>
+        <div className="settings-group">
+          <h3>{t("profileSettings.group.lifecycle")}</h3>
+          <div className="settings-grid">
+            <label>
+              {t("profileSettings.minMemoryMb")}
+              <TextField
+                min="0"
+                type="number"
+                {...form.register("minMemoryMb")}
+              />
+            </label>
+            <label>
+              {t("profileSettings.maxMemoryMb")}
+              <TextField
+                aria-invalid={Boolean(form.formState.errors.maxMemoryMb)}
+                min="0"
+                type="number"
+                {...form.register("maxMemoryMb")}
+              />
+              {form.formState.errors.maxMemoryMb ? (
+                <span className="danger-text">
+                  {validationMessage(form.formState.errors.maxMemoryMb.message)}
+                </span>
+              ) : null}
+            </label>
+            <label>
+              {t("profileSettings.restartAttempts")}
+              <TextField
+                min="0"
+                type="number"
+                {...form.register("restartAttempts")}
+              />
+            </label>
+            <label>
+              {t("profileSettings.restartCooldownSeconds")}
+              <TextField
+                min="0"
+                type="number"
+                {...form.register("restartCooldown")}
+              />
+            </label>
+            <label className="checkbox-row">
+              <Controller
+                control={form.control}
+                name="autoStart"
+                render={({ field }) => (
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
+                  />
+                )}
+              />
+              {t("profileSettings.autoStart")}
+            </label>
+            <label className="checkbox-row">
+              <Controller
+                control={form.control}
+                name="restartEnabled"
+                render={({ field }) => (
+                  <Checkbox
+                    checked={field.value}
+                    onCheckedChange={(checked) =>
+                      field.onChange(checked === true)
+                    }
+                  />
+                )}
+              />
+              {t("profileSettings.restartAfterCrashes")}
+            </label>
+          </div>
         </div>
         <StickyActionBar className="form-actions">
           <Button

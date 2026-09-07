@@ -56,6 +56,35 @@ function requiredJavaMajorForMinecraft(minecraftVersion) {
   return 8;
 }
 
+/* The required major is a target, not a floor. Minecraft up to 1.16 boots
+   through LegacyLauncher/ModLauncher, which cast the system class loader to
+   `java.net.URLClassLoader` — true only through Java 8. A 1.7.10 Forge server
+   started on Java 11 dies with `class jdk.internal.loader.ClassLoaders$
+   AppClassLoader cannot be cast to class java.net.URLClassLoader` before it
+   ever listens, which is exactly what "pick the newest Java installed" used to
+   produce. Above 1.16 no ceiling is claimed, because none is established. */
+function maxJavaMajorForMinecraft(minecraftVersion) {
+  return requiredJavaMajorForMinecraft(minecraftVersion) === 8 ? 8 : null;
+}
+
+/* The lowest runtime inside the supported window, so a machine carrying both
+   Java 8 and Java 21 runs an old server on 8 rather than on whichever entry
+   the scan happened to list first. */
+function selectJavaRuntime(runtimes, minMajorVersion, maxMajorVersion = null) {
+  return (runtimes || [])
+    .filter((runtime) => Number.isFinite(Number(runtime.majorVersion)))
+    .filter((runtime) => Number(runtime.majorVersion) >= minMajorVersion)
+    .filter(
+      (runtime) =>
+        maxMajorVersion === null ||
+        maxMajorVersion === undefined ||
+        Number(runtime.majorVersion) <= maxMajorVersion,
+    )
+    .sort(
+      (left, right) => Number(left.majorVersion) - Number(right.majorVersion),
+    )[0];
+}
+
 function adoptiumPlatform(platform) {
   const values = { win32: "windows", darwin: "mac", linux: "linux" };
   const value = values[platform];
@@ -186,8 +215,10 @@ function createRuntimeManager(dependencies = {}) {
           "A supported Java major version is required.",
         );
       }
-      const compatible = (input.installedRuntimes || []).find(
-        (runtime) => Number(runtime.majorVersion) >= majorVersion,
+      const compatible = selectJavaRuntime(
+        input.installedRuntimes,
+        majorVersion,
+        input?.maxMajorVersion ?? null,
       );
       if (compatible) {
         return { action: "reuse", majorVersion, runtime: compatible };
@@ -330,11 +361,66 @@ function createRuntimeManager(dependencies = {}) {
         }
       }
     },
+
+    /* Only what this app put there. A Java found on PATH or installed by the
+       user belongs to the machine, and a server manager deleting it would be a
+       surprise no confirmation dialog makes acceptable. */
+    async remove(javaPath) {
+      const allowedRoot = path.resolve(
+        path.join(userDataDir, "runtimes", "temurin"),
+      );
+      const relative = path.relative(
+        allowedRoot,
+        path.resolve(String(javaPath || "")),
+      );
+      const segments = relative.split(path.sep).filter(Boolean);
+      if (
+        !relative ||
+        relative.startsWith("..") ||
+        path.isAbsolute(relative) ||
+        segments.length < 3
+      ) {
+        throw provisioningError(
+          "JAVA_NOT_MANAGED",
+          `Only Java runtimes installed by this app can be removed: ${javaPath}`,
+          { detail: String(javaPath || "") },
+        );
+      }
+      /* `<major>/<os>-<arch>` is the directory install commits, so it is the
+         unit that comes back out. Deleting the executable alone would leave a
+         runtime the scan still finds and nothing can start. */
+      const targetDir = path.join(allowedRoot, segments[0], segments[1]);
+      if (!fs.existsSync(targetDir)) {
+        throw provisioningError(
+          "JAVA_RUNTIME_MISSING",
+          `Managed Java runtime is no longer on disk: ${targetDir}`,
+          { detail: targetDir },
+        );
+      }
+      try {
+        await retryTransientFsOperation(
+          () => fs.rmSync(targetDir, { recursive: true, force: true }),
+          `remove managed Java runtime ${targetDir}`,
+        );
+      } catch (caught) {
+        if (isTransientFsError(caught)) {
+          throw provisioningError(
+            "JAVA_RUNTIME_LOCKED",
+            `Managed Java could not be removed: ${caught.code} on ${caught.path || targetDir}. A running server or an antivirus scan is holding it open.`,
+            { detail: targetDir },
+          );
+        }
+        throw caught;
+      }
+      return { path: javaPath, removedDir: targetDir };
+    },
   };
 }
 
 module.exports = {
   TEMURIN_LICENSE_URL,
   createRuntimeManager,
+  maxJavaMajorForMinecraft,
   requiredJavaMajorForMinecraft,
+  selectJavaRuntime,
 };

@@ -29,8 +29,7 @@ coverage/
 # Local AI tooling and generated review sessions
 .agents/
 .claude/
-.impeccable/*
-!.impeccable/design.json
+.impeccable/
 
 # Editor directories and files
 .vscode/*

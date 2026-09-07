@@ -213,15 +213,15 @@ async function verifyWizardHeaderGeometry(window, viewport) {
     const title = header?.querySelector(".create-server-page-title-row");
     const closeButton = header?.querySelector(":scope > .icon-button");
     const wrappers = [...(header?.querySelectorAll(".wizard-step-item-wrapper") ?? [])];
-    if (!header || !title || !closeButton || wrappers.length !== 6) return null;
+    if (!header || !title || !closeButton || wrappers.length !== 3) return null;
 
     const titleRect = title.getBoundingClientRect();
     const closeRect = closeButton.getBoundingClientRect();
     const firstRect = wrappers[0].getBoundingClientRect();
     const lastRect = wrappers[wrappers.length - 1].getBoundingClientRect();
     const connectors = [...header.querySelectorAll(".wizard-step-connector")];
-    if (connectors.length !== 5) {
-      throw new Error("Expected five wizard step connectors, found " + connectors.length + ".");
+    if (connectors.length !== 2) {
+      throw new Error("Expected two wizard step connectors, found " + connectors.length + ".");
     }
     const connectorCenterOffsets = connectors.map(
       (connector) => {
@@ -274,6 +274,14 @@ const rendererErrors = [];
 function registerSmokeIpc() {
   ipcMain.handle("app-command", (_event, command) => {
     switch (command) {
+      case "get_app_preferences":
+        return {
+          appearance: {
+            compactMode: false,
+            motion: "full",
+            fontSize: "medium",
+          },
+        };
       case "get_process_summary":
         return { runningCount: 1, crashedCount: 0 };
       case "list_recoverable_provisioning_jobs":
@@ -329,6 +337,19 @@ function registerSmokeIpc() {
           ],
           events: [],
         };
+      case "list_players":
+        return {
+          serverId: smokeServer.id,
+          players: Array.from({ length: 7 }, (_, index) => ({
+            username: `SmokePlayer${index + 1}`,
+            online: true,
+            operator: false,
+            whitelisted: false,
+            banned: false,
+          })),
+          actionsAvailable: true,
+          unavailableReason: null,
+        };
       case "list_process_events":
         return [
           {
@@ -368,6 +389,7 @@ function registerSmokeIpc() {
           content: '{\n  "motd": "never from a CDN",\n}\n',
           sizeBytes: 48,
           readOnly: false,
+          revision: "smoke-config-revision",
           warning: null,
         };
       case "list_java_runtimes":
@@ -403,6 +425,7 @@ function registerSmokeIpc() {
       case "list_scheduled_task_runs":
       case "list_diagnostic_runs":
       case "list_server_backups":
+      case "list_backup_profiles":
       case "list_notification_events":
       case "get_attention_items":
         return [];
@@ -533,13 +556,13 @@ async function run() {
   );
   await waitFor(
     window.webContents,
-    'document.querySelector(".server-header-telemetry")?.textContent.includes("18.4%") && document.querySelector(".server-header-telemetry")?.textContent.includes("7") && document.querySelector(".server-header-telemetry")?.textContent.includes("19.9")',
+    'document.querySelector(".overview-performance")?.textContent.includes("18.4%") && document.querySelector(".overview-performance")?.textContent.includes("7") && document.querySelector(".overview-performance")?.textContent.includes("19.9")',
     "live CPU, player, and TPS telemetry",
   );
   await waitFor(
     window.webContents,
     `(() => {
-      const overview = document.querySelector(".activity-overview");
+      const overview = document.querySelector(".server-overview-workspace");
       const body = overview?.closest(".server-workspace-content");
       if (!overview || !body) return false;
       const rect = overview.getBoundingClientRect();
@@ -554,7 +577,7 @@ async function run() {
   );
   const desktopWorkbench = await window.webContents.executeJavaScript(`(() => {
     const workbench = document.querySelector(".server-workspace-shell");
-    const navigation = document.querySelector(".server-workspace-nav");
+    const navigation = document.querySelector(".sidebar .workspace-navigation");
     const content = document.querySelector(".server-workspace-main");
     if (!workbench || !navigation || !content) return null;
     const navigationRect = navigation.getBoundingClientRect();
@@ -567,7 +590,7 @@ async function run() {
         const rect = image.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 && (!image.complete || image.naturalWidth === 0);
       }).map((image) => image.src),
-      telemetryText: document.querySelector(".server-header-telemetry")?.textContent ?? "",
+      telemetryText: document.querySelector(".overview-performance")?.textContent ?? "",
     };
   })()`);
   if (
@@ -599,34 +622,66 @@ async function run() {
   );
 
   await setRendererViewport(window, { width: 960, height: 720 });
-  const compactWorkbench = await window.webContents.executeJavaScript(`(() => {
+  const narrowWorkbench = await window.webContents.executeJavaScript(`(() => {
     const workbench = document.querySelector(".server-workspace-shell");
-    const navigation = document.querySelector(".server-workspace-nav");
-    const navigationItem = document.querySelector(".server-workspace-nav-item");
+    const navigation = document.querySelector(".sidebar");
+    const navigationItem = document.querySelector(".sidebar .workspace-navigation button");
     if (!workbench || !navigation || !navigationItem) return null;
     const navigationRect = navigation.getBoundingClientRect();
     const itemRect = navigationItem.getBoundingClientRect();
+    const itemLabel = navigationItem.querySelector("span");
     return {
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      compactNavigation: navigationRect.width <= 60 && itemRect.width <= 44,
-      // Reported so a failure says whether the layout is wrong or the viewport
-      // never reached the breakpoint, instead of leaving both open.
+      labeledNavigation: Math.abs(navigationRect.width - 216) <= 1 &&
+        Boolean(itemLabel && getComputedStyle(itemLabel).display !== "none"),
       viewportWidth: window.innerWidth,
-      compactBreakpointMatches: window.matchMedia("(max-width: 1100px)").matches,
       navigationWidth: navigationRect.width,
       itemWidth: itemRect.width,
     };
   })()`);
   if (
-    !compactWorkbench ||
-    compactWorkbench.horizontalOverflow ||
-    !compactWorkbench.compactNavigation
+    !narrowWorkbench ||
+    narrowWorkbench.horizontalOverflow ||
+    !narrowWorkbench.labeledNavigation
   ) {
     throw new Error(
-      `Compact workbench geometry failed: ${JSON.stringify(compactWorkbench)}`,
+      `Narrow workbench geometry failed: ${JSON.stringify(narrowWorkbench)}`,
     );
   }
-  process.stdout.write("Electron UI smoke: compact workbench verified.\n");
+  await clickAt(
+    window.webContents,
+    await elementCenter(
+      window.webContents,
+      ".sidebar-toggle-button",
+      "sidebar collapse button",
+    ),
+  );
+  await waitFor(
+    window.webContents,
+    `(() => {
+    const sidebar = document.querySelector(".sidebar-collapsed");
+    const label = sidebar?.querySelector(".workspace-navigation button span");
+    return sidebar && Math.abs(sidebar.getBoundingClientRect().width - 64) <= 1 &&
+      label && getComputedStyle(label).display === "none";
+  })()`,
+    "the explicitly collapsed sidebar",
+  );
+  await clickAt(
+    window.webContents,
+    await elementCenter(
+      window.webContents,
+      ".sidebar-toggle-button",
+      "sidebar expand button",
+    ),
+  );
+  await waitFor(
+    window.webContents,
+    'document.querySelector(".sidebar:not(.sidebar-collapsed)")?.getBoundingClientRect().width >= 215',
+    "the expanded sidebar",
+  );
+  process.stdout.write(
+    "Electron UI smoke: labeled and collapsed navigation verified.\n",
+  );
 
   for (const route of [
     {
@@ -635,19 +690,14 @@ async function run() {
       text: "Scheduled tasks",
     },
     {
-      primary: "Operations",
-      view: "Diagnostics",
-      text: "Diagnostics",
-    },
-    {
       primary: "Server settings",
       view: "Network & access",
       text: "Network and connections",
     },
     {
       primary: "Server settings",
-      view: "Import & export",
-      text: "Profile import/export",
+      view: "General",
+      text: "Server folder",
     },
   ]) {
     const label = route.view ?? route.primary;
@@ -803,15 +853,15 @@ async function run() {
 
   await waitFor(
     window.webContents,
-    'document.querySelectorAll(".create-server-page .wizard-step-item").length === 6',
-    "the six Create server wizard steps",
+    'document.querySelectorAll(".create-server-page .wizard-step-item").length === 3',
+    "the three Create server wizard steps",
   );
 
   const stepCount = await window.webContents.executeJavaScript(
     'document.querySelectorAll(".create-server-page .wizard-step-item").length',
   );
-  if (stepCount !== 6) {
-    throw new Error(`Expected six provisioning steps, found ${stepCount}.`);
+  if (stepCount !== 3) {
+    throw new Error(`Expected three provisioning steps, found ${stepCount}.`);
   }
   const inlineShellState = await window.webContents.executeJavaScript(`({
     hasSidebar: Boolean(document.querySelector(".sidebar")),

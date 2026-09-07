@@ -112,13 +112,17 @@ export function DataTable<T>({
             className={getRowClassName?.(row, index)}
             key={getRowKey(row, index)}
             tabIndex={onRowActivate ? 0 : undefined}
+            /* An activatable row was keyboard-only: there was no click handler
+               at all, and Space did nothing. */
+            onClick={
+              onRowActivate ? () => onRowActivate(row, index) : undefined
+            }
             onKeyDown={
               onRowActivate
                 ? (event) => {
-                    if (
-                      event.key === "Enter" &&
-                      event.target === event.currentTarget
-                    ) {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
                       onRowActivate(row, index);
                     }
                   }

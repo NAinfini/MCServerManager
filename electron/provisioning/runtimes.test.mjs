@@ -57,6 +57,105 @@ describe("managed Temurin runtimes", () => {
     expect(fetchJson).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["1.7.10", 8],
+    ["1.12.2", 8],
+    ["1.16.5", 8],
+    ["1.17.1", null],
+    ["1.21.4", null],
+  ])("caps Minecraft %s at Java %s", (minecraftVersion, expected) => {
+    const { maxJavaMajorForMinecraft } = require("./runtimes.cjs");
+    expect(maxJavaMajorForMinecraft(minecraftVersion)).toBe(expected);
+  });
+
+  it("runs a legacy server on Java 8 even when a newer runtime is installed", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const fetchJson = vi.fn();
+    const manager = createRuntimeManager({
+      userDataDir: tempRoot(),
+      platform: "win32",
+      arch: "x64",
+      fetchJson,
+    });
+
+    // Newest-first selection handed a 1.7.10 server the Java 21 on the machine,
+    // and LegacyLauncher died casting the system class loader to
+    // URLClassLoader before the server ever listened.
+    const plan = await manager.plan({
+      majorVersion: 8,
+      maxMajorVersion: 8,
+      installedRuntimes: [
+        { path: "C:/Java/21/java.exe", majorVersion: 21, vendor: "Oracle" },
+        { path: "C:/Java/8/java.exe", majorVersion: 8, vendor: "Temurin" },
+      ],
+    });
+
+    expect(plan).toMatchObject({
+      action: "reuse",
+      runtime: { path: "C:/Java/8/java.exe" },
+    });
+    expect(fetchJson).not.toHaveBeenCalled();
+  });
+
+  it("downloads Java 8 rather than reusing a runtime above the ceiling", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const fetchJson = vi.fn(async () => [
+      {
+        version: { semver: "8.0.432+6" },
+        binary: {
+          package: {
+            link: "https://github.com/adoptium/temurin8-binaries/releases/download/jre.zip",
+            name: "OpenJDK8U-jre_x64_windows_hotspot.zip",
+            checksum: "abc123",
+            size: 50,
+          },
+        },
+      },
+    ]);
+    const manager = createRuntimeManager({
+      userDataDir: tempRoot(),
+      platform: "win32",
+      arch: "x64",
+      fetchJson,
+    });
+
+    const plan = await manager.plan({
+      majorVersion: 8,
+      maxMajorVersion: 8,
+      installedRuntimes: [
+        { path: "C:/Java/11/java.exe", majorVersion: 11, vendor: "Oracle" },
+      ],
+    });
+
+    expect(plan).toMatchObject({ action: "install", majorVersion: 8 });
+  });
+
+  it("still skips runtimes below the required major when no ceiling applies", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const fetchJson = vi.fn();
+    const manager = createRuntimeManager({
+      userDataDir: tempRoot(),
+      platform: "win32",
+      arch: "x64",
+      fetchJson,
+    });
+
+    const plan = await manager.plan({
+      majorVersion: 21,
+      maxMajorVersion: null,
+      installedRuntimes: [
+        { path: "C:/Java/8/java.exe", majorVersion: 8, vendor: "Temurin" },
+        { path: "C:/Java/21/java.exe", majorVersion: 21, vendor: "Oracle" },
+      ],
+    });
+
+    expect(plan).toMatchObject({
+      action: "reuse",
+      runtime: { path: "C:/Java/21/java.exe" },
+    });
+    expect(fetchJson).not.toHaveBeenCalled();
+  });
+
   it("requests the matching Adoptium OS and architecture asset", async () => {
     const { createRuntimeManager } = require("./runtimes.cjs");
     const fetchJson = vi.fn(async () => [
@@ -160,6 +259,48 @@ describe("managed Temurin runtimes", () => {
     });
     expect(runtime.path).toContain(plan.targetDir);
     expect(fs.existsSync(runtime.path)).toBe(true);
+  });
+
+  it("removes a managed runtime it installed and refuses anything else", async () => {
+    const { createRuntimeManager } = require("./runtimes.cjs");
+    const root = tempRoot();
+    const manager = createRuntimeManager({
+      userDataDir: root,
+      platform: "win32",
+      arch: "x64",
+      fetchJson: vi.fn(),
+    });
+    const installed = path.join(
+      root,
+      "runtimes",
+      "temurin",
+      "21",
+      "windows-x64",
+      "jdk-21",
+      "bin",
+      "java.exe",
+    );
+    fs.mkdirSync(path.dirname(installed), { recursive: true });
+    fs.writeFileSync(installed, "java");
+
+    // A Java the user installed themselves is not this app's to delete, whatever
+    // the renderer sends.
+    await expect(
+      manager.remove("C:\\Program Files\\Java\\jdk-11\\bin\\java.exe"),
+    ).rejects.toMatchObject({ code: "JAVA_NOT_MANAGED" });
+
+    await manager.remove(installed);
+
+    // The whole committed directory goes, not just the executable, so the scan
+    // cannot keep offering a runtime nothing can start.
+    expect(
+      fs.existsSync(
+        path.join(root, "runtimes", "temurin", "21", "windows-x64"),
+      ),
+    ).toBe(false);
+    await expect(manager.remove(installed)).rejects.toMatchObject({
+      code: "JAVA_RUNTIME_MISSING",
+    });
   });
 
   it("removes staging data after a checksum mismatch", async () => {

@@ -5,6 +5,7 @@ import type { ServerWorkspaceSection } from "../../app/router";
 import { AppSettingsProvider } from "../../i18n";
 import { cleanup, render, screen, within } from "../../test/render";
 import { ServerDetail } from "./ServerDetail";
+import { ServerWorkspaceNav } from "./ServerWorkspaceNav";
 import type { ServerProfile } from "./types";
 
 vi.mock("../../lib/desktop-runtime", () => ({
@@ -101,6 +102,11 @@ function renderDetail({
     ...render(
       <QueryClientProvider client={queryClient}>
         <AppSettingsProvider>
+          <ServerWorkspaceNav
+            serverName={profile.name}
+            section={section}
+            onNavigate={onNavigate}
+          />
           <ServerDetail
             onNavigate={onNavigate}
             section={section}
@@ -120,20 +126,53 @@ describe("ServerDetail command deck", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses eight task-oriented workspace sections instead of the legacy tab wall", () => {
+  it("copies the labeled local connection address and links to network settings", async () => {
+    const user = userEvent.setup();
+    const writeText = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockResolvedValue();
+    const { onNavigate } = renderDetail();
+    await user.click(
+      screen.getByRole("button", { name: "Copy local server address" }),
+    );
+    expect(writeText).toHaveBeenCalledWith("localhost:25565");
+    expect(screen.getByText("Address copied")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Network & access" }));
+    expect(onNavigate).toHaveBeenCalledWith("settings", "network");
+    writeText.mockRestore();
+  });
+
+  it("moves sidebar focus with arrow and boundary keys without navigating", async () => {
+    const user = userEvent.setup();
+    const { onNavigate } = renderDetail();
+    const nav = screen.getByRole("navigation", {
+      name: "Review Server workspace",
+    });
+    within(nav).getByRole("button", { name: "Overview" }).focus();
+    await user.keyboard("{ArrowDown}");
+    expect(within(nav).getByRole("button", { name: "Console" })).toHaveFocus();
+    await user.keyboard("{End}");
+    expect(
+      within(nav).getByRole("button", { name: "Server settings" }),
+    ).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(within(nav).getByRole("button", { name: "Overview" })).toHaveFocus();
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("uses seven task-oriented workspace sections instead of the legacy tab wall", () => {
     renderDetail();
 
     const workspace = screen.getByRole("navigation", {
       name: "Review Server workspace",
     });
-    expect(within(workspace).getAllByRole("button")).toHaveLength(8);
+    expect(within(workspace).getAllByRole("button")).toHaveLength(7);
     [
       "Overview",
       "Console",
       "Players",
       "Content",
       "Files & backups",
-      "Operations",
       "Automation",
       "Server settings",
     ].forEach((label) => {
@@ -160,7 +199,6 @@ describe("ServerDetail command deck", () => {
       "玩家",
       "内容",
       "文件与备份",
-      "运行状况",
       "自动化",
       "服务器设置",
     ].forEach((label) => {
@@ -221,15 +259,23 @@ describe("ServerDetail command deck", () => {
     expect(screen.getByText("Review Server")).toBeInTheDocument();
   });
 
-  it("places setup guidance and quick links on overview", async () => {
+  it("gathers setup guidance and the retired Operations panels on overview", async () => {
     renderDetail();
 
     const checklist = await screen.findByLabelText("Server setup checklist");
     expect(await within(checklist).findByText("Java")).toBeInTheDocument();
     expect(within(checklist).getByText("Minecraft EULA")).toBeInTheDocument();
+    // The shortcut cards only jumped to nav items already on screen; the
+    // overview carries live state now.
     expect(
-      screen.getByRole("navigation", { name: "Server shortcuts" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("navigation", { name: "Server shortcuts" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Players online")).toBeInTheDocument();
+    // Performance, events and diagnostics were three Operations tabs; the
+    // overview is the one place they are read together now.
+    expect(screen.getByLabelText("Performance history")).toBeInTheDocument();
+    expect(screen.getByLabelText("Events")).toBeInTheDocument();
+    expect(screen.getByLabelText("Diagnostics")).toBeInTheDocument();
   });
 
   it("renders invalid profile dates without crashing overview", async () => {
@@ -242,7 +288,7 @@ describe("ServerDetail command deck", () => {
     expect(screen.getByText("Review Server")).toBeInTheDocument();
   });
 
-  it("keeps server identity, lifecycle actions, invite, and backup in one header", () => {
+  it("keeps server identity, lifecycle actions and backup in one header", () => {
     renderDetail();
 
     expect(
@@ -252,8 +298,8 @@ describe("ServerDetail command deck", () => {
     expect(
       screen.getByRole("button", { name: "Start Review Server" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Invite friends")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Backup" })).toBeInTheDocument();
+    expect(screen.queryByText("Invite friends")).not.toBeInTheDocument();
   });
 
   it("shows a back button only when a back handler is provided", async () => {

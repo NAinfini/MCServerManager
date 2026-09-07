@@ -1,11 +1,6 @@
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { queryKeys } from "../../lib/query-keys";
 
-export interface LocalNetworkAddress {
-  address: string;
-  interfaceName: string;
-}
-
 export interface TunnelProvider {
   id: string;
   name: string;
@@ -34,12 +29,6 @@ export interface TunnelBinding {
 }
 
 export const tunnelKeys = queryKeys.tunnels;
-
-export function listLocalNetworkAddresses() {
-  return invokeDesktopCommandWithErrorHandling<LocalNetworkAddress[]>(
-    "get_local_network_addresses",
-  );
-}
 
 export function listTunnelProviders() {
   return invokeDesktopCommandWithErrorHandling<TunnelProvider[]>(

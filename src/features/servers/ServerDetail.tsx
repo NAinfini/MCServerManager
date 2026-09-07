@@ -1,29 +1,27 @@
 import {
   Component,
+  useEffect,
+  useState,
   type ErrorInfo,
-  type KeyboardEvent,
   type ReactNode,
 } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { ChevronLeft, RefreshCw } from "lucide-react";
+import { Check, ChevronLeft, Copy, RefreshCw } from "lucide-react";
 import type { ServerWorkspaceSection } from "../../app/router";
 import { Button } from "../../components/ui/button";
+import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
+import { ServerUpdatesView } from "../updates/ServerUpdatesView";
 import { createWorldBackup } from "../backups/backupApi";
 import { backupKeys } from "../backups/queries";
 import { LoaderPill } from "../loaders/LoaderIdentity";
 import { usePlayerViewCounts } from "../players/usePlayerViewCounts";
-import { InviteFriendsPopover } from "./InviteFriendsPopover";
 import { ServerActions, ServerProcessStatusBadge } from "./ServerActions";
 import { ServerHeaderTelemetry } from "./ServerHeaderTelemetry";
 import { ServerWorkspacePanel } from "./ServerWorkspacePanel";
 import { serverKeys } from "./queries";
-import {
-  normalizeWorkspaceView,
-  serverWorkspaceDefinitions,
-  workspaceDefinition,
-} from "./serverWorkspace";
+import { normalizeWorkspaceView, workspaceDefinition } from "./serverWorkspace";
 import type { ServerProfile } from "./types";
 
 interface ServerDetailProps {
@@ -97,20 +95,6 @@ class PanelErrorBoundary extends Component<
   }
 }
 
-function moveWorkspaceFocus(event: KeyboardEvent<HTMLElement>) {
-  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
-  const buttons = Array.from(
-    event.currentTarget.querySelectorAll<HTMLButtonElement>(
-      ".server-workspace-nav-item",
-    ),
-  );
-  const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-  if (current < 0) return;
-  event.preventDefault();
-  const direction = event.key === "ArrowDown" ? 1 : -1;
-  buttons[(current + direction + buttons.length) % buttons.length]?.focus();
-}
-
 export function ServerDetail({
   server,
   section = "overview",
@@ -122,6 +106,11 @@ export function ServerDetail({
 }: ServerDetailProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
+    "idle",
+  );
+  useEffect(() => setCopyState("idle"), [server.serverPort]);
   const definition = workspaceDefinition(section);
   const activeView = normalizeWorkspaceView(section, view);
   const playerViewCounts = usePlayerViewCounts(
@@ -167,7 +156,7 @@ export function ServerDetail({
               </div>
               <div className="detail-panel-meta">
                 <LoaderPill loaderType={server.loaderType} />
-                <span>
+                <span className="detail-panel-version">
                   {t("server.meta.mc", {
                     version: server.minecraftVersion ?? "?",
                   })}
@@ -183,14 +172,15 @@ export function ServerDetail({
               </div>
             </div>
           </div>
-          <ServerHeaderTelemetry serverId={server.id} />
+          {section !== "overview" ? (
+            <ServerHeaderTelemetry serverId={server.id} />
+          ) : null}
         </div>
         <div className="detail-panel-actions">
+          <Button variant="ghost" onClick={() => setUpgradeOpen(true)}>
+            {t("server.upgrade.open")}
+          </Button>
           <ServerActions server={server} />
-          <InviteFriendsPopover
-            server={server}
-            onConfigureNetwork={() => onNavigate("settings", "network")}
-          />
           <Button
             disabled={backupMutation.isPending}
             type="button"
@@ -202,51 +192,87 @@ export function ServerDetail({
         </div>
       </header>
 
+      <DialogSurface
+        className="server-upgrade-dialog"
+        description={t("server.upgrade.description")}
+        footer={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => setUpgradeOpen(false)}
+          >
+            {t("common.close")}
+          </Button>
+        }
+        open={upgradeOpen}
+        title={t("server.upgrade.title")}
+        onOpenChange={setUpgradeOpen}
+      >
+        <ServerUpdatesView server={server} />
+      </DialogSurface>
+
       {backupMutation.error ? (
         <p className="detail-panel-error" role="alert">
           {backupMutation.error.message}
         </p>
       ) : null}
 
-      <div className="server-workspace-shell">
-        <nav
-          aria-label={t("server.workspace.aria", { server: server.name })}
-          className="server-workspace-nav"
-          onKeyDown={moveWorkspaceFocus}
+      <div className="server-connection-bar">
+        <span>{t("server.connection.local")}</span>
+        <button
+          type="button"
+          disabled={!server.serverPort}
+          aria-label={t("server.connection.copy")}
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(
+                `localhost:${server.serverPort}`,
+              );
+              setCopyState("copied");
+            } catch {
+              setCopyState("failed");
+            }
+          }}
         >
-          {serverWorkspaceDefinitions.map((item) => {
-            const active = item.id === section;
-            const Icon = item.icon;
-            return (
-              <button
-                aria-current={active ? "page" : undefined}
-                className={
-                  active
-                    ? "server-workspace-nav-item server-workspace-nav-item-active"
-                    : "server-workspace-nav-item"
-                }
-                key={item.id}
-                title={t(item.labelKey)}
-                type="button"
-                onClick={() => onNavigate(item.id, item.defaultView)}
-              >
-                <Icon aria-hidden="true" size={16} />
-                <span>{t(item.labelKey)}</span>
-              </button>
-            );
-          })}
-        </nav>
+          <code>
+            {server.serverPort ? `localhost:${server.serverPort}` : "—"}
+          </code>
+          {copyState === "copied" ? (
+            <Check size={13} aria-hidden="true" />
+          ) : (
+            <Copy size={13} aria-hidden="true" />
+          )}
+        </button>
+        <span role="status">
+          {copyState === "copied"
+            ? t("server.connection.copied")
+            : copyState === "failed"
+              ? t("server.connection.copyFailed")
+              : t("server.connection.localHint")}
+        </span>
+        <button
+          className="server-connection-settings"
+          type="button"
+          onClick={() => onNavigate("settings", "network")}
+        >
+          {t("server.workspace.settings.network")}
+        </button>
+        {backupMutation.isSuccess ? (
+          <span role="status">{t("server.backup.completed")}</span>
+        ) : null}
+      </div>
 
+      <div className="server-workspace-shell">
         <section
           aria-label={t(definition.labelKey)}
           className="server-workspace-main"
         >
-          <header className="server-workspace-heading">
-            <div>
-              <p>{t("server.workspace.current")}</p>
-              <h2>{t(definition.labelKey)}</h2>
-            </div>
-            {definition.views ? (
+          {/* The eyebrow never changed and the section title only repeated the
+              nav item already highlighted beside it, so two of the four header
+              rows were pure chrome. The section name lives on the <section>
+              label, which is what assistive technology reads anyway. */}
+          {definition.views ? (
+            <header className="server-workspace-heading">
               <nav
                 aria-label={t("server.workspace.views")}
                 className="workspace-view-switcher"
@@ -280,8 +306,8 @@ export function ServerDetail({
                   );
                 })}
               </nav>
-            ) : null}
-          </header>
+            </header>
+          ) : null}
 
           <motion.div
             animate={{ opacity: 1, y: 0 }}

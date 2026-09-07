@@ -171,6 +171,7 @@ function createLoaderRegistry(dependencies = {}) {
     download: dependencies.download,
     runProcess: dependencies.runProcess,
     fileExists: dependencies.fileExists,
+    readDirectory: dependencies.readDirectory,
     platform: dependencies.platform || process.platform,
   };
   if (
@@ -380,13 +381,55 @@ function createLoaderRegistry(dependencies = {}) {
           artifactDestination: "forge-installer.jar",
           args: ["-jar", "{installer}", "--installServer"],
         },
+        /* Only the pre-install guess. Which jar the legacy installer actually
+           writes is settled by resolveInstalledOutputs below. */
         expectedOutputs: isLegacyForge(input.minecraftVersion)
           ? [legacyJar]
           : ["user_jvm_args.txt", modernArgs],
         launchSpec: isLegacyForge(input.minecraftVersion)
           ? jarLaunchSpec(legacyJar, input.workingDirectory)
           : modernArgsLaunchSpec(modernArgs, input.workingDirectory),
+        legacyServerJarPrefix: isLegacyForge(input.minecraftVersion)
+          ? `forge-${coordinate}`
+          : null,
       });
+    },
+
+    /* Forge renamed the server jar its legacy installer produces part-way
+       through the 1.12.2 line — 14.23.0.2491 writes
+       `forge-1.12.2-14.23.0.2491-universal.jar`, 14.23.5.2859 writes
+       `forge-1.12.2-14.23.5.2859.jar`, and every build from 1.7.10 up to that
+       switch carries the `-universal` suffix. No rule over the version pair
+       predicts that, which is why installing 1.7.10 failed validation on a
+       jar the installer never had any intention of writing. The name is read
+       back from the directory the installer just wrote instead of guessed,
+       and an unreadable or ambiguous result is raised rather than papered
+       over, because the launch command is built from this name. */
+    async resolveInstalledOutputs(plan) {
+      if (!plan.legacyServerJarPrefix) return plan;
+      if (typeof deps.readDirectory !== "function") {
+        throw new Error("loader directory reader is not configured");
+      }
+      const entries = await deps.readDirectory(plan.workingDirectory);
+      const produced = entries.filter(
+        (entry) =>
+          entry.startsWith(plan.legacyServerJarPrefix) &&
+          entry.endsWith(".jar"),
+      );
+      if (produced.length !== 1) {
+        throw codedError(
+          "LOADER_OUTPUT_UNRESOLVED",
+          produced.length === 0
+            ? `The Forge installer produced no ${plan.legacyServerJarPrefix}*.jar in ${plan.workingDirectory}.`
+            : `The Forge installer produced more than one server jar: ${produced.join(", ")}.`,
+        );
+      }
+      const [serverJar] = produced;
+      return {
+        ...plan,
+        expectedOutputs: [serverJar],
+        launchSpec: jarLaunchSpec(serverJar, plan.workingDirectory),
+      };
     },
   });
 

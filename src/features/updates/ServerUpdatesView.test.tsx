@@ -59,7 +59,7 @@ describe("ServerUpdatesView", () => {
       });
     });
     await user.click(await screen.findByRole("button", { name: "Continue" }));
-    fireEvent.change(screen.getByLabelText("Downloaded server jar"), {
+    fireEvent.change(screen.getByPlaceholderText("C:/path/to/server.jar"), {
       target: { value: "C:/downloads/server.jar" },
     });
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -122,7 +122,7 @@ describe("ServerUpdatesView", () => {
     render(<ServerUpdatesView server={server} />);
 
     await user.click(await screen.findByRole("button", { name: "Continue" }));
-    fireEvent.change(screen.getByLabelText("Downloaded server jar"), {
+    fireEvent.change(screen.getByPlaceholderText("C:/path/to/server.jar"), {
       target: { value: "C:/downloads/server.jar" },
     });
     await user.click(screen.getByRole("button", { name: "Continue" }));
@@ -138,5 +138,118 @@ describe("ServerUpdatesView", () => {
       "install_server_update",
       expect.anything(),
     );
+  });
+
+  it("uses discovered versions, enforces warnings, and installs without a local jar", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "check_server_update") {
+        return {
+          serverId: server.id,
+          loaderType: server.loaderType,
+          currentVersion: server.minecraftVersion,
+          targetVersion: "1.21.5",
+          targetLoaderVersion: "456",
+          updateAvailable: true,
+          installSupported: true,
+          message: "update available",
+          checks: [
+            { id: "java", status: "ready", message: "Java is compatible." },
+            {
+              id: "content",
+              status: "warning",
+              message: "Review installed plugins.",
+            },
+          ],
+        };
+      }
+      if (command === "list_server_update_history") return [];
+      if (command === "create_world_backup") return { id: "backup-1" };
+      if (command === "install_server_update") return { id: "update-1" };
+      return {};
+    });
+    render(<ServerUpdatesView server={server} />);
+
+    expect(
+      await screen.findByText("Review installed plugins."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    expect(screen.getByLabelText("Target Minecraft version")).toHaveValue(
+      "1.21.5",
+    );
+    expect(screen.getByLabelText("Target loader build/version")).toHaveValue(
+      "456",
+    );
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    const confirmations = screen.getAllByRole("checkbox");
+    await user.click(confirmations[0]);
+    await user.click(confirmations[1]);
+    await user.click(
+      screen.getByRole("button", { name: "Back up and install" }),
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("install_server_update", {
+        input: expect.objectContaining({
+          serverId: server.id,
+          targetMinecraftVersion: "1.21.5",
+          targetLoaderVersion: "456",
+          serverJarPath: undefined,
+          acknowledgeWarnings: true,
+          confirm: true,
+        }),
+      });
+    });
+  });
+
+  it("confirms and runs a rollback from update history", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "check_server_update") {
+        return {
+          serverId: server.id,
+          loaderType: server.loaderType,
+          currentVersion: "1.21.1",
+          targetVersion: "1.21.1",
+          targetLoaderVersion: "123",
+          updateAvailable: false,
+          installSupported: true,
+          message: "current",
+          checks: [],
+        };
+      }
+      if (command === "list_server_update_history") {
+        return [
+          {
+            id: "history-1",
+            serverId: server.id,
+            loaderType: "paper",
+            fromVersion: "1.21.1",
+            toVersion: "1.21.5",
+            status: "installed",
+            message: "installed",
+            rollbackPath: "C:/servers/test/backups/server-jars/old.jar",
+            rollbackAvailable: true,
+            createdAt: "2026-09-07T00:00:00Z",
+          },
+        ];
+      }
+      if (command === "rollback_server_update") return { id: "rollback-1" };
+      return {};
+    });
+    render(<ServerUpdatesView server={server} />);
+
+    await user.click(await screen.findByRole("button", { name: "Roll back" }));
+    expect(invoke).not.toHaveBeenCalledWith(
+      "rollback_server_update",
+      expect.anything(),
+    );
+    await user.click(screen.getByRole("button", { name: "Roll back update" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("rollback_server_update", {
+        input: { serverId: server.id, historyId: "history-1", confirm: true },
+      });
+    });
   });
 });

@@ -269,6 +269,74 @@ describe("trusted loader adapters", () => {
     });
   });
 
+  it("takes the legacy Forge server jar from the installer instead of guessing", async () => {
+    const { createLoaderRegistry } = require("./loaders.cjs");
+    const registry = createLoaderRegistry({
+      fetchJson: vi.fn(),
+      fetchText: vi.fn(),
+      // 1.7.10 through the middle of the 1.12.2 line append `-universal`, so
+      // the name built from the version pair is not the file that appears.
+      readDirectory: () => [
+        "forge-installer.jar",
+        "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar",
+        "minecraft_server.1.7.10.jar",
+      ],
+    });
+    const adapter = registry.get("forge");
+    const plan = await adapter.buildInstallPlan({
+      minecraftVersion: "1.7.10",
+      loaderVersion: "10.13.4.1614-1.7.10",
+      workingDirectory: ".",
+    });
+
+    const resolved = await adapter.resolveInstalledOutputs(plan);
+    expect(resolved.expectedOutputs).toEqual([
+      "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar",
+    ]);
+    expect(resolved.launchSpec.jvmArgs).toEqual([
+      "-jar",
+      "forge-1.7.10-10.13.4.1614-1.7.10-universal.jar",
+    ]);
+  });
+
+  it("raises when the legacy Forge installer leaves no server jar behind", async () => {
+    const { createLoaderRegistry } = require("./loaders.cjs");
+    const registry = createLoaderRegistry({
+      fetchJson: vi.fn(),
+      fetchText: vi.fn(),
+      readDirectory: () => ["forge-installer.jar"],
+    });
+    const adapter = registry.get("forge");
+    const plan = await adapter.buildInstallPlan({
+      minecraftVersion: "1.7.10",
+      loaderVersion: "10.13.4.1614-1.7.10",
+      workingDirectory: ".",
+    });
+
+    await expect(adapter.resolveInstalledOutputs(plan)).rejects.toMatchObject({
+      code: "LOADER_OUTPUT_UNRESOLVED",
+    });
+  });
+
+  it("leaves modern Forge outputs untouched", async () => {
+    const { createLoaderRegistry } = require("./loaders.cjs");
+    const registry = createLoaderRegistry({
+      fetchJson: vi.fn(),
+      fetchText: vi.fn(),
+      readDirectory: () => {
+        throw new Error("modern Forge must not read the directory back");
+      },
+    });
+    const adapter = registry.get("forge");
+    const plan = await adapter.buildInstallPlan({
+      minecraftVersion: "1.21.4",
+      loaderVersion: "54.0.1",
+      workingDirectory: ".",
+    });
+
+    expect(await adapter.resolveInstalledOutputs(plan)).toBe(plan);
+  });
+
   it("reports missing loader output during validation", async () => {
     const { createLoaderRegistry } = require("./loaders.cjs");
     const registry = createLoaderRegistry({

@@ -11,6 +11,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
@@ -37,6 +38,7 @@ import {
 } from "./contentApi";
 import { contentKeys } from "./queries";
 import { useNotificationStore } from "../notifications/notificationStore";
+import "./content.css";
 
 interface InstalledContentViewProps {
   server: ServerProfile;
@@ -67,8 +69,20 @@ export function InstalledContentView({
     kind: "disable" | "uninstall";
     item: InstalledContent;
   } | null>(null);
+  const [batchAction, setBatchAction] = useState<
+    "disable" | "uninstall" | null
+  >(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [operationResult, setOperationResult] = useState<{
+    count: number;
+    restartRequired: boolean;
+    backups: number;
+  } | null>(null);
   const [updateCheck, setUpdateCheck] =
     useState<InstalledContentUpdateCheck | null>(null);
+  // Replacing every jar at once is the one action here that cannot be undone
+  // and cannot be done item by item afterwards, so it gets its own gate.
+  const [confirmUpdateAll, setConfirmUpdateAll] = useState(false);
   const contentQuery = useQuery({
     queryKey: contentKeys.installed(server.id),
     queryFn: () => listInstalledContent(server.id),
@@ -78,6 +92,7 @@ export function InstalledContentView({
       importLocalContent(server.id, sourcePath),
     onSuccess: async () => {
       setShowImport(false);
+      setOperationResult({ count: 1, restartRequired: true, backups: 0 });
       await queryClient.invalidateQueries({
         queryKey: contentKeys.installed(server.id),
       });
@@ -89,6 +104,7 @@ export function InstalledContentView({
       disableInstalledContent(server.id, contentId),
     onSuccess: async () => {
       setDangerAction(null);
+      setOperationResult({ count: 1, restartRequired: true, backups: 0 });
       await queryClient.invalidateQueries({
         queryKey: contentKeys.installed(server.id),
       });
@@ -100,6 +116,7 @@ export function InstalledContentView({
       enableInstalledContent(server.id, contentId),
     onSuccess: async () => {
       setDangerAction(null);
+      setOperationResult({ count: 1, restartRequired: true, backups: 0 });
       await queryClient.invalidateQueries({
         queryKey: contentKeys.installed(server.id),
       });
@@ -110,6 +127,8 @@ export function InstalledContentView({
     mutationFn: (contentId: string) =>
       uninstallInstalledContent(server.id, contentId),
     onSuccess: async () => {
+      setDangerAction(null);
+      setOperationResult({ count: 1, restartRequired: true, backups: 0 });
       await queryClient.invalidateQueries({
         queryKey: contentKeys.installed(server.id),
       });
@@ -124,27 +143,69 @@ export function InstalledContentView({
   const installUpdateMutation = useMutation({
     mutationFn: (contentId: string) =>
       installContentUpdate(server.id, contentId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: contentKeys.installed(server.id),
-        }),
-        checkUpdatesMutation.mutateAsync().catch(() => null),
-      ]);
+    onSuccess: async (result) => {
+      setOperationResult({
+        count: 1,
+        restartRequired: true,
+        backups: result.backupPath ? 1 : 0,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: contentKeys.installed(server.id),
+      });
+      checkUpdatesMutation.mutate();
     },
     onError: notifyActionError,
   });
   const installAllUpdatesMutation = useMutation({
-    mutationFn: () => installAllContentUpdates(server.id),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: contentKeys.installed(server.id),
-        }),
-        checkUpdatesMutation.mutateAsync().catch(() => null),
-      ]);
+    mutationFn: (installedContentIds: string[]) =>
+      installAllContentUpdates(server.id, installedContentIds),
+    onSuccess: async (result) => {
+      setSelectedIds(new Set());
+      setOperationResult({
+        count: result.installed.length,
+        restartRequired: result.installed.length > 0,
+        backups: result.installed.filter((item) => item.backupPath).length,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: contentKeys.installed(server.id),
+      });
+      checkUpdatesMutation.mutate();
     },
     onError: notifyActionError,
+  });
+  const batchMutation = useMutation({
+    mutationFn: async ({
+      action,
+      ids,
+    }: {
+      action: "enable" | "disable" | "uninstall";
+      ids: string[];
+    }) => {
+      await Promise.all(
+        ids.map((id) =>
+          action === "enable"
+            ? enableInstalledContent(server.id, id)
+            : action === "disable"
+              ? disableInstalledContent(server.id, id)
+              : uninstallInstalledContent(server.id, id),
+        ),
+      );
+      return ids.length;
+    },
+    onSuccess: async (count) => {
+      setBatchAction(null);
+      setSelectedIds(new Set());
+      setOperationResult({ count, restartRequired: true, backups: 0 });
+      await queryClient.invalidateQueries({
+        queryKey: contentKeys.installed(server.id),
+      });
+    },
+    onError: async (error) => {
+      notifyActionError(error);
+      await queryClient.invalidateQueries({
+        queryKey: contentKeys.installed(server.id),
+      });
+    },
   });
   const content = contentQuery.data ?? [];
   const updateByContentId = new Map(
@@ -153,11 +214,51 @@ export function InstalledContentView({
       update,
     ]),
   );
+  const selectedContent = content.filter((item) => selectedIds.has(item.id));
+  const selectedUpdateIds = selectedContent
+    .filter((item) => updateByContentId.has(item.id))
+    .map((item) => item.id);
+  const allSelected = content.length > 0 && selectedIds.size === content.length;
   const columns: DataTableColumn<InstalledContent>[] = [
+    {
+      id: "select",
+      header: (
+        <Checkbox
+          aria-label={t("content.selection.all", { count: content.length })}
+          checked={
+            allSelected ? true : selectedIds.size > 0 ? "indeterminate" : false
+          }
+          onCheckedChange={(checked) =>
+            setSelectedIds(
+              checked === true
+                ? new Set(content.map((item) => item.id))
+                : new Set(),
+            )
+          }
+        />
+      ),
+      headerClassName: "content-select-cell",
+      cellClassName: "content-select-cell",
+      cell: (item) => (
+        <Checkbox
+          aria-label={t("content.selection.item", { name: item.name })}
+          checked={selectedIds.has(item.id)}
+          onCheckedChange={(checked) =>
+            setSelectedIds((current) => {
+              const next = new Set(current);
+              if (checked === true) next.add(item.id);
+              else next.delete(item.id);
+              return next;
+            })
+          }
+        />
+      ),
+    },
     {
       id: "name",
       header: t("content.table.name"),
       rowHeader: true,
+      sortValue: (item) => item.name,
       cell: (item) => (
         <span className="content-name-cell">
           <span className="content-name-icon">
@@ -165,7 +266,12 @@ export function InstalledContentView({
           </span>
           <span>
             <span>{item.name}</span>
-            <small>{item.contentId ?? t("content.installed.unknownId")}</small>
+            {/* The mod's own id first: it is what the jar declares and what a
+                search for it will match. The marketplace id is a fallback for
+                anything installed from inside the app. */}
+            <small>
+              {item.modId ?? item.contentId ?? t("content.installed.unknownId")}
+            </small>
           </span>
         </span>
       ),
@@ -174,11 +280,13 @@ export function InstalledContentView({
       id: "loader",
       header: t("content.table.loader"),
       cell: (item) => <LoaderPill loaderType={item.loader} />,
+      sortValue: (item) => item.loader,
     },
     {
       id: "version",
       header: t("content.table.version"),
       cell: (item) => item.version ?? t("common.unknown"),
+      sortValue: (item) => item.version,
     },
     {
       id: "update",
@@ -193,14 +301,26 @@ export function InstalledContentView({
         ) : updateCheck ? (
           t("content.installed.current")
         ) : (
-          t("content.installed.notChecked")
+          /* Before a check has run the column has nothing to say about this row,
+             and repeating "Not checked" once per mod turned it into noise. The
+             toolbar button is what states the un-checked state. */
+          <span className="cell-empty">-</span>
         );
       },
+    },
+    {
+      id: "state",
+      header: t("content.table.state"),
+      cell: (item) =>
+        item.installedPath.endsWith(".disabled")
+          ? t("content.state.disabled")
+          : t("content.state.enabled"),
     },
     {
       id: "installed",
       header: t("content.table.installed"),
       cell: (item) => formatDateTime(item.installedAt, language),
+      sortValue: (item) => item.installedAt,
     },
     {
       id: "warnings",
@@ -221,7 +341,7 @@ export function InstalledContentView({
       cell: (item) => {
         const update = updateByContentId.get(item.id);
         return (
-          <>
+          <span className="content-row-actions">
             {item.installedPath.endsWith(".disabled") ? (
               <Button
                 disabled={enableMutation.isPending}
@@ -265,7 +385,7 @@ export function InstalledContentView({
                 {t("content.installed.update")}
               </Button>
             ) : null}
-          </>
+          </span>
         );
       },
     },
@@ -289,14 +409,16 @@ export function InstalledContentView({
           </Button>
           <Button
             disabled={
-              !updateCheck?.updates.length ||
+              selectedUpdateIds.length === 0 ||
               installAllUpdatesMutation.isPending
             }
             variant="secondary"
-            onClick={() => installAllUpdatesMutation.mutate()}
+            onClick={() => setConfirmUpdateAll(true)}
           >
             <Download aria-hidden="true" size={15} />
-            {t("content.installed.updateAll")}
+            {t("content.updates.updateSelected", {
+              count: selectedUpdateIds.length,
+            })}
           </Button>
           <details ref={addMenuRef} className="dropdown content-add-menu">
             <summary className="button button-primary">
@@ -331,6 +453,73 @@ export function InstalledContentView({
           </details>
         </div>
       </div>
+
+      {selectedIds.size > 0 ? (
+        <div
+          className="content-selection-toolbar"
+          role="toolbar"
+          aria-label={t("content.selection.actions")}
+        >
+          <strong>
+            {t("content.selection.count", { count: selectedIds.size })}
+          </strong>
+          <Button
+            disabled={batchMutation.isPending}
+            variant="secondary"
+            onClick={() =>
+              batchMutation.mutate({ action: "enable", ids: [...selectedIds] })
+            }
+          >
+            {t("content.selection.enable")}
+          </Button>
+          <Button
+            disabled={batchMutation.isPending}
+            variant="secondary"
+            onClick={() => setBatchAction("disable")}
+          >
+            {t("content.selection.disable")}
+          </Button>
+          <Button
+            disabled={batchMutation.isPending}
+            variant="ghost"
+            onClick={() => setBatchAction("uninstall")}
+          >
+            {t("content.selection.uninstall")}
+          </Button>
+          <Button variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            {t("content.selection.clear")}
+          </Button>
+        </div>
+      ) : null}
+
+      {operationResult ? (
+        <div
+          className="content-operation-result"
+          role="status"
+          aria-live="polite"
+        >
+          <strong>
+            {t("content.operation.complete", { count: operationResult.count })}
+          </strong>
+          {operationResult.restartRequired ? (
+            <span>{t("content.updates.restartRequired")}</span>
+          ) : null}
+          {operationResult.backups > 0 ? (
+            <span>
+              {t("content.updates.backupsCreated", {
+                count: operationResult.backups,
+              })}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+      {batchMutation.error ? (
+        <div className="inline-error" role="alert">
+          <strong>{t("content.operation.failed")}</strong>
+          <span>{batchMutation.error.message}</span>
+          <span>{t("content.operation.recovery")}</span>
+        </div>
+      ) : null}
 
       {showImport ? (
         <LocalImportDialog
@@ -388,6 +577,9 @@ export function InstalledContentView({
             className="content-table"
             columns={columns}
             getRowKey={(item) => item.id}
+            getRowClassName={(item) =>
+              selectedIds.has(item.id) ? "content-row-selected" : undefined
+            }
             rows={content}
           />
         </div>
@@ -432,6 +624,60 @@ export function InstalledContentView({
           }
           disableMutation.mutate(dangerAction.item.id);
         }}
+      />
+      <ConfirmDangerDialog
+        confirmLabel={
+          batchAction === "uninstall"
+            ? t("content.selection.uninstall")
+            : t("content.selection.disable")
+        }
+        description={t(
+          batchAction === "uninstall"
+            ? "content.selection.confirmUninstall"
+            : "content.selection.confirmDisable",
+          { count: selectedIds.size, server: server.name },
+        )}
+        error={batchMutation.error?.message ?? null}
+        isConfirming={batchMutation.isPending}
+        isOpen={batchAction !== null}
+        title={t(
+          batchAction === "uninstall"
+            ? "content.selection.uninstallTitle"
+            : "content.selection.disableTitle",
+        )}
+        onCancel={() => setBatchAction(null)}
+        onConfirm={() => {
+          if (batchAction) {
+            batchMutation.mutate({
+              action: batchAction,
+              ids: [...selectedIds],
+            });
+          }
+        }}
+      />
+      <ConfirmDangerDialog
+        confirmLabel={t("content.updates.updateSelected", {
+          count: selectedUpdateIds.length,
+        })}
+        consequences={[
+          t("content.updates.consequenceReplace"),
+          t("danger.content.updateAll.consequenceBackup"),
+          t("danger.content.updateAll.consequenceRestart"),
+        ]}
+        description={t("danger.content.updateAll.description", {
+          count: selectedUpdateIds.length,
+          server: server.name,
+        })}
+        error={installAllUpdatesMutation.error?.message ?? null}
+        isConfirming={installAllUpdatesMutation.isPending}
+        isOpen={confirmUpdateAll}
+        title={t("danger.content.updateAll.title")}
+        onCancel={() => setConfirmUpdateAll(false)}
+        onConfirm={() =>
+          installAllUpdatesMutation.mutate(selectedUpdateIds, {
+            onSuccess: () => setConfirmUpdateAll(false),
+          })
+        }
       />
     </section>
   );

@@ -68,10 +68,12 @@ function metricValue(input: number | null | undefined, suffix = "") {
 }
 
 /**
- * Live cards carry the numbers an operator checks first. The history is only
- * requested for servers that are actually up, so an idle dashboard stays quiet.
+ * Every card carries the same CPU curve, so a two-server dashboard still reads
+ * as a dashboard instead of two labels floating in an empty row. A stopped
+ * server draws the history it actually recorded — never a placeholder shape.
+ * With no samples at all the sparkline says so rather than inventing one.
  */
-function ServerCardTelemetry({ serverId }: { serverId: string }) {
+function ServerCardTrend({ serverId }: { serverId: string }) {
   const { t } = useAppSettings();
   const historyQuery = useQuery({
     queryKey: performanceKeys.history(serverId),
@@ -79,10 +81,31 @@ function ServerCardTelemetry({ serverId }: { serverId: string }) {
   });
   const samples = historyQuery.data?.samples ?? [];
   const latest = samples[0];
-  const cpuTrend = [...samples]
-    .reverse()
-    .map((sample) => sample.cpuPercent)
-    .filter((value): value is number => typeof value === "number");
+
+  return (
+    <figure className="server-card-trend">
+      <figcaption>
+        <span>{t("servers.card.cpuTrend")}</span>
+        <b>{metricValue(latest?.cpuPercent, "%")}</b>
+      </figcaption>
+      <Sparkline
+        formatValue={(value) => `${value}%`}
+        label={t("servers.card.cpuTrend")}
+        max={100}
+        values={[...samples].reverse().map((sample) => sample.cpuPercent)}
+      />
+    </figure>
+  );
+}
+
+/** The numbers an operator checks first, only meaningful while the server is up. */
+function ServerCardTelemetry({ serverId }: { serverId: string }) {
+  const { t } = useAppSettings();
+  const historyQuery = useQuery({
+    queryKey: performanceKeys.history(serverId),
+    queryFn: () => getPerformanceHistory(serverId),
+  });
+  const latest = historyQuery.data?.samples?.[0];
 
   return (
     <div className="server-card-telemetry">
@@ -98,10 +121,6 @@ function ServerCardTelemetry({ serverId }: { serverId: string }) {
         {t("performance.tps")}
         <b>{metricValue(latest?.tps)}</b>
       </span>
-      {/* One sample is a reading, not a trend, and would draw an empty box. */}
-      {cpuTrend.length > 1 ? (
-        <Sparkline label={t("servers.card.cpuTrend")} values={cpuTrend} />
-      ) : null}
     </div>
   );
 }
@@ -161,22 +180,24 @@ function ServerCard({
         <StatusBadge status={status} />
       </div>
 
-      {isLive ? (
-        <ServerCardTelemetry serverId={server.id} />
-      ) : (
-        <dl className="server-card-facts">
-          <div>
-            <dt>{t("servers.card.memory")}</dt>
-            <dd>{formatMemory(server, t("server.meta.unset"))}</dd>
-          </div>
-          <div>
-            <dt>{t("servers.card.lastBackup")}</dt>
-            <dd>
-              <ServerLastBackup createdAt={lastBackup} />
-            </dd>
-          </div>
-        </dl>
-      )}
+      <div className="server-card-body">
+        <div className="server-card-readouts">
+          {isLive ? <ServerCardTelemetry serverId={server.id} /> : null}
+          <dl className="server-card-facts">
+            <div>
+              <dt>{t("servers.card.memory")}</dt>
+              <dd>{formatMemory(server, t("server.meta.unset"))}</dd>
+            </div>
+            <div>
+              <dt>{t("servers.card.lastBackup")}</dt>
+              <dd>
+                <ServerLastBackup createdAt={lastBackup} />
+              </dd>
+            </div>
+          </dl>
+        </div>
+        <ServerCardTrend serverId={server.id} />
+      </div>
 
       <div className="server-card-actions">
         <ServerActions processStatus={status} server={server} />

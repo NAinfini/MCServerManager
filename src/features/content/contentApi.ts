@@ -4,6 +4,14 @@ export interface InstalledContent {
   id: string;
   serverId: string;
   contentId?: string | null;
+  provider?: string | null;
+  projectId?: string | null;
+  versionId?: string | null;
+  /* What the jar calls itself, read from its own descriptor (mcmod.info,
+     mods.toml, fabric.mod.json, plugin.yml). Distinct from contentId, which
+     records the marketplace it was downloaded from and is null for a file
+     dropped into the folder by hand. */
+  modId?: string | null;
   name: string;
   version?: string | null;
   loader: string;
@@ -32,14 +40,6 @@ export interface ContentUpdatePolicy {
   updatedAt: string;
 }
 
-export interface ContentUpdatePlan {
-  serverId: string;
-  policy: ContentUpdatePolicyMode;
-  plannedUpdates: string[];
-  warnings: string[];
-  requiresConfirmation: boolean;
-}
-
 export interface InstalledContentUpdate {
   installedContentId: string;
   provider: string;
@@ -63,12 +63,17 @@ export interface InstalledContentUpdateResult {
   backupPath?: string | null;
 }
 
-export interface ContentUpdateCandidate {
-  contentId?: string | null;
+export interface ContentUpdateHistoryEntry {
+  id: string;
+  serverId: string;
+  installedContentId: string;
   name: string;
-  currentVersion?: string | null;
-  latestVersion: string;
-  warnings: string[];
+  fromVersion?: string | null;
+  toVersion: string;
+  status: "installed" | "rolled_back";
+  backupPath: string;
+  createdAt: string;
+  rollbackAvailable: boolean;
 }
 
 export function listInstalledContent(serverId: string) {
@@ -152,27 +157,6 @@ export function saveContentUpdatePolicy(
   );
 }
 
-export function planContentUpdates(
-  serverId: string,
-  options: {
-    availableUpdates?: ContentUpdateCandidate[];
-    installAnyway?: boolean;
-    confirmBatch?: boolean;
-  } = {},
-) {
-  return invokeDesktopCommandWithErrorHandling<ContentUpdatePlan>(
-    "plan_content_updates",
-    {
-      input: {
-        serverId,
-        availableUpdates: options.availableUpdates ?? [],
-        installAnyway: options.installAnyway ?? false,
-        confirmBatch: options.confirmBatch ?? false,
-      },
-    },
-  );
-}
-
 export function checkContentUpdates(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<InstalledContentUpdateCheck>(
     "check_content_updates",
@@ -194,12 +178,29 @@ export function installContentUpdate(
   );
 }
 
-export function installAllContentUpdates(serverId: string) {
+export function installAllContentUpdates(
+  serverId: string,
+  installedContentIds?: string[],
+) {
   return invokeDesktopCommandWithErrorHandling<{
     serverId: string;
     installed: InstalledContentUpdateResult[];
     warnings: string[];
   }>("install_all_content_updates", {
-    input: { serverId },
+    input: { serverId, installedContentIds },
   });
+}
+
+export function listContentUpdateHistory(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<ContentUpdateHistoryEntry[]>(
+    "list_content_update_history",
+    { serverId },
+  );
+}
+
+export function rollbackContentUpdate(serverId: string, historyId: string) {
+  return invokeDesktopCommandWithErrorHandling<InstalledContentUpdateResult>(
+    "rollback_content_update",
+    { input: { serverId, historyId, confirm: true } },
+  );
 }

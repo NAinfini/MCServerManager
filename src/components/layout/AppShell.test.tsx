@@ -421,7 +421,9 @@ describe("AppShell", () => {
       within(main).queryByRole("navigation", { name: "Wizard progress" }),
     ).not.toBeInTheDocument();
 
-    await userEvent.click(within(main).getByRole("button", { name: "Back" }));
+    await userEvent.click(
+      within(main).getByRole("button", { name: "Back to results" }),
+    );
 
     expect(
       main.querySelector(".create-server-wizard-header"),

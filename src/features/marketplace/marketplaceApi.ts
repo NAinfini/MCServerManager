@@ -49,20 +49,6 @@ export interface ProjectVersion {
   serverCompatibility?: "serverPack" | "unverified";
 }
 
-export interface HangarProjectSummary {
-  id: string;
-  name: string;
-  namespace: string;
-  description: string;
-  platform: string;
-}
-
-export interface HangarVersion {
-  name: string;
-  description: string;
-  createdAt?: string | null;
-}
-
 export type BbsmcProjectSummary = MarketplaceProject;
 
 export type MarketplaceProjectType =
@@ -77,6 +63,20 @@ export interface MarketplaceSearchOptions {
   projectType?: MarketplaceProjectType;
   loader?: MarketplaceLoaderFilter;
   sort?: MarketplaceSortOrder;
+  minecraftVersion?: string;
+  offset?: number;
+  limit?: number;
+}
+
+/* A version only counts as a real server pack when the provider says so. Both
+   the result list and the detail panel badge it, so the predicate lives here
+   rather than being restated wherever it is needed. */
+export function isVerifiedServerPack(version: ProjectVersion) {
+  return Boolean(
+    version.isServerPack ||
+    version.serverPackFileId ||
+    version.serverCompatibility === "serverPack",
+  );
 }
 
 export function searchModrinthProjects(
@@ -124,20 +124,30 @@ export function installModrinthVersion(
   );
 }
 
-export function searchHangarProjects(query: string) {
-  return invokeDesktopCommandWithErrorHandling<HangarProjectSummary[]>(
+export function searchHangarProjects(
+  query: string,
+  options: MarketplaceSearchOptions = {},
+) {
+  return invokeDesktopCommandWithErrorHandling<ProjectSummary[]>(
     "search_hangar_projects",
     {
-      query,
+      input: { query, ...options },
     },
   );
 }
 
-export function listHangarVersions(projectId: string) {
-  return invokeDesktopCommandWithErrorHandling<HangarVersion[]>(
+export function getHangarProject(projectId: string) {
+  return invokeDesktopCommandWithErrorHandling<ProjectDetails>(
+    "get_hangar_project",
+    { input: { projectId } },
+  );
+}
+
+export function listHangarVersions(serverId: string, projectId: string) {
+  return invokeDesktopCommandWithErrorHandling<ProjectVersion[]>(
     "list_hangar_versions",
     {
-      input: { projectId },
+      input: { serverId, projectId },
     },
   );
 }
@@ -146,12 +156,12 @@ export function installHangarVersion(
   serverId: string,
   projectId: string,
   versionName: string,
-  name?: string,
+  installAnyway = false,
 ) {
   return invokeDesktopCommandWithErrorHandling<InstalledContent>(
     "install_hangar_version",
     {
-      input: { serverId, projectId, versionName, name },
+      input: { serverId, projectId, versionName, installAnyway },
     },
   );
 }

@@ -89,16 +89,20 @@ describe("PerformanceHistoryView", () => {
 
     renderPerformance();
 
-    expect(await screen.findAllByText("Unavailable")).toHaveLength(6);
+    // CPU, memory and TPS report once each now, on their chart card; disk and
+    // uptime report on their tile. The duplicate tiles are gone.
+    expect(await screen.findAllByText("Unavailable")).toHaveLength(4);
     expect(
       screen.getByText("Process metrics are unavailable."),
     ).toBeInTheDocument();
     expect(
       screen.getByText("No real TPS provider is configured."),
     ).toBeInTheDocument();
-    expect(screen.getByText("process crashed")).toBeInTheDocument();
+    // The events this response carries belong to the Events panel beside this
+    // one on the overview; repeating them here printed the same crash twice.
+    expect(screen.queryByText("process crashed")).not.toBeInTheDocument();
     expect(screen.getByText("Restarts")).toBeInTheDocument();
-    expect(screen.getAllByText("TPS")).toHaveLength(2);
+    expect(screen.getAllByText("TPS")).toHaveLength(1);
   });
 
   it("shows every measured runtime value without synthesizing TPS", async () => {
@@ -124,10 +128,15 @@ describe("PerformanceHistoryView", () => {
 
     renderPerformance();
 
-    expect(await screen.findAllByText("12.5%")).toHaveLength(2);
-    expect(screen.getAllByText("768 MB")).toHaveLength(2);
-    expect(screen.getByText("20480 MB")).toBeInTheDocument();
-    expect(screen.getByText("90 s")).toBeInTheDocument();
+    // The curves carry an SVG <title> per sample for the pointer, which repeats
+    // the same figure; the assertion is about the readouts, so those are out.
+    const readouts = { ignore: "script, style, title" };
+    expect(await screen.findAllByText("12.5%", readouts)).toHaveLength(1);
+    expect(screen.getAllByText("768 MB", readouts)).toHaveLength(1);
+    // Storage and uptime are shown in units a person reads, not the raw
+    // megabytes and seconds the backend reports.
+    expect(screen.getByText("20 GB")).toBeInTheDocument();
+    expect(screen.getByText("1 min 30 s")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(

@@ -8,6 +8,7 @@ export interface FakeDesktopState {
   processStatus: "running" | "stopped" | "crashed";
   preferences: Record<string, any>;
   files: Record<string, string>;
+  directories: string[];
   backups: Array<Record<string, any>>;
   scheduledTasks: Array<Record<string, any>>;
   playerLists: Record<string, Array<Record<string, any>>>;
@@ -75,6 +76,7 @@ export function createFakeDesktopState(): FakeDesktopState {
       "server.properties": "motd=Fabric Workshop\nserver-port=25565\n",
       "eula.txt": "eula=true\n",
     },
+    directories: ["world", "mods"],
     backups: [
       {
         id: "backup-1",
@@ -189,7 +191,6 @@ export async function handleFakeDesktopCommand(
     case "export_app_settings":
     case "export_diagnostic_package":
     case "send_server_command":
-    case "restore_world_backup":
     case "unbind_tunnel_from_server":
     case "bind_tunnel_to_server":
     case "open_tunnel_application":
@@ -361,31 +362,78 @@ export async function handleFakeDesktopCommand(
         ];
       }
       return [
-        {
-          name: "world",
-          relativePath: "world",
+        ...state.directories.map((directory) => ({
+          name: directory.split("/").at(-1),
+          relativePath: directory,
           kind: "directory",
           sizeBytes: 0,
           modifiedAt: now,
           editable: false,
-        },
-        {
-          name: "mods",
-          relativePath: "mods",
-          kind: "directory",
-          sizeBytes: 0,
-          modifiedAt: now,
-          editable: false,
-        },
+        })),
         ...Object.keys(state.files).map((relativePath) => ({
-          name: relativePath,
+          name: relativePath.split("/").at(-1),
           relativePath,
           kind: "file",
           sizeBytes: state.files[relativePath].length,
           modifiedAt: now,
           editable: true,
         })),
-      ];
+      ].filter(
+        (entry) =>
+          entry.relativePath.split("/").slice(0, -1).join("/") === relativePath,
+      );
+    }
+    case "mutate_server_files": {
+      const source = input.relativePath as string;
+      const exists = (value: string) =>
+        value in state.files || state.directories.includes(value);
+      const requireNew = (value: string) => {
+        if (exists(value))
+          throw new Error("The destination path already exists.");
+      };
+      if (input.operation === "createFile") {
+        requireNew(source);
+        state.files[source] = input.content ?? "";
+      } else if (input.operation === "createDirectory") {
+        requireNew(source);
+        state.directories.push(source);
+      } else if (["rename", "move"].includes(input.operation)) {
+        const destination = input.targetRelativePath as string;
+        requireNew(destination);
+        if (!exists(source)) throw new Error("The source path does not exist.");
+        const move = (value: string) =>
+          value === source || value.startsWith(`${source}/`)
+            ? destination + value.slice(source.length)
+            : value;
+        state.files = Object.fromEntries(
+          Object.entries(state.files).map(([value, content]) => [
+            move(value),
+            content,
+          ]),
+        );
+        state.directories = state.directories.map(move);
+        return { relativePaths: [destination] };
+      } else if (input.operation === "delete") {
+        if (!input.confirmDelete)
+          throw new Error("File deletion requires confirmation.");
+        for (const value of Object.keys(state.files))
+          if (value === source || value.startsWith(`${source}/`))
+            delete state.files[value];
+        state.directories = state.directories.filter(
+          (value) => value !== source && !value.startsWith(`${source}/`),
+        );
+      } else if (input.operation === "upload") {
+        const destination = [
+          source,
+          String(input.sourcePaths[0]).split(/[\\/]/).at(-1),
+        ]
+          .filter(Boolean)
+          .join("/");
+        requireNew(destination);
+        state.files[destination] = "Uploaded fixture file";
+        return { relativePaths: [destination] };
+      } else throw new Error("Unsupported file operation");
+      return { relativePaths: [source] };
     }
     case "read_server_text_file": {
       const content = state.files[args?.relativePath] ?? "";
@@ -393,16 +441,24 @@ export async function handleFakeDesktopCommand(
         relativePath: args?.relativePath,
         content,
         sizeBytes: content.length,
+        revision: `fixture:${content}`,
         readOnly: false,
         warning: null,
       };
     }
     case "write_server_text_file":
+      if (
+        args?.expectedRevision !==
+        `fixture:${state.files[args?.relativePath] ?? ""}`
+      ) {
+        throw new Error("The file changed on disk. Reload it before saving.");
+      }
       state.files[args?.relativePath] = args?.content ?? "";
       return {
         relativePath: args?.relativePath,
         content: state.files[args?.relativePath],
         sizeBytes: state.files[args?.relativePath].length,
+        revision: `fixture:${state.files[args?.relativePath]}`,
         readOnly: false,
         warning: null,
       };
@@ -491,14 +547,6 @@ export async function handleFakeDesktopCommand(
         ignoredUpdate: input.ignoredUpdate ?? null,
         updatedAt: now,
       };
-    case "plan_content_updates":
-      return {
-        serverId: "server-1",
-        policy: "notify_only",
-        plannedUpdates: [],
-        warnings: [],
-        requiresConfirmation: false,
-      };
     case "check_content_updates":
       return {
         serverId: "server-1",
@@ -507,6 +555,7 @@ export async function handleFakeDesktopCommand(
         warnings: [],
       };
     case "install_content_update":
+    case "rollback_content_update":
       return {
         content: await handleFakeDesktopCommand(
           state,
@@ -523,6 +572,7 @@ export async function handleFakeDesktopCommand(
     case "search_bbsmc_projects":
       return [];
     case "get_modrinth_project":
+    case "get_hangar_project":
     case "get_curseforge_project":
     case "get_bbsmc_project": {
       const project =
@@ -573,6 +623,19 @@ export async function handleFakeDesktopCommand(
       return handleFakeDesktopCommand(state, "import_local_content", args);
     case "list_server_backups":
       return clone(state.backups);
+    case "preview_backup_restore":
+      return {
+        serverId: input.serverId,
+        backupId: input.backupId,
+        mode: "worldOnly",
+        relativePaths: [`${input.targetWorldDir || "world"}/level.dat`],
+        fileCount: 1,
+        sizeBytes: 2048,
+        warnings: [],
+      };
+    case "restore_world_backup":
+      if (!input.confirm) throw new Error("Restore requires confirmation");
+      return null;
     case "create_world_backup": {
       const backup = {
         id: `backup-${state.backups.length + 1}`,
@@ -699,6 +762,7 @@ export async function handleFakeDesktopCommand(
     case "delete_tunnel_provider":
       return null;
     case "list_server_update_history":
+    case "list_content_update_history":
       return [];
     case "check_server_update":
       return {
@@ -711,8 +775,17 @@ export async function handleFakeDesktopCommand(
         updateAvailable: false,
         installSupported: false,
         message: "No update available.",
+        targetLoaderVersion: "0.16.10",
+        checks: [
+          {
+            id: "loader",
+            status: "blocked",
+            message: "This loader requires manual runtime installation.",
+          },
+        ],
       };
     case "install_server_update":
+    case "rollback_server_update":
       return {
         id: "update-1",
         serverId: "server-1",
@@ -735,18 +808,6 @@ export async function handleFakeDesktopCommand(
         checks: [],
         createdAt: now,
       };
-    case "export_server_profile":
-      return { path: "C:\\Exports\\fabric-workshop.json" };
-    case "preview_profile_import":
-      return {
-        name: input.name ?? "Imported Server",
-        rootDir: input.rootDir ?? "C:\\Servers\\imported",
-        minecraftVersion: "1.21.1",
-        loaderType: "fabric",
-        warnings: [],
-      };
-    case "import_profile":
-      return { ...clone(server), id: "server-imported", name: input.name };
     case "list_java_runtimes":
       return {
         runtimes: [
@@ -798,6 +859,11 @@ export async function handleFakeDesktopCommand(
         architecture: "x64",
         source: "managed",
         managed: true,
+      };
+    case "remove_java_runtime":
+      return {
+        path: (payload as { path?: string })?.path ?? "",
+        removedDir: "C:\\AppData\\MCServerManager\\runtimes\\temurin\\21",
       };
     case "list_app_logs":
       return [

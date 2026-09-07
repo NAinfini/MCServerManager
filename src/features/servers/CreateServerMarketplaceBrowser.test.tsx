@@ -72,10 +72,14 @@ describe("CreateServerMarketplaceBrowser", () => {
   it("uses the shared browser to discover and select a verified server pack", async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
-    renderBrowser(onSelect);
+    const { container } = renderBrowser(onSelect);
     await user.click(
       await screen.findByRole("button", { name: /server pack/i }),
     );
+    expect(container.querySelector(".marketplace-layout")).toHaveClass(
+      "marketplace-layout-detail-mode",
+    );
+    expect(container.querySelector(".marketplace-detail-pane")).toBeTruthy();
     await user.click(
       await screen.findByRole("button", { name: /dedicated pack/i }),
     );
@@ -91,6 +95,68 @@ describe("CreateServerMarketplaceBrowser", () => {
         minecraftVersion: "1.21.4",
       }),
     );
+  });
+
+  it("uses an unfiltered discovery query when switching to BBSMC", async () => {
+    const user = userEvent.setup();
+    renderBrowser();
+
+    await user.click(screen.getByRole("combobox", { name: /^source$/i }));
+    await user.click(await screen.findByRole("option", { name: "BBSMC" }));
+
+    await vi.waitFor(() =>
+      expect(invokeDesktopCommand).toHaveBeenCalledWith(
+        "search_bbsmc_projects",
+        expect.objectContaining({
+          input: expect.objectContaining({ query: "" }),
+        }),
+      ),
+    );
+  });
+
+  it("fetches the BBSMC project so its description has a body to render", async () => {
+    vi.mocked(invokeDesktopCommand).mockImplementation(async (command) => {
+      // BBSMC's search endpoint, like Modrinth's, omits the body. Opening a
+      // pack without asking for the project left the panel blank.
+      if (command === "search_bbsmc_projects")
+        return [
+          {
+            id: "XMUypeti",
+            slug: "the-fool",
+            title: "The Fool",
+            description: "Trickery and disguise.",
+            projectType: "modpack",
+            loaders: ["forge"],
+            gameVersions: ["1.20.1"],
+            downloads: 1_520_000,
+          },
+        ];
+      if (command === "get_bbsmc_project")
+        return {
+          id: "XMUypeti",
+          slug: "the-fool",
+          title: "The Fool",
+          description: "Trickery and disguise.",
+          projectType: "modpack",
+          loaders: ["forge"],
+          gameVersions: ["1.20.1"],
+          body: "Core loop: shapeshifting, trading and relics.",
+        };
+      return [];
+    });
+    const user = userEvent.setup();
+    renderBrowser();
+
+    await user.click(screen.getByRole("combobox", { name: /^source$/i }));
+    await user.click(await screen.findByRole("option", { name: "BBSMC" }));
+    await user.click(await screen.findByRole("button", { name: /the fool/i }));
+
+    expect(invokeDesktopCommand).toHaveBeenCalledWith("get_bbsmc_project", {
+      input: { projectId: "XMUypeti" },
+    });
+    expect(
+      await screen.findByText(/shapeshifting, trading and relics/i),
+    ).toBeInTheDocument();
   });
 
   it("keeps an explicit confirmation for unverified archives", async () => {

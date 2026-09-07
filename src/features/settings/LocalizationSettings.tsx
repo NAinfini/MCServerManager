@@ -14,18 +14,21 @@ export function LocalizationSettings() {
         <h2>{t("settings.language.title")}</h2>
         <Languages aria-hidden="true" size={18} />
       </div>
-      <div className="settings-grid">
-        <label>
-          <Select
-            ariaLabel={t("settings.language.label")}
-            value={language}
-            options={[
-              { value: "en", label: t("settings.language.en") },
-              { value: "zh-CN", label: t("settings.language.zhCN") },
-            ]}
-            onValueChange={(value) => setLanguage(value as Language)}
-          />
-        </label>
+      {/* A settings row rather than a one-cell form grid: the control then sits
+          on the same rail as every other setting in this pane, and the Select
+          stops being wrapped in a label that carries no text. The row carries no
+          label of its own — the section heading above already names the setting,
+          and repeating it printed "Language" twice on consecutive lines. */}
+      <div className="settings-row">
+        <Select
+          ariaLabel={t("settings.language.label")}
+          value={language}
+          options={[
+            { value: "en", label: t("settings.language.en") },
+            { value: "zh-CN", label: t("settings.language.zhCN") },
+          ]}
+          onValueChange={(value) => setLanguage(value as Language)}
+        />
       </div>
     </section>
   );

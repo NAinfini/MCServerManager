@@ -17,6 +17,8 @@ import { navigateTo } from "../../app/router";
 import { LoadingState } from "../../components/ui/loading-state";
 import { StatusBadge } from "../../components/ui/status-badge";
 import { TextField } from "../../components/ui/text-field";
+import { Checkbox } from "../../components/ui/checkbox";
+import { DialogSurface } from "../../components/ui/dialog-surface";
 import {
   DataTable,
   type DataTableColumn,
@@ -108,6 +110,45 @@ export function PlayersView({ server, view }: PlayersViewProps) {
     null,
   );
   const [newPlayer, setNewPlayer] = useState("");
+  const [selectedNames, setSelectedNames] = useState<string[]>([]);
+  const [batch, setBatch] = useState<{
+    action: PlayerAction;
+    players: PlayerSummary[];
+  } | null>(null);
+  const batchMutation = useMutation({
+    mutationFn: async (input: {
+      action: PlayerAction;
+      players: PlayerSummary[];
+    }) => {
+      const failures: Array<{ name: string; message: string }> = [];
+      for (const player of input.players) {
+        try {
+          await applyPlayerChange({
+            serverId: server.id,
+            player: player.username,
+            uuid: player.uuid,
+            action: input.action,
+          });
+        } catch (error) {
+          failures.push({
+            name: player.username,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+      return { failures, completed: input.players.length - failures.length };
+    },
+    onSuccess: async ({ failures }) => {
+      setBatch(null);
+      setSelectedNames(failures.map((failure) => failure.name));
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: playerKeys.list(server.id) }),
+        queryClient.invalidateQueries({
+          queryKey: processKeys.events(server.id),
+        }),
+      ]);
+    },
+  });
   const playersQuery = useQuery({
     queryKey: playerKeys.list(server.id),
     queryFn: () => listPlayers(server.id),
@@ -168,7 +209,68 @@ export function PlayersView({ server, view }: PlayersViewProps) {
         : newPlayer.includes(".")
           ? "banIp"
           : "ban";
+  const selectablePlayers = players.filter((player) => player.kind !== "ip");
+  const selectedPlayers = selectablePlayers.filter((player) =>
+    selectedNames.includes(player.username),
+  );
+  const availableBatchActions = (
+    [
+      "op",
+      "deop",
+      "whitelistAdd",
+      "whitelistRemove",
+      "ban",
+      "pardon",
+      "kick",
+    ] as const
+  )
+    .filter(
+      (action) =>
+        selectedPlayers.length > 0 &&
+        selectedPlayers.every((player) => actionsFor(player).includes(action)),
+    )
+    .filter((action) => action !== "kick" || processStatus === "running");
   const columns: DataTableColumn<PlayerSummary>[] = [
+    {
+      id: "select",
+      header: (
+        <Checkbox
+          aria-label={t("players.batch.selectAll")}
+          disabled={
+            !canApplyActions ||
+            batchMutation.isPending ||
+            selectablePlayers.length === 0
+          }
+          checked={
+            selectablePlayers.length > 0 &&
+            selectedPlayers.length === selectablePlayers.length
+          }
+          onCheckedChange={(checked) =>
+            setSelectedNames(
+              checked ? selectablePlayers.map((player) => player.username) : [],
+            )
+          }
+        />
+      ),
+      cell: (player) =>
+        player.kind === "ip" ? null : (
+          <Checkbox
+            aria-label={t("players.batch.select", { player: player.username })}
+            disabled={!canApplyActions || batchMutation.isPending}
+            checked={selectedNames.includes(player.username)}
+            onCheckedChange={(checked) =>
+              setSelectedNames((names) =>
+                checked
+                  ? [
+                      ...names.filter((name) => name !== player.username),
+                      player.username,
+                    ]
+                  : names.filter((name) => name !== player.username),
+              )
+            }
+          />
+        ),
+    },
     {
       id: "player",
       header: t("players.table.player"),
@@ -197,6 +299,7 @@ export function PlayersView({ server, view }: PlayersViewProps) {
     {
       id: "actions",
       header: t("players.table.actions"),
+      headerClassName: "data-table-header-end",
       cell: (player) => (
         <div className="player-actions">
           {actionsFor(player).map((action) => {
@@ -204,13 +307,13 @@ export function PlayersView({ server, view }: PlayersViewProps) {
             const label = t(labelKey);
             const disabled =
               !canApplyActions ||
+              batchMutation.isPending ||
               actionMutation.isPending ||
               (action === "kick" && processStatus !== "running");
             return (
               <Button
                 key={action}
                 aria-label={`${label} ${player.username}`}
-                className="icon-button"
                 disabled={disabled}
                 title={disabled ? t("players.action.disabledTitle") : label}
                 variant={
@@ -224,6 +327,9 @@ export function PlayersView({ server, view }: PlayersViewProps) {
                 }}
               >
                 <Icon aria-hidden="true" size={14} />
+                {/* Deop and Unwhitelist share an icon, so the glyph alone was
+                    not enough to tell the two buttons apart. */}
+                <span>{label}</span>
               </Button>
             );
           })}
@@ -272,7 +378,12 @@ export function PlayersView({ server, view }: PlayersViewProps) {
                 onChange={(event) => setNewPlayer(event.target.value)}
               />
               <Button
-                disabled={!newPlayer.trim()}
+                disabled={
+                  !newPlayer.trim() ||
+                  !canApplyActions ||
+                  actionMutation.isPending ||
+                  batchMutation.isPending
+                }
                 type="submit"
                 variant="secondary"
               >
@@ -284,6 +395,90 @@ export function PlayersView({ server, view }: PlayersViewProps) {
           <StatusBadge status={processStatus} />
         </div>
       </div>
+
+      {selectedPlayers.length > 0 ? (
+        <div
+          className="players-batch-toolbar"
+          role="group"
+          aria-label={t("players.batch.title")}
+        >
+          <strong>
+            {t("players.batch.selected", { count: selectedPlayers.length })}
+          </strong>
+          {availableBatchActions.map((action) => (
+            <Button
+              key={action}
+              variant="secondary"
+              disabled={
+                !canApplyActions ||
+                batchMutation.isPending ||
+                actionMutation.isPending
+              }
+              onClick={() => {
+                batchMutation.reset();
+                setBatch({ action, players: selectedPlayers });
+              }}
+            >
+              {t(playerActionDefinitions[action].labelKey)}
+            </Button>
+          ))}
+          <Button
+            variant="ghost"
+            disabled={batchMutation.isPending}
+            onClick={() => setSelectedNames([])}
+          >
+            {t("players.batch.clear")}
+          </Button>
+        </div>
+      ) : null}
+      {batchMutation.data ? (
+        <div
+          className="players-batch-result"
+          role={batchMutation.data.failures.length ? "alert" : "status"}
+        >
+          {t("players.batch.completed", {
+            count: batchMutation.data.completed,
+          })}
+          {batchMutation.data.failures.map((failure) => (
+            <p key={failure.name}>
+              {failure.name}: {failure.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {batch ? (
+        <DialogSurface
+          open
+          title={t("players.batch.confirmTitle")}
+          description={t("players.batch.confirm", {
+            action: t(playerActionDefinitions[batch.action].labelKey),
+            count: batch.players.length,
+            server: server.name,
+          })}
+          onOpenChange={(open) => {
+            if (!open && !batchMutation.isPending) setBatch(null);
+          }}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                disabled={batchMutation.isPending}
+                onClick={() => setBatch(null)}
+              >
+                {t("common.cancel")}
+              </Button>
+              <Button
+                disabled={batchMutation.isPending || !canApplyActions}
+                onClick={() => batchMutation.mutate(batch)}
+              >
+                {t("players.batch.apply")}
+              </Button>
+            </>
+          }
+        >
+          <p>{batch.players.map((player) => player.username).join(", ")}</p>
+        </DialogSurface>
+      ) : null}
 
       {view === "whitelist" && !whitelistEnabled ? (
         <AttentionBar className="players-whitelist-notice" tone="info">

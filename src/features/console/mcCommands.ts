@@ -2,7 +2,14 @@ export interface McCommand {
   command: string;
   description: string;
   usage?: string;
+  /* Value sets the usage line cannot express. `<mode>` says nothing about
+     creative or survival even though the set is fixed and closed, so the
+     positions worth completing state their values here. The index is the
+     argument position after the command name. */
+  argumentValues?: Record<number, string[]>;
 }
+
+const GAME_MODES = ["survival", "creative", "adventure", "spectator"];
 
 export const MC_COMMANDS: McCommand[] = [
   {
@@ -70,6 +77,7 @@ export const MC_COMMANDS: McCommand[] = [
     command: "defaultgamemode",
     description: "Set the default game mode for new players.",
     usage: "defaultgamemode <mode>",
+    argumentValues: { 0: GAME_MODES },
   },
   {
     command: "deop",
@@ -130,11 +138,65 @@ export const MC_COMMANDS: McCommand[] = [
     command: "gamemode",
     description: "Set a player's game mode.",
     usage: "gamemode <mode> [target]",
+    argumentValues: { 0: GAME_MODES },
   },
   {
     command: "gamerule",
     description: "Set or query a game rule value.",
     usage: "gamerule <rule> [value]",
+    argumentValues: {
+      0: [
+        "announceAdvancements",
+        "blockExplosionDropDecay",
+        "commandBlockOutput",
+        "commandModificationBlockLimit",
+        "disableElytraMovementCheck",
+        "disableRaids",
+        "doDaylightCycle",
+        "doEntityDrops",
+        "doFireTick",
+        "doImmediateRespawn",
+        "doInsomnia",
+        "doLimitedCrafting",
+        "doMobLoot",
+        "doMobSpawning",
+        "doPatrolSpawning",
+        "doTileDrops",
+        "doTraderSpawning",
+        "doVinesSpread",
+        "doWardenSpawning",
+        "doWeatherCycle",
+        "drowningDamage",
+        "enderPearlsVanishOnDeath",
+        "fallDamage",
+        "fireDamage",
+        "forgiveDeadPlayers",
+        "freezeDamage",
+        "globalSoundEvents",
+        "keepInventory",
+        "lavaSourceConversion",
+        "logAdminCommands",
+        "maxCommandChainLength",
+        "maxEntityCramming",
+        "mobExplosionDropDecay",
+        "mobGriefing",
+        "naturalRegeneration",
+        "playersNetherPortalCreativeDelay",
+        "playersNetherPortalDefaultDelay",
+        "playersSleepingPercentage",
+        "projectilesCanBreakBlocks",
+        "randomTickSpeed",
+        "reducedDebugInfo",
+        "sendCommandFeedback",
+        "showDeathMessages",
+        "snowAccumulationHeight",
+        "spawnRadius",
+        "spectatorsGenerateChunks",
+        "tntExplosionDropDecay",
+        "universalAnger",
+        "waterSourceConversion",
+      ],
+    },
   },
   {
     command: "give",
@@ -361,6 +423,7 @@ export const MC_COMMANDS: McCommand[] = [
     command: "time",
     description: "Change or query the world's game time.",
     usage: "time (set|add|query) <value>",
+    argumentValues: { 1: ["day", "noon", "night", "midnight"] },
   },
   {
     command: "title",
@@ -393,3 +456,36 @@ export const MC_COMMANDS: McCommand[] = [
     usage: "worldborder (add|set|center|damage|get|warning) ...",
   },
 ];
+
+/* Alternations the usage line already spells out — `(on|off|list)` and
+   `[ips|players]` — are real completions that need no second table, so they are
+   read straight off the usage rather than duplicated beside it. */
+function usageLiterals(command: McCommand, index: number): string[] {
+  if (!command.usage) return [];
+  const tokens = command.usage.trim().split(/\s+/).slice(1);
+  const token = tokens[index];
+  if (!token) return [];
+  const body = /^[([](.+)[)\]]$/.exec(token)?.[1];
+  if (!body || !body.includes("|")) return [];
+  return body.split("|").filter((value) => /^[\w-]+$/.test(value));
+}
+
+export function findMcCommand(name: string): McCommand | undefined {
+  const normalized = name.toLowerCase();
+  return MC_COMMANDS.find((entry) => entry.command === normalized);
+}
+
+/* Completions for the argument at `index`, filtered by what has been typed so
+   far. An empty result means the position takes a value this app has no way of
+   knowing — a coordinate, a player name, an item id — and offering guesses
+   there would be worse than offering nothing. */
+export function completeArgument(
+  command: McCommand,
+  index: number,
+  prefix: string,
+): string[] {
+  const values =
+    command.argumentValues?.[index] ?? usageLiterals(command, index);
+  const normalized = prefix.toLowerCase();
+  return values.filter((value) => value.toLowerCase().startsWith(normalized));
+}

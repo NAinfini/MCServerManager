@@ -9,12 +9,18 @@ const { pipeline } = require("node:stream/promises");
 const zlib = require("node:zlib");
 const { createCommandRegistry } = require("./backend/command-registry.cjs");
 const { createBackendContext } = require("./backend/context.cjs");
+const serverFiles = require("./backend/server-files.cjs");
+const backupFiles = require("./backend/backup-files.cjs");
+const contentVersions = require("./backend/content-versions.cjs");
+const taskSchedule = require("./backend/task-schedule.cjs");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
 const { createLoaderRegistry } = require("./provisioning/loaders.cjs");
 const {
   createRuntimeManager,
+  maxJavaMajorForMinecraft: runtimeMaxJavaMajor,
   requiredJavaMajorForMinecraft: runtimeRequiredJavaMajor,
+  selectJavaRuntime,
 } = require("./provisioning/runtimes.cjs");
 const { createJobExecutor } = require("./provisioning/jobs.cjs");
 const {
@@ -24,7 +30,9 @@ const {
 const {
   extractZipArchive,
   extractZipLayers,
+  inspectZip,
 } = require("./provisioning/archive.cjs");
+const { readModMetadata } = require("./provisioning/mod-metadata.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -139,6 +147,7 @@ CREATE TABLE IF NOT EXISTS backups (
   profile_id TEXT REFERENCES backup_profiles(id) ON DELETE SET NULL,
   kind TEXT NOT NULL,
   archive_path TEXT NOT NULL,
+  manifest_sha256 TEXT,
   world_name TEXT NOT NULL,
   size_bytes INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
@@ -158,7 +167,9 @@ CREATE TABLE IF NOT EXISTS installed_content (
   installed_path TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   warnings_json TEXT NOT NULL,
-  installed_at TEXT NOT NULL
+  installed_at TEXT NOT NULL,
+  mod_id TEXT,
+  metadata_scanned_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS content_update_policies (
@@ -171,6 +182,17 @@ CREATE TABLE IF NOT EXISTS content_update_policies (
   ignored_update TEXT,
   updated_at TEXT NOT NULL,
   UNIQUE(server_id, content_key)
+);
+
+CREATE TABLE IF NOT EXISTS content_update_history (
+  id TEXT PRIMARY KEY,
+  server_id TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  installed_content_id TEXT NOT NULL,
+  before_json TEXT NOT NULL,
+  after_json TEXT NOT NULL,
+  backup_path TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS tunnel_providers (
@@ -205,6 +227,10 @@ CREATE TABLE IF NOT EXISTS scheduled_tasks (
   name TEXT NOT NULL,
   kind TEXT NOT NULL,
   interval_minutes INTEGER NOT NULL,
+  schedule_kind TEXT NOT NULL DEFAULT 'interval',
+  time_of_day TEXT,
+  weekdays_json TEXT NOT NULL DEFAULT '[]',
+  backup_profile_id TEXT REFERENCES backup_profiles(id) ON DELETE RESTRICT,
   command TEXT,
   enabled INTEGER NOT NULL DEFAULT 1,
   next_run_at TEXT NOT NULL,
@@ -246,6 +272,7 @@ CREATE TABLE IF NOT EXISTS server_update_history (
   status TEXT NOT NULL,
   message TEXT NOT NULL,
   rollback_path TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL
 );
 
@@ -365,7 +392,7 @@ function createBackend(app) {
 
 function createCommandHandlers(context) {
   const { db } = context;
-  return {
+  const handlers = {
     get_app_preferences: () => getAppPreferences(db),
     save_app_preferences: (args) => saveAppPreferences(db, args?.input),
     reset_app_preferences: () => resetAppPreferences(db),
@@ -416,6 +443,7 @@ function createCommandHandlers(context) {
     list_java_runtimes: () => listJavaRuntimes(db),
     plan_java_runtime: (args) => planJavaRuntime(db, args?.input),
     install_java_runtime: (args) => installJavaRuntime(db, args?.input),
+    remove_java_runtime: (args) => removeJavaRuntime(db, args?.input),
     start_server: (args) => startServer(db, args?.serverId),
     stop_server: (args) => stopServer(db, args?.serverId),
     restart_server: (args) => restartServer(db, args?.serverId),
@@ -433,7 +461,9 @@ function createCommandHandlers(context) {
         args?.serverId,
         args?.relativePath,
         args?.content,
+        args?.expectedRevision,
       ),
+    mutate_server_files: (args) => mutateServerFiles(db, args?.input),
     read_server_properties: (args) => readServerProperties(db, args?.serverId),
     save_server_properties: (args) =>
       saveServerProperties(
@@ -453,6 +483,7 @@ function createCommandHandlers(context) {
       deleteBackupProfile(db, args?.profileId || args?.input?.profileId),
     create_profile_backup: (args) => createProfileBackup(db, args?.input),
     restore_world_backup: (args) => restoreWorldBackup(db, args?.input),
+    preview_backup_restore: (args) => previewBackupRestore(db, args?.input),
     list_players: (args) => listPlayers(db, args?.serverId),
     apply_player_change: (args) => applyPlayerChange(db, args?.input),
     read_player_lists: (args) => readPlayerLists(db, args?.serverId),
@@ -467,11 +498,13 @@ function createCommandHandlers(context) {
     get_content_update_policy: (args) => getContentUpdatePolicy(db, args),
     save_content_update_policy: (args) =>
       saveContentUpdatePolicy(db, args?.input),
-    plan_content_updates: (args) => planContentUpdates(db, args?.input),
     check_content_updates: (args) => checkContentUpdates(db, args?.input),
     install_content_update: (args) => installContentUpdate(db, args?.input),
     install_all_content_updates: (args) =>
       installAllContentUpdates(db, args?.input),
+    list_content_update_history: (args) =>
+      listContentUpdateHistory(db, args?.serverId),
+    rollback_content_update: (args) => rollbackContentUpdate(db, args?.input),
     list_tunnel_providers: () => listTunnelProviders(db),
     list_tunnel_statuses: () => listTunnelStatuses(db),
     get_tunnel_provider: (args) =>
@@ -498,9 +531,6 @@ function createCommandHandlers(context) {
     sample_server_metrics: (args) => sampleServerMetrics(db, args?.serverId),
     run_server_diagnostics: (args) => runServerDiagnostics(db, args?.serverId),
     list_diagnostic_runs: (args) => listDiagnosticRuns(db, args?.serverId),
-    export_server_profile: (args) => exportServerProfile(db, args?.input),
-    preview_profile_import: (args) => previewProfileImport(args?.input),
-    import_profile: (args) => importProfile(db, args?.input),
     preview_modpack_import_command: (args) => previewModpackImport(args?.input),
     plan_server_provisioning: (args) => planServerProvisioning(args?.input),
     create_provisioning_job: (args) =>
@@ -522,29 +552,88 @@ function createCommandHandlers(context) {
     list_loader_versions: (args) => listLoaderVersions(args?.input),
     search_modrinth_projects: (args) => searchModrinthProjects(args?.input),
     get_modrinth_project: (args) => getModrinthProject(args?.input),
-    list_modrinth_versions: (args) => listModrinthVersions(args?.input),
+    list_modrinth_versions: (args) =>
+      listModrinthVersions(marketplaceInput(db, args?.input)),
     install_modrinth_version: (args) => installModrinthVersion(db, args?.input),
-    search_hangar_projects: (args) => searchHangarProjects(args?.query),
-    list_hangar_versions: (args) => listHangarVersions(args?.input),
+    search_hangar_projects: (args) => searchHangarProjects(args?.input),
+    get_hangar_project: (args) => getHangarProject(args?.input),
+    list_hangar_versions: (args) =>
+      listHangarVersions(marketplaceInput(db, args?.input)),
     install_hangar_version: (args) => installHangarVersion(db, args?.input),
     search_curseforge_projects: (args) => searchCurseForgeProjects(args?.input),
     get_curseforge_project: (args) => getCurseForgeProject(args?.input),
-    list_curseforge_files: (args) => listCurseForgeFiles(args?.input),
+    list_curseforge_files: (args) =>
+      listCurseForgeFiles(marketplaceInput(db, args?.input)),
     install_curseforge_file: (args) => installCurseForgeFile(db, args?.input),
     import_curseforge_manual: (args) => importCurseForgeManual(db, args?.input),
     search_bbsmc_projects: (args) => searchBbsmcProjects(args?.input),
     get_bbsmc_project: (args) => getBbsmcProject(args?.input),
     fetch_marketplace_image: (args) => fetchMarketplaceImage(args?.input),
-    list_bbsmc_versions: (args) => listBbsmcVersions(args?.input),
+    list_bbsmc_versions: (args) =>
+      listBbsmcVersions(marketplaceInput(db, args?.input)),
     install_bbsmc_public_file: (args) =>
       installBbsmcPublicFile(db, args?.input),
     check_server_update: (args) => checkServerUpdate(db, args?.input),
     install_server_update: (args) => installServerUpdate(db, args?.input),
+    rollback_server_update: (args) => rollbackServerUpdate(db, args?.input),
     list_server_update_history: (args) =>
       listServerUpdateHistory(db, args?.serverId),
     create_notification_event: (args) =>
       createNotificationEvent(db, args?.input),
   };
+  const activeContentOperations = new Set();
+  context.runtimeState.activeContentOperations = activeContentOperations;
+  for (const name of [
+    "import_local_content",
+    "import_curseforge_manual",
+    "install_modrinth_version",
+    "install_bbsmc_public_file",
+    "install_curseforge_file",
+    "install_hangar_version",
+    "install_content_update",
+    "install_all_content_updates",
+    "rollback_content_update",
+  ]) {
+    const execute = handlers[name];
+    handlers[name] = async (args) => {
+      const id = requireServerId(args?.input?.serverId);
+      if (
+        activeContentOperations.has(id) ||
+        context.runtimeState.backingUpServers?.has(id) ||
+        context.runtimeState.mutatingServerDirs?.has(id)
+      )
+        throw codedError(
+          "CONTENT_OPERATION_IN_PROGRESS",
+          "another content operation is in progress for this server",
+        );
+      activeContentOperations.add(id);
+      try {
+        return await execute(args);
+      } finally {
+        activeContentOperations.delete(id);
+      }
+    };
+  }
+  for (const name of [
+    "disable_installed_content",
+    "enable_installed_content",
+    "uninstall_installed_content",
+  ]) {
+    const execute = handlers[name];
+    handlers[name] = (args) => {
+      if (
+        activeContentOperations.has(args?.input?.serverId) ||
+        context.runtimeState.backingUpServers?.has(args?.input?.serverId) ||
+        context.runtimeState.mutatingServerDirs?.has(args?.input?.serverId)
+      )
+        throw codedError(
+          "CONTENT_OPERATION_IN_PROGRESS",
+          "another content operation is in progress for this server",
+        );
+      return execute(args);
+    };
+  }
+  return handlers;
 }
 
 function nowIso() {
@@ -643,6 +732,37 @@ function migrateDatabase(db) {
     migrateLegacyServersTable(db);
     return;
   }
+  /* `mod_id` is what the jar calls itself; `content_id` is where it was
+     downloaded from. They are not the same thing and must not share a column —
+     the update checker parses `content_id` as `provider:project:version`.
+     `metadata_scanned_at` records that the jar has already been opened and
+     asked, so one that carries no descriptor is not reopened on every page
+     load. Null means "never looked", which every pre-existing row is. */
+  if (!tableHasColumn(db, "installed_content", "mod_id")) {
+    db.exec("ALTER TABLE installed_content ADD COLUMN mod_id TEXT");
+  }
+  if (!tableHasColumn(db, "installed_content", "metadata_scanned_at")) {
+    db.exec(
+      "ALTER TABLE installed_content ADD COLUMN metadata_scanned_at TEXT",
+    );
+  }
+  for (const [column, declaration] of Object.entries({
+    schedule_kind: "TEXT NOT NULL DEFAULT 'interval'",
+    time_of_day: "TEXT",
+    weekdays_json: "TEXT NOT NULL DEFAULT '[]'",
+    backup_profile_id: "TEXT REFERENCES backup_profiles(id) ON DELETE RESTRICT",
+  })) {
+    if (!tableHasColumn(db, "scheduled_tasks", column))
+      db.exec(
+        `ALTER TABLE scheduled_tasks ADD COLUMN ${column} ${declaration}`,
+      );
+  }
+  if (!tableHasColumn(db, "server_update_history", "metadata_json"))
+    db.exec(
+      "ALTER TABLE server_update_history ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'",
+    );
+  if (!tableHasColumn(db, "backups", "manifest_sha256"))
+    db.exec("ALTER TABLE backups ADD COLUMN manifest_sha256 TEXT");
   if (version < currentSchemaVersion) {
     db.exec(`PRAGMA user_version = ${currentSchemaVersion}`);
   }
@@ -2070,7 +2190,9 @@ function getProcessSummary(db) {
 function getAttentionItems(db) {
   const staleBackupBefore = Date.now() - 7 * 24 * 60 * 60 * 1_000;
   return db
-    .prepare("SELECT id, name FROM servers ORDER BY name COLLATE NOCASE")
+    .prepare(
+      "SELECT id, name, created_at FROM servers ORDER BY name COLLATE NOCASE",
+    )
     .all()
     .flatMap((server) => {
       const items = [];
@@ -2123,12 +2245,16 @@ function getAttentionItems(db) {
            LIMIT 1`,
         )
         .get(server.id);
-      const backupTime = backup ? new Date(backup.created_at).getTime() : 0;
-      if (
-        !backup ||
-        !Number.isFinite(backupTime) ||
-        backupTime < staleBackupBefore
-      ) {
+      /* "Overdue" is a claim about elapsed time, so it needs a clock that has
+         actually been running. A server with no backup yet was reported overdue
+         the moment it was created, which is wrong and trains people to ignore
+         the warning. With no backup the clock starts at the server's creation,
+         so the notice appears only once a week of the server's life has passed
+         without one. */
+      const backupTime = backup
+        ? new Date(backup.created_at).getTime()
+        : new Date(server.created_at).getTime();
+      if (!Number.isFinite(backupTime) || backupTime < staleBackupBefore) {
         items.push({
           id: `backup:${server.id}`,
           serverId: server.id,
@@ -2381,7 +2507,29 @@ function parseJavaVersionOutput(output) {
   return {
     majorVersion: Number.isFinite(majorVersion) ? majorVersion : null,
     version,
+    architecture: parseJavaArchitecture(output),
   };
+}
+
+/* Every 64-bit JVM says so on its VM line — "64-Bit Server VM", "amd64-64",
+   "aarch64". A 32-bit build says nothing at all, which is exactly why it has to
+   be read rather than assumed: this used to report `process.arch`, so a 32-bit
+   Java 8 was listed as x64. That is not cosmetic. A 32-bit JVM cannot address
+   more than roughly 1.5 GB of heap, so pointing a 6 GB server at one trades a
+   version crash for a heap crash. */
+function parseJavaArchitecture(output) {
+  return /\b(64-bit|amd64|x86_64|aarch64|ppc64|s390x)\b/i.test(output)
+    ? "64-bit"
+    : "32-bit";
+}
+
+/* A 32-bit JVM cannot reserve a heap this large; the JVM refuses at startup
+   with "Could not reserve enough space for object heap". */
+const MAX_32_BIT_HEAP_MB = 1536;
+
+function runtimeFitsHeap(architecture, maxMemoryMb) {
+  if (architecture !== "32-bit") return true;
+  return !maxMemoryMb || Number(maxMemoryMb) <= MAX_32_BIT_HEAP_MB;
 }
 
 function detectJavaVendor(output) {
@@ -2391,7 +2539,10 @@ function detectJavaVendor(output) {
   if (/openjdk/i.test(output)) {
     return "OpenJDK";
   }
-  if (/oracle/i.test(output)) {
+  /* Oracle's own builds never print "Oracle". They print `Java(TM) SE Runtime
+     Environment`, which is why three of four detected runtimes read "Unknown"
+     in a table whose whole job is telling them apart. */
+  if (/oracle|java\(tm\)/i.test(output)) {
     return "Oracle";
   }
   return "Unknown";
@@ -2456,12 +2607,34 @@ function inspectJavaRuntime(candidate) {
     version: parsed.version,
     majorVersion: parsed.majorVersion,
     vendor: detectJavaVendor(output),
-    architecture: process.arch,
+    architecture: parsed.architecture,
   };
 }
 
 function requiredJavaMajorForMinecraft(minecraftVersion) {
   return runtimeRequiredJavaMajor(minecraftVersion);
+}
+
+function maxJavaMajorForMinecraft(minecraftVersion) {
+  return runtimeMaxJavaMajor(minecraftVersion);
+}
+
+/* The version window is a launch precondition, not a report. Minecraft up to
+   1.16 boots through LegacyLauncher, which casts the system class loader to
+   `java.net.URLClassLoader`; on Java 9+ that cast throws before the server ever
+   opens its port, and all the operator sees is a JVM stack trace about
+   `jdk.internal.loader.ClassLoaders$AppClassLoader`. The app already knows the
+   window, so it refuses in its own words rather than letting the JVM fail. */
+function assertJavaMajorInWindow(minecraftVersion, majorVersion, javaPath) {
+  const maxMajorVersion = maxJavaMajorForMinecraft(minecraftVersion);
+  if (maxMajorVersion === null) return;
+  if (!Number.isFinite(Number(majorVersion))) return;
+  if (Number(majorVersion) <= maxMajorVersion) return;
+  throw codedError(
+    "JAVA_VERSION_OUT_OF_RANGE",
+    `Minecraft ${minecraftVersion} cannot run on Java ${majorVersion}: it needs Java ${maxMajorVersion}. Configured runtime: ${javaPath}`,
+    { detail: String(javaPath || "") },
+  );
 }
 
 function getServerEulaAcceptance(db, serverId) {
@@ -2507,16 +2680,36 @@ function createJavaCompatibility(profile, runtimes) {
   const requiredMajorVersion = requiredJavaMajorForMinecraft(
     profile.minecraftVersion,
   );
+  const maxMajorVersion = maxJavaMajorForMinecraft(profile.minecraftVersion);
   const configuredJavaPath = profile.javaPath || null;
+  /* Newest-first picked Java 21 for a 1.7.10 server and then called it
+     compatible, which is how a freshly installed Forge 1.7.10 server crashed on
+     its first start. The window is what counts, and the lowest runtime inside
+     it is the safest member of that window. */
   const runtime = configuredJavaPath
     ? runtimes.find(
         (item) =>
           normalizeJavaPath(item.path) ===
           normalizeJavaPath(configuredJavaPath),
       )
-    : runtimes
+    : selectJavaRuntime(runtimes, requiredMajorVersion, maxMajorVersion) ||
+      runtimes
         .filter((item) => Number.isFinite(item.majorVersion))
-        .sort((left, right) => right.majorVersion - left.majorVersion)[0];
+        .sort((left, right) => left.majorVersion - right.majorVersion)[0];
+
+  /* The one runtime already on this machine that would actually work for this
+     server: right version window and able to hold the configured heap. The view
+     offers it as a one-click fix, so the rule lives here rather than being
+     re-derived — and half-derived — on the other side of the IPC boundary. */
+  const recommendedJavaPath = !requiredMajorVersion
+    ? null
+    : (selectJavaRuntime(
+        runtimes.filter((item) =>
+          runtimeFitsHeap(item.architecture, profile.maxMemoryMb),
+        ),
+        requiredMajorVersion,
+        maxMajorVersion,
+      )?.path ?? null);
 
   if (!requiredMajorVersion) {
     return {
@@ -2525,6 +2718,8 @@ function createJavaCompatibility(profile, runtimes) {
       minecraftVersion: profile.minecraftVersion,
       configuredJavaPath,
       requiredMajorVersion: null,
+      maxMajorVersion,
+      recommendedJavaPath,
       status: "unknown",
       message: "Set a Minecraft version to check Java compatibility.",
     };
@@ -2537,6 +2732,8 @@ function createJavaCompatibility(profile, runtimes) {
       minecraftVersion: profile.minecraftVersion,
       configuredJavaPath,
       requiredMajorVersion,
+      maxMajorVersion,
+      recommendedJavaPath,
       status: "unknown",
       message: configuredJavaPath
         ? `Configured Java runtime was not detected. Java ${requiredMajorVersion} or newer is required.`
@@ -2551,22 +2748,47 @@ function createJavaCompatibility(profile, runtimes) {
       minecraftVersion: profile.minecraftVersion,
       configuredJavaPath,
       requiredMajorVersion,
+      maxMajorVersion,
+      recommendedJavaPath,
       status: "unknown",
       message: `Detected Java version is unknown. Java ${requiredMajorVersion} or newer is required.`,
     };
   }
 
-  const compatible = runtime.majorVersion >= requiredMajorVersion;
+  const fitsWindow =
+    runtime.majorVersion >= requiredMajorVersion &&
+    (maxMajorVersion === null || runtime.majorVersion <= maxMajorVersion);
+  /* Version is not the only way a runtime can be wrong for this server. A
+     32-bit JVM is a valid Java 8 and still cannot start a 6 GB server. */
+  const fitsHeap = runtimeFitsHeap(runtime.architecture, profile.maxMemoryMb);
+  const compatible = fitsWindow && fitsHeap;
   return {
     serverId: profile.id,
     serverName: profile.name,
     minecraftVersion: profile.minecraftVersion,
     configuredJavaPath,
     requiredMajorVersion,
+    maxMajorVersion,
+    recommendedJavaPath,
+    /* What the server runs on today, so the report can name the actual problem
+       instead of restating the requirement. */
+    configuredMajorVersion: runtime.majorVersion,
+    configuredArchitecture: runtime.architecture ?? null,
+    reason: compatible
+      ? null
+      : !fitsHeap
+        ? "architecture"
+        : runtime.majorVersion < requiredMajorVersion
+          ? "tooOld"
+          : "tooNew",
     status: compatible ? "compatible" : "warning",
     message: compatible
       ? `Java ${runtime.majorVersion} satisfies required Java ${requiredMajorVersion}.`
-      : `Java ${runtime.majorVersion} is below required Java ${requiredMajorVersion}.`,
+      : !fitsHeap
+        ? `This is a 32-bit Java and cannot reserve the ${profile.maxMemoryMb} MB configured for this server.`
+        : runtime.majorVersion < requiredMajorVersion
+          ? `Java ${runtime.majorVersion} is below required Java ${requiredMajorVersion}.`
+          : `Java ${runtime.majorVersion} is too new for Minecraft ${profile.minecraftVersion}, which needs Java ${requiredMajorVersion}.`,
   };
 }
 
@@ -2734,10 +2956,21 @@ function listJavaRuntimes(db) {
   }
   const uniqueCandidates = [...seen.values()];
   const runtimes = [];
+  /* Whether this app installed a runtime is decided by where it lives, not by
+     which source claimed the row: a managed runtime a server points at is
+     labelled "Server profile", because that source is listed first. Only these
+     may be removed from inside the app. */
+  const managedRoot = normalizeJavaPath(
+    path.join(appDataDirFor(db), "runtimes", "temurin"),
+  );
 
   for (const candidate of uniqueCandidates) {
     try {
-      runtimes.push(inspectJavaRuntime(candidate));
+      const runtime = inspectJavaRuntime(candidate);
+      runtime.managed = normalizeJavaPath(runtime.path).startsWith(
+        `${managedRoot}${path.sep}`,
+      );
+      runtimes.push(runtime);
     } catch (error) {
       failures.push(javaScanFailure(candidate.path, candidate.source, error));
     }
@@ -2787,6 +3020,12 @@ async function planJavaRuntime(db, input) {
     : listJavaRuntimes(db).runtimes;
   return runtimeManagerFor(db).plan({
     majorVersion,
+    /* Null means "no ceiling established". Absent would read the same but is
+       easy to drop by accident, so the caller states it. */
+    maxMajorVersion:
+      input?.maxMajorVersion === undefined || input?.maxMajorVersion === null
+        ? null
+        : Number(input.maxMajorVersion),
     installedRuntimes,
   });
 }
@@ -2798,13 +3037,48 @@ async function installJavaRuntime(db, input) {
       "You must confirm the Temurin license and managed download before installation.",
     );
   }
+  /* The re-plan exists so a renderer-supplied plan cannot pick the URL or the
+     target. It must also not widen the version window: without a ceiling, a
+     request to install Java 8 for a legacy server would come back as "reuse the
+     Java 11 already on this machine" and hand the caller the very runtime the
+     original plan rejected. Installing major N means major N. */
   const canonicalPlan = await planJavaRuntime(db, {
     majorVersion: input?.plan?.majorVersion,
+    maxMajorVersion: input?.plan?.majorVersion,
   });
   const runtime = await runtimeManagerFor(db).install(canonicalPlan, {
     consent: true,
   });
   return runtime;
+}
+
+async function removeJavaRuntime(db, input) {
+  const javaPath = String(input?.path || "");
+  if (!javaPath) {
+    throw provisioningError(
+      "JAVA_PATH_REQUIRED",
+      "A Java runtime path is required.",
+    );
+  }
+  /* A runtime a server is pointed at is not spare capacity. Removing it leaves
+     that server unable to start, and the next thing the operator would see is a
+     launch failure rather than the deletion that caused it. The servers are
+     named so the refusal says what to repoint first. */
+  const target = normalizeJavaPath(javaPath);
+  const inUse = listServerProfiles(db)
+    .filter(
+      (profile) =>
+        profile.javaPath && normalizeJavaPath(profile.javaPath) === target,
+    )
+    .map((profile) => profile.name);
+  if (inUse.length > 0) {
+    throw provisioningError(
+      "JAVA_RUNTIME_IN_USE",
+      `This Java runtime is still used by ${inUse.join(", ")}. Point those servers at another runtime first.`,
+      { detail: inUse.join(", ") },
+    );
+  }
+  return runtimeManagerFor(db).remove(javaPath);
 }
 
 function setupStatusFromJavaCompatibility(compatibility) {
@@ -3135,8 +3409,47 @@ async function assertServerPortAvailable(db, profile) {
   }
 }
 
+/* Checked at start, not only at creation: a profile can be repointed at another
+   runtime from settings, and one created before this check existed still holds
+   whatever it was given. The probe runs only for versions with an established
+   ceiling — above 1.16 there is nothing to verify and nothing to pay for. */
+function assertLaunchJavaSupported(db, profile, executable) {
+  if (maxJavaMajorForMinecraft(profile.minecraftVersion) === null) return;
+  // Same seam as the runtime scan: a test can state the machine it describes
+  // instead of depending on whichever Java the runner has. Production probes.
+  // The seam takes a path, matching how the runtime manager already calls it.
+  const inspect = contextFor(db).dependencies.runtimeDependencies.inspectJava;
+  const inspected = inspect
+    ? inspect(executable)
+    : inspectJavaRuntime({ path: executable, source: "Server profile" });
+  assertJavaMajorInWindow(
+    profile.minecraftVersion,
+    inspected.majorVersion,
+    executable,
+  );
+  /* Only the legacy window is probed, and 32-bit builds only still exist down
+     there, so this is the branch where the heap ceiling is worth stating. The
+     JVM's own refusal is "Could not reserve enough space for object heap",
+     which reads as a machine-memory problem rather than a 32-bit one. */
+  if (!runtimeFitsHeap(inspected.architecture, profile.maxMemoryMb)) {
+    throw codedError(
+      "JAVA_ARCHITECTURE_TOO_SMALL",
+      `This 32-bit Java cannot reserve the ${profile.maxMemoryMb} MB configured for this server. Use a 64-bit Java or lower the maximum memory. Configured runtime: ${executable}`,
+      { detail: String(executable || "") },
+    );
+  }
+}
+
 async function startServer(db, serverId, options = {}) {
   const id = requireServerId(serverId);
+  if (
+    contextFor(db).runtimeState.mutatingServerDirs?.has(id) ||
+    contextFor(db).runtimeState.backingUpServers?.has(id)
+  )
+    throw codedError(
+      "SERVER_FILES_BUSY",
+      "server files are being restored or upgraded",
+    );
   const startingServers = contextFor(db).runtimeState.startingServers;
   if (startingServers.has(id) || managedChildren.has(id)) {
     throw provisioningError(
@@ -3160,6 +3473,7 @@ async function startReservedServer(db, serverId, options = {}) {
   const launch = profile.launchSpec
     ? structuredServerLaunch(profile)
     : legacyServerLaunch(profile);
+  assertLaunchJavaSupported(db, profile, launch.executable);
   await assertServerPortAvailable(db, profile);
   if (closedDatabases.has(db)) {
     throw provisioningError(
@@ -3515,47 +3829,47 @@ function restartServerWithCountdown(db, input) {
 }
 
 function listServerFiles(db, serverId, relativePath) {
-  const { root, target } = safeServerPath(db, serverId, relativePath);
-  if (!fs.existsSync(target)) {
-    return [];
-  }
-  return fs.readdirSync(target, { withFileTypes: true }).map((entry) => {
-    const fullPath = path.join(target, entry.name);
-    const stat = fs.statSync(fullPath);
-    const childRelative = path.relative(root, fullPath).replace(/\\/g, "/");
-    return {
-      name: entry.name,
-      relativePath: childRelative,
-      kind: entry.isDirectory() ? "directory" : "file",
-      sizeBytes: entry.isFile() ? stat.size : 0,
-      modifiedAt: stat.mtime.toISOString(),
-      editable: entry.isFile() && stat.size <= 1024 * 1024,
-    };
-  });
+  return serverFiles.listFiles(
+    (relative) => safeServerPath(db, serverId, relative),
+    relativePath,
+  );
 }
 
 function readServerTextFile(db, serverId, relativePath) {
-  const { root, target } = safeServerPath(db, serverId, relativePath);
-  const stat = fs.statSync(target);
-  if (!stat.isFile()) {
-    throw codedError("PATH_NOT_A_FILE", "selected path is not a file");
-  }
-  if (stat.size > 1024 * 1024) {
-    throw codedError("FILE_TOO_LARGE_TO_EDIT", "file is too large to edit");
-  }
-  return {
-    relativePath: path.relative(root, target).replace(/\\/g, "/"),
-    content: fs.readFileSync(target, "utf8"),
-    sizeBytes: stat.size,
-    readOnly: false,
-    warning: null,
-  };
+  return serverFiles.readText(
+    (relative) => safeServerPath(db, serverId, relative),
+    relativePath,
+  );
 }
 
-function writeServerTextFile(db, serverId, relativePath, content) {
-  const { target } = safeServerPath(db, serverId, relativePath);
-  fs.writeFileSync(target, String(content ?? ""), "utf8");
-  return readServerTextFile(db, serverId, relativePath);
+function writeServerTextFile(
+  db,
+  serverId,
+  relativePath,
+  content,
+  expectedRevision,
+) {
+  assertServerFilesAvailable(db, serverId);
+  return serverFiles.writeText(
+    (relative) => safeServerPath(db, serverId, relative),
+    relativePath,
+    content,
+    expectedRevision,
+  );
+}
+
+async function mutateServerFiles(db, input) {
+  const serverId = requireServerId(input?.serverId);
+  return withServerFiles(
+    db,
+    serverId,
+    () =>
+      serverFiles.mutateFiles(
+        (relative) => safeServerPath(db, serverId, relative),
+        input,
+      ),
+    false,
+  );
 }
 
 function propertiesPath(db, serverId) {
@@ -3573,6 +3887,7 @@ function readServerProperties(db, serverId) {
 }
 
 function saveServerProperties(db, serverId, entries) {
+  assertServerFilesAvailable(db, serverId);
   const filePath = propertiesPath(db, serverId);
   const requestedEntries = entries || [];
   const portEntry = [...requestedEntries]
@@ -3618,6 +3933,7 @@ function mapBackup(row) {
     serverId: row.server_id,
     profileId: row.profile_id,
     kind: row.kind,
+    mode: row.kind === "world" ? "worldOnly" : row.kind,
     archivePath: row.archive_path,
     worldName: row.world_name,
     sizeBytes: row.size_bytes,
@@ -3636,51 +3952,202 @@ function listServerBackups(db, serverId) {
     .map(mapBackup);
 }
 
+function requireStoppedServer(db, serverId) {
+  const managed = managedChildren.get(serverId);
+  const persisted = db
+    .prepare(
+      "SELECT 1 FROM managed_processes WHERE server_id = ? AND status IN ('running', 'external_running') LIMIT 1",
+    )
+    .get(serverId);
+  if (
+    managed?.db === db ||
+    persisted ||
+    contextFor(db).runtimeState.startingServers.has(serverId)
+  ) {
+    throw codedError(
+      "SERVER_MUST_BE_STOPPED",
+      "Stop the server before modifying its stored runtime or world.",
+    );
+  }
+}
+
+async function flushWorldForBackup(db, serverId) {
+  const managed = managedChildren.get(serverId);
+  if (!managed || managed.db !== db) {
+    requireStoppedServer(db, serverId);
+    return false;
+  }
+  const child = managed.child;
+  let finish;
+  const saved = new Promise((resolve, reject) => {
+    let buffer = "";
+    const onData = (chunk) => {
+      buffer = (buffer + chunk.toString()).slice(-8192);
+      if (
+        /(?:^|\n)[^\n]*INFO(?:\]:|\])?:?\s+(?:Saved the game|Saved the world|Saved all (?:chunks|dimensions)|All dimensions are saved)[.!]?\r?(?:\n|$)/i.test(
+          buffer,
+        )
+      )
+        finish();
+    };
+    const onExit = () =>
+      finish(
+        codedError(
+          "BACKUP_SAVE_FAILED",
+          "server stopped before confirming its save",
+        ),
+      );
+    const timeout = setTimeout(
+      () =>
+        finish(
+          codedError(
+            "BACKUP_SAVE_TIMEOUT",
+            "server did not confirm save-all flush within 30 seconds",
+          ),
+        ),
+      30_000,
+    );
+    finish = (error) => {
+      clearTimeout(timeout);
+      child.stdout.off("data", onData);
+      child.stderr.off("data", onData);
+      child.off("exit", onExit);
+      error ? reject(error) : resolve();
+    };
+    child.stdout.on("data", onData);
+    child.stderr.on("data", onData);
+    child.once("exit", onExit);
+  });
+  try {
+    sendServerCommand(db, serverId, "save-off");
+    sendServerCommand(db, serverId, "save-all flush");
+  } catch (error) {
+    finish(error);
+  }
+  try {
+    await saved;
+  } catch (error) {
+    if (managedChildren.get(serverId) === managed)
+      sendServerCommand(db, serverId, "save-on");
+    throw error;
+  }
+  return true;
+}
+
 async function createBackupRecord(
   db,
   serverId,
-  profileId = null,
-  includePaths = ["world"],
+  backupProfile = null,
+  operation = null,
 ) {
   const profile = getServerProfile(db, requireServerId(serverId));
+  const state = contextFor(db).runtimeState;
+  state.backingUpServers ||= new Set();
+  if (
+    state.backingUpServers.has(profile.id) ||
+    state.activeContentOperations?.has(profile.id) ||
+    (state.mutatingServerDirs?.has(profile.id) &&
+      state.mutatingServerDirs.get(profile.id) !== operation)
+  )
+    throw codedError("BACKUP_IN_PROGRESS", "a backup is already in progress");
   const id = randomUUID();
   const createdAt = nowIso();
-  const backupRoot = path.join(profile.rootDir, "backups", id);
-  const hasRunningProcess = Boolean(managedChildren.get(profile.id));
-  if (hasRunningProcess) {
-    sendServerCommand(db, profile.id, "save-off");
-    sendServerCommand(db, profile.id, "save-all flush");
+  const root = safeServerPath(db, profile.id, ".").root;
+  const backupRoot = safeServerPath(db, profile.id, `backups/${id}`).target;
+  const worldName =
+    readPropertiesFile(path.join(root, "server.properties"))["level-name"] ||
+    "world";
+  const mode = backupProfile ? modeFromDb(backupProfile.mode) : "worldOnly";
+  let includes = backupProfile
+    ? JSON.parse(backupProfile.include_paths || "[]")
+    : [];
+  if (["worldOnly", "worldPlusConfigs"].includes(mode))
+    includes = [
+      worldName,
+      `${worldName}_nether`,
+      `${worldName}_the_end`,
+    ].filter((relative) =>
+      fs.existsSync(safeServerPath(db, profile.id, relative).target),
+    );
+  const excludes = backupProfile
+    ? JSON.parse(backupProfile.exclude_paths || "[]")
+    : [];
+  if (mode === "worldPlusConfigs") {
+    includes.push(
+      ...fs
+        .readdirSync(root, { withFileTypes: true })
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            /\.(properties|json|ya?ml|toml|conf|cfg|txt)$/i.test(entry.name),
+        )
+        .map((entry) => entry.name),
+    );
+    includes.push(
+      ...["config", "defaultconfigs", "plugins"].filter((relative) =>
+        fs.existsSync(safeServerPath(db, profile.id, relative).target),
+      ),
+    );
+    excludes.push("plugins/*.jar", "plugins/*.jar.disabled");
   }
+  let savingDisabled = false,
+    recorded = false;
+  state.backingUpServers.add(profile.id);
   try {
-    fs.mkdirSync(backupRoot, { recursive: true });
-    for (const relative of includePaths.length ? includePaths : ["world"]) {
-      // Both sides of this must be the resolved root: safeServerPath follows
-      // links, and on macOS /var is a link to /private/var, so measuring the
-      // resolved source against the stored rootDir produced a path that climbed
-      // out of the backup folder entirely.
-      const { root, target: source } = safeServerPath(db, profile.id, relative);
-      if (fs.existsSync(source)) {
-        const destinationRelative = path
-          .relative(root, source)
-          .replace(/\\/g, "/");
-        await copyTree(source, path.join(backupRoot, destinationRelative));
-      }
-    }
+    for (const relative of includes) safeServerPath(db, profile.id, relative);
+    savingDisabled = await flushWorldForBackup(db, profile.id);
+    const manifest = await backupFiles.writeSnapshot({
+      root,
+      archive: backupRoot,
+      mode,
+      includes,
+      excludes,
+      worldName,
+      serverState:
+        mode === "fullServer"
+          ? {
+              minecraftVersion: profile.minecraftVersion,
+              loaderType: profile.loaderType,
+              loaderVersion: profile.loaderVersion,
+              launchSpec: profile.launchSpec,
+              javaPath: profile.javaPath,
+              installedContent: db
+                .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+                .all(profile.id),
+              contentPolicies: db
+                .prepare(
+                  "SELECT * FROM content_update_policies WHERE server_id = ?",
+                )
+                .all(profile.id),
+            }
+          : null,
+    });
+    const sizeBytes = manifest.files.reduce((sum, file) => sum + file.size, 0);
+    db.prepare(
+      `INSERT INTO backups (id, server_id, profile_id, kind, archive_path, world_name, size_bytes, status, created_at, manifest_sha256) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)`,
+    ).run(
+      id,
+      profile.id,
+      backupProfile?.id || null,
+      mode === "worldOnly" ? "world" : mode,
+      backupRoot,
+      worldName,
+      sizeBytes,
+      createdAt,
+      createHash("sha256").update(JSON.stringify(manifest)).digest("hex"),
+    );
+    recorded = true;
+    if (backupProfile?.id)
+      await pruneBackupProfileRecords(db, backupProfile.id);
+    return mapBackup(db.prepare("SELECT * FROM backups WHERE id = ?").get(id));
+  } catch (error) {
+    if (!recorded) await removeTree(backupRoot);
+    throw error;
   } finally {
-    if (hasRunningProcess) {
+    state.backingUpServers.delete(profile.id);
+    if (savingDisabled && managedChildren.get(profile.id)?.db === db)
       sendServerCommand(db, profile.id, "save-on");
-    }
   }
-  const sizeBytes = await directorySizeBytes(backupRoot);
-  db.prepare(
-    `INSERT INTO backups
-      (id, server_id, profile_id, kind, archive_path, world_name, size_bytes, status, created_at)
-     VALUES (?, ?, ?, 'world', ?, 'world', ?, 'completed', ?)`,
-  ).run(id, profile.id, profileId, backupRoot, sizeBytes, createdAt);
-  if (profileId) {
-    await pruneBackupProfileRecords(db, profileId);
-  }
-  return mapBackup(db.prepare("SELECT * FROM backups WHERE id = ?").get(id));
 }
 
 async function createWorldBackup(db, input) {
@@ -3779,7 +4246,38 @@ function listBackupProfiles(db, serverId) {
     .map(mapBackupProfile);
 }
 
+function validateBackupProfile(input) {
+  if (
+    !["worldOnly", "worldPlusConfigs", "fullServer", "custom"].includes(
+      input?.mode || "worldOnly",
+    )
+  )
+    throw codedError(
+      "BACKUP_PROFILE_MODE_INVALID",
+      "unsupported backup profile mode",
+    );
+  for (const relative of [
+    ...(input?.includePaths || []),
+    ...(input?.excludePaths || []),
+  ])
+    backupFiles.relativePath(relative);
+  if (input?.mode === "custom" && !input.includePaths?.length)
+    throw codedError(
+      "BACKUP_EMPTY",
+      "select at least one path for a custom backup",
+    );
+  if (
+    input?.retentionCount != null &&
+    (!Number.isInteger(input.retentionCount) || input.retentionCount < 1)
+  )
+    throw codedError(
+      "BACKUP_RETENTION_INVALID",
+      "backup retention count must be a positive integer",
+    );
+}
+
 function createBackupProfile(db, input) {
+  validateBackupProfile(input);
   const id = randomUUID();
   const now = nowIso();
   db.prepare(
@@ -3803,6 +4301,7 @@ function createBackupProfile(db, input) {
 }
 
 function updateBackupProfile(db, input) {
+  validateBackupProfile(input);
   const id = trimRequired(
     input?.id || input?.profileId,
     "backup profile id is required",
@@ -3845,6 +4344,15 @@ function deleteBackupProfile(db, profileId) {
   if (!existing) {
     throw codedError("BACKUP_PROFILE_NOT_FOUND", "backup profile not found");
   }
+  if (
+    db
+      .prepare("SELECT 1 FROM scheduled_tasks WHERE backup_profile_id = ?")
+      .get(id)
+  )
+    throw codedError(
+      "BACKUP_PROFILE_IN_USE",
+      "a scheduled task still uses this backup profile",
+    );
   db.prepare("DELETE FROM backup_profiles WHERE id = ?").run(id);
   return null;
 }
@@ -3853,103 +4361,146 @@ async function createProfileBackup(db, input) {
   const profile = db
     .prepare("SELECT * FROM backup_profiles WHERE id = ?")
     .get(input?.profileId);
-  if (!profile) {
+  if (!profile)
     throw codedError("BACKUP_PROFILE_NOT_FOUND", "backup profile not found");
-  }
-  return createBackupRecord(
-    db,
-    profile.server_id,
-    profile.id,
-    JSON.parse(profile.include_paths || "[]"),
+  return createBackupRecord(db, profile.server_id, profile);
+}
+
+async function backupRestorePlan(db, input) {
+  const backup = db
+    .prepare("SELECT * FROM backups WHERE id = ?")
+    .get(input?.backupId);
+  if (!backup || (input?.serverId && backup.server_id !== input.serverId))
+    throw codedError("BACKUP_NOT_FOUND", "backup not found");
+  const manifest = await backupFiles.verifiedSnapshot(
+    backup.archive_path,
+    backup.manifest_sha256,
   );
+  const remap = backupFiles.restorePaths(manifest, input?.targetWorldDir);
+  for (const relative of manifest.includes)
+    safeServerPath(db, backup.server_id, remap(relative));
+  return { backup, manifest, remap };
+}
+
+async function previewBackupRestore(db, input) {
+  const { backup, manifest, remap } = await backupRestorePlan(db, input);
+  return {
+    backupId: backup.id,
+    serverId: backup.server_id,
+    mode: manifest.mode,
+    relativePaths: backupFiles
+      .restoreScope(serverRoot(db, backup.server_id), manifest)
+      .map(remap),
+    fileCount: manifest.files.length,
+    sizeBytes: manifest.files.reduce((sum, file) => sum + file.size, 0),
+    warnings: [],
+  };
+}
+
+function restoreBackupDatabaseState(db, serverId, root, manifest) {
+  if (manifest.mode !== "fullServer" || !manifest.serverState) return;
+  const state = manifest.serverState;
+  db.prepare(
+    "UPDATE servers SET minecraft_version = ?, loader_type = ?, loader_version = ?, java_path = ?, launch_spec_json = ?, updated_at = ? WHERE id = ?",
+  ).run(
+    state.minecraftVersion,
+    dbLoader(state.loaderType),
+    state.loaderVersion,
+    state.javaPath,
+    state.launchSpec ? JSON.stringify(state.launchSpec) : null,
+    nowIso(),
+    serverId,
+  );
+  const covered = (installedPath) =>
+    !backupFiles.excluded(
+      path.relative(root, installedPath).replace(/\\/g, "/"),
+      manifest.excludes,
+    );
+  for (const row of db
+    .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+    .all(serverId)) {
+    if (covered(row.installed_path))
+      db.prepare("DELETE FROM installed_content WHERE id = ?").run(row.id);
+  }
+  const savedFiles = new Set(manifest.files.map((file) => file.path));
+  const insert = db.prepare(
+    "INSERT INTO installed_content (id,server_id,content_id,name,version,loader,environment,source_path,installed_path,sha256,warnings_json,installed_at,mod_id,metadata_scanned_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+  );
+  for (const row of state.installedContent) {
+    if (
+      covered(row.installed_path) &&
+      savedFiles.has(
+        path.relative(root, row.installed_path).replace(/\\/g, "/"),
+      )
+    )
+      insert.run(
+        row.id,
+        serverId,
+        row.content_id,
+        row.name,
+        row.version,
+        row.loader,
+        row.environment,
+        row.source_path,
+        row.installed_path,
+        row.sha256,
+        row.warnings_json,
+        row.installed_at,
+        row.mod_id,
+        row.metadata_scanned_at,
+      );
+  }
+  db.prepare("DELETE FROM content_update_policies WHERE server_id = ?").run(
+    serverId,
+  );
+  const policyInsert = db.prepare(
+    "INSERT INTO content_update_policies (id,server_id,content_id,content_key,policy,pinned_version,ignored_update,updated_at) VALUES (?,?,?,?,?,?,?,?)",
+  );
+  for (const row of state.contentPolicies)
+    policyInsert.run(
+      row.id,
+      serverId,
+      row.content_id,
+      row.content_key,
+      row.policy,
+      row.pinned_version,
+      row.ignored_update,
+      row.updated_at,
+    );
 }
 
 async function restoreWorldBackup(db, input) {
-  if (!input?.confirm) {
+  if (!input?.confirm)
     throw codedError(
       "RESTORE_NEEDS_CONFIRMATION",
       "restore requires explicit confirmation",
     );
-  }
-  const backup = db
-    .prepare("SELECT * FROM backups WHERE id = ?")
-    .get(input?.backupId);
-  if (!backup) {
-    throw codedError("BACKUP_NOT_FOUND", "backup not found");
-  }
-  const managed = managedChildren.get(backup.server_id);
-  const persistedActiveProcess = db
-    .prepare(
-      `SELECT 1 FROM managed_processes
-       WHERE server_id = ? AND status IN ('running', 'external_running')
-       LIMIT 1`,
-    )
-    .get(backup.server_id);
-  if (managed?.db === db || persistedActiveProcess) {
-    throw provisioningError(
-      "SERVER_MUST_BE_STOPPED",
-      "Stop the server before restoring a world backup.",
-    );
-  }
-  const sourceWorld = path.join(backup.archive_path, "world");
-  if (!fs.existsSync(sourceWorld)) {
-    throw codedError(
-      "BACKUP_WORLD_MISSING",
-      "backup world folder does not exist",
-    );
-  }
-  const targetWorldDir = trimRequired(
-    input.targetWorldDir,
-    "target world directory is required",
+  const { backup, manifest } = await backupRestorePlan(db, input);
+  requireStoppedServer(db, backup.server_id);
+  await withServerFiles(db, backup.server_id, () =>
+    backupFiles.restoreSnapshot({
+      root: safeServerPath(db, backup.server_id, ".").root,
+      archive: backup.archive_path,
+      manifest,
+      resolve: (relative) => safeServerPath(db, backup.server_id, relative),
+      targetWorldDir: input?.targetWorldDir,
+      commit: () => {
+        db.exec("BEGIN");
+        try {
+          restoreBackupDatabaseState(
+            db,
+            backup.server_id,
+            safeServerPath(db, backup.server_id, ".").root,
+            manifest,
+          );
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+      },
+    }),
   );
-  if (path.isAbsolute(targetWorldDir)) {
-    throw codedError("PATH_ESCAPES_SERVER_ROOT", "path escapes server root");
-  }
-  if (
-    targetWorldDir === "." ||
-    targetWorldDir === ".." ||
-    targetWorldDir.includes("/") ||
-    targetWorldDir.includes("\\")
-  ) {
-    throw codedError(
-      "RESTORE_TARGET_INVALID",
-      "restore target must be a world folder name",
-    );
-  }
-  if (targetWorldDir.toLowerCase() === "backups") {
-    throw codedError(
-      "RESTORE_TARGET_IS_BACKUP_STORAGE",
-      "restore target must not overlap backup storage",
-    );
-  }
-  const { target } = safeServerPath(db, backup.server_id, targetWorldDir);
-  // Copy first, swap second. Deleting the world and then copying into place
-  // leaves nothing to fall back on if the copy fails half way, which is the
-  // one failure a server owner can never recover from.
-  const stamp = Date.now();
-  const staged = `${target}.restoring-${stamp}`;
-  const replaced = `${target}.replaced-${stamp}`;
-  await removeTree(staged);
-  await copyTree(sourceWorld, staged);
-
-  let movedExistingWorld = false;
-  try {
-    if (fs.existsSync(target)) {
-      // The swap itself stays synchronous: two renames must not interleave with
-      // anything else, or a failure could leave the server with no world folder.
-      fs.renameSync(target, replaced);
-      movedExistingWorld = true;
-    }
-    fs.renameSync(staged, target);
-  } catch (error) {
-    // Put the original world back before surfacing the failure.
-    if (movedExistingWorld && !fs.existsSync(target)) {
-      fs.renameSync(replaced, target);
-    }
-    await removeTree(staged);
-    throw error;
-  }
-  await removeTree(replaced);
   return null;
 }
 
@@ -4214,6 +4765,12 @@ function mapInstalledContent(row) {
     id: row.id,
     serverId: row.server_id,
     contentId: row.content_id,
+    provider: parseInstalledContentProvider(row.content_id)?.provider || null,
+    projectId: parseInstalledContentProvider(row.content_id)?.projectId || null,
+    versionId: parseInstalledContentProvider(row.content_id)?.versionId || null,
+    /* What the jar calls itself, read from its own descriptor. Distinct from
+       contentId, which records where it was downloaded from. */
+    modId: row.mod_id ?? null,
     name: row.name,
     version: row.version,
     loader: row.loader,
@@ -4226,13 +4783,110 @@ function mapInstalledContent(row) {
   };
 }
 
-function listInstalledContent(db, serverId) {
+async function listInstalledContent(db, serverId) {
+  const id = requireServerId(serverId);
+  await adoptContentOnDisk(db, id);
   return db
     .prepare(
       "SELECT * FROM installed_content WHERE server_id = ? ORDER BY installed_at DESC",
     )
-    .all(requireServerId(serverId))
+    .all(id)
     .map(mapInstalledContent);
+}
+
+/* The install commands are not the only way content reaches a server. A modpack
+   arrives as one archive and is extracted whole, and people drop jars into
+   mods/ through the file manager or Explorer. Those files run on the server but
+   had no row here, so the content view was empty for exactly the servers with
+   the most content in them. The directory is the truth; the table is an index
+   of it, so reading the list reconciles the two first. Everything downstream —
+   enable, disable, uninstall — already works off the row, so adoption is all
+   that is needed to make those files manageable. */
+async function adoptContentOnDisk(db, serverId) {
+  const profile = getServerProfile(db, serverId);
+  const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
+  if (!fs.existsSync(targetDir)) return;
+  const onDisk = fs
+    .readdirSync(targetDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => entry.name)
+    .filter((name) => /\.jar(\.disabled)?$/i.test(name))
+    .map((name) => path.join(targetDir, name));
+
+  const rows = db
+    .prepare(
+      "SELECT id, installed_path FROM installed_content WHERE server_id = ?",
+    )
+    .all(serverId);
+  const known = new Set(rows.map((row) => path.resolve(row.installed_path)));
+
+  for (const filePath of onDisk) {
+    if (known.has(path.resolve(filePath))) continue;
+    const stats = fs.statSync(filePath);
+    const fileName = path.basename(filePath);
+    db.prepare(
+      `INSERT INTO installed_content
+        (id, server_id, content_id, name, version, loader, environment, source_path,
+         installed_path, sha256, warnings_json, installed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      randomUUID(),
+      serverId,
+      null,
+      fileName.replace(/\.disabled$/i, ""),
+      null,
+      profile.loaderType,
+      null,
+      filePath,
+      filePath,
+      await sha256File(filePath),
+      "[]",
+      stats.mtime.toISOString(),
+    );
+  }
+
+  /* A row whose file is gone is a stale index entry, and every action it offers
+     would fail. Only rows inside the directory just read are dropped, so a row
+     pointing somewhere unreadable is left alone rather than silently discarded. */
+  const resolvedDir = path.resolve(targetDir);
+  for (const row of rows) {
+    const resolved = path.resolve(row.installed_path);
+    if (path.dirname(resolved) !== resolvedDir) continue;
+    if (fs.existsSync(resolved)) continue;
+    db.prepare("DELETE FROM installed_content WHERE id = ?").run(row.id);
+  }
+
+  await fillContentMetadata(db, serverId);
+}
+
+/* A jar carries its own id and version; the file name is only a guess at them.
+   Adopted files were stored with both left null, so a mods folder full of
+   working mods read as a column of "Unknown" — including the four the operator
+   had just installed. Read once and recorded, because the answer does not
+   change while the file does not. */
+async function fillContentMetadata(db, serverId) {
+  const pending = db
+    .prepare(
+      `SELECT id, installed_path FROM installed_content
+       WHERE server_id = ? AND metadata_scanned_at IS NULL`,
+    )
+    .all(serverId);
+  if (pending.length === 0) return;
+  const scannedAt = new Date().toISOString();
+  const update = db.prepare(
+    `UPDATE installed_content
+        SET mod_id = COALESCE(mod_id, ?),
+            version = COALESCE(version, ?),
+            metadata_scanned_at = ?
+      WHERE id = ?`,
+  );
+  for (const row of pending) {
+    if (!fs.existsSync(row.installed_path)) continue;
+    const metadata = await readModMetadata(row.installed_path);
+    /* The scan is marked done either way. A jar with no descriptor is a fact
+       about that jar, not a reason to reopen it on every page load. */
+    update.run(metadata.modId, metadata.version, scannedAt, row.id);
+  }
 }
 
 function contentTargetDir(profile) {
@@ -4246,11 +4900,21 @@ function safeFilename(value, fallback = "download.jar") {
 }
 
 function uniqueTargetPath(targetDir, filename) {
-  const parsed = path.parse(safeFilename(filename));
-  let candidate = path.join(targetDir, `${parsed.name}${parsed.ext}`);
+  const safeName = safeFilename(filename);
+  const disabledSuffix = safeName.endsWith(".jar.disabled") ? ".disabled" : "";
+  const parsed = path.parse(
+    disabledSuffix ? safeName.slice(0, -disabledSuffix.length) : safeName,
+  );
+  let candidate = path.join(
+    targetDir,
+    `${parsed.name}${parsed.ext}${disabledSuffix}`,
+  );
   let suffix = 1;
   while (fs.existsSync(candidate)) {
-    candidate = path.join(targetDir, `${parsed.name}-${suffix}${parsed.ext}`);
+    candidate = path.join(
+      targetDir,
+      `${parsed.name}-${suffix}${parsed.ext}${disabledSuffix}`,
+    );
     suffix += 1;
   }
   return candidate;
@@ -4279,12 +4943,24 @@ async function fetchOrNetworkError(url, init, context) {
   } catch (error) {
     if (error?.mcsmCode) throw error;
     const cause = error?.cause?.code || error?.code || error?.name;
+    /* A timeout is not the same failure as an unreachable host, and saying so
+       matters: a request that never returns leaves whatever asked for it
+       waiting on a spinner with nothing to act on. */
+    if (error?.name === "TimeoutError") {
+      throw codedError("NETWORK_TIMEOUT", `${context}: timed out`);
+    }
     throw codedError(
       "NETWORK_UNREACHABLE",
       `${context}: ${cause ? `${cause} ` : ""}${error?.message || error}`,
     );
   }
 }
+
+/* Metadata lookups only — never the file downloads, which legitimately run
+   long. Without a bound, a connection that opens and then stalls (a blocking
+   proxy, a filtered route) hangs forever, and the Java install dialog sat on
+   "Finding a build…" with no error and no way forward. */
+const METADATA_REQUEST_TIMEOUT_MS = 20_000;
 
 async function fetchJson(
   url,
@@ -4295,6 +4971,7 @@ async function fetchJson(
   const response = await fetchOrNetworkError(
     url,
     {
+      signal: AbortSignal.timeout(METADATA_REQUEST_TIMEOUT_MS),
       ...options,
       headers: requestHeaders({
         Accept: "application/json",
@@ -4318,6 +4995,7 @@ async function fetchText(
   const response = await fetchOrNetworkError(
     url,
     {
+      signal: AbortSignal.timeout(METADATA_REQUEST_TIMEOUT_MS),
       ...options,
       headers: requestHeaders({
         Accept: "text/plain, application/xml, text/xml",
@@ -4371,43 +5049,127 @@ async function downloadRemoteFile(
   fs.writeFileSync(targetPath, body);
 }
 
-async function installRemoteContent(db, input) {
-  const profile = getServerProfile(db, requireServerId(input?.serverId));
-  const downloadUrl = trimRequired(
-    input?.downloadUrl,
-    "download URL is required",
-  );
-  const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
-  fs.mkdirSync(targetDir, { recursive: true });
-  const targetPath = uniqueTargetPath(
-    targetDir,
-    input?.fileName || path.basename(new URL(downloadUrl).pathname),
-  );
-  await downloadRemoteFile(downloadUrl, targetPath, input?.headers || {});
+async function existingMarketplaceContent(db, serverId, contentId) {
+  const parsed = parseInstalledContentProvider(contentId);
+  if (!parsed) return null;
+  const row = db
+    .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+    .all(serverId)
+    .find((item) => {
+      const source = parseInstalledContentProvider(item.content_id);
+      return (
+        source?.provider === parsed.provider &&
+        source.projectId === parsed.projectId
+      );
+    });
+  if (row && row.content_id !== contentId)
+    throw codedError(
+      "CONTENT_PROJECT_ALREADY_INSTALLED",
+      "another version of this project is installed; use the content update action",
+    );
+  if (row && !fs.existsSync(row.installed_path))
+    throw codedError(
+      "CONTENT_SOURCE_FILE_MISSING",
+      "installed project file is missing; rescan installed content before reinstalling",
+    );
+  if (row && (await sha256File(row.installed_path)) !== row.sha256)
+    throw codedError(
+      "CONTENT_CHANGED_ON_DISK",
+      "the installed project file differs from its recorded checksum",
+    );
+  return row ? mapInstalledContent(row) : null;
+}
+
+function recordInstalledContent(db, profile, input, targetPath, checksum) {
   const id = randomUUID();
-  const checksum = await sha256File(targetPath);
   db.prepare(
-    `INSERT INTO installed_content
-      (id, server_id, content_id, name, version, loader, environment, source_path,
-       installed_path, sha256, warnings_json, installed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO installed_content (id, server_id, content_id, name, version, loader, environment, source_path, installed_path, sha256, warnings_json, installed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
     profile.id,
-    input?.contentId ?? null,
-    input?.name || path.basename(targetPath),
-    input?.version ?? null,
+    input.contentId ?? null,
+    input.name || path.basename(targetPath),
+    input.version ?? null,
     profile.loaderType,
-    input?.environment ?? null,
-    downloadUrl,
+    input.environment ?? null,
+    input.sourcePath || input.downloadUrl,
     targetPath,
     checksum,
-    JSON.stringify(input?.warnings || []),
+    JSON.stringify(input.warnings || []),
     nowIso(),
   );
   return mapInstalledContent(
     db.prepare("SELECT * FROM installed_content WHERE id = ?").get(id),
   );
+}
+
+async function installRemoteContent(db, input) {
+  const profile = getServerProfile(db, requireServerId(input?.serverId));
+  const existing = await existingMarketplaceContent(
+    db,
+    profile.id,
+    input.contentId,
+  );
+  if (existing) return existing;
+  const downloadUrl = trimRequired(
+    input?.downloadUrl,
+    "download URL is required",
+  );
+  const warnings = input.versionMetadata
+    ? contentVersions.checkCompatibility(
+        input.versionMetadata,
+        profile,
+        input.installAnyway,
+      )
+    : [];
+  const targetDir = safeServerPath(
+    db,
+    profile.id,
+    contentTargetDir(profile),
+  ).target;
+  fs.mkdirSync(targetDir, { recursive: true });
+  const staged = path.join(targetDir, `.mcsm-download-${randomUUID()}`);
+  let targetPath;
+  try {
+    await downloadRemoteFile(
+      validateProvisioningUrl(
+        downloadUrl,
+        parseInstalledContentProvider(input.contentId)?.provider,
+      ),
+      staged,
+      {},
+      (url) =>
+        validateProvisioningUrl(
+          url,
+          parseInstalledContentProvider(input.contentId)?.provider,
+        ),
+    );
+    verifyProvisioningHashes(staged, input.hashes || {});
+    const checksum = await sha256File(staged);
+    const duplicate = await existingMarketplaceContent(
+      db,
+      profile.id,
+      input.contentId,
+    );
+    if (duplicate) return duplicate;
+    targetPath = uniqueTargetPath(
+      targetDir,
+      input.fileName || path.basename(new URL(downloadUrl).pathname),
+    );
+    fs.renameSync(staged, targetPath);
+    return recordInstalledContent(
+      db,
+      profile,
+      { ...input, warnings: [...(input.warnings || []), ...warnings] },
+      targetPath,
+      checksum,
+    );
+  } catch (error) {
+    if (targetPath) fs.rmSync(targetPath, { force: true });
+    throw error;
+  } finally {
+    fs.rmSync(staged, { force: true });
+  }
 }
 
 async function importLocalContent(db, input) {
@@ -4416,40 +5178,48 @@ async function importLocalContent(db, input) {
     input?.sourcePath || input?.filePath,
     "content source path is required",
   );
-  if (!fs.existsSync(sourcePath)) {
+  if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile())
     throw codedError(
       "CONTENT_SOURCE_FILE_MISSING",
       "content source file does not exist",
     );
-  }
-  const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
-  fs.mkdirSync(targetDir, { recursive: true });
-  const targetPath = path.join(targetDir, path.basename(sourcePath));
-  await fs.promises.copyFile(sourcePath, targetPath);
-  const id = randomUUID();
-  const checksum = await sha256File(targetPath);
-  db.prepare(
-    `INSERT INTO installed_content
-      (id, server_id, content_id, name, version, loader, environment, source_path,
-       installed_path, sha256, warnings_json, installed_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(
-    id,
+  const targetDir = safeServerPath(
+    db,
     profile.id,
-    input?.contentId ?? null,
-    input?.name || path.basename(sourcePath),
-    input?.version ?? null,
-    profile.loaderType,
-    input?.environment ?? null,
-    sourcePath,
-    targetPath,
-    checksum,
-    "[]",
-    nowIso(),
-  );
-  return mapInstalledContent(
-    db.prepare("SELECT * FROM installed_content WHERE id = ?").get(id),
-  );
+    contentTargetDir(profile),
+  ).target;
+  fs.mkdirSync(targetDir, { recursive: true });
+  const staged = path.join(targetDir, `.mcsm-import-${randomUUID()}`);
+  let targetPath;
+  try {
+    await fs.promises.copyFile(sourcePath, staged, fs.constants.COPYFILE_EXCL);
+    const checksum = await sha256File(staged);
+    const duplicate = db
+      .prepare(
+        "SELECT * FROM installed_content WHERE server_id = ? AND sha256 = ?",
+      )
+      .get(profile.id, checksum);
+    if (
+      duplicate &&
+      fs.existsSync(duplicate.installed_path) &&
+      (await sha256File(duplicate.installed_path)) === checksum
+    )
+      return mapInstalledContent(duplicate);
+    targetPath = uniqueTargetPath(targetDir, path.basename(sourcePath));
+    fs.renameSync(staged, targetPath);
+    return recordInstalledContent(
+      db,
+      profile,
+      { ...input, sourcePath },
+      targetPath,
+      checksum,
+    );
+  } catch (error) {
+    if (targetPath) fs.rmSync(targetPath, { force: true });
+    throw error;
+  } finally {
+    fs.rmSync(staged, { force: true });
+  }
 }
 
 function disableInstalledContent(db, input) {
@@ -4589,26 +5359,6 @@ function saveContentUpdatePolicy(db, input) {
   });
 }
 
-function planContentUpdates(db, input) {
-  const policy = getContentUpdatePolicy(db, {
-    serverId: input?.serverId,
-    contentId: null,
-  });
-  const candidates = input?.availableUpdates || [];
-  return {
-    serverId: requireServerId(input?.serverId),
-    policy: policy.policy,
-    plannedUpdates: candidates.map(
-      (item) => `${item.name} -> ${item.latestVersion}`,
-    ),
-    warnings: candidates.flatMap((item) => item.warnings || []),
-    requiresConfirmation:
-      policy.policy === "batch_confirm" &&
-      !input?.confirmBatch &&
-      candidates.length > 0,
-  };
-}
-
 function parseInstalledContentProvider(contentId) {
   const parts = String(contentId || "").split(":");
   if (parts.length < 3) {
@@ -4622,22 +5372,37 @@ function parseInstalledContentProvider(contentId) {
 }
 
 function versionMatchesServer(version, profile) {
-  const loaders = version.loaders || [];
-  const gameVersions = version.gameVersions || [];
-  return (
-    (loaders.length === 0 || loaders.includes(profile.loaderType)) &&
-    (gameVersions.length === 0 ||
-      gameVersions.includes(profile.minecraftVersion))
+  return contentVersions.compatibilityWarnings(version, profile).length === 0;
+}
+
+function firstCompatibleVersion(
+  versions,
+  profile,
+  currentVersionId,
+  currentVersion,
+) {
+  return contentVersions.newestCompatibleVersion(
+    versions,
+    profile,
+    currentVersionId,
+    currentVersion,
   );
 }
 
-function firstCompatibleVersion(versions, profile, currentVersionId) {
-  return versions.find(
-    (version) =>
-      version.id !== currentVersionId &&
-      version.name !== currentVersionId &&
-      versionMatchesServer(version, profile),
-  );
+function contentUpdateAllowed(db, content, update = null) {
+  const policy = db
+    .prepare(
+      "SELECT * FROM content_update_policies WHERE server_id = ? AND content_key IN (?, ?, '__server__') ORDER BY CASE WHEN content_key = '__server__' THEN 1 ELSE 0 END LIMIT 1",
+    )
+    .get(content.server_id, content.content_id || content.id, content.id);
+  if (policy?.policy === "pin_current") return false;
+  if (policy?.policy === "ignore_update")
+    return (
+      policy.ignored_update &&
+      update &&
+      ![update.versionId, update.latestVersion].includes(policy.ignored_update)
+    );
+  return true;
 }
 
 function contentUpdateFile(update) {
@@ -4650,6 +5415,8 @@ function contentUpdateFile(update) {
 }
 
 async function resolveContentUpdate(db, profile, content) {
+  if (!contentUpdateAllowed(db, content, { versionId: "", latestVersion: "" }))
+    return null;
   const parsed = parseInstalledContentProvider(content.content_id);
   if (!parsed) {
     return {
@@ -4662,6 +5429,7 @@ async function resolveContentUpdate(db, profile, content) {
       await listModrinthVersions({ projectId: parsed.projectId }),
       profile,
       parsed.versionId,
+      content.version,
     );
     if (!latest) return null;
     const file = contentUpdateFile(latest);
@@ -4671,6 +5439,7 @@ async function resolveContentUpdate(db, profile, content) {
     return {
       installedContentId: content.id,
       provider: "modrinth",
+      versionMetadata: latest,
       projectId: parsed.projectId,
       versionId: latest.id,
       currentVersion: content.version,
@@ -4680,28 +5449,33 @@ async function resolveContentUpdate(db, profile, content) {
       downloadUrl: file.url,
       nextContentId: `modrinth:${parsed.projectId}:${latest.id}`,
       warnings: latest.warnings || [],
+      hashes: file?.hashes || {},
     };
   }
 
   if (parsed.provider === "hangar") {
-    const latest = (
-      await listHangarVersions({ projectId: parsed.projectId })
-    ).find((version) => version.name !== parsed.versionId);
+    const latest = firstCompatibleVersion(
+      await listHangarVersions({ projectId: parsed.projectId }),
+      profile,
+      parsed.versionId,
+      content.version,
+    );
     if (!latest) return null;
-    const projectName =
-      parsed.projectId.split("/").filter(Boolean).pop() || parsed.projectId;
+    const file = contentUpdateFile(latest);
     return {
       installedContentId: content.id,
       provider: "hangar",
+      versionMetadata: latest,
       projectId: parsed.projectId,
-      versionId: latest.name,
+      versionId: latest.id,
       currentVersion: content.version,
-      latestVersion: latest.name,
+      latestVersion: latest.versionNumber,
       name: content.name,
-      fileName: `${projectName}-${latest.name}.jar`,
-      downloadUrl: `https://hangar.papermc.io/api/v1/projects/${encodeHangarProjectId(parsed.projectId)}/versions/${encodeURIComponent(latest.name)}/PAPER/download`,
-      nextContentId: `hangar:${parsed.projectId}:${latest.name}`,
-      warnings: [],
+      fileName: file.filename,
+      downloadUrl: file.url,
+      hashes: file.hashes,
+      nextContentId: `hangar:${parsed.projectId}:${latest.id}`,
+      warnings: latest.warnings || [],
     };
   }
 
@@ -4710,12 +5484,14 @@ async function resolveContentUpdate(db, profile, content) {
       await listCurseForgeFiles({ modId: parsed.projectId }),
       profile,
       parsed.versionId,
+      content.version,
     );
     if (!latest) return null;
     const file = latest.files?.[0];
     return {
       installedContentId: content.id,
       provider: "curseforge",
+      versionMetadata: latest,
       projectId: parsed.projectId,
       versionId: latest.id,
       currentVersion: content.version,
@@ -4723,9 +5499,9 @@ async function resolveContentUpdate(db, profile, content) {
       name: content.name,
       fileName: file?.filename || `${parsed.projectId}-${latest.id}.jar`,
       downloadUrl: await curseForgeDownloadUrl(parsed.projectId, latest.id),
-      headers: { "x-api-key": curseForgeApiKey() },
       nextContentId: `curseforge:${parsed.projectId}:${latest.id}`,
       warnings: latest.warnings || [],
+      hashes: file?.hashes || {},
     };
   }
 
@@ -4734,6 +5510,7 @@ async function resolveContentUpdate(db, profile, content) {
       await listBbsmcVersions({ projectId: parsed.projectId }),
       profile,
       parsed.versionId,
+      content.version,
     );
     if (!latest) return null;
     const file = selectInstallableBbsmcFile(latest);
@@ -4747,6 +5524,7 @@ async function resolveContentUpdate(db, profile, content) {
     return {
       installedContentId: content.id,
       provider: "bbsmc",
+      versionMetadata: latest,
       projectId: parsed.projectId,
       versionId: latest.id,
       currentVersion: content.version,
@@ -4756,6 +5534,7 @@ async function resolveContentUpdate(db, profile, content) {
       downloadUrl: file.url,
       nextContentId: `bbsmc:${parsed.projectId}:${latest.id}`,
       warnings: latest.warnings || [],
+      hashes: file?.hashes || {},
     };
   }
 
@@ -4778,7 +5557,7 @@ async function checkContentUpdates(db, input) {
       warnings.push(result.warning);
       continue;
     }
-    updates.push(result);
+    if (contentUpdateAllowed(db, row, result)) updates.push(result);
   }
   return {
     serverId: profile.id,
@@ -4799,49 +5578,115 @@ function uniqueBackupPath(filePath) {
 }
 
 async function installResolvedContentUpdate(db, content, update) {
+  if (!contentUpdateAllowed(db, content, update))
+    throw codedError(
+      "CONTENT_UPDATE_BLOCKED_BY_POLICY",
+      "this update is blocked by the content update policy",
+    );
+  return installMarketplaceVersion(
+    db,
+    { serverId: content.server_id },
+    update.provider,
+    update.versionMetadata,
+    () => replaceContentVersion(db, content, update),
+  );
+}
+
+async function replaceContentVersion(db, content, update) {
   const targetDir = path.dirname(content.installed_path);
   fs.mkdirSync(targetDir, { recursive: true });
-  const targetPath = uniqueTargetPath(targetDir, update.fileName);
-  await downloadRemoteFile(
-    update.downloadUrl,
-    targetPath,
-    update.headers || {},
-  );
-  let backupPath = null;
-  if (fs.existsSync(content.installed_path)) {
+  const staged = path.join(targetDir, `.mcsm-update-${randomUUID()}`);
+  let backupPath = null,
+    targetPath = null,
+    moved = false,
+    installed = false;
+  try {
+    await downloadRemoteFile(
+      validateProvisioningUrl(update.downloadUrl, update.provider),
+      staged,
+      {},
+      (url) => validateProvisioningUrl(url, update.provider),
+    );
+    verifyProvisioningHashes(staged, update.hashes || {});
+    const checksum = await sha256File(staged);
+    const current = db
+      .prepare("SELECT * FROM installed_content WHERE id = ?")
+      .get(content.id);
+    if (
+      !current ||
+      current.content_id !== content.content_id ||
+      current.installed_path !== content.installed_path ||
+      (await sha256File(content.installed_path)) !== content.sha256
+    )
+      throw codedError(
+        "CONTENT_CHANGED_ON_DISK",
+        "installed content changed while its update was being prepared",
+      );
+    if (!contentUpdateAllowed(db, content, update))
+      throw codedError(
+        "CONTENT_UPDATE_BLOCKED_BY_POLICY",
+        "this update is blocked by the content update policy",
+      );
+    const disabled = content.installed_path.endsWith(".disabled");
+    targetPath = uniqueTargetPath(
+      targetDir,
+      `${safeFilename(update.fileName)}${disabled ? ".disabled" : ""}`,
+    );
     backupPath = uniqueBackupPath(content.installed_path);
-    fs.renameSync(content.installed_path, backupPath);
-  }
-  const now = nowIso();
-  const checksum = await sha256File(targetPath);
-  db.prepare(
-    `UPDATE installed_content
-        SET content_id = ?,
-            version = ?,
-            source_path = ?,
-            installed_path = ?,
-            sha256 = ?,
-            warnings_json = ?,
-            installed_at = ?
-      WHERE id = ?`,
-  ).run(
-    update.nextContentId,
-    update.latestVersion,
-    update.downloadUrl,
-    targetPath,
-    checksum,
-    JSON.stringify(update.warnings || []),
-    now,
-    content.id,
-  );
-  return {
-    content: mapInstalledContent(
-      db
+    const now = nowIso();
+    db.exec("BEGIN");
+    try {
+      fs.renameSync(content.installed_path, backupPath);
+      moved = true;
+      fs.renameSync(staged, targetPath);
+      installed = true;
+      db.prepare(
+        `UPDATE installed_content SET content_id = ?, version = ?, source_path = ?, installed_path = ?, sha256 = ?, warnings_json = ?, installed_at = ?, mod_id = NULL, metadata_scanned_at = NULL WHERE id = ?`,
+      ).run(
+        update.nextContentId,
+        update.latestVersion,
+        update.downloadUrl,
+        targetPath,
+        checksum,
+        JSON.stringify(update.warnings || []),
+        now,
+        content.id,
+      );
+      const after = db
         .prepare("SELECT * FROM installed_content WHERE id = ?")
-        .get(content.id),
-    ),
-    backupPath,
-  };
+        .get(content.id);
+      db.prepare(
+        "INSERT INTO content_update_history (id, server_id, installed_content_id, before_json, after_json, backup_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, 'installed', ?)",
+      ).run(
+        randomUUID(),
+        content.server_id,
+        content.id,
+        JSON.stringify(content),
+        JSON.stringify(after),
+        backupPath,
+        now,
+      );
+      db.prepare(
+        "UPDATE content_update_policies SET content_id = ?, content_key = ? WHERE server_id = ? AND content_key = ?",
+      ).run(
+        update.nextContentId,
+        update.nextContentId,
+        content.server_id,
+        content.content_id,
+      );
+      db.exec("COMMIT");
+      return { content: mapInstalledContent(after), backupPath };
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    if (installed) fs.rmSync(targetPath, { force: true });
+    if (moved) fs.renameSync(backupPath, content.installed_path);
+    throw error;
+  } finally {
+    fs.rmSync(staged, { force: true });
+  }
 }
 
 async function installContentUpdate(db, input) {
@@ -4849,19 +5694,18 @@ async function installContentUpdate(db, input) {
   const content = db
     .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
     .get(input?.installedContentId, profile.id);
-  if (!content) {
+  if (!content)
     throw codedError(
       "INSTALLED_CONTENT_NOT_FOUND",
       "installed content not found",
     );
-  }
   const update = await resolveContentUpdate(db, profile, content);
-  if (!update || update.warning) {
+  if (!update || update.warning)
     throw codedError(
       "CONTENT_ALREADY_CURRENT",
-      update?.warning || "installed content is already current",
+      update?.warning ||
+        "installed content is already current or its updates are disabled by policy",
     );
-  }
   return installResolvedContentUpdate(db, content, update);
 }
 
@@ -4870,17 +5714,142 @@ async function installAllContentUpdates(db, input) {
   const plan = await checkContentUpdates(db, { serverId: profile.id });
   const installed = [];
   for (const update of plan.updates) {
+    if (
+      Array.isArray(input.installedContentIds) &&
+      !input.installedContentIds.includes(update.installedContentId)
+    )
+      continue;
     const content = db
       .prepare("SELECT * FROM installed_content WHERE id = ? AND server_id = ?")
       .get(update.installedContentId, profile.id);
-    if (content) {
+    if (content)
       installed.push(await installResolvedContentUpdate(db, content, update));
-    }
   }
+  return { serverId: profile.id, installed, warnings: plan.warnings };
+}
+
+function listContentUpdateHistory(db, serverId) {
+  return db
+    .prepare(
+      "SELECT * FROM content_update_history WHERE server_id = ? ORDER BY created_at DESC",
+    )
+    .all(requireServerId(serverId))
+    .map((row) => {
+      const before = JSON.parse(row.before_json),
+        after = JSON.parse(row.after_json);
+      const current = db
+        .prepare("SELECT * FROM installed_content WHERE id = ?")
+        .get(row.installed_content_id);
+      return {
+        id: row.id,
+        serverId: row.server_id,
+        installedContentId: row.installed_content_id,
+        name: before.name,
+        fromVersion: before.version,
+        toVersion: after.version,
+        status: row.status,
+        backupPath: row.backup_path,
+        createdAt: row.created_at,
+        rollbackAvailable:
+          row.status === "installed" &&
+          current?.content_id === after.content_id &&
+          current?.sha256 === after.sha256 &&
+          fs.existsSync(current.installed_path) &&
+          fs.existsSync(row.backup_path),
+      };
+    });
+}
+
+async function rollbackContentUpdate(db, input) {
+  if (!input?.confirm)
+    throw codedError(
+      "RESTORE_NEEDS_CONFIRMATION",
+      "restore requires explicit confirmation",
+    );
+  const history = db
+    .prepare(
+      "SELECT * FROM content_update_history WHERE id = ? AND server_id = ? AND status = 'installed'",
+    )
+    .get(input.historyId, requireServerId(input.serverId));
+  if (!history)
+    throw codedError(
+      "CONTENT_UPDATE_HISTORY_NOT_FOUND",
+      "content update history is unavailable",
+    );
+  const before = JSON.parse(history.before_json),
+    after = JSON.parse(history.after_json);
+  const current = db
+    .prepare("SELECT * FROM installed_content WHERE id = ?")
+    .get(history.installed_content_id);
+  if (
+    !current ||
+    current.content_id !== after.content_id ||
+    current.sha256 !== after.sha256 ||
+    !fs.existsSync(history.backup_path) ||
+    (await sha256File(history.backup_path)) !== before.sha256 ||
+    !fs.existsSync(current.installed_path) ||
+    (await sha256File(current.installed_path)) !== after.sha256
+  )
+    throw codedError(
+      "CONTENT_CHANGED_ON_DISK",
+      "content or its recovery copy changed after the update",
+    );
+  const disabled = current.installed_path.endsWith(".disabled");
+  const restoredPath =
+    before.installed_path.replace(/\.disabled$/, "") +
+    (disabled ? ".disabled" : "");
+  if (restoredPath !== current.installed_path && fs.existsSync(restoredPath))
+    throw codedError(
+      "FILE_TARGET_EXISTS",
+      "rollback destination already exists",
+    );
+  const replaced = `${current.installed_path}.mcsm-rollback-${randomUUID()}`;
+  let moved = false,
+    installed = false;
+  db.exec("BEGIN");
+  try {
+    fs.renameSync(current.installed_path, replaced);
+    moved = true;
+    fs.renameSync(history.backup_path, restoredPath);
+    installed = true;
+    db.prepare(
+      "UPDATE installed_content SET content_id = ?, version = ?, source_path = ?, installed_path = ?, sha256 = ?, warnings_json = ?, installed_at = ?, mod_id = ?, metadata_scanned_at = ? WHERE id = ?",
+    ).run(
+      before.content_id,
+      before.version,
+      before.source_path,
+      restoredPath,
+      before.sha256,
+      before.warnings_json,
+      before.installed_at,
+      before.mod_id,
+      before.metadata_scanned_at,
+      before.id,
+    );
+    db.prepare(
+      "UPDATE content_update_policies SET content_id = ?, content_key = ? WHERE server_id = ? AND content_key = ?",
+    ).run(
+      before.content_id,
+      before.content_id,
+      before.server_id,
+      after.content_id,
+    );
+    db.prepare(
+      "UPDATE content_update_history SET status = 'rolled_back' WHERE id = ?",
+    ).run(history.id);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    if (installed) fs.renameSync(restoredPath, history.backup_path);
+    if (moved) fs.renameSync(replaced, current.installed_path);
+    throw error;
+  }
+  fs.rmSync(replaced, { force: true });
   return {
-    serverId: profile.id,
-    installed,
-    warnings: plan.warnings,
+    content: mapInstalledContent(
+      db.prepare("SELECT * FROM installed_content WHERE id = ?").get(before.id),
+    ),
+    backupPath: null,
   };
 }
 
@@ -5076,7 +6045,8 @@ function listScheduledTasks(db, serverId) {
       serverId: row.server_id,
       name: row.name,
       kind: row.kind,
-      intervalMinutes: row.interval_minutes,
+      ...taskSchedule.fromRow(row),
+      backupProfileId: row.backup_profile_id,
       command: row.command,
       enabled: row.enabled,
       nextRunAt: row.next_run_at,
@@ -5104,34 +6074,62 @@ function listScheduledTaskRuns(db, serverId) {
     }));
 }
 
-function createScheduledTask(db, input) {
-  const id = randomUUID();
-  const now = nowIso();
-  const intervalMinutes = Number(input?.intervalMinutes || 0);
-  if (intervalMinutes <= 0)
+function validateTask(db, input, serverId) {
+  const normalized = taskSchedule.schedule(input);
+  if (
+    ![
+      "start",
+      "stop",
+      "restart",
+      "world_backup",
+      "command",
+      "server_update_check",
+      "content_update_check",
+    ].includes(input.kind)
+  )
     throw codedError(
-      "TASK_INTERVAL_NOT_POSITIVE",
-      "task interval must be positive",
+      "UNSUPPORTED_SCHEDULED_TASK_KIND",
+      "unsupported scheduled task kind",
     );
-  const nextRunAt = new Date(
-    Date.now() + intervalMinutes * 60_000,
-  ).toISOString();
+  if (input.kind === "command")
+    trimRequired(input.command, "server command is required");
+  if (
+    input.backupProfileId &&
+    !db
+      .prepare("SELECT 1 FROM backup_profiles WHERE id = ? AND server_id = ?")
+      .get(input.backupProfileId, serverId)
+  )
+    throw codedError(
+      "BACKUP_PROFILE_NOT_FOUND",
+      "backup profile does not belong to this server",
+    );
+  return normalized;
+}
+
+function createScheduledTask(db, input) {
+  const serverId = requireServerId(input?.serverId);
+  const normalized = validateTask(db, input, serverId);
+  const id = randomUUID(),
+    now = nowIso();
   db.prepare(
-    `INSERT INTO scheduled_tasks
-      (id, server_id, name, kind, interval_minutes, command, enabled, next_run_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
+    `INSERT INTO scheduled_tasks (id, server_id, name, kind, interval_minutes, schedule_kind, time_of_day, weekdays_json, backup_profile_id, command, enabled, next_run_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     id,
-    requireServerId(input?.serverId),
+    serverId,
     trimRequired(input?.name, "task name is required"),
-    input?.kind || "command",
-    intervalMinutes,
-    input?.command ?? null,
-    nextRunAt,
+    input.kind,
+    normalized.intervalMinutes,
+    normalized.scheduleKind,
+    normalized.timeOfDay,
+    JSON.stringify(normalized.weekdays),
+    input.backupProfileId || null,
+    input.command || null,
+    input.enabled === false ? 0 : 1,
+    taskSchedule.nextRun(normalized),
     now,
     now,
   );
-  return listScheduledTasks(db, input.serverId).find((task) => task.id === id);
+  return listScheduledTasks(db, serverId).find((task) => task.id === id);
 }
 
 function updateScheduledTask(db, input) {
@@ -5142,43 +6140,32 @@ function updateScheduledTask(db, input) {
   const existing = db
     .prepare("SELECT * FROM scheduled_tasks WHERE id = ?")
     .get(id);
-  if (!existing) {
+  if (!existing)
     throw codedError("SCHEDULED_TASK_NOT_FOUND", "scheduled task not found");
-  }
-  const intervalMinutes = Number(input?.intervalMinutes || 0);
-  if (intervalMinutes <= 0)
-    throw codedError(
-      "TASK_INTERVAL_NOT_POSITIVE",
-      "task interval must be positive",
-    );
-  const now = nowIso();
-  const enabled =
-    input?.enabled === undefined
-      ? existing.enabled
-      : input.enabled === false
-        ? 0
-        : 1;
-  const nextRunAt = enabled
-    ? new Date(Date.now() + intervalMinutes * 60_000).toISOString()
-    : existing.next_run_at;
+  const merged = {
+    ...taskSchedule.fromRow(existing),
+    backupProfileId: existing.backup_profile_id,
+    name: existing.name,
+    kind: existing.kind,
+    command: existing.command,
+    enabled: existing.enabled !== 0,
+    ...input,
+  };
+  const normalized = validateTask(db, merged, existing.server_id);
   db.prepare(
-    `UPDATE scheduled_tasks
-        SET name = ?,
-            kind = ?,
-            interval_minutes = ?,
-            command = ?,
-            enabled = ?,
-            next_run_at = ?,
-            updated_at = ?
-      WHERE id = ?`,
+    "UPDATE scheduled_tasks SET name = ?, kind = ?, interval_minutes = ?, schedule_kind = ?, time_of_day = ?, weekdays_json = ?, backup_profile_id = ?, command = ?, enabled = ?, next_run_at = ?, updated_at = ? WHERE id = ?",
   ).run(
-    trimRequired(input?.name, "task name is required"),
-    input?.kind || "command",
-    intervalMinutes,
-    input?.command ?? null,
-    enabled,
-    nextRunAt,
-    now,
+    trimRequired(merged.name, "task name is required"),
+    merged.kind,
+    normalized.intervalMinutes,
+    normalized.scheduleKind,
+    normalized.timeOfDay,
+    JSON.stringify(normalized.weekdays),
+    merged.backupProfileId || null,
+    merged.command || null,
+    merged.enabled ? 1 : 0,
+    taskSchedule.nextRun(normalized),
+    nowIso(),
     id,
   );
   return listScheduledTasks(db, existing.server_id).find(
@@ -5223,9 +6210,7 @@ async function runDueScheduledTasks(db) {
       message = error instanceof Error ? error.message : String(error);
     }
     const finishedAt = nowIso();
-    const nextRunAt = new Date(
-      Date.now() + task.interval_minutes * 60_000,
-    ).toISOString();
+    const nextRunAt = taskSchedule.nextRun(taskSchedule.fromRow(task));
     const run = {
       id: randomUUID(),
       taskId: task.id,
@@ -5271,7 +6256,9 @@ async function runScheduledTaskAction(db, task) {
     case "restart":
       return restartServer(db, task.server_id);
     case "world_backup":
-      return createWorldBackup(db, { serverId: task.server_id });
+      return task.backup_profile_id
+        ? createProfileBackup(db, { profileId: task.backup_profile_id })
+        : createWorldBackup(db, { serverId: task.server_id });
     case "command":
       return sendServerCommand(db, task.server_id, task.command);
     case "server_update_check":
@@ -5499,38 +6486,6 @@ function listDiagnosticRuns(db, serverId) {
     }));
 }
 
-function exportServerProfile(db, input) {
-  const profile = getServerProfile(db, input?.serverId);
-  return { version: 1, server: profile };
-}
-
-function previewProfileImport(input) {
-  const document = JSON.parse(
-    trimRequired(input?.documentJson, "profile JSON is required"),
-  );
-  return { document, warnings: [] };
-}
-
-function importProfile(db, input) {
-  const document = JSON.parse(
-    trimRequired(input?.documentJson, "profile JSON is required"),
-  );
-  const server = document.server || document;
-  return createServerProfile(db, {
-    source: { kind: "blank" },
-    name: input?.name || server.name,
-    rootDir: input?.targetRootDir,
-    loaderType: server.loaderType || "paper",
-    minecraftVersion: server.minecraftVersion ?? null,
-    loaderVersion: server.loaderVersion ?? null,
-    javaPath: input?.javaPath ?? server.javaPath ?? null,
-    serverPort: server.serverPort ?? 25565,
-    minMemoryMb: server.minMemoryMb ?? 1024,
-    maxMemoryMb: server.maxMemoryMb ?? 4096,
-    restartPolicy: server.restartPolicy ?? defaultRestartPolicy(),
-  });
-}
-
 async function planServerProvisioning(input) {
   const source = input?.source || input;
   let sourcePlan;
@@ -5550,6 +6505,7 @@ async function planServerProvisioning(input) {
       loaderType: input?.loaderType || null,
       loaderVersion: input?.loaderVersion || null,
       requiredJavaMajor: requiredJavaMajorForMinecraft(input?.minecraftVersion),
+      maxJavaMajor: maxJavaMajorForMinecraft(input?.minecraftVersion),
       artifacts: [],
       optionalFiles: [],
       archiveLayers: [],
@@ -5576,6 +6532,9 @@ async function planServerProvisioning(input) {
       loaderType: input?.loaderType || detected.loaderType || "vanilla",
       loaderVersion: input?.loaderVersion || null,
       requiredJavaMajor: requiredJavaMajorForMinecraft(
+        input?.minecraftVersion || detected.minecraftVersion,
+      ),
+      maxJavaMajor: maxJavaMajorForMinecraft(
         input?.minecraftVersion || detected.minecraftVersion,
       ),
       artifacts: [],
@@ -5641,6 +6600,7 @@ async function planServerProvisioning(input) {
     minecraftVersion,
     loaderVersion,
     requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    maxJavaMajor: maxJavaMajorForMinecraft(minecraftVersion),
     loaderInstallPlan,
     launchSpec: loaderInstallPlan.launchSpec,
   };
@@ -5743,6 +6703,14 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
     configuration.maxMemoryMb,
   );
   validateRestartPolicy(profile.restartPolicy);
+  /* The plan arrives from the renderer, so the runtime it names is a request,
+     not a verdict. Committing it unchecked is how a Forge 1.7.10 profile ended
+     up pinned to the Java 11 on this machine's PATH. */
+  assertJavaMajorInWindow(
+    profile.minecraftVersion,
+    plan.javaRuntime?.majorVersion,
+    plan.javaRuntime?.path,
+  );
   const restartPolicy = profile.restartPolicy || defaultRestartPolicy();
   const source = plan.source || { kind: "blank" };
   const isLocalPack = ["localModpack", "localModpackFile"].includes(
@@ -5852,15 +6820,17 @@ function verifyProvisioningHashes(filePath, hashes = {}) {
       .update(fs.readFileSync(filePath))
       .digest("hex");
     if (actual.toLowerCase() !== String(expected).toLowerCase()) {
-      throw Object.assign(new Error(`${algorithm} checksum mismatch`), {
-        code: "ARTIFACT_CHECKSUM_MISMATCH",
-      });
+      throw codedError(
+        "ARTIFACT_CHECKSUM_MISMATCH",
+        `${algorithm} checksum mismatch`,
+      );
     }
   }
 }
 
 const PROVISIONING_PROVIDER_HOSTS = Object.freeze({
   modrinth: new Set(["cdn.modrinth.com"]),
+  hangar: new Set(["hangar.papermc.io", "hangarcdn.papermc.io"]),
   bbsmc: new Set(["cdn.bbsmc.net"]),
   curseforge: new Set([
     "edge.forgecdn.net",
@@ -5870,9 +6840,7 @@ const PROVISIONING_PROVIDER_HOSTS = Object.freeze({
 });
 
 function blockedProvisioningUrl(message) {
-  return Object.assign(new Error(message), {
-    code: "PROVISIONING_URL_BLOCKED",
-  });
+  return codedError("PROVISIONING_URL_BLOCKED", message);
 }
 
 function isPrivateProvisioningIp(hostname) {
@@ -5986,6 +6954,7 @@ function provisioningLoaderRegistry(db) {
         "LOADER_METADATA_REQUEST_FAILED",
       ),
     fileExists: fs.existsSync,
+    readDirectory: (directory) => fs.readdirSync(directory),
     download: async (url, target, hashes) => {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       const expectedHost = new URL(url).hostname.toLowerCase();
@@ -6111,7 +7080,12 @@ function provisioningExecutorFor(db) {
           workingDirectory: job.stagingDir,
         });
         await adapter.install(installPlan, { javaPath: plan.javaRuntime.path });
-        const validation = await adapter.validate(installPlan);
+        /* Some installers only settle their output names once they have run,
+           so the plan that gets validated and launched is the resolved one. */
+        const resolvedPlan = adapter.resolveInstalledOutputs
+          ? await adapter.resolveInstalledOutputs(installPlan)
+          : installPlan;
+        const validation = await adapter.validate(resolvedPlan);
         if (!validation.valid) {
           throw Object.assign(
             new Error(
@@ -6121,7 +7095,7 @@ function provisioningExecutorFor(db) {
           );
         }
         const launchSpec = {
-          ...installPlan.launchSpec,
+          ...resolvedPlan.launchSpec,
           workingDirectory: ".",
           validated: true,
         };
@@ -6129,7 +7103,7 @@ function provisioningExecutorFor(db) {
           plan: {
             ...plan,
             loaderInstallPlan: {
-              ...installPlan,
+              ...resolvedPlan,
               workingDirectory: ".",
               launchSpec,
             },
@@ -6245,6 +7219,41 @@ const curseForgeLoaderTypes = {
   neoForge: 6,
 };
 
+function marketplacePage(input) {
+  return {
+    limit: Math.min(100, Math.max(1, Number.parseInt(input?.limit, 10) || 20)),
+    offset: Math.max(0, Number.parseInt(input?.offset, 10) || 0),
+  };
+}
+
+function marketplaceInput(db, input) {
+  return {
+    ...input,
+    server: input?.serverId
+      ? getServerProfile(db, input.serverId)
+      : {
+          minecraftVersion: input?.minecraftVersion,
+          loaderType: input?.loader,
+        },
+  };
+}
+
+function versionForServer(version, input) {
+  return {
+    ...version,
+    warnings: [
+      ...(version.warnings || []),
+      ...contentVersions.compatibilityWarnings(
+        version,
+        input?.server || {
+          minecraftVersion: input?.minecraftVersion,
+          loaderType: input?.loader,
+        },
+      ),
+    ],
+  };
+}
+
 function marketplaceSortIndex(sort) {
   if (sort === "downloads" || sort === "updated") {
     return sort;
@@ -6252,7 +7261,7 @@ function marketplaceSortIndex(sort) {
   return "relevance";
 }
 
-function marketplaceFacets(projectType, loader) {
+function marketplaceFacets(projectType, loader, minecraftVersion) {
   const allowedProjectTypes = new Set([
     "mod",
     "modpack",
@@ -6269,6 +7278,7 @@ function marketplaceFacets(projectType, loader) {
   if (loaderFacet) {
     facets.push([`categories:${loaderFacet}`]);
   }
+  if (minecraftVersion) facets.push([`versions:${minecraftVersion}`]);
   return facets.length
     ? `&facets=${encodeURIComponent(JSON.stringify(facets))}`
     : "";
@@ -6329,11 +7339,14 @@ function providerProjectUrl(provider, project) {
 
 async function searchModrinthProjects(input) {
   const query = encodeURIComponent(input?.query || "");
-  if (!query) return [];
-  const facets = marketplaceFacets(input?.projectType, input?.loader);
+  const facets = marketplaceFacets(
+    input?.projectType,
+    input?.loader,
+    input?.minecraftVersion,
+  );
   const index = encodeURIComponent(marketplaceSortIndex(input?.sort));
   const data = await fetchJson(
-    `https://api.modrinth.com/v2/search?query=${query}&limit=20&index=${index}${facets}`,
+    `https://api.modrinth.com/v2/search?query=${query}&limit=${marketplacePage(input).limit}&offset=${marketplacePage(input).offset}&index=${index}${facets}`,
     {},
     "Modrinth search failed",
   );
@@ -6386,6 +7399,7 @@ function mapModrinthVersion(item) {
     name: item.name,
     versionNumber: item.version_number,
     releaseType: item.version_type || null,
+    publishedAt: item.date_published || null,
     loaders: item.loaders || [],
     gameVersions: minecraftVersionLabels(item.game_versions),
     files: (item.files || []).map((file) => ({
@@ -6396,7 +7410,11 @@ function mapModrinthVersion(item) {
       hashes: file.hashes || {},
       isServerPack: /\.mrpack$/i.test(file.filename || ""),
     })),
-    dependencies: item.dependencies || [],
+    dependencies: (item.dependencies || []).map((dependency) => ({
+      projectId: dependency.project_id || null,
+      versionId: dependency.version_id || null,
+      dependencyType: dependency.dependency_type || "optional",
+    })),
     warnings: [],
     isServerPack: (item.files || []).some((file) =>
       /\.mrpack$/i.test(file.filename || ""),
@@ -6416,7 +7434,9 @@ async function listModrinthVersions(input) {
     {},
     "Modrinth version lookup failed",
   );
-  return items.map(mapModrinthVersion);
+  return items
+    .map(mapModrinthVersion)
+    .map((version) => versionForServer(version, input));
 }
 
 async function getModrinthVersion(versionId) {
@@ -6443,87 +7463,210 @@ function modrinthContentKey(version) {
   return `modrinth:${version.projectId}:${version.id}`;
 }
 
-async function installModrinthResolvedVersion(db, input, version, visited) {
-  const key = modrinthContentKey(version);
-  if (visited.has(key)) {
-    return null;
+async function marketplaceDependencyVersion(provider, dependency, profile) {
+  const projectId = dependency.projectId;
+  if (dependency.versionId) {
+    if (provider === "modrinth")
+      return getModrinthVersion(dependency.versionId);
+    if (provider === "bbsmc") return getBbsmcVersion(dependency.versionId);
+    if (provider === "curseforge")
+      return getCurseForgeFile(projectId, dependency.versionId);
   }
-  visited.add(key);
-
-  const dependencies = [];
-  for (const dependency of version.dependencies || []) {
-    if (dependency.dependency_type !== "required") {
-      continue;
-    }
-    let dependencyVersion = null;
-    if (dependency.version_id) {
-      dependencyVersion = await getModrinthVersion(dependency.version_id);
-    } else if (dependency.project_id) {
-      const dependencyVersions = await listModrinthVersions({
-        serverId: input.serverId,
-        projectId: dependency.project_id,
-      });
-      dependencyVersion = dependencyVersions[0] ?? null;
-    }
-    if (dependencyVersion) {
-      const installed = await installModrinthResolvedVersion(
-        db,
-        input,
-        dependencyVersion,
-        visited,
-      );
-      if (installed) {
-        dependencies.push(installed);
-      }
-    }
-  }
-
-  const file = selectInstallableModrinthFile(version);
-  if (!file?.url) {
+  if (!projectId)
     throw codedError(
-      "MODRINTH_VERSION_NO_FILE",
-      `Modrinth version ${version.id} has no downloadable file`,
+      "CONTENT_DEPENDENCY_UNAVAILABLE",
+      "required dependency has no provider project identifier",
     );
+  const versions =
+    provider === "modrinth"
+      ? await listModrinthVersions({ projectId })
+      : provider === "bbsmc"
+        ? await listBbsmcVersions({ projectId })
+        : provider === "curseforge"
+          ? await listCurseForgeFiles({ projectId })
+          : await listHangarVersions({ projectId });
+  return versions.find((version) => versionMatchesServer(version, profile));
+}
+
+async function installMarketplaceVersion(
+  db,
+  input,
+  provider,
+  version,
+  replaceRoot,
+) {
+  const profile = getServerProfile(db, requireServerId(input.serverId));
+  const created = [],
+    visited = new Set();
+  async function install(resolved, root = false) {
+    if (!resolved)
+      throw codedError(
+        "CONTENT_DEPENDENCY_UNAVAILABLE",
+        "a required dependency has no compatible version",
+      );
+    contentVersions.checkCompatibility(resolved, profile, input.installAnyway);
+    const key = `${provider}:${resolved.projectId}:${resolved.id}`;
+    const existing =
+      root && replaceRoot
+        ? null
+        : await existingMarketplaceContent(db, profile.id, key);
+    if (existing) {
+      if (!root && existing.installedPath.endsWith(".disabled"))
+        throw codedError(
+          "CONTENT_DEPENDENCY_UNAVAILABLE",
+          "a required dependency is disabled",
+        );
+      return { content: existing, dependencies: [] };
+    }
+    if (visited.has(key)) return null;
+    visited.add(key);
+    const file =
+      provider === "modrinth"
+        ? selectInstallableModrinthFile(resolved)
+        : provider === "bbsmc"
+          ? selectInstallableBbsmcFile(resolved)
+          : resolved.files?.[0];
+    if (provider === "bbsmc") ensureBbsmcFileIsDirect(file, resolved);
+    if (!file)
+      throw codedError(
+        "CONTENT_DEPENDENCY_UNAVAILABLE",
+        "marketplace version has no downloadable file",
+      );
+    const dependencies = [];
+    for (const dependency of resolved.dependencies || []) {
+      if (dependency.dependencyType !== "required") continue;
+      if (!dependency.versionId && dependency.projectId) {
+        const row = db
+          .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+          .all(profile.id)
+          .find((item) => {
+            const source = parseInstalledContentProvider(item.content_id);
+            return (
+              source?.provider === provider &&
+              source.projectId === dependency.projectId
+            );
+          });
+        if (row && fs.existsSync(row.installed_path)) {
+          if (
+            row.installed_path.endsWith(".disabled") ||
+            (await sha256File(row.installed_path)) !== row.sha256
+          )
+            throw codedError(
+              "CONTENT_DEPENDENCY_UNAVAILABLE",
+              "a required dependency is disabled or changed on disk",
+            );
+          dependencies.push({
+            content: mapInstalledContent(row),
+            dependencies: [],
+          });
+          continue;
+        }
+      }
+      const dependencyVersion = await marketplaceDependencyVersion(
+        provider,
+        dependency,
+        profile,
+      );
+      const installed = await install(dependencyVersion);
+      if (installed) dependencies.push(installed);
+    }
+    if (root && replaceRoot) return replaceRoot();
+    const downloadUrl =
+      provider === "curseforge"
+        ? await curseForgeDownloadUrl(resolved.projectId, resolved.id)
+        : file.url;
+    if (!downloadUrl)
+      throw codedError(
+        "NO_DOWNLOAD_URL_AVAILABLE",
+        "marketplace version has no downloadable file",
+      );
+    const content = await installRemoteContent(db, {
+      serverId: profile.id,
+      contentId: key,
+      name:
+        root && input.name
+          ? input.name
+          : provider === "hangar"
+            ? resolved.projectId.split("/").pop()
+            : resolved.name,
+      version: resolved.versionNumber,
+      downloadUrl,
+      fileName: file.filename,
+      environment: "server",
+      versionMetadata: resolved,
+      installAnyway: input.installAnyway,
+      hashes: file.hashes,
+      warnings: resolved.warnings,
+    });
+    created.push(content);
+    return { content, dependencies };
   }
-  const content = await installRemoteContent(db, {
-    serverId: input.serverId,
-    contentId: key,
-    name: version.name,
-    version: version.versionNumber,
-    downloadUrl: file.url,
-    fileName: file.filename,
-    environment: "server",
-  });
-  return { content, dependencies };
+  try {
+    return await install(version, true);
+  } catch (error) {
+    for (const content of created.reverse())
+      uninstallInstalledContent(db, {
+        serverId: profile.id,
+        contentId: content.id,
+      });
+    throw error;
+  }
 }
 
 async function installModrinthVersion(db, input) {
-  const versions = await listModrinthVersions(input);
-  const version = versions.find((item) => item.id === input?.versionId);
+  const version = (await listModrinthVersions(input)).find(
+    (item) => item.id === input?.versionId,
+  );
   if (!version)
     throw codedError(
       "MODRINTH_VERSION_NOT_FOUND",
       "Modrinth version not found",
     );
-  return installModrinthResolvedVersion(db, input, version, new Set());
+  return installMarketplaceVersion(db, input, "modrinth", version);
 }
 
-async function searchHangarProjects(query) {
-  if (!query) return [];
+function mapHangarProject(item) {
+  const id =
+    item.namespace?.owner && item.namespace?.slug
+      ? `${item.namespace.owner}/${item.namespace.slug}`
+      : String(item.id);
+  return {
+    id,
+    slug: item.namespace?.slug || String(item.id),
+    title: item.name,
+    description: item.description || "",
+    projectType: "plugin",
+    loaders: Object.keys(item.supportedPlatforms || {}).map((platform) =>
+      platform.toLowerCase(),
+    ),
+    gameVersions: minecraftVersionLabels(item.supportedPlatforms?.PAPER),
+    iconUrl: item.avatarUrl || null,
+    gallery: [],
+    downloads: item.stats?.downloads || 0,
+    follows: item.stats?.stars || 0,
+    updatedAt: item.lastUpdated || null,
+    body: item.mainPageContent || null,
+    websiteUrl: `https://hangar.papermc.io/${id}`,
+  };
+}
+
+async function searchHangarProjects(input) {
+  const page = marketplacePage(input);
+  const params = new URLSearchParams({
+    query: input?.query || "",
+    limit: String(Math.min(25, page.limit)),
+    offset: String(page.offset),
+    platform: "PAPER",
+  });
+  if (input?.minecraftVersion) params.set("version", input.minecraftVersion);
+  if (["downloads", "updated"].includes(input?.sort))
+    params.set("sort", `-${input.sort}`);
   const data = await fetchJson(
-    `https://hangar.papermc.io/api/v1/projects?query=${encodeURIComponent(query)}&limit=20`,
+    `https://hangar.papermc.io/api/v1/projects?${params}`,
     {},
     "Hangar search failed",
   );
-  return (data.result || []).map((item) => ({
-    id:
-      item.id?.toString() ||
-      `${item.namespace?.owner || item.owner || item.name}/${item.namespace?.slug || item.slug || item.name}`,
-    name: item.name,
-    namespace: item.namespace?.owner || "",
-    description: item.description || "",
-    platform: "paper",
-  }));
+  return (data.result || []).map(mapHangarProject);
 }
 
 function encodeHangarProjectId(projectId) {
@@ -6531,6 +7674,26 @@ function encodeHangarProjectId(projectId) {
     .split("/")
     .map((part) => encodeURIComponent(part))
     .join("/");
+}
+
+async function getHangarProject(input) {
+  const projectId = trimRequired(
+    input?.projectId,
+    "Hangar project id is required",
+  );
+  const [item, body] = await Promise.all([
+    fetchJson(
+      `https://hangar.papermc.io/api/v1/projects/${encodeHangarProjectId(projectId)}`,
+      {},
+      "Hangar project lookup failed",
+    ),
+    fetchText(
+      `https://hangar.papermc.io/api/v1/pages/main/${encodeHangarProjectId(projectId)}`,
+      {},
+      "Hangar project page lookup failed",
+    ),
+  ]);
+  return { ...mapHangarProject(item), body };
 }
 
 async function listHangarVersions(input) {
@@ -6543,40 +7706,80 @@ async function listHangarVersions(input) {
     {},
     "Hangar version lookup failed",
   );
-  const versions = Array.isArray(data) ? data : data.result || [];
-  return versions.map((item) => ({
-    name: item.name || item.versionString || item.version || item.id,
-    description: item.description || "",
-    createdAt: item.createdAt || item.created_at || null,
-  }));
+  return (Array.isArray(data) ? data : data.result || []).map((item) => {
+    const name = item.name;
+    const download = item.downloads?.PAPER;
+    const file = download?.fileInfo;
+    const projectName = projectId.split("/").pop();
+    return versionForServer(
+      {
+        id: name,
+        projectId,
+        name,
+        versionNumber: name,
+        description: item.description || "",
+        createdAt: item.createdAt || null,
+        publishedAt: item.createdAt || null,
+        releaseType: item.channel?.name?.toLowerCase() || "release",
+        loaders: Object.keys(item.platformDependencies || {}).map((platform) =>
+          platform.toLowerCase(),
+        ),
+        gameVersions: minecraftVersionLabels(item.platformDependencies?.PAPER),
+        files: [
+          {
+            filename: file?.name || `${projectName}-${name}.jar`,
+            size: file?.sizeBytes || 0,
+            primary: true,
+            url:
+              download?.downloadUrl ||
+              download?.externalUrl ||
+              `https://hangar.papermc.io/api/v1/projects/${encodeHangarProjectId(projectId)}/versions/${encodeURIComponent(name)}/PAPER/download`,
+            hashes: file?.sha256Hash ? { sha256: file.sha256Hash } : {},
+          },
+        ],
+        dependencies: (item.pluginDependencies?.PAPER || []).map(
+          (dependency) => ({
+            projectId: dependency.projectId
+              ? String(dependency.projectId)
+              : dependency.namespace
+                ? `${dependency.namespace.owner}/${dependency.namespace.slug}`
+                : null,
+            versionId: null,
+            dependencyType: dependency.required ? "required" : "optional",
+          }),
+        ),
+        warnings: [],
+      },
+      input,
+    );
+  });
 }
 
 async function installHangarVersion(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
-  if (profile.loaderType !== "paper") {
+  if (profile.loaderType !== "paper")
     throw codedError(
       "HANGAR_REQUIRES_PAPER",
       "Hangar plugins can only be installed into Paper servers.",
     );
-  }
   const projectId = trimRequired(
     input?.projectId,
     "Hangar project id is required",
   );
   const versionName = trimRequired(
-    input?.versionName,
+    input?.versionName || input?.versionId,
     "Hangar version is required",
   );
-  const projectName = projectId.split("/").filter(Boolean).pop() || projectId;
-  return installRemoteContent(db, {
-    serverId: profile.id,
-    contentId: `hangar:${projectId}:${versionName}`,
-    name: input?.name || projectName,
-    version: versionName,
-    downloadUrl: `https://hangar.papermc.io/api/v1/projects/${encodeHangarProjectId(projectId)}/versions/${encodeURIComponent(versionName)}/PAPER/download`,
-    fileName: input?.fileName || `${projectName}-${versionName}.jar`,
-    environment: "server",
-  });
+  const version = (await listHangarVersions({ projectId })).find(
+    (item) => item.id === versionName,
+  );
+  if (!version)
+    throw codedError(
+      "CONTENT_VERSION_NOT_FOUND",
+      "selected marketplace version was not found",
+    );
+  return (await installMarketplaceVersion(db, input, "hangar", version))
+    .content;
 }
 
 function curseForgeApiKey() {
@@ -6620,7 +7823,6 @@ function mapCurseForgeProject(item) {
 
 async function searchCurseForgeProjects(input) {
   const query = encodeURIComponent(input?.query || "");
-  if (!query) return [];
   const classIds = {
     mod: 6,
     modpack: 4471,
@@ -6639,7 +7841,7 @@ async function searchCurseForgeProjects(input) {
     ? `&modLoaderType=${curseForgeLoaderTypes[input.loader]}`
     : "";
   const data = await fetchJson(
-    `https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter=${query}&pageSize=20${classId}${sortField}${modLoaderType}`,
+    `https://api.curseforge.com/v1/mods/search?gameId=432&searchFilter=${query}&pageSize=${marketplacePage(input).limit}&index=${marketplacePage(input).offset}${input?.minecraftVersion ? `&gameVersion=${encodeURIComponent(input.minecraftVersion)}` : ""}${classId}${sortField}${modLoaderType}`,
     { headers: curseForgeHeaders() },
     "CurseForge search failed",
   );
@@ -6707,7 +7909,12 @@ function mapCurseForgeFile(item) {
         hashes,
       },
     ],
-    dependencies: item.dependencies || [],
+    publishedAt: item.fileDate || null,
+    dependencies: (item.dependencies || []).map((dependency) => ({
+      projectId: String(dependency.modId),
+      versionId: null,
+      dependencyType: dependency.relationType === 3 ? "required" : "optional",
+    })),
     warnings: [],
   };
 }
@@ -6768,6 +7975,7 @@ async function planModrinthMarketplacePack(source) {
     loaderType: normalizeMarketplaceLoaderType(version.loaders),
     loaderVersion: null,
     requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    maxJavaMajor: maxJavaMajorForMinecraft(minecraftVersion),
     artifacts: [
       {
         provider: "modrinth",
@@ -6847,6 +8055,7 @@ async function planCurseForgeMarketplacePack(source) {
     loaderType: normalizeMarketplaceLoaderType(target.loaders),
     loaderVersion: null,
     requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    maxJavaMajor: maxJavaMajorForMinecraft(minecraftVersion),
     artifacts: [
       {
         provider: "curseforge",
@@ -6892,6 +8101,7 @@ async function planBbsmcMarketplacePack(source) {
     loaderType: normalizeMarketplaceLoaderType(version.loaders),
     loaderVersion: null,
     requiredJavaMajor: requiredJavaMajorForMinecraft(minecraftVersion),
+    maxJavaMajor: maxJavaMajorForMinecraft(minecraftVersion),
     artifacts: [
       {
         provider: "bbsmc",
@@ -6938,7 +8148,9 @@ async function listCurseForgeFiles(input) {
     { headers: curseForgeHeaders() },
     "CurseForge file lookup failed",
   );
-  return (data.data || []).map(mapCurseForgeFile);
+  return (data.data || [])
+    .map(mapCurseForgeFile)
+    .map((version) => versionForServer(version, input));
 }
 
 async function curseForgeDownloadUrl(modId, fileId) {
@@ -6959,23 +8171,9 @@ async function installCurseForgeFile(db, input) {
     input?.fileId || input?.versionId,
     "CurseForge file id is required",
   );
-  const downloadUrl = await curseForgeDownloadUrl(modId, fileId);
-  if (!downloadUrl) {
-    throw codedError(
-      "CURSEFORGE_NO_DOWNLOAD_URL_FOR_FILE",
-      "CurseForge did not return a download URL for this file.",
-    );
-  }
-  return installRemoteContent(db, {
-    serverId: input?.serverId,
-    contentId: `curseforge:${modId}:${fileId}`,
-    name: input?.name || `CurseForge ${modId}`,
-    version: input?.version ?? null,
-    downloadUrl,
-    fileName: input?.fileName || `${modId}-${fileId}.jar`,
-    environment: "server",
-    headers: { "x-api-key": curseForgeApiKey() },
-  });
+  const version = await getCurseForgeFile(modId, fileId);
+  return (await installMarketplaceVersion(db, input, "curseforge", version))
+    .content;
 }
 
 const BBSMC_API_BASE = "https://api.bbsmc.net/v2";
@@ -7114,10 +8312,16 @@ function mapBbsmcProject(item) {
 
 async function searchBbsmcProjects(input) {
   const query = encodeURIComponent(input?.query || "");
-  const facets = marketplaceFacets(input?.projectType, input?.loader);
+  const facets = marketplaceFacets(
+    input?.projectType,
+    input?.loader,
+    input?.minecraftVersion,
+  );
   const index = encodeURIComponent(marketplaceSortIndex(input?.sort));
   const data = await fetchJson(
-    bbsmcUrl(`search?limit=20&query=${query}&index=${index}${facets}`),
+    bbsmcUrl(
+      `search?limit=${marketplacePage(input).limit}&offset=${marketplacePage(input).offset}&query=${query}&index=${index}${facets}`,
+    ),
     {},
     "BBSMC search failed",
   );
@@ -7154,7 +8358,12 @@ function mapBbsmcVersion(item) {
       url: file.url,
       hashes: file.hashes || {},
     })),
-    dependencies: item.dependencies || [],
+    publishedAt: item.date_published || null,
+    dependencies: (item.dependencies || []).map((dependency) => ({
+      projectId: dependency.project_id || null,
+      versionId: dependency.version_id || null,
+      dependencyType: dependency.dependency_type || "optional",
+    })),
     diskUrls: item.disk_urls || [],
     diskOnly: Boolean(item.disk_only),
     warnings: item.disk_urls?.length
@@ -7173,7 +8382,9 @@ async function listBbsmcVersions(input) {
     {},
     "BBSMC version lookup failed",
   );
-  return items.map(mapBbsmcVersion);
+  return items
+    .map(mapBbsmcVersion)
+    .map((version) => versionForServer(version, input));
 }
 
 async function getBbsmcVersion(versionId) {
@@ -7221,18 +8432,7 @@ async function installBbsmcPublicFile(db, input) {
     "BBSMC version id is required",
   );
   const version = await getBbsmcVersion(versionId);
-  const file = selectInstallableBbsmcFile(version);
-  ensureBbsmcFileIsDirect(file, version);
-  return installRemoteContent(db, {
-    serverId: input?.serverId,
-    contentId: `bbsmc:${version.projectId}:${version.id}`,
-    name: input?.name || version.name,
-    version: version.versionNumber,
-    downloadUrl: file.url,
-    fileName: input?.fileName || file.filename,
-    environment: "server",
-    warnings: version.warnings,
-  });
+  return (await installMarketplaceVersion(db, input, "bbsmc", version)).content;
 }
 
 async function importCurseForgeManual(db, input) {
@@ -7245,39 +8445,179 @@ async function importCurseForgeManual(db, input) {
   return { content, dependencyResolution: "manual" };
 }
 
-function checkServerUpdate(db, input) {
-  const profile = getServerProfile(db, requireServerId(input?.serverId));
-  const targetVersion =
-    input?.targetMinecraftVersion ||
-    input?.targetVersion ||
-    profile.minecraftVersion;
-  const current = profile.minecraftVersion || null;
-  const updateAvailable = Boolean(
-    targetVersion && current && targetVersion !== current,
+function assertServerFilesAvailable(db, serverId) {
+  const state = contextFor(db).runtimeState;
+  state.mutatingServerDirs ||= new Map();
+  if (
+    state.mutatingServerDirs.has(serverId) ||
+    state.backingUpServers?.has(serverId) ||
+    state.activeContentOperations?.has(serverId)
+  )
+    throw codedError(
+      "SERVER_FILES_BUSY",
+      "server files are being restored or upgraded",
+    );
+}
+
+async function withServerFiles(db, serverId, action, stopped = true) {
+  if (stopped) requireStoppedServer(db, serverId);
+  assertServerFilesAvailable(db, serverId);
+  const state = contextFor(db).runtimeState;
+  const operation = Symbol("server files operation");
+  state.mutatingServerDirs.set(serverId, operation);
+  try {
+    return await action(operation);
+  } finally {
+    state.mutatingServerDirs.delete(serverId);
+  }
+}
+
+async function serverUpdateChecks(db, profile, targetVersion) {
+  const checks = [];
+  const supported = ["paper", "vanilla"].includes(profile.loaderType);
+  checks.push({
+    id: "loader",
+    status: supported ? "ready" : "blocked",
+    message: supported
+      ? `${profile.loaderType} supports managed server JAR replacement.`
+      : `${profile.loaderType} requires its loader installer; direct JAR replacement is unavailable.`,
+  });
+  const comparison = contentVersions.compareVersions(
+    targetVersion,
+    profile.minecraftVersion,
   );
+  checks.push({
+    id: "version",
+    status: comparison !== null && comparison < 0 ? "blocked" : "ready",
+    message:
+      comparison !== null && comparison < 0
+        ? "Minecraft downgrades are not supported because existing worlds may become unreadable."
+        : `Target Minecraft ${targetVersion}.`,
+  });
+  try {
+    requireStoppedServer(db, profile.id);
+    checks.push({
+      id: "stopped",
+      status: "ready",
+      message: "Server is stopped.",
+    });
+  } catch (error) {
+    checks.push({ id: "stopped", status: "blocked", message: error.message });
+  }
+  const executable = profile.javaPath || "java";
+  try {
+    const inspect = contextFor(db).dependencies.runtimeDependencies.inspectJava;
+    const runtime = inspect
+      ? await inspect(executable)
+      : inspectJavaRuntime({ path: executable, source: "Server profile" });
+    assertJavaMajorInWindow(targetVersion, runtime.majorVersion, executable);
+    if (!runtimeFitsHeap(runtime.architecture, profile.maxMemoryMb))
+      throw codedError(
+        "JAVA_ARCHITECTURE_TOO_SMALL",
+        "configured Java cannot hold the server heap",
+      );
+    checks.push({
+      id: "java",
+      status: "ready",
+      message: `Java ${runtime.majorVersion} supports Minecraft ${targetVersion}.`,
+    });
+  } catch (error) {
+    checks.push({ id: "java", status: "blocked", message: error.message });
+  }
+  if (targetVersion !== profile.minecraftVersion) {
+    const target = { ...profile, minecraftVersion: targetVersion };
+    for (const content of db
+      .prepare("SELECT * FROM installed_content WHERE server_id = ?")
+      .all(profile.id)) {
+      if (content.installed_path.endsWith(".disabled")) continue;
+      const source = parseInstalledContentProvider(content.content_id);
+      let version;
+      try {
+        if (source?.provider === "modrinth")
+          version = (
+            await listModrinthVersions({ projectId: source.projectId })
+          ).find((item) => item.id === source.versionId);
+        else if (source?.provider === "bbsmc")
+          version = await getBbsmcVersion(source.versionId);
+        else if (source?.provider === "curseforge")
+          version = await getCurseForgeFile(source.projectId, source.versionId);
+        else if (source?.provider === "hangar")
+          version = (
+            await listHangarVersions({ projectId: source.projectId })
+          ).find((item) => item.id === source.versionId);
+        const warnings = version
+          ? contentVersions.compatibilityWarnings(version, target)
+          : ["No authoritative compatibility metadata is available."];
+        checks.push({
+          id: `content:${content.id}`,
+          status: warnings.length ? "warning" : "ready",
+          message: `${content.name}: ${warnings.join(" ") || "compatible with the target version."}`,
+        });
+      } catch (error) {
+        checks.push({
+          id: `content:${content.id}`,
+          status: "warning",
+          message: `${content.name}: ${error.message}`,
+        });
+      }
+    }
+  }
+  return checks;
+}
+
+async function checkServerUpdate(db, input) {
+  const profile = getServerProfile(db, requireServerId(input?.serverId));
+  const adapter = loaderRegistry().get(profile.loaderType);
+  const versions = (await adapter.listMinecraftVersions())
+    .filter((item) => item.stable)
+    .sort((a, b) => contentVersions.compareVersions(b.value, a.value) || 0);
+  const targetVersion =
+    input?.targetMinecraftVersion || input?.targetVersion || versions[0]?.value;
+  if (!targetVersion || !versions.some((item) => item.value === targetVersion))
+    throw codedError(
+      "MINECRAFT_VERSION_METADATA_NOT_FOUND",
+      "the target Minecraft version is not available from the loader provider",
+    );
+  const loaders = (await adapter.listLoaderVersions(targetVersion))
+    .filter((item) => item.stable)
+    .sort((a, b) => contentVersions.compareVersions(b.value, a.value) || 0);
+  const targetLoaderVersion =
+    input?.targetLoaderVersion || loaders[0]?.value || null;
+  const comparison = contentVersions.compareVersions(
+    targetVersion,
+    profile.minecraftVersion,
+  );
+  const loaderComparison = contentVersions.compareVersions(
+    targetLoaderVersion,
+    profile.loaderVersion,
+  );
+  const updateAvailable =
+    (comparison !== null && comparison > 0) ||
+    (targetVersion === profile.minecraftVersion &&
+      targetLoaderVersion !== profile.loaderVersion &&
+      (loaderComparison === null || loaderComparison > 0));
   const result = {
     serverId: profile.id,
     loaderType: profile.loaderType,
-    currentVersion: current,
+    currentVersion: profile.minecraftVersion,
     targetVersion,
+    targetLoaderVersion,
     updateAvailable,
-    installSupported:
-      profile.loaderType === "paper" || profile.loaderType === "vanilla",
+    installSupported: ["paper", "vanilla"].includes(profile.loaderType),
     message: updateAvailable
-      ? `stable ${profile.loaderType} update is available for ${targetVersion}`
-      : "server is current",
+      ? `${profile.loaderType} ${targetVersion}${targetLoaderVersion ? ` / ${targetLoaderVersion}` : ""} is available.`
+      : "The installed server version is current.",
     downloadedJarPath: null,
     downloadedJarSha256: null,
+    checks: await serverUpdateChecks(db, profile, targetVersion),
   };
   db.prepare(
-    `INSERT INTO server_update_history
-      (id, server_id, loader_type, from_version, to_version, status, message, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    "INSERT INTO server_update_history (id, server_id, loader_type, from_version, to_version, status, message, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
   ).run(
     randomUUID(),
     profile.id,
     profile.loaderType,
-    current,
+    profile.minecraftVersion,
     targetVersion,
     updateAvailable ? "available" : "current",
     result.message,
@@ -7286,103 +8626,277 @@ function checkServerUpdate(db, input) {
   return result;
 }
 
+function serverJarTarget(db, profile) {
+  const args = profile.launchSpec?.jvmArgs || [];
+  const jarIndex = args.indexOf("-jar");
+  if (jarIndex >= 0 && args[jarIndex + 1]) {
+    const working = profile.launchSpec.workingDirectory || ".";
+    return safeServerPath(
+      db,
+      profile.id,
+      path.join(working, args[jarIndex + 1]),
+    ).target;
+  }
+  const existing = fs.existsSync(path.join(profile.rootDir, "server.jar"))
+    ? "server.jar"
+    : fs.readdirSync(profile.rootDir).find((name) => /\.jar$/i.test(name));
+  return safeServerPath(db, profile.id, existing || "server.jar").target;
+}
+
 async function installServerUpdate(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
-  if (!input?.confirm) {
+  if (!input?.confirm)
     throw codedError(
       "SERVER_JAR_INSTALL_NEEDS_CONFIRMATION",
       "server jar installation requires explicit confirmation",
     );
-  }
-  const sourceJar = trimRequired(
-    input?.serverJarPath,
-    "downloaded server jar path is required",
-  );
-  if (!fs.existsSync(sourceJar)) {
-    throw codedError(
-      "DOWNLOADED_SERVER_JAR_MISSING",
-      `downloaded server jar does not exist: ${sourceJar}`,
-    );
-  }
-  const actualSha256 = await sha256File(sourceJar);
-  const expectedSha256 = String(input?.serverJarSha256 || "").trim();
-  if (
-    expectedSha256 &&
-    actualSha256.toLowerCase() !== expectedSha256.toLowerCase()
-  ) {
-    throw codedError(
-      "SERVER_JAR_CHECKSUM_MISMATCH",
-      "downloaded server jar checksum does not match",
-    );
-  }
-
-  fs.mkdirSync(profile.rootDir, { recursive: true });
-  const targetJar = path.join(profile.rootDir, "server.jar");
-  const now = nowIso();
-  let rollbackPath = null;
-  if (fs.existsSync(targetJar)) {
-    const rollbackDir = path.join(profile.rootDir, "backups", "server-jars");
-    fs.mkdirSync(rollbackDir, { recursive: true });
-    rollbackPath = path.join(
-      rollbackDir,
-      `server-${now.replace(/[:.]/g, "-")}.jar`,
-    );
-    fs.copyFileSync(targetJar, rollbackPath);
-  }
-  fs.copyFileSync(sourceJar, targetJar);
-
-  const targetVersion =
-    input?.targetMinecraftVersion ||
-    input?.targetVersion ||
-    profile.minecraftVersion;
-  const targetLoaderVersion =
-    input?.targetLoaderVersion === undefined
-      ? profile.loaderVersion
-      : input.targetLoaderVersion;
-  updateServerProfile(db, {
-    id: profile.id,
-    minecraftVersion: targetVersion ?? null,
-    loaderVersion: targetLoaderVersion ?? null,
+  return withServerFiles(db, profile.id, async (operation) => {
+    const found = input.serverJarPath
+      ? null
+      : await checkServerUpdate(db, input);
+    const targetVersion =
+      input.targetMinecraftVersion ||
+      input.targetVersion ||
+      found?.targetVersion ||
+      profile.minecraftVersion;
+    const targetLoaderVersion =
+      input.targetLoaderVersion ||
+      found?.targetLoaderVersion ||
+      profile.loaderVersion;
+    const checks =
+      found?.checks || (await serverUpdateChecks(db, profile, targetVersion));
+    const blocked = checks.filter((check) => check.status === "blocked");
+    if (blocked.length)
+      throw codedError(
+        "SERVER_UPDATE_PREFLIGHT_FAILED",
+        blocked.map((check) => check.message).join(" "),
+      );
+    if (
+      checks.some((check) => check.status === "warning") &&
+      !input.acknowledgeWarnings
+    )
+      throw codedError(
+        "SERVER_UPDATE_WARNINGS_NEED_CONFIRMATION",
+        "review and acknowledge content compatibility warnings before upgrading",
+      );
+    const targetJar = serverJarTarget(db, profile);
+    const staged = `${targetJar}.mcsm-update-${randomUUID()}`;
+    let recovery = null,
+      replaced = null;
+    const id = randomUUID();
+    try {
+      if (input.serverJarPath) {
+        if (!fs.existsSync(input.serverJarPath))
+          throw codedError(
+            "DOWNLOADED_SERVER_JAR_MISSING",
+            "downloaded server jar does not exist",
+          );
+        await fs.promises.copyFile(input.serverJarPath, staged);
+        if (
+          input.serverJarSha256 &&
+          (await sha256File(staged)) !== input.serverJarSha256.toLowerCase()
+        )
+          throw codedError(
+            "SERVER_JAR_CHECKSUM_MISMATCH",
+            "downloaded server jar checksum does not match",
+          );
+      } else {
+        const adapter = loaderRegistry().get(profile.loaderType);
+        const plan = await adapter.buildInstallPlan({
+          minecraftVersion: targetVersion,
+          loaderVersion: targetLoaderVersion,
+          workingDirectory: profile.rootDir,
+        });
+        const artifact = plan.artifacts.find(
+          (item) => item.destination === "server.jar",
+        );
+        if (
+          !artifact ||
+          !adapter.approvedHosts.includes(new URL(artifact.url).hostname)
+        )
+          throw codedError(
+            "UNAPPROVED_ARTIFACT_HOST",
+            "server artifact is not on the approved loader host",
+          );
+        await downloadRemoteFile(artifact.url, staged, {}, (url) => {
+          if (!adapter.approvedHosts.includes(new URL(url).hostname))
+            throw codedError(
+              "UNAPPROVED_ARTIFACT_HOST",
+              "server artifact redirected outside approved loader hosts",
+            );
+        });
+        verifyProvisioningHashes(staged, artifact.hashes);
+      }
+      await inspectZip(staged);
+      const checksum = await sha256File(staged);
+      if (fs.existsSync(targetJar)) {
+        // Preserve worlds as well as the runtime: switching a JAR alone cannot
+        // undo a world-format upgrade after the new Minecraft version starts.
+        recovery = await createBackupRecord(
+          db,
+          profile.id,
+          {
+            id: null,
+            mode: "full_server",
+            include_paths: "[]",
+            exclude_paths: JSON.stringify([
+              path.relative(profile.rootDir, staged).replace(/\\/g, "/"),
+            ]),
+          },
+          operation,
+        );
+        replaced = `${targetJar}.mcsm-swap-${randomUUID()}`;
+      }
+      db.exec("BEGIN");
+      let installed = false,
+        moved = false;
+      try {
+        if (replaced) {
+          fs.renameSync(targetJar, replaced);
+          moved = true;
+        }
+        fs.renameSync(staged, targetJar);
+        installed = true;
+        const metadata = {
+          before: {
+            minecraftVersion: profile.minecraftVersion,
+            loaderVersion: profile.loaderVersion,
+            launchSpec: profile.launchSpec,
+          },
+          after: {
+            minecraftVersion: targetVersion,
+            loaderVersion: targetLoaderVersion,
+            sha256: checksum,
+            targetJar,
+          },
+          backupId: recovery?.id || null,
+        };
+        db.prepare(
+          "UPDATE servers SET minecraft_version = ?, loader_version = ?, updated_at = ? WHERE id = ?",
+        ).run(targetVersion, targetLoaderVersion, nowIso(), profile.id);
+        db.prepare(
+          "INSERT INTO server_update_history (id, server_id, loader_type, from_version, to_version, status, message, rollback_path, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, 'installed', ?, ?, ?, ?)",
+        ).run(
+          id,
+          profile.id,
+          profile.loaderType,
+          profile.minecraftVersion,
+          targetVersion,
+          `Installed ${profile.loaderType} ${targetVersion}. Recovery restores the full pre-upgrade server snapshot.`,
+          recovery?.archivePath || null,
+          JSON.stringify(metadata),
+          nowIso(),
+        );
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        if (installed) fs.rmSync(targetJar, { force: true });
+        if (moved) fs.renameSync(replaced, targetJar);
+        throw error;
+      }
+      if (replaced) fs.rmSync(replaced, { force: true });
+      return listServerUpdateHistory(db, profile.id).find(
+        (item) => item.id === id,
+      );
+    } finally {
+      fs.rmSync(staged, { force: true });
+    }
   });
-
-  const id = randomUUID();
-  const message = `installed ${profile.loaderType} server jar${targetVersion ? ` for ${targetVersion}` : ""}`;
-  db.prepare(
-    `INSERT INTO server_update_history
-      (id, server_id, loader_type, from_version, to_version, status, message, rollback_path, created_at)
-     VALUES (?, ?, ?, ?, ?, 'installed', ?, ?, ?)`,
-  ).run(
-    id,
-    profile.id,
-    profile.loaderType,
-    profile.minecraftVersion,
-    targetVersion ?? null,
-    message,
-    rollbackPath,
-    now,
-  );
-  return listServerUpdateHistory(db, profile.id).find(
-    (entry) => entry.id === id,
-  );
 }
 
 function listServerUpdateHistory(db, serverId) {
+  const profile = getServerProfile(db, requireServerId(serverId));
   return db
     .prepare(
       "SELECT * FROM server_update_history WHERE server_id = ? ORDER BY created_at DESC",
     )
-    .all(requireServerId(serverId))
-    .map((row) => ({
-      id: row.id,
-      serverId: row.server_id,
-      loaderType: row.loader_type,
-      fromVersion: row.from_version,
-      toVersion: row.to_version,
-      status: row.status,
-      message: row.message,
-      rollbackPath: row.rollback_path,
-      createdAt: row.created_at,
-    }));
+    .all(profile.id)
+    .map((row) => {
+      const metadata = JSON.parse(row.metadata_json);
+      return {
+        id: row.id,
+        serverId: row.server_id,
+        loaderType: row.loader_type,
+        fromVersion: row.from_version,
+        toVersion: row.to_version,
+        status: row.status,
+        message: row.message,
+        rollbackPath: row.rollback_path,
+        createdAt: row.created_at,
+        rollbackAvailable:
+          row.status === "installed" &&
+          Boolean(metadata.backupId) &&
+          profile.minecraftVersion === metadata.after?.minecraftVersion &&
+          profile.loaderVersion === metadata.after?.loaderVersion &&
+          Boolean(row.rollback_path && fs.existsSync(row.rollback_path)),
+      };
+    });
+}
+
+async function rollbackServerUpdate(db, input) {
+  if (!input?.confirm)
+    throw codedError(
+      "RESTORE_NEEDS_CONFIRMATION",
+      "restore requires explicit confirmation",
+    );
+  const profile = getServerProfile(db, requireServerId(input.serverId));
+  return withServerFiles(db, profile.id, async () => {
+    const history = db
+      .prepare(
+        "SELECT * FROM server_update_history WHERE id = ? AND server_id = ? AND status = 'installed'",
+      )
+      .get(input.historyId, profile.id);
+    if (!history)
+      throw codedError(
+        "SERVER_UPDATE_HISTORY_NOT_FOUND",
+        "server update history is unavailable",
+      );
+    const metadata = JSON.parse(history.metadata_json);
+    if (
+      !metadata.backupId ||
+      profile.minecraftVersion !== metadata.after.minecraftVersion ||
+      profile.loaderVersion !== metadata.after.loaderVersion ||
+      (await sha256File(metadata.after.targetJar)) !== metadata.after.sha256
+    )
+      throw codedError(
+        "SERVER_UPDATE_ROLLBACK_UNAVAILABLE",
+        "server runtime changed after this update; its rollback cannot be applied",
+      );
+    const { backup, manifest } = await backupRestorePlan(db, {
+      serverId: profile.id,
+      backupId: metadata.backupId,
+    });
+    await backupFiles.restoreSnapshot({
+      root: safeServerPath(db, profile.id, ".").root,
+      archive: backup.archive_path,
+      manifest,
+      resolve: (relative) => safeServerPath(db, profile.id, relative),
+      commit: () => {
+        db.exec("BEGIN");
+        try {
+          restoreBackupDatabaseState(
+            db,
+            profile.id,
+            safeServerPath(db, profile.id, ".").root,
+            manifest,
+          );
+          db.prepare(
+            "UPDATE server_update_history SET status = 'rolled_back', message = ? WHERE id = ?",
+          ).run(
+            "Restored the complete server snapshot from before this upgrade.",
+            history.id,
+          );
+          db.exec("COMMIT");
+        } catch (error) {
+          db.exec("ROLLBACK");
+          throw error;
+        }
+      },
+    });
+    return listServerUpdateHistory(db, profile.id).find(
+      (item) => item.id === history.id,
+    );
+  });
 }
 
 function createNotificationEvent(db, input) {

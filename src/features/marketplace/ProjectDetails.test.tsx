@@ -58,4 +58,61 @@ describe("ProjectDetails", () => {
     expect(details).not.toHaveTextContent("<script>");
     expect(details).not.toHaveTextContent("alert");
   });
+
+  it("does not repeat the summary when a provider has no long description", () => {
+    render(
+      <AppSettingsProvider>
+        <ProjectDetails
+          isLoading={false}
+          project={{ ...project, body: null }}
+          provider="BBSMC"
+          selectedVersionId={null}
+          versions={[]}
+          onSelectVersion={vi.fn()}
+        />
+      </AppSettingsProvider>,
+    );
+
+    expect(screen.getAllByText("Short pack summary")).toHaveLength(1);
+  });
+
+  it("presents BBSMC versions without raw ids or backend warning copy", () => {
+    render(
+      <AppSettingsProvider>
+        <ProjectDetails
+          isLoading={false}
+          project={{ ...project, body: null }}
+          provider="BBSMC"
+          selectedVersionId={null}
+          versions={[
+            {
+              id: "8545214",
+              projectId: "pack-a",
+              name: "thematipack-fabric-1.20.1-1.6.5",
+              versionNumber: "8545214",
+              loaders: ["fabric"],
+              gameVersions: ["1.20.1"],
+              files: [],
+              dependencies: [],
+              warnings: [
+                "This BBSMC version also provides external disk download links.",
+              ],
+            },
+          ]}
+          onSelectVersion={vi.fn()}
+        />
+      </AppSettingsProvider>,
+    );
+
+    expect(screen.getByText("Available versions")).toBeInTheDocument();
+    expect(
+      screen.getByText("Also available through an external download link"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("8545214")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "This BBSMC version also provides external disk download links.",
+      ),
+    ).not.toBeInTheDocument();
+  });
 });

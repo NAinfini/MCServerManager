@@ -40,16 +40,19 @@ function renderPolicy() {
 describe("ContentUpdatePolicyView", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockImplementation(async (command, args) => {
-      if (command === "get_content_update_policy")
+      if (command === "get_content_update_policy") {
+        const input = args as { contentId?: string | null };
+        const isContentPolicy = Boolean(input.contentId);
         return {
           id: "default",
           serverId: server.id,
-          contentId: null,
-          policy: "manual_only",
-          pinnedVersion: null,
+          contentId: input.contentId ?? null,
+          policy: isContentPolicy ? "pin_current" : "manual_only",
+          pinnedVersion: isContentPolicy ? "1.0.0" : null,
           ignoredUpdate: null,
           updatedAt: "2026-07-01T00:00:00Z",
         };
+      }
       if (command === "list_installed_content")
         return [
           {
@@ -91,7 +94,9 @@ describe("ContentUpdatePolicyView", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.queryByLabelText(/candidate name/i)).not.toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: /automatic/i }));
+    await user.click(
+      screen.getByRole("radio", { name: /batch after confirmation/i }),
+    );
     await waitFor(() =>
       expect(invoke).toHaveBeenCalledWith("save_content_update_policy", {
         input: {
@@ -117,6 +122,28 @@ describe("ContentUpdatePolicyView", () => {
           contentId: "modrinth:demo:1",
           policy: "pin_current",
           pinnedVersion: "1.0.0",
+          ignoredUpdate: null,
+        },
+      }),
+    );
+  });
+
+  it("removes a content restriction and clears its pinned values", async () => {
+    const user = userEvent.setup();
+    renderPolicy();
+
+    expect(
+      await screen.findByText(/Pinned to current version/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Allow updates" }));
+
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith("save_content_update_policy", {
+        input: {
+          serverId: server.id,
+          contentId: "modrinth:demo:1",
+          policy: "manual_only",
+          pinnedVersion: null,
           ignoredUpdate: null,
         },
       }),

@@ -6,6 +6,7 @@ import {
   Download,
   Info,
   RotateCcw,
+  ScanSearch,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -30,11 +31,14 @@ import {
   deleteServerBackup,
   exportServerBackup,
   listServerBackups,
+  previewBackupRestore,
   restoreWorldBackup,
+  type BackupRestorePreview,
   type BackupRecord,
 } from "./backupApi";
 import { BackupProfilesView } from "./BackupProfilesView";
 import { backupKeys } from "./queries";
+import "../files/operations.css";
 
 interface ServerBackupsViewProps {
   server: ServerProfile;
@@ -62,19 +66,27 @@ function formatRelativeTime(value: string, language: string) {
   return rtf.format(Math.round(diffMs / 1000), "second");
 }
 
-function backupStatusIcon(backup: BackupRecord) {
-  if (backup.status === "completed") {
-    return (
-      <CheckCircle2
-        aria-hidden="true"
-        className="backup-status-completed"
-        size={16}
-      />
-    );
-  }
-
+/* The icon is decorative and the colour is the only other signal, so this cell
+   used to be silent to a screen reader — you could not tell which backup
+   failed. */
+function backupStatusIcon(backup: BackupRecord, label: string) {
   return (
-    <XCircle aria-hidden="true" className="backup-status-failed" size={16} />
+    <>
+      {backup.status === "completed" ? (
+        <CheckCircle2
+          aria-hidden="true"
+          className="backup-status-completed"
+          size={16}
+        />
+      ) : (
+        <XCircle
+          aria-hidden="true"
+          className="backup-status-failed"
+          size={16}
+        />
+      )}
+      <span className="visually-hidden">{label}</span>
+    </>
   );
 }
 
@@ -98,6 +110,8 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
   const [deleteBackup, setDeleteBackup] = useState<BackupRecord | null>(null);
   const [targetWorldDir, setTargetWorldDir] = useState("");
+  const [restorePreview, setRestorePreview] =
+    useState<BackupRestorePreview | null>(null);
   const backupsQuery = useQuery({
     queryKey: backupKeys.list(server.id),
     queryFn: () => listServerBackups(server.id),
@@ -117,16 +131,33 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
     mutationFn: () =>
       restoreWorldBackup({
         backupId: restoreBackup?.id ?? "",
-        targetWorldDir,
+        targetWorldDir:
+          restorePreview?.mode === "worldOnly" ? targetWorldDir : undefined,
         confirm: true,
       }),
     onSuccess: async () => {
       setIsRestoreConfirmOpen(false);
       setRestoreBackup(null);
+      setRestorePreview(null);
       setTargetWorldDir("");
       await queryClient.invalidateQueries({
         queryKey: backupKeys.list(server.id),
       });
+    },
+  });
+  const previewMutation = useMutation({
+    mutationFn: () =>
+      previewBackupRestore({
+        serverId: server.id,
+        backupId: restoreBackup?.id ?? "",
+        targetWorldDir:
+          restoreBackup?.kind === "world" || restoreBackup?.kind === "worldOnly"
+            ? targetWorldDir
+            : undefined,
+      }),
+    onSuccess: (preview) => {
+      setRestorePreview(preview);
+      setIsRestoreConfirmOpen(true);
     },
   });
   const deleteMutation = useMutation({
@@ -170,23 +201,41 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
         size: formatBytes(lastCompletedBackup.sizeBytes),
       })
     : t("backups.lastBackupNone");
-  const canRestoreTarget = isSafeRestoreTarget(targetWorldDir);
+  const expectsWorldTarget =
+    restoreBackup?.kind === "world" || restoreBackup?.kind === "worldOnly";
+  const canRestoreTarget =
+    !expectsWorldTarget || isSafeRestoreTarget(targetWorldDir);
   const restoreBlocked =
     runtime.error !== null ||
     runtime.status === "running" ||
     runtime.status === "externalRunning";
   const columns: DataTableColumn<BackupRecord>[] = [
-    { id: "status", header: t("backups.table.status"), cell: backupStatusIcon },
+    {
+      id: "status",
+      header: t("backups.table.status"),
+      cell: (backup) =>
+        backupStatusIcon(
+          backup,
+          t(
+            backup.status === "completed"
+              ? "backups.completed"
+              : "backups.failed",
+          ),
+        ),
+      sortValue: (backup) => backup.status,
+    },
     {
       id: "world",
       header: t("backups.table.world"),
       rowHeader: true,
       cell: (backup) => backup.worldName,
+      sortValue: (backup) => backup.worldName,
     },
     {
       id: "created",
       header: t("backups.table.created"),
       cell: (backup) => formatDateTime(backup.createdAt, language),
+      sortValue: (backup) => backup.createdAt,
     },
     {
       id: "size",
@@ -195,6 +244,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
         backup.status === "completed"
           ? formatBytes(backup.sizeBytes)
           : t("backups.failed"),
+      sortValue: (backup) => backup.sizeBytes,
     },
     {
       id: "archive",
@@ -226,7 +276,9 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
             onClick={() => {
               restoreMutation.reset();
               setRestoreBackup(backup);
-              setTargetWorldDir(backup.worldName);
+              setRestorePreview(null);
+              previewMutation.reset();
+              setTargetWorldDir(backup.worldName || "world");
             }}
           >
             <RotateCcw aria-hidden="true" size={14} />
@@ -246,7 +298,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
             className="icon-button"
             disabled={deleteMutation.isPending}
             title={t("backups.delete.titleAttr")}
-            variant="ghost"
+            variant="danger"
             onClick={() => {
               deleteMutation.reset();
               setDeleteBackup(backup);
@@ -303,7 +355,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
         </div>
       ) : null}
       {exportMutation.data?.exportedPath ? (
-        <div className="success-panel backups-error">
+        <div className="success-panel backups-note" role="status">
           {t("backups.exported", { path: exportMutation.data.exportedPath })}
         </div>
       ) : null}
@@ -314,7 +366,7 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
           onSubmit={(event) => {
             event.preventDefault();
             restoreMutation.reset();
-            setIsRestoreConfirmOpen(true);
+            previewMutation.mutate();
           }}
         >
           <div>
@@ -323,18 +375,31 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
             </h3>
             <p>{t("backups.restore.description")}</p>
           </div>
-          <label>
-            <span>{t("backups.restore.target")}</span>
-            <TextField
-              autoFocus
-              required
-              placeholder={restoreBackup.worldName}
-              value={targetWorldDir}
-              onChange={(event) => setTargetWorldDir(event.target.value)}
-            />
-          </label>
-          {!canRestoreTarget ? (
+          {expectsWorldTarget ? (
+            <label>
+              <span>{t("backups.restore.target")}</span>
+              <TextField
+                autoFocus
+                required
+                placeholder={restoreBackup.worldName}
+                value={targetWorldDir}
+                onChange={(event) => {
+                  setTargetWorldDir(event.target.value);
+                  setRestorePreview(null);
+                  previewMutation.reset();
+                }}
+              />
+            </label>
+          ) : (
+            <p className="info-note">{t("backups.restore.fullScope")}</p>
+          )}
+          {expectsWorldTarget && !canRestoreTarget ? (
             <p className="danger-text">{t("backups.restore.invalidTarget")}</p>
+          ) : null}
+          {previewMutation.error ? (
+            <p className="danger-text" role="alert">
+              {previewMutation.error.message}
+            </p>
           ) : null}
           <div className="dialog-actions">
             <Button
@@ -345,17 +410,25 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
                 restoreMutation.reset();
                 setIsRestoreConfirmOpen(false);
                 setRestoreBackup(null);
+                setRestorePreview(null);
                 setTargetWorldDir("");
               }}
             >
               {t("common.cancel")}
             </Button>
             <Button
-              disabled={restoreMutation.isPending || !canRestoreTarget}
+              disabled={
+                previewMutation.isPending ||
+                restoreMutation.isPending ||
+                !canRestoreTarget
+              }
               type="submit"
               variant="danger"
             >
-              {t("common.restore")}
+              <ScanSearch aria-hidden="true" size={14} />
+              {previewMutation.isPending
+                ? t("backups.restore.previewing")
+                : t("backups.restore.preview")}
             </Button>
           </div>
         </form>
@@ -410,17 +483,56 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
 
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.restoreBackup")}
-        description={t("danger.backup.restore.description", {
-          world: restoreBackup?.worldName ?? "",
-          target: targetWorldDir,
-        })}
+        description={
+          restorePreview?.mode === "worldOnly"
+            ? t("danger.backup.restore.description", {
+                world: restoreBackup?.worldName ?? "",
+                target: targetWorldDir,
+              })
+            : t("backups.restore.confirmFullDescription")
+        }
         error={restoreMutation.error?.message ?? null}
         isConfirming={restoreMutation.isPending}
         isOpen={isRestoreConfirmOpen}
         title={t("danger.backup.restore.title")}
         onCancel={() => setIsRestoreConfirmOpen(false)}
         onConfirm={() => restoreMutation.mutate()}
-      />
+      >
+        {restorePreview ? (
+          <div className="restore-preview">
+            <div className="restore-preview-summary">
+              <strong>
+                {t(`backups.restore.mode.${restorePreview.mode}`)}
+              </strong>
+              <span>
+                {t("backups.restore.previewSummary", {
+                  count: restorePreview.fileCount,
+                  size: formatBytes(restorePreview.sizeBytes),
+                })}
+              </span>
+            </div>
+            <ul className="restore-preview-paths">
+              {restorePreview.relativePaths.slice(0, 8).map((relativePath) => (
+                <li key={relativePath}>{relativePath}</li>
+              ))}
+            </ul>
+            {restorePreview.relativePaths.length > 8 ? (
+              <p>
+                {t("backups.restore.morePaths", {
+                  count: restorePreview.relativePaths.length - 8,
+                })}
+              </p>
+            ) : null}
+            {restorePreview.warnings.length ? (
+              <ul className="restore-preview-warnings">
+                {restorePreview.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmDangerDialog>
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteBackup")}
         description={t("danger.backup.delete.description", {

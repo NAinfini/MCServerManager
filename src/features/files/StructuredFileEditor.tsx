@@ -256,7 +256,7 @@ export function StructuredFileEditor({
             className="icon-button"
             disabled={readOnly}
             title={t("files.structured.removeProperty", { key: row.key })}
-            variant="ghost"
+            variant="danger"
             onClick={() => onChange(removeLine(content, row.lineIndex))}
           >
             <Trash2 aria-hidden="true" size={15} />
@@ -366,7 +366,7 @@ export function StructuredFileEditor({
             title={t("files.structured.removeRow", {
               index: rowIndex + 1,
             })}
-            variant="ghost"
+            variant="danger"
             onClick={() =>
               onChange(
                 serializeJson(
@@ -483,7 +483,7 @@ export function StructuredFileEditor({
             className="icon-button"
             disabled={readOnly}
             title={t("files.structured.removeProperty", { key })}
-            variant="ghost"
+            variant="danger"
             onClick={() =>
               onChange(
                 serializeJson(
@@ -583,7 +583,10 @@ export function StructuredFileEditor({
                 })}
                 className="icon-button"
                 disabled={readOnly}
-                variant="ghost"
+                title={t("files.structured.removeRow", {
+                  index: index + 1,
+                })}
+                variant="danger"
                 onClick={() =>
                   onChange(
                     serializeJson(

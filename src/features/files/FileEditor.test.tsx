@@ -26,6 +26,7 @@ function file(relativePath: string, content: string): ServerTextFile {
   return {
     relativePath,
     content,
+    revision: `revision-${content}`,
     readOnly: false,
     sizeBytes: content.length,
     warning: null,

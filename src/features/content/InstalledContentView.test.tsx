@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "../../test/render";
+import { cleanup, render, screen, waitFor, within } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -109,7 +109,7 @@ describe("InstalledContentView", () => {
     });
   });
 
-  it("checks content updates and lets users update one item or all items manually", async () => {
+  it("checks content updates and updates one item or the selected items", async () => {
     const user = userEvent.setup();
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (command === "list_installed_content") {
@@ -157,10 +157,28 @@ describe("InstalledContentView", () => {
       });
     });
 
-    await user.click(screen.getByRole("button", { name: "Update all" }));
+    await user.click(
+      screen.getByRole("checkbox", { name: "Select Fabric API" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Update selected (1)" }),
+    );
+    expect(
+      await screen.findByText(
+        "Each selected file will be replaced. The previous file is recorded for rollback when the update succeeds.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", {
+        name: "Update selected (1)",
+      }),
+    );
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("install_all_content_updates", {
-        input: { serverId: server.id },
+        input: {
+          serverId: server.id,
+          installedContentIds: [content.id],
+        },
       });
     });
   });

@@ -24,6 +24,7 @@ import { DropImportOverlay } from "../../features/servers/DropImportOverlay";
 import { DropImportReviewDialog } from "../../features/servers/DropImportReviewDialog";
 import { ServerList } from "../../features/servers/ServerList";
 import { ServerDetail } from "../../features/servers/ServerDetail";
+import { ServerWorkspaceNav } from "../../features/servers/ServerWorkspaceNav";
 import { ServerRuntimeProvider } from "../../features/servers/ServerRuntimeContext";
 import { WizardStepIndicator } from "../../features/servers/WizardStepIndicator";
 import type { ServerProfile } from "../../domain/server";
@@ -152,18 +153,20 @@ export function AppShell({ processSummary }: AppShellProps) {
     navigateTo({
       name: "server",
       serverId: item.serverId,
+      /* Crashes land on the overview, which is where diagnostics, the event
+         timeline and the performance history now sit together. */
       section:
         item.kind === "update"
           ? "content"
           : item.kind === "backup"
             ? "data"
-            : "monitor",
+            : "overview",
       view:
         item.kind === "update"
           ? "updates"
           : item.kind === "backup"
             ? "backups"
-            : "diagnostics",
+            : undefined,
     });
   };
 
@@ -248,13 +251,17 @@ export function AppShell({ processSummary }: AppShellProps) {
     setCreateServerProgress(null);
   }, []);
 
-  const openCreateServer = useCallback((sourcePath: string | null = null) => {
-    setCreateServerLifecycle("draft");
-    navigateTo({
-      name: "create-server",
-      ...(sourcePath ? { sourcePath } : {}),
-    });
-  }, []);
+  const openCreateServer = useCallback(
+    (sourcePath: string | null = null, intent?: "import") => {
+      setCreateServerLifecycle("draft");
+      navigateTo({
+        name: "create-server",
+        ...(sourcePath ? { sourcePath } : {}),
+        ...(intent ? { intent } : {}),
+      });
+    },
+    [],
+  );
 
   const handleCreateServerRouteState = useCallback(
     (state: { step: number; jobId?: string | null }) => {
@@ -274,7 +281,7 @@ export function AppShell({ processSummary }: AppShellProps) {
   const handleCreateServerCompletionAction = useCallback(
     (
       serverId: string,
-      action: "overview" | "invite" | "content" | "backup",
+      action: "overview" | "network" | "content" | "backup",
     ) => {
       resetCreateServer();
       navigateTo({
@@ -285,7 +292,7 @@ export function AppShell({ processSummary }: AppShellProps) {
             ? "content"
             : action === "backup"
               ? "data"
-              : action === "invite"
+              : action === "network"
                 ? "settings"
                 : "overview",
         view:
@@ -293,7 +300,7 @@ export function AppShell({ processSummary }: AppShellProps) {
             ? "browse"
             : action === "backup"
               ? "backups"
-              : action === "invite"
+              : action === "network"
                 ? "network"
                 : undefined,
       });
@@ -378,6 +385,22 @@ export function AppShell({ processSummary }: AppShellProps) {
         }
       >
         <Sidebar
+          workspaceNavigation={
+            selectedServer && route.name === "server" ? (
+              <ServerWorkspaceNav
+                serverName={selectedServer.name}
+                section={route.section}
+                onNavigate={(section, view) =>
+                  navigateTo({
+                    name: "server",
+                    serverId: selectedServer.id,
+                    section,
+                    ...(view ? { view } : {}),
+                  })
+                }
+              />
+            ) : undefined
+          }
           activePage={activePage}
           selectedServerId={selectedServerId ?? undefined}
           serverStatuses={processSummary?.statuses}
@@ -431,15 +454,6 @@ export function AppShell({ processSummary }: AppShellProps) {
                   <p className="visually-hidden">
                     {t("servers.create.description")}
                   </p>
-                  <Button
-                    aria-label={t("servers.create.close")}
-                    className="icon-button create-server-detail-close"
-                    type="button"
-                    variant="ghost"
-                    onClick={() => requestCreateServerExit(openServersOverview)}
-                  >
-                    <X aria-hidden="true" size={16} />
-                  </Button>
                 </>
               ) : (
                 <header className="create-server-page-header create-server-wizard-header">
@@ -503,10 +517,26 @@ export function AppShell({ processSummary }: AppShellProps) {
                 initialStep={
                   route.name === "create-server" ? route.step : undefined
                 }
+                openFolderPickerOnMount={
+                  route.name === "create-server" && route.intent === "import"
+                }
                 initialJobId={
                   route.name === "create-server" ? (route.jobId ?? null) : null
                 }
                 showHeading={false}
+                /* The pack page hides the wizard header for the full canvas,
+                   so the exit rides along in the detail bar rather than being
+                   floated into a corner the search row already owns. */
+                marketplaceDetailAction={
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => requestCreateServerExit(openServersOverview)}
+                  >
+                    <X aria-hidden="true" size={15} />
+                    {t("servers.create.exit")}
+                  </Button>
+                }
                 onHeaderHiddenChange={setCreateServerHeaderHidden}
                 onHeaderBackChange={handleCreateServerHeaderBackChange}
                 onProgressChange={setCreateServerProgress}
@@ -534,6 +564,7 @@ export function AppShell({ processSummary }: AppShellProps) {
           ) : selectedServer ? (
             <ServerRuntimeProvider serverId={selectedServer.id}>
               <ServerDetail
+                key={selectedServer.id}
                 server={selectedServer}
                 section={route.name === "server" ? route.section : "overview"}
                 view={route.name === "server" ? route.view : undefined}
@@ -681,7 +712,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                   lastBackups={processSummary?.lastBackups}
                   serverStatuses={processSummary?.statuses}
                   onCreateServer={() => openCreateServer()}
-                  onImportServer={() => openCreateServer()}
+                  onImportServer={() => openCreateServer(null, "import")}
                   onRetry={() => void profilesQuery.refetch()}
                   onSelectServer={(serverId) =>
                     navigateTo({

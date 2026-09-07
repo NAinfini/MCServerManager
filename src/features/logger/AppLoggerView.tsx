@@ -216,6 +216,11 @@ export function AppLoggerView() {
                     >
                       <LogLevelIcon level={normalizedLevel} />
                     </div>
+                    {/* The icon is decorative, so the level has to be spelled
+                        out for a screen reader. */}
+                    <span className="visually-hidden">
+                      {t(`logger.severity.${normalizedLevel}`)}
+                    </span>
                     <div className="app-log-content">
                       <div className="app-log-heading">
                         <strong>{entry.message || t("logger.untitled")}</strong>

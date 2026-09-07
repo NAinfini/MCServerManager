@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { AppShell } from "./components/layout/AppShell";
+import { AppearanceProvider } from "./features/settings/AppearanceProvider";
 import { installDesktopServerEventSync } from "./app/serverEventSync";
 import { CloseBehaviorDialog } from "./features/app/CloseBehaviorDialog";
 import {
@@ -36,6 +37,7 @@ import { useProcessSummaryPolling } from "./lib/polling";
 import { queryKeys } from "./lib/query-keys";
 import "./styles/tokens.css";
 import "./styles/app.css";
+import "./styles/command-studio.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,7 +111,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AppSettingsProvider>
         <AppErrorBoundary>
-          <AppRuntime />
+          <AppearanceProvider>
+            <AppRuntime />
+          </AppearanceProvider>
         </AppErrorBoundary>
       </AppSettingsProvider>
     </QueryClientProvider>

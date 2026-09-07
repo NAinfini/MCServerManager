@@ -6,6 +6,7 @@ import { useAppSettings } from "../../i18n";
 import { queryKeys } from "../../lib/query-keys";
 import { formatDateTime } from "../../lib/date-format";
 import type { ServerProfile } from "../../domain/server";
+import { navigateTo } from "../../app/router";
 
 interface DiagnosticCheck {
   name: string;
@@ -116,6 +117,21 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
               </div>
             ))}
           </div>
+          {latest.status !== "pass" ? (
+            <Button
+              variant="secondary"
+              onClick={() =>
+                navigateTo({
+                  name: "server",
+                  serverId: server.id,
+                  section: "console",
+                  view: "logs",
+                })
+              }
+            >
+              {t("diagnostics.openLogs")}
+            </Button>
+          ) : null}
         </>
       ) : !historyQuery.error ? (
         <div className="list-state">

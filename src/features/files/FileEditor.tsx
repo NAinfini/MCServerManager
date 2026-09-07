@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
-import { Braces, Code2, Save } from "lucide-react";
+import { Braces, Code2, FileLock2, RefreshCw, Save } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
-import type { ServerTextFile } from "./fileApi";
+import type { ServerFileEntry, ServerTextFile } from "./fileApi";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
 import {
   hasStructuredFileEditor,
@@ -19,6 +19,8 @@ interface FileEditorProps {
   isLoading: boolean;
   isSaving: boolean;
   error: string | null;
+  selectedEntry?: ServerFileEntry | null;
+  onReload?: () => void;
   onSave: (content: string) => void;
 }
 
@@ -48,9 +50,11 @@ export function FileEditor({
   isLoading,
   isSaving,
   error,
+  selectedEntry = null,
+  onReload,
   onSave,
 }: FileEditorProps) {
-  const { t } = useAppSettings();
+  const { resolvedTheme, t } = useAppSettings();
   const [content, setContent] = useState("");
   const [editorMode, setEditorMode] = useState<"structured" | "source">(
     "structured",
@@ -78,7 +82,7 @@ export function FileEditor({
     setContent((current) => {
       return current === file.content ? file.content : current;
     });
-  }, [file?.relativePath, file?.content]);
+  }, [file?.relativePath, file?.content, file?.revision]);
 
   const dirty = file ? content !== file.content : false;
   useUnsavedGuard({
@@ -96,6 +100,23 @@ export function FileEditor({
   }
 
   if (!file) {
+    if (selectedEntry?.kind === "file" && !selectedEntry.editable) {
+      return (
+        <section className="files-editor files-binary-preview">
+          <div className="files-editor-toolbar">
+            <div>
+              <strong>{selectedEntry.relativePath}</strong>
+              <span>{t("files.editor.readOnly")}</span>
+            </div>
+          </div>
+          <div className="files-binary-message">
+            <FileLock2 aria-hidden="true" size={28} />
+            <strong>{t("files.editor.binary.title")}</strong>
+            <span>{t("files.editor.binary.description")}</span>
+          </div>
+        </section>
+      );
+    }
     return (
       <div className="files-editor-empty">
         <EmptyState
@@ -166,7 +187,24 @@ export function FileEditor({
         <div className="inline-error files-editor-warning">{file.warning}</div>
       ) : null}
       {error ? (
-        <div className="inline-error files-editor-warning">{error}</div>
+        <div className="inline-error files-editor-warning" role="alert">
+          <strong>{t("files.editor.saveFailed")}</strong>
+          <span>{error}</span>
+          <span>{t("files.editor.draftPreserved")}</span>
+          {onReload ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                loadedPathRef.current = null;
+                setContent(file.content);
+                onReload();
+              }}
+            >
+              <RefreshCw aria-hidden="true" size={14} />
+              {t("files.editor.reloadDisk")}
+            </Button>
+          ) : null}
+        </div>
       ) : null}
 
       {showStructuredEditor ? (
@@ -187,7 +225,7 @@ export function FileEditor({
               scrollBeyondLastLine: false,
               wordWrap: "on",
             }}
-            theme="vs-dark"
+            theme={resolvedTheme === "dark" ? "vs-dark" : "vs"}
             value={content}
             onChange={(value) => setContent(value ?? "")}
           />

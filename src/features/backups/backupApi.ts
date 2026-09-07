@@ -52,8 +52,24 @@ export interface CreateProfileBackupInput {
 
 export interface RestoreBackupInput {
   backupId: string;
-  targetWorldDir: string;
+  targetWorldDir?: string;
   confirm: boolean;
+}
+
+export interface BackupRestorePreview {
+  backupId: string;
+  serverId: string;
+  mode: "worldOnly" | "worldPlusConfigs" | "fullServer" | "custom";
+  relativePaths: string[];
+  fileCount: number;
+  sizeBytes: number;
+  warnings: string[];
+}
+
+export interface PreviewBackupRestoreInput {
+  serverId: string;
+  backupId: string;
+  targetWorldDir?: string;
 }
 
 export interface ExportBackupInput {
@@ -126,4 +142,11 @@ export function restoreWorldBackup(input: RestoreBackupInput) {
   return invokeDesktopCommandWithErrorHandling<void>("restore_world_backup", {
     input,
   });
+}
+
+export function previewBackupRestore(input: PreviewBackupRestoreInput) {
+  return invokeDesktopCommandWithErrorHandling<BackupRestorePreview>(
+    "preview_backup_restore",
+    { input },
+  );
 }

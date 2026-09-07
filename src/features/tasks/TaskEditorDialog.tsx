@@ -13,26 +13,40 @@ export type ScheduledTaskKind =
   | "server_update_check"
   | "content_update_check";
 
+export type ScheduleKind = "interval" | "weekly";
+
+export interface TaskFormInput {
+  name: string;
+  kind: ScheduledTaskKind;
+  scheduleKind: ScheduleKind;
+  intervalMinutes: number;
+  timeOfDay: string | null;
+  weekdays: number[];
+  command?: string | null;
+  backupProfileId: string | null;
+}
+
 interface TaskEditorDialogProps {
   isSaving: boolean;
   initialTask?: {
     name: string;
     kind: ScheduledTaskKind;
+    scheduleKind: ScheduleKind;
     intervalMinutes: number;
+    timeOfDay: string | null;
+    weekdays: number[];
     command?: string | null;
+    backupProfileId: string | null;
   };
+  backupProfiles?: Array<{ id: string; name: string }>;
   submitLabel?: string;
-  onCreate: (input: {
-    name: string;
-    kind: ScheduledTaskKind;
-    intervalMinutes: number;
-    command?: string | null;
-  }) => void;
+  onCreate: (input: TaskFormInput) => void;
 }
 
 export function TaskEditorDialog({
   initialTask,
   isSaving,
+  backupProfiles = [],
   onCreate,
   submitLabel,
 }: TaskEditorDialogProps) {
@@ -41,26 +55,29 @@ export function TaskEditorDialog({
   const [kind, setKind] = useState<ScheduledTaskKind>(
     initialTask?.kind ?? "world_backup",
   );
+  const [scheduleKind, setScheduleKind] = useState<ScheduleKind>(
+    initialTask?.scheduleKind ?? "interval",
+  );
   const [intervalMinutes, setIntervalMinutes] = useState(
     initialTask?.intervalMinutes ?? 1440,
   );
   const [command, setCommand] = useState(initialTask?.command ?? "");
-  const [targetMinecraftVersion, setTargetMinecraftVersion] = useState("");
-  const [targetLoaderVersion, setTargetLoaderVersion] = useState("");
+  const [timeOfDay, setTimeOfDay] = useState(initialTask?.timeOfDay ?? "03:00");
+  const [weekdays, setWeekdays] = useState<number[]>(
+    initialTask?.weekdays?.length ? initialTask.weekdays : [1, 2, 3, 4, 5],
+  );
+  const [backupProfileId, setBackupProfileId] = useState(
+    initialTask?.backupProfileId ?? "__default__",
+  );
   const trimmedName = name.trim();
   const trimmedCommand = command.trim();
-  const trimmedTargetMinecraftVersion = targetMinecraftVersion.trim();
-  const updateTarget = [
-    trimmedTargetMinecraftVersion,
-    targetLoaderVersion.trim(),
-  ]
-    .filter(Boolean)
-    .join(" ");
   const canSubmit =
     Boolean(trimmedName) &&
+    (scheduleKind !== "interval" ||
+      (Number.isFinite(intervalMinutes) && intervalMinutes > 0)) &&
+    (scheduleKind !== "weekly" ||
+      (/^\d{2}:\d{2}$/.test(timeOfDay) && weekdays.length > 0)) &&
     (kind !== "command" || Boolean(trimmedCommand)) &&
-    (kind !== "server_update_check" ||
-      Boolean(trimmedTargetMinecraftVersion)) &&
     !isSaving;
   const taskKindOptions = [
     { value: "start", label: t("tasks.kind.start") },
@@ -74,19 +91,32 @@ export function TaskEditorDialog({
       label: t("tasks.kind.contentUpdateCheck"),
     },
   ] as const;
+  const scheduleKindOptions = [
+    { value: "interval", label: t("tasks.schedule.interval") },
+    { value: "weekly", label: t("tasks.schedule.weekly") },
+  ] as const;
+  const backupProfileOptions = [
+    { value: "__default__", label: t("tasks.backup.defaultProfile") },
+    ...backupProfiles.map((profile) => ({
+      value: profile.id,
+      label: profile.name,
+    })),
+  ];
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onCreate({
       name: trimmedName,
       kind,
+      scheduleKind,
       intervalMinutes,
-      command:
-        kind === "command"
-          ? trimmedCommand
-          : kind === "server_update_check"
-            ? updateTarget
-            : null,
+      timeOfDay: scheduleKind === "weekly" ? timeOfDay : null,
+      weekdays: scheduleKind === "weekly" ? weekdays : [],
+      command: kind === "command" ? trimmedCommand : null,
+      backupProfileId:
+        kind === "world_backup" && backupProfileId !== "__default__"
+          ? backupProfileId
+          : null,
     });
   }
 
@@ -110,14 +140,62 @@ export function TaskEditorDialog({
         />
       </label>
       <label>
-        {t("tasks.form.everyMinutes")}
-        <TextField
-          min={1}
-          type="number"
-          value={intervalMinutes}
-          onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+        {t("tasks.form.schedule")}
+        <Select
+          ariaLabel={t("tasks.form.schedule")}
+          options={scheduleKindOptions}
+          value={scheduleKind}
+          onValueChange={(value) => setScheduleKind(value as ScheduleKind)}
         />
       </label>
+      {scheduleKind === "interval" ? (
+        <label>
+          {t("tasks.form.everyMinutes")}
+          <TextField
+            min={1}
+            required
+            type="number"
+            value={intervalMinutes}
+            onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+          />
+        </label>
+      ) : (
+        <>
+          <label>
+            {t("tasks.form.timeOfDay")}
+            <TextField
+              required
+              type="time"
+              value={timeOfDay}
+              onChange={(event) => setTimeOfDay(event.target.value)}
+            />
+          </label>
+          <fieldset className="task-weekdays">
+            <legend>{t("tasks.form.weekdays")}</legend>
+            <div role="group" aria-label={t("tasks.form.weekdays")}>
+              {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                const selected = weekdays.includes(day);
+                return (
+                  <Button
+                    aria-pressed={selected}
+                    key={day}
+                    variant={selected ? "primary" : "secondary"}
+                    onClick={() =>
+                      setWeekdays((current) =>
+                        selected
+                          ? current.filter((value) => value !== day)
+                          : [...current, day].sort(),
+                      )
+                    }
+                  >
+                    {t(`tasks.weekday.${day}`)}
+                  </Button>
+                );
+              })}
+            </div>
+          </fieldset>
+        </>
+      )}
       {kind === "command" ? (
         <label>
           {t("tasks.form.command")}
@@ -128,27 +206,16 @@ export function TaskEditorDialog({
           />
         </label>
       ) : null}
-      {kind === "server_update_check" ? (
-        <>
-          <label>
-            {t("tasks.form.targetMinecraftVersion")}
-            <TextField
-              placeholder={t("tasks.form.targetVersionPlaceholder")}
-              value={targetMinecraftVersion}
-              onChange={(event) =>
-                setTargetMinecraftVersion(event.target.value)
-              }
-            />
-          </label>
-          <label>
-            {t("tasks.form.targetLoaderBuild")}
-            <TextField
-              placeholder={t("tasks.form.loaderBuildPlaceholder")}
-              value={targetLoaderVersion}
-              onChange={(event) => setTargetLoaderVersion(event.target.value)}
-            />
-          </label>
-        </>
+      {kind === "world_backup" ? (
+        <label>
+          {t("tasks.form.backupProfile")}
+          <Select
+            ariaLabel={t("tasks.form.backupProfile")}
+            options={backupProfileOptions}
+            value={backupProfileId}
+            onValueChange={setBackupProfileId}
+          />
+        </label>
       ) : null}
       <Button disabled={!canSubmit} type="submit" variant="primary">
         {submitLabel ?? t("tasks.add")}

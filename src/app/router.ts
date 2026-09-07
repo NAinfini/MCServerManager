@@ -6,7 +6,6 @@ export const serverWorkspaceSections = [
   "players",
   "content",
   "data",
-  "monitor",
   "automation",
   "settings",
 ] as const;
@@ -18,6 +17,9 @@ export type AppRoute =
   | {
       name: "create-server";
       sourcePath?: string;
+      /* "import" opens the folder picker straight away, so the Import Server
+         entry point does something different from Create Server. */
+      intent?: "import";
       step?: number;
       jobId?: string;
     }
@@ -33,6 +35,26 @@ export type AppRoute =
     };
 
 const workspaceSectionSet = new Set<string>(serverWorkspaceSections);
+
+/**
+ * Sections that were retired when Operations was folded into Overview and
+ * Console, and when version upgrade and content update policy left the settings
+ * rail. Links minted before that still exist in notifications, in the remembered
+ * last location, and in anything a user bookmarked, so they are mapped onto
+ * their successor instead of quietly resolving to Overview.
+ */
+const retiredWorkspaceRoutes: Record<
+  string,
+  { section: ServerWorkspaceSection; view?: string }
+> = {
+  monitor: { section: "overview" },
+  "monitor/performance": { section: "overview" },
+  "monitor/events": { section: "overview" },
+  "monitor/diagnostics": { section: "overview" },
+  "monitor/logs": { section: "console", view: "logs" },
+  "settings/updates": { section: "settings", view: "general" },
+  "settings/contentPolicy": { section: "content", view: "updates" },
+};
 
 function decodePart(value: string | undefined) {
   if (!value) return "";
@@ -69,33 +91,41 @@ export function parseAppHash(hash: string): AppRoute {
     const rawStep = search.get("step");
     const parsedStep = rawStep === null ? Number.NaN : Number(rawStep);
     const step =
-      Number.isInteger(parsedStep) && parsedStep >= 0 && parsedStep <= 5
+      Number.isInteger(parsedStep) && parsedStep >= 0 && parsedStep <= 2
         ? parsedStep
         : undefined;
     const jobId = search.get("job") || undefined;
+    const intent = search.get("intent") === "import" ? "import" : undefined;
     return {
       name: "create-server",
       ...(sourcePath ? { sourcePath } : {}),
+      ...(intent ? { intent } : {}),
       ...(step !== undefined ? { step } : {}),
       ...(jobId ? { jobId } : {}),
     };
   }
 
   const serverId = parts[1];
-  const section = workspaceSectionSet.has(parts[2] ?? "")
-    ? (parts[2] as ServerWorkspaceSection)
-    : "overview";
   if (!serverId) {
     return { name: "dashboard" };
   }
 
-  const pathView =
-    section === "settings"
-      ? parts[3] || "general"
-      : section === "content" && parts[3] === "browse"
-        ? "browse"
-        : undefined;
-  const view = pathView || search.get("view") || undefined;
+  const requestedSection = parts[2] ?? "";
+  const requestedView = parts[3] || search.get("view") || "";
+  const retired =
+    retiredWorkspaceRoutes[
+      requestedView ? `${requestedSection}/${requestedView}` : requestedSection
+    ];
+  const section = retired
+    ? retired.section
+    : workspaceSectionSet.has(requestedSection)
+      ? (requestedSection as ServerWorkspaceSection)
+      : "overview";
+  const view = retired
+    ? retired.view
+    : section === "settings"
+      ? requestedView || "general"
+      : requestedView || undefined;
   const filePath = search.get("path") || undefined;
   return {
     name: "server",
@@ -113,6 +143,7 @@ export function toAppHash(route: AppRoute): string {
     case "create-server": {
       const search = new URLSearchParams();
       if (route.sourcePath) search.set("source", route.sourcePath);
+      if (route.intent) search.set("intent", route.intent);
       if (route.step !== undefined) search.set("step", String(route.step));
       if (route.jobId) search.set("job", route.jobId);
       const query = search.toString();

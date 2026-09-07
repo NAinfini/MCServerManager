@@ -122,4 +122,48 @@ describe("ServerProfileSettings", () => {
     );
     expect(await screen.findByText(/restart.*required/i)).toBeInTheDocument();
   });
+
+  // Typing the path was the old field, and knowing it was the old problem.
+  it("picks the Java runtime from the ones the scan found", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_java_runtimes") {
+        return {
+          runtimes: [
+            {
+              path: "C:/java21/bin/java.exe",
+              source: "PATH",
+              version: "21.0.4",
+              majorVersion: 21,
+              vendor: "Temurin",
+              architecture: "x64",
+            },
+          ],
+          failures: [],
+          compatibility: [],
+        } as never;
+      }
+      return undefined as never;
+    });
+    renderSettings();
+
+    await user.click(
+      await screen.findByRole("combobox", { name: "Java path" }),
+    );
+    await user.click(
+      screen.getByRole("option", { name: "Java 21 · Temurin · x64" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "update_server_profile",
+        expect.objectContaining({
+          input: expect.objectContaining({
+            javaPath: "C:/java21/bin/java.exe",
+          }),
+        }),
+      );
+    });
+  });
 });

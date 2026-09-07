@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 const read = (path) => readFileSync(resolve(process.cwd(), path), "utf8");
 const app = read("src/App.tsx");
 const tokens = read("src/styles/tokens.css");
-const css = read("src/styles/app.css");
+const css =
+  read("src/styles/app.css") + "\n" + read("src/styles/command-studio.css");
 
 function block(source, selector) {
   const start = source.indexOf(selector);
@@ -21,11 +22,14 @@ function block(source, selector) {
 }
 
 describe("single design system", () => {
-  it("loads tokens before one consolidated application stylesheet", () => {
+  it("loads shared tokens before application and workspace styles", () => {
     const tokenImport = app.indexOf('import "./styles/tokens.css";');
     const appImport = app.indexOf('import "./styles/app.css";');
     expect(tokenImport).toBeGreaterThan(-1);
     expect(appImport).toBeGreaterThan(tokenImport);
+    expect(
+      app.indexOf('import "./styles/command-studio.css";'),
+    ).toBeGreaterThan(appImport);
     expect(app).not.toContain("styles.css");
     expect(app).not.toContain("styles/preview");
   });

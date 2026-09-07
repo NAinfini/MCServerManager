@@ -46,6 +46,13 @@ function renderProfiles() {
   );
 }
 
+/* The editor is a composer now, not a permanent band above the list. */
+async function openComposer() {
+  await userEvent.click(
+    await screen.findByRole("button", { name: "New profile" }),
+  );
+}
+
 describe("BackupProfilesView", () => {
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
@@ -74,6 +81,7 @@ describe("BackupProfilesView", () => {
     });
 
     renderProfiles();
+    await openComposer();
     await userEvent.type(
       await screen.findByLabelText(/profile name/i),
       "Configs",
@@ -106,6 +114,7 @@ describe("BackupProfilesView", () => {
     });
 
     renderProfiles();
+    await openComposer();
     await userEvent.type(
       await screen.findByLabelText(/profile name/i),
       "Custom files",

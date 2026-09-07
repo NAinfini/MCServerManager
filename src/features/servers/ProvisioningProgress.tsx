@@ -22,6 +22,16 @@ function progressValue(job: ProvisioningJob) {
   return index < 0 ? 0 : Math.round((index / activeStages.length) * 100);
 }
 
+function formatElapsed(createdAt: string, updatedAt: string) {
+  const start = Date.parse(createdAt);
+  const end = Date.parse(updatedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
+    return null;
+  const seconds = Math.round((end - start) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${String(seconds % 60).padStart(2, "0")}s`;
+}
+
 interface ProvisioningProgressProps {
   job: ProvisioningJob;
   busy?: boolean;
@@ -37,6 +47,10 @@ export function ProvisioningProgress({
 }: ProvisioningProgressProps) {
   const { t } = useAppSettings();
   const displayedStage = job.stage === "failed" ? job.error?.stage : job.stage;
+  const stageIndex = activeStages.indexOf(displayedStage as ProvisioningStage);
+  /* The backend reports stage transitions only — no byte or file counts — so the
+     elapsed figure is derived from the job timestamps rather than invented. */
+  const elapsed = formatElapsed(job.createdAt, job.updatedAt);
   const canCancel =
     job.stage !== "ready" &&
     job.stage !== "failed" &&
@@ -44,10 +58,27 @@ export function ProvisioningProgress({
 
   return (
     <section className="provisioning-progress" aria-live="polite">
+      {/* The stage is the headline. A fixed "Installing" title with the stage
+          demoted to a subtitle told the user nothing they could not already see
+          from the spinner. */}
       <div className="provisioning-progress-heading">
         <div>
-          <strong>{t("provisioning.progress.title")}</strong>
-          <span>{t(`provisioning.stage.${displayedStage || "planned"}`)}</span>
+          <strong>
+            {t(`provisioning.stage.${displayedStage || "planned"}`)}
+          </strong>
+          <span>
+            {[
+              stageIndex >= 0
+                ? t("provisioning.progress.stageCounter", {
+                    current: stageIndex + 1,
+                    total: activeStages.length,
+                  })
+                : null,
+              elapsed,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         </div>
         {job.stage === "ready" ? (
           <CheckCircle2 aria-hidden="true" size={20} />

@@ -50,6 +50,54 @@ function renderPlayers() {
 }
 
 describe("PlayersView", () => {
+  it("reviews batch changes and retains only failed players for retry", async () => {
+    vi.mocked(invoke).mockImplementation(async (command, args) => {
+      if (command === "get_server_process_status") return { status: "running" };
+      if (command === "list_players")
+        return {
+          serverId: server.id,
+          actionsAvailable: true,
+          players: ["Alex", "Steve"].map((username) => ({
+            username,
+            online: true,
+            operator: false,
+            whitelisted: false,
+            banned: false,
+          })),
+        };
+      if (command === "apply_player_change") {
+        if ((args as { input: { player: string } }).input.player === "Steve")
+          throw new Error("Permission denied for Steve");
+        return { method: "command" };
+      }
+      return [];
+    });
+    renderPlayers();
+    fireEvent.click(
+      await screen.findByRole("checkbox", { name: "Select all players" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Whitelist" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Alex, Steve");
+    expect(
+      vi
+        .mocked(invoke)
+        .mock.calls.filter(([command]) => command === "apply_player_change"),
+    ).toHaveLength(0);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply to selected players" }),
+    );
+    expect(
+      await screen.findByText(/Permission denied for Steve/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Select Steve" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("checkbox", { name: "Select Alex" }),
+    ).not.toBeChecked();
+    expect(screen.getByText("Completed for 1 players.")).toBeInTheDocument();
+  });
+
   beforeEach(() => {
     vi.mocked(invoke).mockReset();
   });
@@ -93,8 +141,10 @@ describe("PlayersView", () => {
 
     expect(await screen.findByText("Alex")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Deop Alex" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Deop Alex" })).toHaveClass(
-      "icon-button",
+    // Deop and Unwhitelist share a glyph, so the action carries a visible
+    // label rather than relying on the icon alone to tell them apart.
+    expect(screen.getByRole("button", { name: "Deop Alex" })).toHaveTextContent(
+      "Deop",
     );
     expect(screen.queryByPlaceholderText(/command/i)).not.toBeInTheDocument();
   });

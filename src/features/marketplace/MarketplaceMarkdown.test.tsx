@@ -21,6 +21,24 @@ describe("MarketplaceMarkdown", () => {
     cleanup();
   });
 
+  it("renders a requirements table instead of leaking its pipe characters", () => {
+    render(
+      <MarketplaceMarkdown
+        source={[
+          "| Players | Memory |",
+          "| --- | --- |",
+          "| up to 10 | 4 GB |",
+        ].join("\n")}
+      />,
+    );
+
+    expect(
+      screen.getByRole("columnheader", { name: "Players" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "4 GB" })).toBeInTheDocument();
+    expect(screen.queryByText(/\|/)).not.toBeInTheDocument();
+  });
+
   it("keeps expanded details open when the rendered description refreshes", async () => {
     const source = [
       "<details>",

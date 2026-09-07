@@ -69,6 +69,60 @@ describe("Electron backend Java runtime contract", () => {
       backend.close();
     }
   });
+
+  it("refuses to remove a managed runtime a server still points at", async () => {
+    const { appDataDir, backend } = createTestBackendWithAppData();
+    const managedJava = path.join(
+      appDataDir,
+      "runtimes",
+      "temurin",
+      "21",
+      `${process.platform === "win32" ? "windows" : "linux"}-x64`,
+      "jdk-21",
+      "bin",
+      process.platform === "win32" ? "java.exe" : "java",
+    );
+    fs.mkdirSync(path.dirname(managedJava), { recursive: true });
+    fs.writeFileSync(managedJava, "java");
+    const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-java-remove-"));
+    tempDirs.push(parent);
+
+    try {
+      const server = await createProvisionedServer(
+        backend,
+        path.join(parent, "server"),
+        {
+          executable: { kind: "java" },
+          jvmArgs: ["-jar", "server.jar"],
+          serverArgs: ["nogui"],
+          workingDirectory: ".",
+        },
+      );
+      backend.handle("update_server_profile", {
+        input: { id: server.id, javaPath: managedJava },
+      });
+
+      // Deleting it would leave that server unable to start, with a launch
+      // failure as the first thing the operator sees.
+      await expect(
+        backend.handle("remove_java_runtime", {
+          input: { path: managedJava },
+        }),
+      ).rejects.toMatchObject({ code: "JAVA_RUNTIME_IN_USE" });
+      expect(fs.existsSync(managedJava)).toBe(true);
+
+      backend.handle("update_server_profile", {
+        input: { id: server.id, javaPath: null },
+      });
+      await backend.handle("remove_java_runtime", {
+        input: { path: managedJava },
+      });
+
+      expect(fs.existsSync(managedJava)).toBe(false);
+    } finally {
+      backend.close();
+    }
+  });
 });
 
 describe("Electron backend marketplace image loading", () => {
@@ -561,6 +615,7 @@ async function createProvisionedServer(
   targetDir,
   launchSpec,
   profileOverrides = {},
+  javaMajorVersion = 21,
 ) {
   const javaPath = path.join(
     path.dirname(targetDir),
@@ -575,7 +630,7 @@ async function createProvisionedServer(
       plan: validProvisioningPlan(targetDir, {
         javaRuntime: {
           path: javaPath,
-          majorVersion: 21,
+          majorVersion: javaMajorVersion,
           validated: true,
         },
         launchSpec: { ...launchSpec, validated: true },
@@ -2627,6 +2682,129 @@ describe("Electron backend resource lifecycle management", () => {
       }
     });
 
+    it("refuses to start a legacy server on a Java above its ceiling", async () => {
+      // The reported crash: a Forge 1.7.10 profile pinned to the Java 11 on this
+      // machine's PATH started, then died inside LegacyLauncher with
+      // `AppClassLoader cannot be cast to URLClassLoader`. All the operator saw
+      // was a JVM stack trace. The app knows the window, so it says so first.
+      const spawnImpl = vi.fn(() => createFakeChild(19010));
+      const backend = createTestBackend({
+        spawn: spawnImpl,
+        runtimeDependencies: {
+          inspectJava: vi.fn((javaPath) => ({
+            path: javaPath,
+            version: "11.0.12",
+            majorVersion: 11,
+            vendor: "Oracle",
+            architecture: "x64",
+          })),
+        },
+      });
+      const parent = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-launch-legacy-"),
+      );
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(
+          backend,
+          targetDir,
+          {
+            executable: { kind: "java" },
+            jvmArgs: ["-jar", "server.jar"],
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+          },
+          { minecraftVersion: "1.7.10", loaderVersion: "10.13.4.1614-1.7.10" },
+          8,
+        );
+        fs.writeFileSync(path.join(targetDir, "server.jar"), "jar");
+
+        await expect(
+          backend.handle("start_server", { serverId: server.id }),
+        ).rejects.toMatchObject({ code: "JAVA_VERSION_OUT_OF_RANGE" });
+        expect(spawnImpl).not.toHaveBeenCalled();
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("refuses to start a large-heap server on a 32-bit Java", async () => {
+      // The only Java 8 on a machine can be a 32-bit one, and it looks correct
+      // by version. It still cannot reserve a 6 GB heap, so offering it as the
+      // fix for a legacy server would trade a version crash for a heap crash.
+      const spawnImpl = vi.fn(() => createFakeChild(19011));
+      const backend = createTestBackend({
+        spawn: spawnImpl,
+        runtimeDependencies: {
+          inspectJava: vi.fn((javaPath) => ({
+            path: javaPath,
+            version: "1.8.0_371",
+            majorVersion: 8,
+            vendor: "Oracle",
+            architecture: "32-bit",
+          })),
+        },
+      });
+      const parent = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-launch-x86-"));
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        const server = await createProvisionedServer(
+          backend,
+          targetDir,
+          {
+            executable: { kind: "java" },
+            jvmArgs: ["-jar", "server.jar"],
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+          },
+          { minecraftVersion: "1.7.10" },
+          8,
+        );
+        fs.writeFileSync(path.join(targetDir, "server.jar"), "jar");
+
+        await expect(
+          backend.handle("start_server", { serverId: server.id }),
+        ).rejects.toMatchObject({ code: "JAVA_ARCHITECTURE_TOO_SMALL" });
+        expect(spawnImpl).not.toHaveBeenCalled();
+      } finally {
+        backend.close();
+      }
+    });
+
+    it("refuses to commit a profile pinned to a Java above its ceiling", async () => {
+      // The plan comes from the renderer, so the runtime it names is a request.
+      // Trusting it is how the bad java_path was written in the first place.
+      const backend = createTestBackend();
+      const parent = fs.mkdtempSync(
+        path.join(os.tmpdir(), "mcsm-commit-legacy-"),
+      );
+      tempDirs.push(parent);
+      const targetDir = path.join(parent, "server");
+
+      try {
+        await expect(
+          createProvisionedServer(
+            backend,
+            targetDir,
+            {
+              executable: { kind: "java" },
+              jvmArgs: ["-jar", "server.jar"],
+              serverArgs: ["nogui"],
+              workingDirectory: ".",
+            },
+            { minecraftVersion: "1.7.10" },
+            11,
+          ),
+        ).rejects.toThrow(/Java 11/);
+      } finally {
+        backend.close();
+      }
+    });
+
     it("starts an argument-file launch specification with memory flags first", async () => {
       const spawnImpl = vi.fn(() => createFakeChild(19002));
       const backend = createTestBackend({ spawn: spawnImpl });
@@ -2891,13 +3069,20 @@ describe("Electron backend resource lifecycle management", () => {
       const server = createServer(backend, serverRoot);
       await backend.handle("start_server", { serverId: server.id });
       child.emit("exit", 1);
-      backend.handle("check_server_update", {
+      globalThis.fetch = vi.fn(async (url) =>
+        String(url).endsWith("/builds")
+          ? jsonResponse([{ id: 125, channel: "STABLE" }])
+          : jsonResponse({ versions: { 1.21: ["1.21.5", "1.21.4"] } }),
+      );
+      await backend.handle("check_server_update", {
         input: {
           serverId: server.id,
           targetMinecraftVersion: "1.21.5",
         },
       });
 
+      // The server was created moments ago, so nothing about its backups is
+      // overdue yet; only a week later does the absence become a finding.
       expect(backend.handle("get_attention_items")).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -2910,13 +3095,28 @@ describe("Electron backend resource lifecycle management", () => {
             kind: "update",
             severity: "info",
           }),
-          expect.objectContaining({
-            serverId: server.id,
-            kind: "backup",
-            severity: "warning",
-          }),
         ]),
       );
+      expect(backend.handle("get_attention_items")).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: "backup" })]),
+      );
+
+      const eightDaysOn = Date.now() + 8 * 24 * 60 * 60 * 1_000;
+      const clock = vi.spyOn(Date, "now").mockReturnValue(eightDaysOn);
+      try {
+        expect(backend.handle("get_attention_items")).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              serverId: server.id,
+              kind: "backup",
+              severity: "warning",
+              createdAt: null,
+            }),
+          ]),
+        );
+      } finally {
+        clock.mockRestore();
+      }
     } finally {
       backend.close();
     }
@@ -3062,14 +3262,24 @@ describe("Electron backend resource lifecycle management", () => {
   });
 
   it("installs a local server jar and records rollback history", async () => {
-    const backend = createTestBackend();
+    const backend = createTestBackend({
+      runtimeDependencies: {
+        inspectJava: () => ({ majorVersion: 21, architecture: "x64" }),
+      },
+    });
     const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
     const downloadDir = fs.mkdtempSync(
       path.join(os.tmpdir(), "mcsm-download-"),
     );
     tempDirs.push(serverRoot, downloadDir);
     const sourceJar = path.join(downloadDir, "paper.jar");
-    fs.writeFileSync(sourceJar, "new jar");
+    fs.copyFileSync(
+      await createZipFixture(
+        [["META-INF/MANIFEST.MF", "Manifest-Version: 1.0\nMain-Class: Test\n"]],
+        "jar",
+      ),
+      sourceJar,
+    );
     const checksum = createHash("sha256")
       .update(fs.readFileSync(sourceJar))
       .digest("hex");
@@ -3087,8 +3297,8 @@ describe("Electron backend resource lifecycle management", () => {
         },
       });
 
-      expect(fs.readFileSync(path.join(serverRoot, "server.jar"), "utf8")).toBe(
-        "new jar",
+      expect(fs.readFileSync(path.join(serverRoot, "server.jar"))).toEqual(
+        fs.readFileSync(sourceJar),
       );
       expect(history).toMatchObject({
         serverId: server.id,
@@ -3531,8 +3741,53 @@ describe("Electron backend marketplace installation", () => {
         fs.existsSync(path.join(serverRoot, "mods", "dependency.jar")),
       ).toBe(true);
       expect(
-        backend.handle("list_installed_content", { serverId: server.id }),
+        await backend.handle("list_installed_content", { serverId: server.id }),
       ).toHaveLength(2);
+    } finally {
+      backend.close();
+    }
+  });
+
+  it("lists mods that arrived with a pack and forgets ones deleted outside the app", async () => {
+    const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+    const server = createServer(backend, serverRoot, "fabric");
+    const modsDir = path.join(serverRoot, "mods");
+    fs.mkdirSync(modsDir, { recursive: true });
+    // A modpack is extracted whole, so nothing about these files ever went
+    // through an install command.
+    fs.writeFileSync(path.join(modsDir, "jei.jar"), "jei");
+    fs.writeFileSync(path.join(modsDir, "waystones.jar.disabled"), "waystones");
+    fs.writeFileSync(path.join(modsDir, "config.txt"), "not content");
+
+    try {
+      const adopted = await backend.handle("list_installed_content", {
+        serverId: server.id,
+      });
+      expect(adopted.map((item) => item.name).sort()).toEqual([
+        "jei.jar",
+        "waystones.jar",
+      ]);
+      expect(adopted.every((item) => item.sha256.length === 64)).toBe(true);
+
+      // Adoption is idempotent: a second read must not duplicate the rows.
+      expect(
+        await backend.handle("list_installed_content", { serverId: server.id }),
+      ).toHaveLength(2);
+
+      const jei = adopted.find((item) => item.name === "jei.jar");
+      expect(
+        await backend.handle("disable_installed_content", {
+          input: { serverId: server.id, contentId: jei.id },
+        }),
+      ).toMatchObject({ installedPath: expect.stringMatching(/\.disabled$/) });
+
+      fs.rmSync(path.join(modsDir, "jei.jar.disabled"));
+      const remaining = await backend.handle("list_installed_content", {
+        serverId: server.id,
+      });
+      expect(remaining.map((item) => item.name)).toEqual(["waystones.jar"]);
     } finally {
       backend.close();
     }
@@ -3600,7 +3855,26 @@ describe("Electron backend marketplace installation", () => {
     const server = createServer(backend, serverRoot, "forge");
     globalThis.fetch = vi.fn(async (url, options) => {
       const href = String(url);
-      expect(options?.headers?.["x-api-key"]).toBe("test-key");
+      if (href.includes("api.curseforge.com"))
+        expect(options?.headers?.["x-api-key"]).toBe("test-key");
+      else expect(options?.headers?.["x-api-key"]).toBeUndefined();
+      if (href.endsWith("/v1/mods/123/files/456"))
+        return jsonResponse({
+          data: {
+            id: 456,
+            modId: 123,
+            displayName: "Curse Mod",
+            fileName: "curse-mod.jar",
+            gameVersions: ["1.21.4", "Forge"],
+            hashes: [
+              {
+                algo: 1,
+                value: createHash("sha1").update("curse").digest("hex"),
+              },
+            ],
+            dependencies: [],
+          },
+        });
       if (href.endsWith("/v1/mods/123/files/456/download-url")) {
         return jsonResponse({ data: "https://edge.forgecdn.net/mod.jar" });
       }
@@ -3874,6 +4148,9 @@ describe("Electron backend marketplace installation", () => {
 
   it("rejects BBSMC cloud-disk-only versions instead of pretending to install", async () => {
     const backend = createTestBackend();
+    const serverRoot = fs.mkdtempSync(path.join(os.tmpdir(), "mcsm-server-"));
+    tempDirs.push(serverRoot);
+    const server = createServer(backend, serverRoot, "fabric");
     globalThis.fetch = vi.fn(async (url) => {
       const href = String(url);
       if (href === "https://api.bbsmc.net/v2/version/version-2") {
@@ -3896,7 +4173,7 @@ describe("Electron backend marketplace installation", () => {
     try {
       await expect(
         backend.handle("install_bbsmc_public_file", {
-          input: { serverId: "server", versionId: "version-2" },
+          input: { serverId: server.id, versionId: "version-2" },
         }),
       ).rejects.toThrow(/external disk download links/);
     } finally {

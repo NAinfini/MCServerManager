@@ -123,8 +123,6 @@ select.field-control {
     );
   min-height: 100vh;
   overflow: hidden;
-  color: var(--text-main);
-  background: var(--bg-app);
 }
 
 .app-crash-panel {
@@ -170,9 +168,7 @@ select.field-control {
   height: var(--window-titlebar-height);
   align-items: center;
   justify-content: space-between;
-  border-bottom: 0;
   color: var(--text-main);
-  background: transparent;
   user-select: none;
   -webkit-app-region: drag;
   app-region: drag;
@@ -182,11 +178,7 @@ select.field-control {
   display: inline-flex;
   min-width: 0;
   align-items: center;
-  gap: var(--space-2);
   padding: 0 var(--space-3);
-  color: var(--text-main);
-  font-size: var(--text-compact);
-  font-weight: var(--weight-semibold);
 }
 
 .window-titlebar-mark {
@@ -198,7 +190,7 @@ select.field-control {
   border-radius: var(--radius-sm);
   color: var(--text-inverse);
   background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: 0 2px 6px rgba(62, 207, 142, 0.3);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 30%, transparent);
   font-size: var(--text-xs);
   font-weight: var(--weight-bold);
   overflow: hidden;
@@ -220,55 +212,23 @@ select.field-control {
 }
 
 .window-control.button {
-  width: 42px;
   min-height: 0;
   border: 0;
   border-radius: 0;
   padding: 0;
-  color: var(--text-muted);
   background: transparent;
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 
-.window-control.button:hover {
-  color: var(--text-main);
-  background: var(--bg-panel-muted);
-}
-
 .window-control-close.button:hover {
-  color: #ffffff;
+  color: var(--text-inverse);
   background: var(--danger);
 }
 
 /* --------------------------------------------------------------------------
    Bottom Status Bar
    -------------------------------------------------------------------------- */
-
-.status-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  height: var(--status-bar-height);
-  padding: 0 var(--space-3);
-  border-top: 0;
-  background: transparent;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  color: var(--text-muted);
-}
-
-.status-bar-item {
-  display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
-  align-items: center;
-  gap: var(--space-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .status-bar-item > svg {
   flex: 0 0 auto;
@@ -309,11 +269,7 @@ select.field-control {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  border: 1px solid var(--runtime-badge-border);
-  border-radius: var(--radius-pill);
-  padding: 1px 8px;
   color: var(--runtime-badge-color);
-  background: var(--runtime-badge-bg);
   font-size: var(--text-sm);
   line-height: 18px;
   white-space: nowrap;
@@ -374,7 +330,6 @@ select.field-control {
 
 .app-body {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   gap: 0;
   height: calc(
     100vh - var(--window-titlebar-height) - var(--status-bar-height)
@@ -384,20 +339,14 @@ select.field-control {
   overflow: hidden;
 }
 
-.app-body-sidebar-collapsed {
-  grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
-}
-
 .sidebar {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
   border: 0;
-  border-right: 1px solid var(--border-subtle);
   border-radius: 0;
   color: var(--text-main);
-  background: var(--bg-sidebar);
   box-shadow: none;
 }
 
@@ -406,18 +355,13 @@ select.field-control {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 10px var(--space-3) 8px;
 }
 
 .sidebar-brand {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
   border: 0;
-  border-radius: var(--radius-md);
-  padding: 4px 6px;
-  margin: -4px -6px;
   color: inherit;
   background: transparent;
   text-align: left;
@@ -435,29 +379,22 @@ select.field-control {
 
 .app-mark {
   display: grid;
-  width: 38px;
-  height: 38px;
   flex-shrink: 0;
   place-items: center;
   border-radius: var(--radius-md);
   color: var(--text-inverse);
   background: linear-gradient(135deg, var(--accent), var(--accent-hover));
-  box-shadow: 0 2px 8px rgba(62, 207, 142, 0.25);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 25%, transparent);
   font-weight: var(--weight-bold);
   overflow: hidden;
 }
 
 .sidebar-toggle-button {
   display: inline-grid;
-  width: 30px;
-  height: 30px;
-  min-height: 30px;
   flex: 0 0 30px;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-md);
   color: var(--text-muted);
-  background: color-mix(in srgb, #ffffff 4%, transparent);
   cursor: pointer;
   transition:
     border-color 140ms ease,
@@ -479,10 +416,6 @@ select.field-control {
 /* The brand name is a fixed string, so it gets a size that clears the 128px
    copy column on one line; the ellipsis only guards against future renames. */
 .sidebar-title {
-  font-size: var(--text-base);
-  line-height: 18px;
-  color: var(--text-main);
-  font-weight: var(--weight-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -491,9 +424,6 @@ select.field-control {
 .sidebar .sidebar-subtitle {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
-  color: var(--accent);
-  font-size: var(--text-sm);
 }
 
 .sidebar .sidebar-section-label,
@@ -503,8 +433,6 @@ select.field-control {
 
 .server-nav-meta {
   display: flex;
-  min-width: 0;
-  gap: var(--space-2);
   align-items: center;
   overflow: hidden;
 }
@@ -525,7 +453,6 @@ select.field-control {
   min-width: 0;
   max-width: 100%;
   align-items: center;
-  gap: 6px;
   vertical-align: middle;
 }
 
@@ -554,12 +481,6 @@ select.field-control {
   letter-spacing: 0;
 }
 
-.loader-pill .loader-icon-fallback {
-  color: var(--text-inverse);
-  font-size: var(--text-xs);
-  line-height: 18px;
-}
-
 /* --------------------------------------------------------------------------
    Navigation
    -------------------------------------------------------------------------- */
@@ -568,11 +489,6 @@ select.field-control {
 .server-nav-list {
   display: flex;
   flex-direction: column;
-}
-
-.primary-nav {
-  gap: var(--space-1);
-  padding: 0 var(--space-3) var(--space-6);
 }
 
 .nav-item,
@@ -587,37 +503,16 @@ select.field-control {
 }
 
 .nav-item {
-  gap: var(--space-3);
-  height: 32px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-weight: var(--weight-medium);
   transition:
     color 140ms ease,
     background-color 140ms ease;
 }
 
-.nav-item:hover {
-  color: var(--text-main);
-  background: color-mix(in srgb, var(--text-main) 6%, transparent);
-}
-
 .nav-item-active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 11%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
   font-weight: var(--weight-semibold);
 }
 
-.server-nav-section {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 var(--space-2);
-}
-
 .sidebar-top-nav {
-  padding: 0 var(--space-2) var(--space-1);
   border-bottom: 1px solid var(--border-subtle);
   margin-bottom: var(--space-1);
 }
@@ -627,23 +522,23 @@ select.field-control {
 }
 
 .sidebar-footer-nav {
-  border-top: 1px solid var(--border-subtle);
   margin-top: var(--space-1);
   padding-top: var(--space-2);
 }
 
-.sidebar-section-label {
-  padding: 0 8px 6px;
-  color: var(--text-subtle);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.server-nav-list {
-  gap: var(--space-1);
+/* The eyebrow treatment — monospaced, uppercased, widely tracked — is a Latin
+   convention. Chinese has no case to raise and CJK glyphs are already
+   full-width, so the same rule turned every section label into loose,
+   typewriter-looking text. Under a Chinese UI these labels use the interface
+   face at normal tracking. The lang attribute is set from the language
+   setting in src/i18n/index.ts. */
+:lang(zh) .sidebar-section-label,
+:lang(zh) .eyebrow,
+:lang(zh) .console-command-form label,
+:lang(zh) .wizard-source-question,
+:lang(zh) .java-table thead th {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
 }
 
 .server-nav-entry,
@@ -663,7 +558,6 @@ select.field-control {
 }
 
 .server-nav-item-active {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
   box-shadow:
     inset 3px 0 0 var(--accent),
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
@@ -682,12 +576,10 @@ select.field-control {
 }
 
 .server-drop-zone {
-  height: 8px;
   margin: 0 6px;
   border-radius: var(--radius-pill);
   background: transparent;
   opacity: 0;
-  transform: scaleX(0.64) scaleY(0.5);
   transition:
     opacity 120ms ease,
     transform 120ms ease,
@@ -712,9 +604,6 @@ select.field-control {
 }
 
 .server-nav-group {
-  border: 1px solid color-mix(in srgb, var(--accent) 12%, var(--border-subtle));
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-panel) 70%, transparent);
   overflow: hidden;
 }
 
@@ -723,10 +612,7 @@ select.field-control {
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: var(--button-height-md);
   border: 0;
-  padding: 7px 10px;
-  color: var(--text-muted);
   background: transparent;
   cursor: pointer;
   text-align: left;
@@ -762,11 +648,6 @@ select.field-control {
 }
 
 .server-nav-group-count {
-  min-width: 20px;
-  border-radius: var(--radius-pill);
-  padding: 1px 6px;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 13%, transparent);
   font-size: var(--text-sm);
   font-weight: var(--weight-bold);
   text-align: center;
@@ -786,10 +667,6 @@ select.field-control {
   gap: 2px;
   min-width: 178px;
   padding: 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--bg-elevated) 94%, black);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
 }
 
 .sidebar-context-menu button {
@@ -823,7 +700,6 @@ select.field-control {
 
 .server-nav-name {
   overflow: hidden;
-  font-weight: var(--weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -841,7 +717,7 @@ select.field-control {
 
 .status-dot-running {
   background: var(--running);
-  box-shadow: 0 0 6px rgba(68, 212, 146, 0.55);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--running) 55%, transparent);
 }
 
 .status-dot-stopped {
@@ -851,12 +727,12 @@ select.field-control {
 .status-dot-starting,
 .status-dot-stopping {
   background: var(--starting);
-  box-shadow: 0 0 4px rgba(229, 169, 61, 0.45);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--starting) 45%, transparent);
 }
 
 .status-dot-crashed {
   background: var(--crashed);
-  box-shadow: 0 0 6px rgba(240, 102, 91, 0.55);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--crashed) 55%, transparent);
 }
 
 .status-dot-external {
@@ -870,17 +746,13 @@ select.field-control {
 .page {
   display: flex;
   flex-direction: column;
-  min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--space-5);
-  background: var(--bg-app);
   scroll-behavior: smooth;
 }
 
 .page-create-server {
   overflow: hidden;
-  padding: 0;
 }
 
 .create-server-page {
@@ -889,7 +761,6 @@ select.field-control {
   height: 100%;
   min-height: 0;
   flex-direction: column;
-  background: var(--bg-panel);
 }
 
 .page-header,
@@ -1003,20 +874,21 @@ select.field-control {
   line-height: 24px;
 }
 
+/* space-between flung the description to the opposite end of the row from its
+   own title. Grouping them keeps the pair together and frees the right end for
+   a real action. */
+.section-heading-copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
 /* --------------------------------------------------------------------------
    Status Badges
    -------------------------------------------------------------------------- */
 
 .status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
   height: 20px;
-  border: 1px solid color-mix(in srgb, currentColor 26%, transparent);
-  padding: 0 8px;
-  border-radius: var(--radius-pill);
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
   letter-spacing: 0.02em;
 }
 
@@ -1031,7 +903,6 @@ select.field-control {
 }
 
 .status-stopped {
-  color: var(--stopped);
   background: color-mix(in srgb, var(--stopped) 12%, transparent);
 }
 
@@ -1085,6 +956,28 @@ select.field-control {
   --meta-badge-color: #c7b7ff;
   --meta-badge-bg: color-mix(in srgb, #7c5cff 13%, var(--bg-elevated));
   --meta-badge-border: color-mix(in srgb, #a78bfa 34%, var(--border-subtle));
+}
+
+/* Whether an archive is a real server pack is the single fact that decides
+   whether provisioning can succeed, so it gets the success colour. */
+.meta-badge-verified {
+  --meta-badge-color: var(--running);
+  --meta-badge-bg: color-mix(in srgb, var(--running) 12%, var(--bg-elevated));
+  --meta-badge-border: color-mix(
+    in srgb,
+    var(--running) 34%,
+    var(--border-subtle)
+  );
+}
+
+.meta-badge-latest {
+  --meta-badge-color: var(--text-main);
+  --meta-badge-bg: var(--accent);
+  --meta-badge-border: var(--accent);
+}
+
+[data-theme="light"] .meta-badge-latest {
+  --meta-badge-color: var(--text-inverse);
 }
 
 [data-theme="light"] .meta-badge-version {
@@ -1248,14 +1141,8 @@ select.field-control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
   min-height: var(--button-height-md);
   border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 0 12px;
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  letter-spacing: 0.02em;
   cursor: pointer;
   transition:
     border-color 140ms ease,
@@ -1270,32 +1157,17 @@ select.field-control {
 }
 
 .button-primary {
-  color: var(--text-inverse);
-  background: var(--accent);
   box-shadow: none;
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
   box-shadow: none;
 }
 
-.button-secondary {
-  border-color: transparent;
-  color: var(--text-main);
-  background: var(--bg-elevated);
-}
-
 .button-secondary:hover:not(:disabled),
-.nav-item:hover,
-.server-nav-item:hover {
-  background: var(--bg-elevated);
-}
-
-.sidebar .nav-item:hover,
-.sidebar .server-nav-item:hover {
-  background: color-mix(in srgb, #ffffff 6%, transparent);
-}
+/* The sidebar hover used to be painted here with a white wash that landed on
+   almost the same colour as the selected item, and it outranked the hover rule
+   further down. Hover is now owned by --bg-hover in one place. */
 
 /* --------------------------------------------------------------------------
    Ops Panel & Detail Panel
@@ -1314,69 +1186,17 @@ select.field-control {
   overflow: hidden;
 }
 
-.detail-panel-heading {
+/* The available updates and the policy that governs them are two panels reading
+   top to bottom, not a card grid. */
+.content-updates-workspace {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.detail-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-5);
-  border-bottom: 1px solid var(--border-panel);
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--bg-elevated) 30%, var(--bg-panel)),
-    var(--bg-panel)
-  );
-}
-
-.detail-panel-title {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.detail-panel-name {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  line-height: 24px;
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.detail-panel-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  line-height: 16px;
-}
-
-.detail-panel-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .detail-panel-error {
   margin: 0;
-  padding: var(--space-2) var(--space-5);
   color: var(--danger);
-  font-size: var(--text-compact);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--danger-soft);
 }
 
 /* Radix keeps every tab panel mounted and hides inactive ones with [hidden];
@@ -1387,26 +1207,19 @@ select.field-control {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-height: 0;
 }
 
 .settings-sections {
   display: flex;
   flex-direction: column;
   flex: 1;
-  min-width: 0;
   min-height: 0;
-  gap: var(--space-5);
-  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
-  padding: var(--space-5) var(--space-6);
 }
 
 .settings-section {
-  width: 100%;
-  min-width: 0;
   scroll-margin-top: var(--space-4);
 }
 
@@ -1430,8 +1243,6 @@ select.field-control {
   display: inline-flex;
   align-items: center;
   min-height: var(--button-height-sm);
-  color: var(--danger);
-  font-size: var(--text-compact);
   line-height: 16px;
 }
 
@@ -1446,59 +1257,16 @@ select.field-control {
   line-height: 18px;
 }
 
-.provisioning-compatibility,
-.provisioning-java-step,
 .provisioning-progress {
   display: grid;
   gap: var(--space-4);
 }
 
-/* These steps lay themselves out with a grid gap, so the browser default
-   `h3 { margin: 1em 0 }` was stacking on top of it and stranding the heading. */
-.provisioning-compatibility > h3,
-.provisioning-java-step > h3,
-.wizard-review-step > h3 {
+.provisioning-summary > h3 {
   margin: 0;
   font-size: var(--text-md);
   font-weight: var(--weight-semibold);
   line-height: 20px;
-}
-
-/* The runtime path is long and unbreakable, so it gets its own monospace line
-   under the verdict instead of running on from the sentence. */
-.provisioning-java-ready {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 10px;
-  padding: 13px 15px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
-}
-
-.provisioning-java-ready > svg {
-  margin-top: 1px;
-  color: var(--accent);
-}
-
-.provisioning-java-ready > div {
-  display: grid;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.provisioning-java-ready strong {
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-}
-
-.provisioning-java-ready code {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--text-compact);
-  line-height: 17px;
-  overflow-wrap: anywhere;
 }
 
 /* The compatibility step is mostly empty when nothing is wrong, so it reports
@@ -1534,24 +1302,6 @@ select.field-control {
   font-family: var(--font-mono);
   font-size: var(--text-base);
   overflow-wrap: anywhere;
-}
-
-.provisioning-all-clear {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
-  color: var(--text-main);
-  font-size: var(--text-base);
-}
-
-.provisioning-all-clear svg {
-  flex: 0 0 auto;
-  color: var(--accent);
 }
 
 .provisioning-warning {
@@ -1590,65 +1340,93 @@ select.field-control {
 
 /* Sixteen controls in one flat grid gave no reading order. Grouping them into
    titled sections lets the eye land on the one field it came for. */
-.provisioning-configuration-step,
-.wizard-review-groups {
+.provisioning-setup-main {
   display: grid;
   gap: var(--space-4);
   align-content: start;
+  min-width: 0;
 }
 
 .wizard-form-section {
   display: grid;
   gap: var(--space-3);
   padding: 16px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-panel-muted);
 }
 
+/* A group label, not a call to action: six accent-coloured uppercase headings
+   down one form competed with the fields they introduce. */
 .wizard-form-section > h4 {
   display: flex;
   gap: var(--space-2);
   align-items: center;
   margin: 0;
-  color: var(--accent);
-  font-size: var(--text-sm);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .wizard-form-section > h4 > svg {
-  color: var(--accent);
+  color: var(--text-subtle);
 }
 
 .wizard-form-section > .form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px var(--space-4);
-  align-items: end;
+  gap: 14px var(--space-4);
+  /* `end` bottom-aligned controls of different heights and left the labels
+     ragged; every cell is a label over a control, so they start together. */
+  align-items: start;
+}
+
+/* The global caps size a control to the value it holds — right for a settings
+   page of single fields, wrong here: in a two-column grid they gave every row
+   a different right edge. The cell is the measure instead. */
+.wizard-form-section .field-control,
+.wizard-form-section select.field-control,
+.wizard-form-section .field-control[type="number"] {
+  width: 100%;
+  max-width: none;
 }
 
 .wizard-form-section .field-span-2 {
   grid-column: 1 / -1;
 }
 
-/* Checkbox rows sit on the text baseline, not the input baseline, so
-   `align-items: end` would push them off the row they belong to. */
+/* A checkbox is a label beside a box, not a label above a control, so it never
+   lined up with the field it shared a row with. It gets its own row. */
 .wizard-form-section .checkbox-row {
+  grid-column: 1 / -1;
   align-self: center;
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 /* Wizard step bodies read as a centred form column instead of stretching the
    full workspace width. The marketplace step is excluded on purpose. */
 .unified-provisioning-wizard > .form-grid,
-.unified-provisioning-wizard > .provisioning-compatibility,
-.unified-provisioning-wizard > .provisioning-configuration-step,
-.unified-provisioning-wizard > .provisioning-java-step,
-.unified-provisioning-wizard > .provisioning-progress,
-.unified-provisioning-wizard > .wizard-review-step {
+.unified-provisioning-wizard > .provisioning-progress {
   width: 100%;
   max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+}
+
+/* The install step is one column, but its two panels disagreed on both measure
+   and alignment — 720 centred against 940 flush left — so the completion card
+   hung off the left of the panel it belongs to with the window's whole left
+   half empty beside it. The card matches the progress panel's *content* box,
+   not its border box, so its edges line up with the stage list above it. */
+.unified-provisioning-wizard > .provisioning-complete-actions {
+  width: 100%;
+  max-width: calc(720px - 2 * var(--space-4));
+  margin: 0 auto;
+}
+
+/* The setup step carries a summary rail beside the form, so it needs room the
+   single-column steps do not. */
+.unified-provisioning-wizard > .provisioning-setup-step {
+  width: 100%;
+  max-width: 1080px;
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
 }
@@ -1665,11 +1443,14 @@ select.field-control {
   margin-top: var(--space-2);
 }
 
+/* The acceptance is the last gate before the install, so it gets the same card
+   chrome as the sections above rather than floating loose under them. */
 .provisioning-eula {
   margin-top: 18px;
-  padding: var(--panel-padding-block);
-  border: 0;
+  padding: var(--panel-padding-block) var(--space-4);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  background: var(--bg-raised);
 }
 
 .provisioning-progress-heading {
@@ -1882,10 +1663,7 @@ select.field-control {
 }
 
 .console-panel {
-  display: flex;
-  flex-direction: column;
   flex: 1;
-  min-height: 0;
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -1894,7 +1672,6 @@ select.field-control {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 0;
   color: var(--text-muted);
   font-size: var(--text-compact);
 }
@@ -1911,8 +1688,6 @@ select.field-control {
 .console-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
 }
 
 .console-toolbar-actions .field-control {
@@ -1927,11 +1702,8 @@ select.field-control {
   justify-content: space-between;
   gap: var(--space-3);
   margin: 0;
-  padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid
     color-mix(in srgb, var(--warning) 40%, var(--border-subtle));
-  color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 12%, var(--bg-panel));
   font-size: var(--text-compact);
 }
 
@@ -1973,10 +1745,7 @@ select.field-control {
 .console-output {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-height: 0;
   overflow: hidden;
-  background: var(--bg-inset);
 }
 
 .xterm-host {
@@ -1989,16 +1758,10 @@ select.field-control {
 
 .command-template-bar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
 }
 
 .command-template-bar .button {
-  min-height: 30px;
   padding-inline: 10px;
   font-family: var(--font-mono);
   font-size: 11.5px;
@@ -2018,12 +1781,7 @@ select.field-control {
 
 .console-command-form {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 6px;
   align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-panel);
 }
 
 .console-command-form label {
@@ -2039,10 +1797,6 @@ select.field-control {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-panel-muted);
 }
 
 .console-toolbar .field-control {
@@ -2086,20 +1840,14 @@ select.field-control {
    -------------------------------------------------------------------------- */
 
 .logs-panel {
-  display: grid;
-  gap: var(--space-4);
   border: 0;
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
   box-shadow: var(--shadow-panel);
-  overflow: hidden;
 }
 
 .logs-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(0, 1fr);
-  min-height: 420px;
-  border-top: 1px solid var(--border-subtle);
 }
 
 .logs-list {
@@ -2166,12 +1914,6 @@ select.field-control {
    Players Panel
    -------------------------------------------------------------------------- */
 
-.players-panel {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
-}
-
 .players-toolbar {
   display: flex;
   align-items: center;
@@ -2202,7 +1944,6 @@ select.field-control {
 
 .players-table th,
 .players-table td {
-  height: 32px;
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 8px;
   text-align: left;
@@ -2270,13 +2011,29 @@ select.field-control {
 
 .player-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--space-1);
 }
 
+/* The buttons carry their label now, so they are sized by it rather than
+   squeezed into a 32px square. */
 .player-actions .button {
-  width: 32px;
-  min-height: 32px;
-  padding: 0;
+  min-height: 30px;
+  gap: 5px;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
+}
+
+/* Ban and kick sat in every row as filled red chips, so a table of ordinary
+   players read as a row of warnings. They keep the danger colour but drop the
+   fill and the border until they are pointed at, which puts them behind the
+   safe actions without hiding them. */
+.player-actions .button-danger:not(:hover):not(:focus-visible):not(:disabled),
+.task-item-actions
+  .button-danger:not(:hover):not(:focus-visible):not(:disabled) {
+  border-color: transparent;
+  background: transparent;
 }
 
 /* --------------------------------------------------------------------------
@@ -2284,12 +2041,7 @@ select.field-control {
    -------------------------------------------------------------------------- */
 
 .backups-panel {
-  display: flex;
-  flex-direction: column;
   flex: 1;
-  min-height: 0;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
 }
 
 /* Hero: action first, quiet last-backup summary. */
@@ -2304,16 +2056,6 @@ select.field-control {
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-
-.backups-hero-copy strong {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-}
-
-.backups-hero-copy span {
-  color: var(--text-muted);
-  font-size: var(--text-compact);
 }
 
 /* Neutral info note (never red) with a leading icon. */
@@ -2393,7 +2135,8 @@ select.field-control {
   flex: 0 0 auto;
 }
 
-.backups-error {
+.backups-error,
+.backups-note {
   padding: 0 2px;
 }
 
@@ -2410,8 +2153,6 @@ select.field-control {
 
 .backups-table-scroll {
   flex: 1;
-  min-height: 0;
-  overflow: auto;
 }
 
 .backups-table {
@@ -2422,18 +2163,12 @@ select.field-control {
 
 .backups-table th,
 .backups-table td {
-  height: 32px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 8px;
   text-align: left;
   vertical-align: middle;
 }
 
 .backups-table thead th {
   height: 28px;
-  color: var(--text-muted);
-  background: var(--bg-panel-muted);
-  font-size: var(--text-compact);
   font-weight: var(--weight-semibold);
 }
 
@@ -2454,22 +2189,13 @@ select.field-control {
    -------------------------------------------------------------------------- */
 
 .files-panel {
-  display: flex;
-  flex-direction: column;
   flex: 1;
-  min-height: 0;
-  background: var(--bg-raised);
 }
 
 .files-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
-  min-height: var(--button-height-md);
-  padding: var(--space-2) var(--space-3);
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-panel-muted);
 }
 
 .files-breadcrumb {
@@ -2477,7 +2203,6 @@ select.field-control {
   flex-wrap: wrap;
   align-items: center;
   gap: 2px;
-  min-width: 0;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: var(--text-compact);
@@ -2509,12 +2234,12 @@ select.field-control {
   cursor: pointer;
 }
 
-.files-breadcrumb-link:hover:not(:disabled) {
+.files-breadcrumb-link:hover:not([aria-current="page"]) {
   color: var(--text-main);
   background: var(--bg-hover);
 }
 
-.files-breadcrumb-link:disabled {
+.files-breadcrumb-link[aria-current="page"] {
   color: var(--text-main);
   font-weight: var(--weight-semibold);
   cursor: default;
@@ -2524,7 +2249,6 @@ select.field-control {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: var(--space-2);
 }
 
 .files-toolbar-actions .button {
@@ -2540,21 +2264,15 @@ select.field-control {
 
 .files-body {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  flex: 1;
-  min-height: 0;
 }
 
 .files-browser {
-  min-width: 0;
   overflow: auto;
-  border-right: 1px solid var(--border-subtle);
 }
 
 .files-editor {
   display: flex;
   flex-direction: column;
-  min-width: 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -2564,10 +2282,7 @@ select.field-control {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: var(--button-height-md);
   padding: 6px 10px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-panel-muted);
 }
 
 .files-list {
@@ -2579,22 +2294,11 @@ select.field-control {
   grid-template-columns: 18px minmax(0, 1fr) auto;
   gap: var(--space-2);
   align-items: center;
-  min-height: 30px;
-  border: 0;
   border-bottom: 1px solid var(--border-subtle);
-  padding: 0 10px;
   color: var(--text-main);
   background: transparent;
   text-align: left;
   cursor: pointer;
-}
-
-.files-row:hover {
-  background: var(--bg-hover);
-}
-
-.files-row-selected {
-  background: var(--accent-muted);
 }
 
 .files-row span {
@@ -2655,10 +2359,19 @@ select.field-control {
    Content Panel
    -------------------------------------------------------------------------- */
 
+/* Auto grid rows stretch to share the free space, so the toolbar was growing to
+   350px whenever the panel was taller than its content. A flex column keeps
+   every band at its natural height and gives the leftovers to the table. */
 .content-panel {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
+}
+
+.content-panel > * {
+  flex: 0 0 auto;
 }
 
 .content-toolbar {
@@ -2776,8 +2489,16 @@ select.field-control {
   font-weight: var(--weight-semibold);
 }
 
+/* Same reason as .players-table-scroll: one installed mod should not leave the
+   rest of the canvas empty. Here the panel is padded, so the surface is a card
+   with its own edge. */
 .content-table-scroll {
-  overflow-x: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
 }
 
 .content-table {
@@ -2803,11 +2524,26 @@ select.field-control {
   font-weight: var(--weight-semibold);
 }
 
+/* `display: grid` pulled the row header out of the table layout entirely: it
+   stopped sharing the column widths and painted its own box across the header
+   rule. The cell content already lays itself out via .content-name-cell. */
 .content-table tbody th {
-  display: grid;
-  align-content: center;
-  gap: 2px;
   font-weight: var(--weight-semibold);
+}
+
+/* The buttons were bare inline children of the <td>, so they collapsed against
+   each other and wrapped mid-label. A flex wrapper *inside* the cell spaces
+   them without taking the cell itself out of the table layout. */
+.cell-empty {
+  color: var(--text-subtle);
+}
+
+.content-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  white-space: nowrap;
 }
 
 .content-warning {
@@ -2846,15 +2582,164 @@ select.field-control {
   margin-top: 4px;
 }
 
-/* --------------------------------------------------------------------------
-   Marketplace
-   -------------------------------------------------------------------------- */
-
-.marketplace-panel {
+/* The panel keeps no gutter of its own, so a view that adds none puts its
+   heading hard against the border. */
+.content-update-policy {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
 }
+
+.content-update-policy > .settings-grid {
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+  padding: 0;
+}
+
+/* Each option is a title over an explanation. Buttons centre their contents and
+   lay them out in a row, so the two ran together into one centred line. */
+.content-update-policy > .settings-grid > .button {
+  height: auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.content-update-policy > .settings-grid > .button > svg {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+.content-update-policy > .settings-grid > .button > span {
+  display: grid;
+  gap: 2px;
+}
+
+.content-update-policy > .settings-grid > .button small {
+  font-weight: var(--weight-regular);
+  opacity: 0.85;
+}
+
+.policy-exceptions {
+  display: grid;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+  padding-top: var(--space-4);
+}
+
+/* The section heading spans the panel and carries its own gutter; everything
+   under it pays for its own, the way every other panel here works. */
+.content-updates {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.content-updates > *:not(.section-heading) {
+  margin-inline: var(--space-6);
+}
+
+.content-updates > *:last-child {
+  margin-bottom: var(--space-5);
+}
+
+.content-update-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.content-update-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.content-update-identity {
+  display: grid;
+  gap: 2px;
+}
+
+.content-update-identity small {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+.content-update-warnings {
+  display: grid;
+  gap: var(--space-2);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--bg-panel-muted);
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+.content-update-warnings > ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.policy-exceptions-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.policy-exceptions-heading span {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+.policy-exceptions > ul {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.policy-exceptions > ul > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+}
+
+.policy-exceptions > ul > li > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.policy-exceptions > ul > li > span:first-child small {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+.policy-exceptions > ul > li > span:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   Marketplace
+   -------------------------------------------------------------------------- */
 
 .provider-icon {
   width: 17px;
@@ -2865,20 +2750,7 @@ select.field-control {
 
 .marketplace-layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: var(--space-3);
   align-items: start;
-}
-
-.marketplace-layout-card-mode {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.marketplace-results,
-.marketplace-details {
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
 }
 
 .marketplace-results {
@@ -2889,16 +2761,14 @@ select.field-control {
   scrollbar-width: thin;
 }
 
-.marketplace-details {
-  overflow: hidden;
-}
+/* No overflow clipping here: it would turn the details panel into the sticky
+   containing block and pin the version rail to a box that never scrolls. */
 
 .marketplace-result,
 .marketplace-version-row {
   display: grid;
   width: 100%;
   border: 0;
-  border-bottom: 1px solid var(--border-subtle);
   padding: var(--space-2) var(--space-3);
   color: var(--text-main);
   background: transparent;
@@ -2912,64 +2782,6 @@ select.field-control {
   align-items: start;
 }
 
-.marketplace-card-grid.marketplace-results {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: var(--space-3);
-  max-height: none;
-  overflow: visible;
-  border: 0;
-  background: transparent;
-}
-
-.marketplace-card-grid .marketplace-result {
-  grid-template-columns: 96px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: var(--space-3);
-  min-height: 128px;
-  align-items: stretch;
-  overflow: hidden;
-  border: 0;
-  border-radius: var(--radius-lg);
-  padding: var(--space-3);
-  background: var(--bg-panel);
-}
-
-.marketplace-card-grid .marketplace-result-icon {
-  grid-row: 1 / -1;
-  align-self: center;
-  width: 96px;
-  height: 96px;
-  min-height: 0;
-  aspect-ratio: 1;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-panel-muted);
-}
-
-.marketplace-card-grid .marketplace-result-icon img {
-  object-fit: contain;
-}
-
-.marketplace-card-grid .marketplace-result-body {
-  grid-column: 2;
-  grid-row: 1;
-  align-content: start;
-  gap: var(--space-2);
-  padding: var(--space-4) var(--space-4) var(--space-2) 0;
-}
-
-.marketplace-card-grid .marketplace-result-body > strong {
-  font-size: var(--text-md);
-  line-height: 22px;
-}
-
-.marketplace-version-row {
-  gap: 2px;
-}
-
 .marketplace-result:hover,
 .marketplace-result-selected,
 .marketplace-version-row:hover,
@@ -2979,7 +2791,6 @@ select.field-control {
 
 .marketplace-result span:not(.meta-badge),
 .marketplace-version-row small,
-.marketplace-details > div > span,
 .marketplace-install-note span {
   color: var(--text-muted);
   font-size: var(--text-compact);
@@ -3004,10 +2815,11 @@ select.field-control {
 }
 
 .marketplace-detail-icon {
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
-  font-size: var(--text-lg);
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-display);
 }
 
 .marketplace-result-icon img,
@@ -3045,31 +2857,11 @@ select.field-control {
 .marketplace-details {
   display: grid;
   gap: 10px;
-  padding: 12px;
 }
 
-.marketplace-details-heading,
 .marketplace-install-note {
   display: grid;
   gap: var(--space-1);
-}
-
-.marketplace-details-heading {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-}
-
-.marketplace-details-heading > span:last-child {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.marketplace-version-list {
-  display: grid;
-  border: 0;
-  border-radius: var(--radius-sm);
 }
 
 .marketplace-install-dialog {
@@ -3114,7 +2906,15 @@ select.field-control {
   color: var(--text-muted);
 }
 
-.inline-dialog label:not(.checkbox-row) {
+/* A dialog's default label is a caption above a control. A checkbox is a box
+   beside its label, so the row layouts are excluded by name — `display: grid`
+   here beats their own `display: flex` on specificity and stacks the checkbox
+   above the text it belongs to. This exclusion list is a registry: any new
+   checkbox row inside a dialog has to be added to it. */
+.inline-dialog
+  label:not(.checkbox-row):not(.confirm-danger-option):not(
+    .java-managed-consent
+  ) {
   display: grid;
   min-width: 0;
   gap: 6px;
@@ -3123,7 +2923,7 @@ select.field-control {
   font-weight: var(--weight-semibold);
 }
 
-.inline-dialog label > span {
+.inline-dialog label:not(.confirm-danger-option) > span {
   color: var(--text-muted);
   font-size: var(--text-compact);
   font-weight: var(--weight-semibold);
@@ -3343,11 +3143,11 @@ select.field-control {
   font-size: var(--text-base);
 }
 
-.create-server-detail-close {
-  position: absolute;
-  top: var(--space-4);
-  right: var(--space-4);
-  z-index: 2;
+/* The exit used to float in the page corner, which is the corner the
+   marketplace search row already occupies — the two drew on top of each other.
+   It sits in the detail bar now, pushed to the free end of that row. */
+.marketplace-detail-bar-action {
+  margin-left: auto;
 }
 
 /* --------------------------------------------------------------------------
@@ -3360,7 +3160,6 @@ select.field-control {
   width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4);
   align-content: start;
 }
 
@@ -3424,8 +3223,6 @@ select.field-control {
 
 .wizard-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3);
 }
 
 .wizard-action {
@@ -3434,10 +3231,6 @@ select.field-control {
   align-items: start;
   column-gap: var(--space-3);
   row-gap: 3px;
-  padding: var(--panel-padding-block);
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--bg-elevated);
   color: var(--text-main);
   font: inherit;
   text-align: left;
@@ -3449,7 +3242,6 @@ select.field-control {
 
 .wizard-action:hover {
   border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .wizard-action-icon {
@@ -3593,7 +3385,7 @@ select.field-control {
 
 .wizard-step-connector-active {
   background: var(--accent);
-  box-shadow: 0 0 6px rgba(62, 207, 142, 0.3);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .wizard-step-label {
@@ -3680,14 +3472,6 @@ select.field-control {
   flex: 1;
 }
 
-/* Wizard review step */
-
-.wizard-review-step {
-  display: grid;
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
-}
-
 .wizard-review-fields {
   display: grid;
   gap: var(--space-2);
@@ -3696,8 +3480,19 @@ select.field-control {
 
 /* The review sections reuse the config-section chrome, but their single <dl>
    child must not be squeezed into one half of the two-column field grid. */
-.wizard-review-groups .form-grid {
+.provisioning-summary .form-grid {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* The rail is too narrow for a label column beside the value: paths were
+   breaking mid-word to fit. Stack them instead. */
+.provisioning-summary .wizard-review-fields > div {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.provisioning-summary .wizard-review-fields dt {
+  font-size: var(--text-compact);
 }
 
 .wizard-review-fields > div {
@@ -3833,13 +3628,6 @@ select.field-control {
   max-width: none;
 }
 
-.marketplace-card-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: max-content;
-  align-content: start;
-  gap: var(--space-3);
-}
-
 .marketplace-pack-card {
   border: 0;
   border-radius: var(--radius-md);
@@ -3855,17 +3643,6 @@ select.field-control {
   grid-template-columns: 74px minmax(0, 1fr);
   gap: var(--space-3);
   min-height: 116px;
-  padding: var(--space-3);
-}
-
-.marketplace-card-grid .marketplace-pack-card {
-  grid-template-columns: 96px minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  gap: var(--space-3);
-  min-height: 128px;
-  align-items: start;
-  align-content: start;
-  overflow: hidden;
   padding: var(--space-3);
 }
 
@@ -3889,46 +3666,10 @@ select.field-control {
   );
 }
 
-.marketplace-card-grid .marketplace-pack-card-media {
-  grid-row: 1 / -1;
-  align-self: center;
-  width: 96px;
-  height: 96px;
-  min-height: 0;
-  aspect-ratio: 1;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, var(--accent) 34%, var(--bg-panel-muted)),
-    color-mix(in srgb, var(--accent-warm) 22%, var(--bg-elevated))
-  );
-}
-
-.marketplace-card-grid .marketplace-pack-card-media img {
-  object-fit: contain;
-}
-
-.marketplace-card-grid .marketplace-pack-card-body {
-  grid-column: 2;
-  grid-row: 1;
-  align-content: start;
-  padding: var(--space-4) var(--space-4) var(--space-2) 0;
-}
-
-.marketplace-card-grid .marketplace-pack-card-title {
-  align-items: flex-start;
-}
-
-.marketplace-card-grid .marketplace-pack-card-meta {
-  margin-top: auto;
-  padding-top: var(--space-2);
-}
-
 .marketplace-pack-card:hover {
   border-color: color-mix(in srgb, var(--accent) 38%, var(--border-subtle));
   background: color-mix(in srgb, var(--accent) 6%, var(--bg-elevated));
-  box-shadow: 0 0 8px rgba(62, 207, 142, 0.15);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .marketplace-pack-card strong {
@@ -4058,6 +3799,44 @@ select.field-control {
   color: var(--text-subtle);
 }
 
+/* Block display keeps a wide requirements table scrolling inside the reading
+   column instead of pushing the whole panel sideways. */
+.marketplace-pack-body table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: var(--text-compact);
+}
+
+.marketplace-pack-body th,
+.marketplace-pack-body td {
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 5px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.marketplace-pack-body th {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.marketplace-pack-body td {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.marketplace-pack-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+
 .marketplace-pack-body ul,
 .marketplace-pack-body ol {
   padding-left: 1.3rem;
@@ -4067,12 +3846,14 @@ select.field-control {
   margin-top: 4px;
 }
 
+/* Bounded, not reshaped. A forced 16/9 box made every wide banner — the shape
+   most pack bodies use — sit in the middle of a tall empty plate; the image
+   keeps its own ratio and is capped on both axes instead. */
 .marketplace-pack-body img {
   display: block;
-  width: min(100%, 720px);
+  width: auto;
   height: auto;
-  aspect-ratio: 16 / 9;
-  max-width: 100%;
+  max-width: min(100%, 720px);
   max-height: min(320px, 40vh);
   border: 0;
   border-radius: var(--radius-md);
@@ -4156,7 +3937,6 @@ select.field-control {
 
 .java-layout {
   display: grid;
-  gap: var(--space-4);
 }
 
 .java-panel {
@@ -4210,10 +3990,63 @@ select.field-control {
   overflow-wrap: anywhere;
 }
 
-.java-managed-install {
-  width: fit-content;
-  max-width: 100%;
-  justify-self: start;
+/* An install button and two escape hatches on one line. Without an explicit row
+   the button and both links ran together into a single unreadable string. */
+.java-acquire-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.java-acquire-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.java-acquire-links a {
+  color: var(--accent);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.java-acquire-links a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* The runtime a server is pointed at, under the diagnosis that names the
+   problem. Quieter than the sentence above it: it is evidence, not the message. */
+.java-runtime-path {
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.java-install-summary {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.java-install-summary > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+}
+
+.java-install-summary dt {
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+}
+
+.java-install-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .java-download-form .field-label {
@@ -4238,8 +4071,14 @@ select.field-control {
 
 .java-table {
   width: 100%;
-  min-width: 820px;
+  min-width: 1096px;
   border-collapse: collapse;
+  /* Four of the six columns hold short labels that read as one line or not at
+     all — "Java 11" and "架构" broke across two rows and doubled the height of
+     every row in the table. Fixed layout with stated widths keeps those four on
+     one line and hands the remaining width to the two columns that actually
+     hold arbitrary-length text. */
+  table-layout: fixed;
 }
 
 .java-table th,
@@ -4248,6 +4087,70 @@ select.field-control {
   border-bottom: 1px solid var(--border-subtle);
   padding: 0 12px;
   text-align: left;
+}
+
+.java-table th:nth-child(1),
+.java-table td:nth-child(1) {
+  width: 116px;
+}
+
+.java-table th:nth-child(2),
+.java-table td:nth-child(2) {
+  width: 140px;
+}
+
+/* 96px clipped the "ARCHITECTURE" header itself — the column name was
+   unreadable even though every value in it ("x64") fits twice over. */
+.java-table th:nth-child(3),
+.java-table td:nth-child(3) {
+  width: 132px;
+}
+
+.java-table th:nth-child(4),
+.java-table td:nth-child(4) {
+  width: 230px;
+}
+
+.java-table th:nth-child(5),
+.java-table td:nth-child(5) {
+  width: 140px;
+}
+
+.java-table th:last-child,
+.java-table td:last-child {
+  width: 108px;
+}
+
+.java-actions-cell .button {
+  height: 26px;
+  padding: 0 10px;
+}
+
+/* Every cell holds a single line. What does not fit is cut with an ellipsis
+   rather than allowed to double the height of the row it is in; the full value
+   stays reachable through the cell's title and, for a server, its link. */
+.java-table th,
+.java-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-usedby {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-usedby a {
+  color: var(--text-main);
+  text-decoration: none;
+}
+
+.java-usedby a:hover {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 .java-table thead th {
@@ -4279,8 +4182,9 @@ select.field-control {
 
 .java-source-chip {
   display: inline-flex;
-  max-width: 160px;
+  max-width: 100%;
   align-items: center;
+  white-space: nowrap;
   border: 0;
   border-radius: var(--radius-pill);
   padding: 1px 8px;
@@ -4315,9 +4219,14 @@ select.field-control {
   padding: var(--space-5) var(--space-6);
 }
 
+/* A workbench in name and in use: you add a provider on the left and watch it
+   appear in the list on the right. Stacked, the 380px-wide form left two thirds
+   of a full-width panel empty and pushed the list it feeds below the fold. */
 .tunnel-workbench {
   display: grid;
   min-width: 0;
+  grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+  align-items: start;
   overflow: hidden;
   border-radius: var(--radius-lg);
   background: var(--bg-panel);
@@ -4330,12 +4239,24 @@ select.field-control {
 }
 
 .tunnel-workbench-section > .section-heading {
+  /* Wraps because the form column is 380px wide: side by side, "Add provider"
+     was squeezed into a 44px sliver and broke across two lines while its note
+     took the rest. The note drops to its own line instead. */
+  flex-wrap: wrap;
   border-bottom: 0;
   background: transparent;
 }
 
 .tunnel-workbench-section + .tunnel-workbench-section {
   padding-top: var(--space-2);
+}
+
+/* Below the workbench's own breakpoint the two halves stack again — 380px plus
+   a provider row does not fit, and the form would be squeezed to nothing. */
+@media (max-width: 1100px) {
+  .tunnel-workbench {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .provider-row {
@@ -4454,27 +4375,17 @@ select.field-control {
   gap: 2px;
 }
 
-.compatibility-row > div:not(.java-recommendation) {
+.compatibility-row > div {
   min-width: 0;
   flex: 1;
 }
 
-.java-recommendation {
-  justify-items: end;
+/* The fix sits at the end of the row it belongs to, centred against the two or
+   three lines of text beside it rather than pinned to the first one. */
+.compatibility-row > .button {
+  flex: 0 0 auto;
+  align-self: center;
   margin-left: auto;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.java-recommendation a {
-  color: var(--accent);
-  font-weight: var(--weight-bold);
-  text-decoration: none;
-}
-
-.java-recommendation a:hover {
-  color: var(--accent-hover);
-  text-decoration: underline;
 }
 
 .compatibility-row span,
@@ -4514,24 +4425,14 @@ select.field-control {
 
 .settings-layout {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
   grid-template-rows: 1fr;
   gap: 0;
-  min-height: 480px;
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--bg-panel);
   box-shadow: var(--shadow-panel);
-  overflow: hidden;
 }
 
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: var(--space-3) var(--space-2);
-  border-right: 1px solid var(--border-subtle);
-  background: var(--bg-sidebar);
 }
 
 .settings-nav-item {
@@ -4539,13 +4440,9 @@ select.field-control {
   align-items: center;
   gap: var(--space-2);
   height: 30px;
-  padding: 0 var(--space-3);
   border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
   background: transparent;
   font: inherit;
-  font-size: var(--text-compact);
   font-weight: var(--weight-semibold);
   cursor: pointer;
   text-align: left;
@@ -4557,16 +4454,6 @@ select.field-control {
 .settings-nav-item:hover {
   color: var(--text-main);
   background: color-mix(in srgb, var(--text-main) 5%, transparent);
-}
-
-.settings-nav-item-active {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg-elevated));
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-
-.settings-content {
-  padding: var(--space-6);
 }
 
 .settings-error,
@@ -4590,8 +4477,6 @@ select.field-control {
 
 .settings-section-title {
   margin: 0 0 var(--space-4);
-  font-size: var(--text-md);
-  font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--border-subtle);
@@ -4605,13 +4490,10 @@ select.field-control {
 
 .settings-plain-section {
   display: grid;
-  gap: var(--space-3);
-  padding: 0 0 var(--space-6);
 }
 
 .settings-plain-section + .settings-plain-section {
   border-top: 1px solid var(--border-subtle);
-  padding-top: var(--space-5);
 }
 
 .settings-plain-section .section-heading {
@@ -4625,12 +4507,6 @@ select.field-control {
 }
 
 .settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  min-height: 40px;
-  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -4640,7 +4516,6 @@ select.field-control {
 
 .settings-row-label {
   display: grid;
-  gap: 2px;
 }
 
 .settings-row-label strong {
@@ -4649,7 +4524,6 @@ select.field-control {
 }
 
 .settings-row-label span {
-  font-size: var(--text-sm);
   color: var(--text-muted);
 }
 
@@ -4714,6 +4588,38 @@ select.field-control {
 
 .settings-grid label {
   min-width: 0;
+}
+
+/* A server property now carries three lines — what it does, what the file calls
+   it, and what changing it costs — so its columns are wider than the default
+   settings grid and its rows sit to the top instead of stretching. */
+.property-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 340px));
+  align-items: start;
+}
+
+.property-field-name {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.property-field-name code {
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+
+/* The editor's form root is .create-server-form, which paints every <small>
+   in the danger colour for validation messages. The hint under each field is
+   not an error, so it has to out-rank that rule — hence the grid class. */
+.property-grid .property-field-hint {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+  line-height: 1.5;
 }
 
 .settings-grid label:not(.checkbox-row):not(.switch-row) {
@@ -4891,23 +4797,15 @@ select.field-control {
 
 .update-status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
 }
 
 .update-status-grid > div {
   display: grid;
   gap: 3px;
-  padding: var(--space-3);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-panel-muted);
 }
 
 .update-status-grid span {
-  color: var(--text-muted);
-  font-size: var(--text-compact);
   font-weight: var(--weight-semibold);
 }
 
@@ -4925,43 +4823,6 @@ select.field-control {
    Metrics
    -------------------------------------------------------------------------- */
 
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: var(--space-4);
-  padding: var(--space-5) var(--space-6);
-}
-
-.metric-card {
-  display: grid;
-  gap: 6px;
-  padding: var(--space-2);
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-panel-muted);
-}
-
-.metric-card span {
-  color: var(--text-muted);
-  font-size: var(--text-compact);
-  font-weight: var(--weight-semibold);
-}
-
-.metric-card strong {
-  font-size: var(--text-md);
-  color: var(--text-main);
-}
-
-.metric-card-icon {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
 .metric-progress {
   height: 6px;
   overflow: hidden;
@@ -4976,49 +4837,6 @@ select.field-control {
   border-radius: var(--radius-pill);
   background: var(--accent);
   transition: transform 400ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* --------------------------------------------------------------------------
-   Performance Events
-   -------------------------------------------------------------------------- */
-
-.perf-separator {
-  height: 1px;
-  margin: var(--space-4) var(--space-5);
-  background: var(--border-subtle);
-}
-
-.perf-events {
-  display: grid;
-  gap: var(--space-2);
-  padding: 0 var(--space-4) var(--space-4);
-}
-
-.perf-events h3 {
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
-  margin-bottom: var(--space-3);
-  color: var(--text-main);
-}
-
-.perf-event-item {
-  display: grid;
-  gap: 2px;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--bg-panel-muted);
-}
-
-.perf-event-item strong {
-  font-size: var(--text-compact);
-  font-weight: var(--weight-semibold);
-  text-transform: capitalize;
-}
-
-.perf-event-item span {
-  color: var(--text-muted);
-  font-size: var(--text-compact);
 }
 
 /* --------------------------------------------------------------------------
@@ -5086,6 +4904,20 @@ select.field-control {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2);
+}
+
+/* Labels here were plain inline elements, so the caption ran straight into its
+   control with no gap and no room to wrap. Stacked, same as .settings-grid. */
+.form-grid > label:not(.checkbox-row):not(.provisioning-port-field) {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.form-grid > label > span {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
 }
 
 .create-server-form .checkbox-row {
@@ -5247,8 +5079,6 @@ select.field-control {
   max-height: min(340px, var(--radix-select-content-available-height));
   overflow: hidden;
   border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  background: var(--bg-panel);
   box-shadow: var(--shadow-md);
 }
 
@@ -5284,7 +5114,6 @@ select.field-control {
   min-height: 26px;
   align-items: center;
   gap: var(--space-2);
-  border-radius: var(--radius-xs);
   padding: 0 24px 0 8px;
   color: var(--text-main);
   outline: none;
@@ -5443,16 +5272,9 @@ select.field-control {
   overflow: hidden;
 }
 
-/* Destructive escalation lives in the confirm dialog; keep the header quiet. */
-.logger-page .page-header-actions .button-danger {
-  border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--border-subtle));
-  background: transparent;
-  color: var(--danger);
-}
-
-.logger-page .page-header-actions .button-danger:hover:not(:disabled) {
-  background: var(--danger-soft);
-}
+/* The quiet destructive treatment this page defined for itself is now what
+   `.button-danger` does everywhere, so the local override only made this one
+   header disagree with the rest of the app on hover. */
 
 .logger-toolbar {
   display: flex;
@@ -5511,6 +5333,10 @@ select.field-control {
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+/* The theme swatches must depict a theme other than the active one, so they
+   cannot read theme tokens — the literals below mirror tokens.css by hand and
+   have to be updated alongside it. Values are the light/dark --bg-app,
+   --bg-titlebar, --border-subtle and --accent. */
 .theme-preview {
   display: grid;
   grid-template-columns: 26% minmax(0, 1fr);
@@ -5518,11 +5344,11 @@ select.field-control {
   overflow: hidden;
   border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
   border-radius: var(--radius-sm);
-  background: #f2f1eb;
+  background: #f2f5f9;
 }
 
 .theme-preview-sidebar {
-  background: #e2e7e0;
+  background: #e7ecf3;
 }
 
 .theme-preview-content {
@@ -5535,28 +5361,32 @@ select.field-control {
 .theme-preview-content span {
   height: 8px;
   border-radius: var(--radius-xs);
-  background: #cfd7d1;
+  background: #d1d9e4;
 }
 
 .theme-preview-content span:last-child {
   width: 62%;
-  background: #69c294;
+  background: #2568dc;
+}
+
+.theme-preview-dark {
+  background: #111823;
 }
 
 .theme-preview-dark .theme-preview-sidebar {
-  background: #202a27;
+  background: #0d131c;
 }
 
 .theme-preview-dark .theme-preview-content span {
-  background: #34423d;
+  background: #263142;
 }
 
 .theme-preview-dark .theme-preview-content span:last-child {
-  background: #69c294;
+  background: #3478f6;
 }
 
 .theme-preview-system .theme-preview-sidebar {
-  background: linear-gradient(135deg, #e2e7e0 0 50%, #202a27 50%);
+  background: linear-gradient(135deg, #e7ecf3 0 50%, #0d131c 50%);
 }
 
 .theme-choice-label {
@@ -5570,7 +5400,6 @@ select.field-control {
 
 .app-log-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
   gap: var(--space-4);
   height: 100%;
   min-width: 0;
@@ -5608,6 +5437,37 @@ select.field-control {
   height: 28px;
   border-radius: var(--radius-sm);
   background: var(--bg-panel-muted);
+}
+
+/* Severity has to survive a scan of 500 rows, so it is carried twice: the icon
+   tile is tinted, and the row keeps a stripe on the edge you scan down. The
+   modifier classes below were emitted by AppLoggerView long before any rule
+   existed to match them, which made every level look identical. */
+.app-log-icon-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
+.app-log-icon-warning {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+
+.app-log-icon-info {
+  color: var(--info);
+  background: color-mix(in srgb, var(--info) 14%, transparent);
+}
+
+.app-log-icon-debug {
+  color: var(--text-subtle);
+}
+
+.app-log-row-error {
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.app-log-row-warning {
+  box-shadow: inset 3px 0 0 var(--warning);
 }
 
 .app-log-content {
@@ -5736,10 +5596,6 @@ select.field-control {
     grid-area: close;
   }
 
-  .marketplace-card-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .logger-page {
     grid-template-rows: auto;
     height: auto;
@@ -5793,6 +5649,53 @@ select.field-control {
   display: grid;
   gap: var(--space-4);
   padding: var(--space-5) var(--space-6);
+}
+
+/* The on-demand composers. They read as a sheet dropped over the list rather
+   than another band of the page, so the list stays the thing being edited. */
+.profile-editor {
+  margin: 0 var(--space-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding-bottom: var(--space-4);
+  background: var(--bg-raised);
+}
+
+.task-editor {
+  margin: 0 var(--space-6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+.task-editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+}
+
+.task-editor .create-server-form {
+  padding: var(--space-4);
+}
+
+/* Three short fields in a card the width of the panel. Stacked in the wizard's
+   320px column they left two thirds of the card empty and the form read as
+   unfinished, so they tile and the submit keeps its own row. */
+.task-editor .create-server-form {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3) var(--space-4);
+  align-items: start;
+}
+
+.task-editor .create-server-form > label {
+  max-width: none;
+}
+
+.task-editor .create-server-form > .button {
+  grid-column: 1 / -1;
 }
 
 .task-item {
@@ -5851,6 +5754,10 @@ select.field-control {
   align-items: center;
   justify-content: flex-end;
   gap: var(--space-2);
+  /* A definite row with an auto column made this the first item placed, so the
+     buttons claimed column 1 and pushed the task name to the right of the card.
+     Naming the column puts the row back in reading order. */
+  grid-column: 2;
   grid-row: 1 / 3;
   align-self: center;
 }
@@ -5919,10 +5826,6 @@ select.field-control {
 .tooltip-content {
   z-index: 50;
   padding: 6px 10px;
-  border-radius: var(--radius-sm);
-  color: var(--text-main);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
   font-size: var(--text-compact);
   font-weight: var(--weight-medium);
   line-height: 16px;
@@ -6013,12 +5916,6 @@ select.field-control {
   box-shadow: var(--shadow-sm);
 }
 
-.server-card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--space-3);
-}
-
 /* Deterministic loader cover art shared by cards, sidebar rows, and detail. */
 .server-cover {
   display: inline-flex;
@@ -6035,7 +5932,7 @@ select.field-control {
 }
 
 .server-cover-fallback {
-  color: rgba(255, 255, 255, 0.9);
+  color: color-mix(in srgb, var(--text-inverse) 90%, transparent);
   font-weight: var(--weight-bold);
   font-size: 0.42em;
   letter-spacing: 0.02em;
@@ -6043,22 +5940,11 @@ select.field-control {
 }
 
 .server-card {
-  position: relative;
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  background: var(--bg-raised);
   box-shadow: none;
   cursor: pointer;
   transition:
     background-color 160ms ease,
     border-color 160ms ease;
-}
-
-.server-card:hover {
-  background: var(--bg-hover);
 }
 
 /* --------------------------------------------------------------------------
@@ -6152,7 +6038,6 @@ select.field-control {
 
 .sidebar-collapsed .server-nav-item {
   justify-content: center;
-  min-height: 40px;
   padding: 6px;
 }
 
@@ -6183,10 +6068,6 @@ select.field-control {
 
 .sidebar-collapsed .server-drop-zone {
   margin: 0;
-}
-
-.app-body-sidebar-collapsed {
-  grid-template-columns: 56px minmax(0, 1fr);
 }
 
 /* --------------------------------------------------------------------------
@@ -6328,6 +6209,27 @@ select.field-control {
 }
 
 .icon-button.button,
+/* The class had transitions and hover states but no base rule, so the control
+   rendered with the browser's default grey button chrome — the loudest thing on
+   the overview for its least important action. */
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.button-link:hover {
+  text-decoration: underline;
+}
+
 .button-link,
 .marketplace-content-option,
 .settings-nav-item,
@@ -6370,7 +6272,6 @@ select.field-control {
 .provider-row,
 .task-item,
 .task-run-item,
-.perf-event-item,
 .server-card {
   transition:
     transform var(--motion-fast) var(--ease-out-quart),
@@ -6385,7 +6286,6 @@ select.field-control {
 .provider-row:hover,
 .task-item:hover,
 .task-run-item:hover,
-.perf-event-item:hover,
 .server-card:hover {
   transform: none;
 }
@@ -6442,18 +6342,18 @@ textarea:focus-visible,
 
 .status-dot-running {
   box-shadow:
-    0 0 8px rgba(68, 212, 146, 0.6),
-    0 0 3px rgba(68, 212, 146, 0.3);
+    0 0 8px color-mix(in srgb, var(--running) 60%, transparent),
+    0 0 3px color-mix(in srgb, var(--running) 30%, transparent);
   animation: status-glow-pulse 2s ease-in-out infinite;
 }
 
 @keyframes status-glow-pulse {
   0%,
   100% {
-    box-shadow: 0 0 6px rgba(68, 212, 146, 0.4);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--running) 40%, transparent);
   }
   50% {
-    box-shadow: 0 0 10px rgba(68, 212, 146, 0.6);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--running) 60%, transparent);
   }
 }
 
@@ -6465,8 +6365,8 @@ textarea:focus-visible,
 
 .status-dot-crashed {
   box-shadow:
-    0 0 8px rgba(240, 102, 91, 0.6),
-    0 0 3px rgba(240, 102, 91, 0.3);
+    0 0 8px color-mix(in srgb, var(--crashed) 60%, transparent),
+    0 0 3px color-mix(in srgb, var(--crashed) 30%, transparent);
 }
 
 /* --------------------------------------------------------------------------
@@ -6502,7 +6402,7 @@ textarea:focus-visible,
   border-radius: var(--radius-panel);
   padding: var(--space-8);
   background: color-mix(in srgb, var(--accent-soft) 90%, transparent);
-  box-shadow: 0 0 40px rgba(62, 207, 142, 0.15);
+  box-shadow: 0 0 40px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .drop-import-zone h2 {
@@ -6600,16 +6500,11 @@ textarea:focus-visible,
 
 .activity-overview {
   display: grid;
-  gap: var(--space-4);
 }
 
 .activity-recent-section {
   display: grid;
   gap: var(--space-3);
-  border: 0;
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  background: var(--bg-panel);
   box-shadow: var(--shadow-panel);
 }
 
@@ -6621,8 +6516,6 @@ textarea:focus-visible,
 
 .activity-recent-header h3 {
   margin: 0;
-  font-size: var(--text-base);
-  font-weight: var(--weight-semibold);
 }
 
 .activity-recent {
@@ -6634,21 +6527,35 @@ textarea:focus-visible,
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: var(--text-compact);
 }
 
 .activity-event:last-child {
   border-bottom: 0;
 }
 
+/* The base had no `background` at all, so every dot rendered invisible and no
+   level was distinguishable. The per-level modifiers below are the ones
+   ServerEventsView has always emitted. */
 .activity-event-dot {
   width: 8px;
   height: 8px;
   flex: 0 0 8px;
   border-radius: 50%;
   margin-top: 5px;
+  background: var(--text-subtle);
+}
+
+.activity-event-dot-error {
+  background: var(--danger);
+}
+
+.activity-event-dot-warning {
+  background: var(--warning);
+}
+
+.activity-event-dot-info {
+  background: var(--info);
 }
 
 .activity-event-time {
@@ -6846,12 +6753,7 @@ textarea:focus-visible,
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  height: var(--status-bar-height);
   padding: 0 10px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-panel-muted);
-  color: var(--text-muted);
-  font-size: var(--text-xs);
   font-weight: var(--weight-medium);
 }
 
@@ -6888,10 +6790,6 @@ textarea:focus-visible,
   white-space: nowrap;
 }
 
-.status-bar-mono {
-  font-family: var(--font-mono);
-}
-
 /* --------------------------------------------------------------------------
    Reduced Motion
    -------------------------------------------------------------------------- */
@@ -6924,45 +6822,6 @@ textarea:focus-visible,
     overflow: visible;
   }
 
-  .app-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
-    height: auto;
-    overflow: visible;
-  }
-
-  .sidebar {
-    grid-row: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .sidebar-header {
-    display: none;
-  }
-
-  .primary-nav {
-    flex-flow: row wrap;
-    gap: 6px;
-    overflow: visible;
-    padding: 0 12px 12px;
-  }
-
-  .primary-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .nav-item {
-    flex: 1 1 calc(50% - 6px);
-    height: 34px;
-    min-width: 0;
-    justify-content: center;
-  }
-
-  .server-nav-section {
-    display: none;
-  }
-
   .page {
     grid-column: auto;
     grid-row: auto;
@@ -6977,20 +6836,9 @@ textarea:focus-visible,
     flex-direction: column;
   }
 
-  .detail-panel-header {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-3);
-  }
-
-  .detail-panel-actions {
-    flex-wrap: wrap;
-  }
-
   .summary-strip,
   .marketplace-layout,
-  .update-status-grid,
-  .metrics-grid {
+  .update-status-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -7165,10 +7013,12 @@ textarea:focus-visible,
   background: var(--bg-hover);
 }
 
+/* Selected differs from hover in kind, not just in brightness: it carries the
+   accent. Luminance alone was not enough to tell them apart. */
 .nav-item-active {
   color: var(--text-main);
-  background: var(--bg-elevated);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .server-nav-section {
@@ -7221,8 +7071,8 @@ textarea:focus-visible,
 
 .server-nav-item-active {
   color: var(--text-main);
-  background: var(--bg-elevated);
-  box-shadow: inset 2px 0 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--bg-elevated));
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .server-nav-item .server-cover {
@@ -7370,16 +7220,6 @@ textarea:focus-visible,
 }
 
 @media (max-width: 880px) {
-  .app-body,
-  .app-body-sidebar-collapsed {
-    grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
-  }
-
-  .sidebar {
-    display: flex;
-    grid-column: 1;
-  }
-
   .page {
     grid-column: 2;
     padding: 14px;
@@ -7389,74 +7229,9 @@ textarea:focus-visible,
   .page-create-server {
     padding: 0;
   }
-
-  .sidebar-header {
-    justify-content: center;
-    padding-inline: 8px;
-  }
-
-  .sidebar-brand-copy,
-  .sidebar-toggle-button,
-  .sidebar-section-label,
-  .server-nav-copy,
-  .server-nav-item .status-badge,
-  .nav-item span,
-  .server-nav-group-name,
-  .server-nav-group-count {
-    display: none;
-  }
-
-  .primary-nav,
-  .sidebar-top-nav,
-  .server-nav-section {
-    padding-inline: 8px;
-  }
-
-  .nav-item,
-  .server-nav-item,
-  .server-nav-group-header {
-    width: 44px;
-    min-width: 44px;
-    justify-content: center;
-    padding-inline: 0;
-  }
-
-  .primary-nav,
-  .sidebar-top-nav {
-    align-items: center;
-  }
-
-  .nav-item {
-    height: 44px;
-    min-height: 44px;
-  }
-
-  .server-nav-item {
-    min-height: 44px;
-  }
-
-  .server-nav-group-header {
-    min-height: 44px;
-  }
 }
 
 @media (max-width: 720px) {
-  .app-body,
-  .app-body-sidebar-collapsed {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    display: flex;
-    grid-column: 1;
-  }
-
-  .primary-nav,
-  .sidebar-top-nav,
-  .server-nav-section {
-    padding-inline: 4px;
-  }
-
   .page {
     grid-column: 2;
   }
@@ -7478,14 +7253,14 @@ button:where(:not(.switch-root):not(.checkbox-root):not(.status-bar-action)),
 }
 
 .button-primary {
-  border-color: var(--accent);
-  color: #fff;
-  background: var(--accent);
+  border-color: var(--accent-solid);
+  color: var(--text-inverse);
+  background: var(--accent-solid);
 }
 
 .button-primary:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  border-color: var(--accent-solid-hover);
+  background: var(--accent-solid-hover);
 }
 
 .button-secondary {
@@ -7499,9 +7274,63 @@ button:where(:not(.switch-root):not(.checkbox-root):not(.status-bar-action)),
   background: color-mix(in srgb, var(--bg-elevated) 72%, var(--text-main) 6%);
 }
 
+/* What a button does, in its colour. Only the committing action of a surface is
+   filled with the accent; the three consequential kinds carry their own hue as
+   a tint so a control deck reads at a glance without turning into a traffic
+   light. Danger fills on hover: by then the press is deliberate.
+
+   `danger` and `ghost` had no rule at all before this — both rendered as bare
+   base buttons, which made "Delete profile" and "Cancel" look identical. */
+.button-success {
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 14%, transparent);
+}
+
+.button-success:hover:not(:disabled) {
+  border-color: var(--success);
+  background: color-mix(in srgb, var(--success) 24%, transparent);
+}
+
+.button-warning {
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+
+.button-warning:hover:not(:disabled) {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+}
+
+.button-danger {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+
+.button-danger:hover:not(:disabled) {
+  border-color: var(--danger-solid);
+  color: var(--text-inverse);
+  background: var(--danger-solid);
+}
+
+.button-ghost {
+  border-color: transparent;
+  color: var(--text-muted);
+  background: transparent;
+}
+
+.button-ghost:hover:not(:disabled) {
+  color: var(--text-main);
+  background: var(--bg-hover);
+}
+
+/* 0.42 dropped disabled label text to 2.53:1 in the light theme. Disabled still
+   has to be readable — it is how you find out what is unavailable and why. */
 .button:disabled,
 button:disabled {
-  opacity: 0.42;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 
@@ -7642,7 +7471,7 @@ textarea:hover,
 .loader-pill .loader-icon-fallback {
   width: 14px;
   height: 14px;
-  color: #fff;
+  color: var(--text-inverse);
   background: var(--text-subtle);
   font-size: 8px;
   line-height: 14px;
@@ -8010,6 +7839,19 @@ textarea:hover,
   color: var(--text-main);
 }
 
+/* Column headers default to the start edge, so a column whose cells are pushed
+   to the end or centred left its header stranded above empty space. Pair these
+   with the cell's own alignment via DataTable's headerClassName. Qualified with
+   th because per-table rules like `.players-table th { text-align: left }`
+   already carry that specificity and would otherwise win. */
+th.data-table-header-end {
+  text-align: right;
+}
+
+th.data-table-header-center {
+  text-align: center;
+}
+
 .server-setup-details {
   min-width: 0;
 }
@@ -8108,7 +7950,7 @@ textarea:hover,
   height: 15px;
   padding: 0 4px;
   border: 2px solid var(--bg-titlebar);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--danger);
   color: var(--text-inverse);
   font-size: 9px;
@@ -8376,13 +8218,16 @@ textarea:hover,
    Server cards
    -------------------------------------------------------------------------- */
 
+/* auto-fill held empty 320px tracks open, so two servers sat in the left third
+   of the window with the rest blank. auto-fit collapses the empty tracks and
+   lets the cards that do exist take the whole row. */
 .server-card-grid {
   display: grid;
   height: 100%;
   margin: 0;
   padding: 0;
   gap: var(--space-4);
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   align-content: start;
   list-style: none;
   overflow-y: auto;
@@ -8394,6 +8239,9 @@ textarea:hover,
   min-width: 0;
   flex-direction: column;
   gap: var(--space-3);
+  /* The card, not the window, decides whether the curve sits beside the
+     readouts: with auto-fit a card is as wide as the row lets it be. */
+  container-type: inline-size;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
@@ -8496,10 +8344,60 @@ textarea:hover,
   margin-left: auto;
 }
 
+.server-card-body {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-3);
+}
+
+.server-card-readouts {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+/* One card wide enough for two columns puts the curve beside the numbers; a
+   narrow one stacks them. */
+@container (min-width: 460px) {
+  .server-card-body {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 34%);
+    align-items: start;
+    gap: var(--space-5);
+  }
+}
+
+.server-card-trend {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  margin: 0;
+}
+
+.server-card-trend figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.server-card-trend figcaption b {
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  font-weight: var(--weight-medium);
+}
+
+.server-card-trend .sparkline {
+  height: 40px;
+}
+
 .server-card-telemetry {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-2) var(--space-4);
   color: var(--text-muted);
   font-size: var(--text-sm);
 }
@@ -8514,12 +8412,6 @@ textarea:hover,
   color: var(--text-main);
   font-family: var(--font-mono);
   font-weight: var(--weight-medium);
-}
-
-.server-card-telemetry .sparkline {
-  width: 72px;
-  height: 24px;
-  margin-left: auto;
 }
 
 .server-card-facts {
@@ -8616,50 +8508,6 @@ textarea:hover,
   box-shadow: none;
 }
 
-.detail-panel-header {
-  min-height: 72px;
-  flex: 0 0 auto;
-  gap: 18px;
-  border-bottom: 0;
-  padding: 11px 18px 9px;
-  background: var(--bg-raised);
-}
-
-.detail-panel-title {
-  gap: 3px;
-}
-
-.detail-panel-heading {
-  gap: 7px;
-}
-
-.detail-panel-name {
-  font-size: 19px;
-  font-weight: 650;
-  line-height: 25px;
-  letter-spacing: -0.02em;
-}
-
-.detail-panel-meta {
-  gap: 7px;
-  color: var(--text-subtle);
-  font-family: var(--font-sans);
-  font-size: var(--text-compact);
-  line-height: 15px;
-}
-
-.detail-panel-actions {
-  gap: 6px;
-}
-
-.detail-panel-actions .server-actions {
-  flex-wrap: nowrap;
-}
-
-.detail-panel-actions .status-badge {
-  margin-inline: 3px 2px;
-}
-
 .detail-panel-error {
   border-bottom: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
   padding: 7px 18px;
@@ -8712,15 +8560,33 @@ textarea:hover,
   background: var(--bg-raised);
 }
 
+/* A two-player list left the panel's surface ending two rows down with the
+   rest of the canvas bare, as if the page had failed to finish loading. The
+   scroll area owns the surface, so the table reads as one card at any row
+   count. */
 .players-table-scroll {
   min-height: 0;
   flex: 1 1 auto;
   overflow: auto;
+  background: var(--bg-raised);
 }
 
 .players-table th,
 .players-table td {
   height: 40px;
+}
+
+/* The table is flush to the panel, so its outer cells own the panel's gutter.
+   At the cell's own 8px the first column sat 4px inside the toolbar heading
+   above it and read as pinned to the border. */
+.players-table th:first-child,
+.players-table td:first-child {
+  padding-left: 12px;
+}
+
+.players-table th:last-child,
+.players-table td:last-child {
+  padding-right: 12px;
 }
 
 .players-table thead th {
@@ -8762,8 +8628,11 @@ textarea:hover,
   gap: 26px;
 }
 
+/* Four short facts. Two columns spread them over 400px each, so a six-character
+   loader name sat alone in the middle of a void and the pairs stopped reading
+   as a set. They tile to the width instead, down to one column on a phone. */
 .update-status-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 14px 32px;
   border: 0;
   background: transparent;
@@ -8848,6 +8717,26 @@ textarea:hover,
 .update-history {
   border-top: 1px solid var(--border-subtle);
   padding-top: var(--space-4);
+}
+
+/* The panel carries no padding of its own — every block inside it pays for its
+   own gutter — and the wizard's blocks never did, so the step rail, the stage
+   and the history heading all sat flush against the panel border while the
+   heading above them was inset. The status grid already pays inline, so it
+   stops paying twice. */
+.update-wizard > .update-wizard-steps,
+.update-wizard > .update-wizard-stage,
+.update-wizard > .update-history {
+  padding-inline: var(--space-6);
+}
+
+.update-wizard > .update-wizard-stage > .update-status-grid {
+  padding-inline: 0;
+}
+
+/* Last block in the panel, so it owes the bottom gutter too. */
+.update-wizard > .update-history {
+  padding-bottom: var(--space-5);
 }
 
 .update-history h3 {
@@ -9014,10 +8903,21 @@ textarea:hover,
   background: var(--bg-panel-muted);
 }
 
-.command-template-bar .button {
+/* The shortcut buttons used to be stripped of border and background, so they
+   read as plain text sitting beside fully-chromed dropdowns — half the strip
+   looked clickable and half did not. They carry the same chrome as the menus
+   now, and the menus size to their label instead of stretching to the 260px
+   form-select width, which is what forced this one row to wrap into three. */
+.command-template-bar .button,
+.command-template-bar .select-trigger {
   min-height: 27px;
-  border-color: transparent;
-  background: transparent;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+}
+
+.command-template-bar .select-trigger {
+  width: auto;
+  max-width: none;
 }
 
 .console-command-form {
@@ -9223,6 +9123,7 @@ textarea:hover,
   display: grid;
   width: 100%;
   max-width: none;
+  align-content: start;
   gap: 12px;
   padding: 14px 16px 20px;
 }
@@ -9232,16 +9133,46 @@ textarea:hover,
   gap: 6px;
 }
 
+/* Content type on the left, the one action that does not go through search on
+   the right. Both were full-width rows of their own, which stacked three bands
+   of chrome above the results and left the import button stranded on an
+   otherwise empty line. */
+.marketplace-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.marketplace-toolbar-row > .marketplace-secondary-actions {
+  margin-left: auto;
+}
+
 .marketplace-layout {
   grid-template-columns: minmax(240px, 0.76fr) minmax(360px, 1.24fr);
+  align-content: start;
   gap: 0;
   overflow: hidden;
   border-radius: var(--radius-md);
   background: var(--bg-raised);
 }
 
-.marketplace-layout.marketplace-layout-card-mode {
+/* Hiding the results does not reclaim their track, so the column definition has
+   to collapse too or the detail panel keeps laying out at list width. */
+.marketplace-layout-detail-mode {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.marketplace-layout-detail-mode > .marketplace-results {
+  display: none;
+}
+
+/* No cap: the pack page takes the canvas it is given. A centred page left a
+   wide window mostly empty, which is the complaint this replaced — the cost is
+   a long line of prose on a very wide window, chosen deliberately. */
+.marketplace-layout-detail-mode > .marketplace-detail-pane {
+  width: 100%;
 }
 
 .marketplace-results,
@@ -9260,57 +9191,415 @@ textarea:hover,
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.marketplace-result:hover,
+.marketplace-result:not(.marketplace-result-static):hover,
 .marketplace-result-selected,
 .marketplace-version-row:hover,
 .marketplace-version-row-selected {
   background: var(--accent-soft);
 }
 
-.marketplace-card-grid.marketplace-results {
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-  border: 0;
-  background: transparent;
-}
-
-.marketplace-card-grid {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.marketplace-card-grid .marketplace-result {
-  grid-template-columns: 64px minmax(0, 1fr);
-  grid-template-rows: auto;
-  min-height: 84px;
-  border: 0;
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
-}
-
-.marketplace-card-grid .marketplace-result-icon,
-.marketplace-card-grid .marketplace-pack-card-media {
-  width: 64px;
-  height: 64px;
-}
-
-.marketplace-card-grid .marketplace-result-body,
-.marketplace-card-grid .marketplace-pack-card-body {
-  padding: 2px 0;
-}
-
-.marketplace-card-grid .marketplace-pack-card {
-  grid-template-columns: 64px minmax(0, 1fr);
-  grid-template-rows: auto;
-  min-height: 84px;
-  padding: 10px;
-}
-
-.marketplace-card-grid .marketplace-result:hover {
-  background: var(--bg-hover);
+/* Hangar results cannot be installed from here, so they must not look like the
+   installable cards beside them. */
+.marketplace-result-static {
+  cursor: default;
 }
 
 .marketplace-details {
   padding: 14px;
+}
+
+.marketplace-detail-pane {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 12px;
+  padding: 14px;
+}
+
+.marketplace-detail-pane > .marketplace-details {
+  padding: 0;
+}
+
+.marketplace-detail-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.marketplace-details-back {
+  width: max-content;
+}
+
+.marketplace-detail-bar-source {
+  color: var(--text-subtle);
+  font-size: var(--text-compact);
+}
+
+/* --- Project detail: hero band over a reading column and a version rail --- */
+
+.marketplace-details-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: start;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: var(--space-4);
+}
+
+.marketplace-details-headline {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.marketplace-details-headline h2 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+  line-height: 26px;
+}
+
+.marketplace-details-headline p {
+  max-width: 72ch;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  line-height: 19px;
+}
+
+.marketplace-details-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: 4px 0 0;
+}
+
+.marketplace-details-stats > div {
+  display: grid;
+  gap: 1px;
+}
+
+.marketplace-details-stats dd {
+  margin: 0;
+  color: var(--text-main);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.marketplace-details-stats dt {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marketplace-details-hero-aside {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: end;
+}
+
+.marketplace-details-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+  max-width: 260px;
+}
+
+/* Both columns follow the window: the description takes what is left and the
+   version rail grows with it, so nothing is left over to become a gutter
+   between them. The rail is clamped because a version row is a name and three
+   chips — past ~460px it is padding, not information. */
+.marketplace-details-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 24%, 460px);
+  gap: var(--space-6);
+  align-items: start;
+  padding-top: var(--space-4);
+}
+
+/* No measure cap. Provider prose on a 2000px window sets a long line — that is
+   the accepted cost of filling the canvas rather than centring a narrow page. */
+.marketplace-details-body {
+  min-width: 0;
+}
+
+.marketplace-version-panel {
+  position: sticky;
+  /* Clears the workspace heading the content scrolls under. */
+  top: var(--space-5);
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.marketplace-version-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.marketplace-version-heading h3,
+.marketplace-version-heading span {
+  margin: 0;
+}
+
+.marketplace-version-heading h3 {
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+}
+
+.marketplace-version-heading span {
+  color: var(--text-subtle);
+  font-size: var(--text-compact);
+}
+
+/* Flex, not grid: a <button> reports a min-content block size of one line, so
+   as a grid item it gets a track too short for its own rows and the versions
+   draw over each other once the list is tall enough to hit the max-height. */
+.marketplace-version-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel);
+}
+
+.marketplace-version-list > .marketplace-version-row {
+  flex: 0 0 auto;
+}
+
+.marketplace-version-row {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+  padding: 9px 11px;
+}
+
+.marketplace-version-row:last-child {
+  border-bottom: 0;
+}
+
+.marketplace-version-row-selected {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.marketplace-version-summary {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.marketplace-version-summary strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: var(--text-compact);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.marketplace-version-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.marketplace-version-badges:empty,
+.marketplace-version-notes:empty {
+  display: none;
+}
+
+.marketplace-version-notes {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.marketplace-version-notes small {
+  font-size: var(--text-xs);
+  line-height: 15px;
+  white-space: normal;
+}
+
+.marketplace-version-footer {
+  display: grid;
+  gap: 6px;
+}
+
+.marketplace-version-footer .button {
+  width: 100%;
+  justify-content: center;
+}
+
+/* The action is full-bleed in the rail, and the rail is the last column of the
+   detail, so its right edge is the scroll container's own content edge. The
+   shared hover scale grows a control outward from its centre, which hung 1.2%
+   of a 300px button — 1.8px — past that edge and gave the detail a horizontal
+   scrollbar for as long as the pointer stayed on the button. A full-bleed
+   control has nowhere to grow into and 3.6px of width reads as nothing, so it
+   keeps only the lift, which moves up and cannot overflow. */
+.marketplace-version-footer .button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.marketplace-version-hint {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--text-compact);
+  text-align: center;
+}
+
+/* Both hosts of the marketplace — the creation step and the content workspace —
+   give it a full-height canvas, and both used to leave most of it blank: every
+   band from the panel down sized itself to its content. The fill stops at the
+   first `align-content: start` in the chain, so the whole chain is listed here.
+   The two hosts are grouped rather than duplicated: they are the same panel and
+   the same defect, and two copies would drift. */
+.wizard-marketplace-step {
+  align-content: stretch;
+}
+
+/* Flex rather than a fixed row track: the search row, the secondary actions and
+   the error line are not all present at once, and a track list would strand the
+   layout in the wrong row. */
+.wizard-marketplace-step > .marketplace-panel,
+.server-workspace-content .marketplace-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.wizard-marketplace-step > .marketplace-panel > *,
+.server-workspace-content .marketplace-panel > * {
+  flex: 0 0 auto;
+}
+
+.wizard-marketplace-step > .marketplace-panel > .marketplace-layout,
+.server-workspace-content .marketplace-panel > .marketplace-layout {
+  min-height: 0;
+  flex: 1 1 auto;
+  /* Both are needed: `align-content` grows the row, `align-items` grows the
+     item inside it. The base rule pins items to the top of the row. */
+  align-content: stretch;
+  align-items: stretch;
+}
+
+/* The list was capped at 560px, so once the row grew the cap became the new
+   hole. Results scroll inside the row they are given instead — the card grid
+   too: the row is a fixed height now, and `.marketplace-layout` clips, so a
+   grid that only grew would put its last packs out of reach. Scrolling here
+   also keeps the search row pinned instead of scrolling it off the top. */
+.wizard-marketplace-step .marketplace-results,
+.server-workspace-content .marketplace-results {
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+/* Nothing has been searched for yet, so the panel is the message. Centred in
+   the full height rather than a short card with a void under it. */
+.wizard-marketplace-step .marketplace-results > .empty-state,
+.server-workspace-content .marketplace-results > .empty-state {
+  min-height: 100%;
+}
+
+/* Centring inside a canvas-height box only reads as composed when the box has
+   something in it. With just the prompt, the border drew a 550px rectangle
+   around a 56px illustration and the emptiness became the loudest thing on the
+   page. Nothing to show means nothing to size to, so the box hugs its message
+   and the canvas below it is simply free. */
+.wizard-marketplace-step
+  > .marketplace-panel
+  > .marketplace-layout:has(> .marketplace-results > .empty-state),
+.server-workspace-content
+  .marketplace-panel
+  > .marketplace-layout:has(> .marketplace-results > .empty-state) {
+  flex: 0 0 auto;
+}
+
+.wizard-marketplace-step .marketplace-results:has(> .empty-state),
+.server-workspace-content .marketplace-results:has(> .empty-state) {
+  overflow-y: visible;
+}
+
+/* With nothing found there is nothing to lay out in columns, and the card
+   track list was sizing the message to one 310px cell in the top-left corner.
+   No results means one full-width row. */
+
+.wizard-marketplace-step .marketplace-detail-pane,
+.server-workspace-content .marketplace-detail-pane {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.wizard-marketplace-step .marketplace-detail-pane > *,
+.server-workspace-content .marketplace-detail-pane > * {
+  flex: 0 0 auto;
+}
+
+/* The pack page is the one band that can outgrow the row, and
+   `.marketplace-layout` clips, so it has to carry the scroll itself. Scrolling
+   here rather than on the pane keeps the back and exit controls pinned. The
+   version rail's `position: sticky` now resolves against this box — which is
+   the scroller, so it sticks as intended. */
+.wizard-marketplace-step .marketplace-detail-pane > .marketplace-details,
+.server-workspace-content .marketplace-detail-pane > .marketplace-details {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+/* The hero keeps its height; the prose and the version rail below it take what
+   is left, so the rail runs the depth of the page instead of ending in mid-air.
+   `min-content` keeps a long description from being squeezed. */
+.wizard-marketplace-step .marketplace-details,
+.server-workspace-content .marketplace-details {
+  align-content: stretch;
+  grid-template-rows: auto minmax(min-content, 1fr);
+}
+
+.wizard-marketplace-step
+  .marketplace-layout:not(.marketplace-layout-has-selection)
+  > .marketplace-detail-pane {
+  display: none;
+}
+
+/* Below this the rail has no room to sit beside the prose, so it stacks above
+   it: the version list stays the first thing reachable either way. */
+@media (max-width: 1100px) {
+  .marketplace-details-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .marketplace-version-panel {
+    position: static;
+    order: -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .marketplace-details-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .marketplace-details-hero-aside {
+    grid-column: 1 / -1;
+    justify-items: start;
+  }
+
+  .marketplace-details-tags {
+    justify-content: flex-start;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -9356,6 +9645,10 @@ textarea:hover,
 
 .settings-layout {
   grid-template-columns: 190px minmax(0, 1fr);
+  /* Rows cap at 760px, so on a wide window the card used to run on for another
+     700px of empty white. Bounding it to the width its content actually needs
+     makes the panel read as a deliberate column rather than a half-filled box. */
+  max-width: 994px;
   min-height: 0;
   border: 0;
   border-radius: var(--radius-md);
@@ -9415,7 +9708,9 @@ textarea:hover,
 
 .settings-content > .settings-panel {
   width: 100%;
-  max-width: 920px;
+  /* Same measure as .settings-row so the section rules and the control rail
+     end on the same vertical line instead of 45px apart. */
+  max-width: 760px;
 }
 
 .settings-error {
@@ -9506,6 +9801,39 @@ textarea:hover,
   max-width: var(--control-width-select);
 }
 
+/* Toggles and menus move to the row's end edge, the way every platform
+   settings list places them, so the label and its control frame the row
+   instead of stacking in the left third of an otherwise empty panel. Wider
+   controls — paths, free text, the memory pair — keep their own line, where
+   they need the full measure. */
+.settings-row:has(> .switch-root),
+.settings-row:has(> .select-trigger),
+.settings-row:has(> .field-control[type="number"]) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-6);
+}
+
+.settings-row:has(> .switch-root) > :not(.settings-row-label),
+.settings-row:has(> .select-trigger) > :not(.settings-row-label),
+.settings-row:has(> .field-control[type="number"]) > :not(.settings-row-label) {
+  justify-self: end;
+}
+
+.settings-row:has(> .select-trigger) > .select-trigger {
+  width: var(--control-width-select);
+}
+
+/* A row whose section heading already names its control carries no label, so
+   the control has to be placed in the second column by hand — auto-placement
+   drops it in the first, and the empty column's gap then holds it 24px short of
+   the rail every other control ends on. */
+.settings-row:not(:has(> .settings-row-label)) > .switch-root,
+.settings-row:not(:has(> .settings-row-label)) > .select-trigger,
+.settings-row:not(:has(> .settings-row-label)) > .field-control[type="number"] {
+  grid-column: 2;
+}
+
 .settings-row > .field-control {
   width: min(100%, var(--control-width-text));
   max-width: var(--control-width-text);
@@ -9547,26 +9875,13 @@ textarea:hover,
   margin: 0;
 }
 
+/* One column, top to bottom. The two-column split gave the server list — the
+   thing the page is actually about — a third of the width, beside a runtime
+   table that needed all of it. */
 .java-layout {
-  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.6fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 14px;
-}
-
-.java-panel-compatibility,
-.java-panel-failures {
-  grid-column: 1 / -1;
-}
-
-.java-managed-install {
-  width: fit-content;
-}
-
-.metric-card {
-  border-color: var(--border-subtle);
-  border-radius: var(--radius-md);
-  background: var(--bg-raised);
-  box-shadow: none;
 }
 
 .app-log-workspace {
@@ -9762,9 +10077,6 @@ textarea:hover,
   transform: none;
 }
 
-.wizard-review-step,
-.provisioning-compatibility,
-.provisioning-java-step,
 .provisioning-progress {
   width: 100%;
   max-width: 940px;
@@ -9785,6 +10097,108 @@ textarea:hover,
 
 .provisioning-port-field > small {
   color: var(--warning);
+}
+
+/* Setup step: form on the left, the summary that used to be a whole review
+   screen docked on the right so the facts stay visible while still editable. */
+.provisioning-setup-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 296px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.provisioning-readiness {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.provisioning-strip {
+  display: grid;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-panel-muted);
+}
+
+.provisioning-strip-head {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-base);
+  line-height: 18px;
+}
+
+.provisioning-strip-head > svg {
+  align-self: center;
+  color: var(--text-subtle);
+}
+
+.provisioning-strip-head > strong {
+  font-weight: var(--weight-semibold);
+}
+
+/* The detail is a runtime path or a version triplet: long, unbreakable, and
+   secondary to the verdict beside it. */
+.provisioning-strip-head > span {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+  overflow-wrap: anywhere;
+}
+
+.provisioning-strip[data-tone="ok"] {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elevated));
+}
+
+.provisioning-strip[data-tone="ok"] .provisioning-strip-head > svg {
+  color: var(--accent);
+}
+
+.provisioning-strip[data-tone="warn"] {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border-panel));
+  background: color-mix(in srgb, var(--warning) 8%, var(--bg-panel-muted));
+}
+
+.provisioning-strip[data-tone="warn"] .provisioning-strip-head > svg {
+  color: var(--warning);
+}
+
+.provisioning-summary {
+  position: sticky;
+  top: var(--space-5);
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--panel-padding-block) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-raised);
+}
+
+/* The blocking reason has to sit with the button it explains, and it must not
+   push the button off the bar when the sentence is long. */
+.wizard-nav-blocked {
+  flex: 0 1 auto;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-compact);
+  line-height: 17px;
+  text-align: right;
+}
+
+@media (max-width: 1100px) {
+  .provisioning-setup-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .provisioning-summary {
+    position: static;
+    order: -1;
+  }
 }
 
 .provisioning-advanced-settings {
@@ -9810,8 +10224,15 @@ textarea:hover,
   font-size: var(--text-compact);
 }
 
+/* The disclosure is already a card; giving each group inside it a card of its
+   own stacked four panels within a panel. Inside, a group is a hairline and a
+   heading. */
 .provisioning-advanced-settings .wizard-form-section {
-  margin: 0 10px 10px;
+  margin: 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  padding: var(--space-4) 15px;
+  background: transparent;
 }
 
 .provisioning-complete-actions {
@@ -9850,17 +10271,6 @@ textarea:hover,
    -------------------------------------------------------------------------- */
 
 @media (max-width: 1100px) {
-  .detail-panel-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .detail-panel-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .java-layout,
   .app-log-workspace {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -9885,10 +10295,6 @@ textarea:hover,
     border-left: 0;
     border-top: 1px solid var(--border-subtle);
   }
-
-  .marketplace-card-grid.marketplace-results {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 
 @media (max-width: 880px) {
@@ -9900,14 +10306,6 @@ textarea:hover,
 
   .dashboard-status-total {
     margin-left: 0;
-  }
-
-  .detail-panel-header {
-    padding: 10px 12px;
-  }
-
-  .detail-panel-meta {
-    display: none;
   }
 
   .update-status-grid {
@@ -9971,9 +10369,13 @@ textarea:hover,
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
+  /* This was a nowrap strip with its scrollbar hidden, so at 720px three of the
+     eight sections sat off-screen with nothing saying they were there.
+     Wrapping keeps every section reachable and visible. */
   .settings-nav {
     height: auto;
     flex-direction: row;
+    flex-wrap: wrap;
     overflow-x: auto;
     border-bottom: 0;
     scrollbar-width: none;
@@ -10013,29 +10415,68 @@ textarea:hover,
 }
 
 @media (max-width: 720px) {
-  .marketplace-card-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .wizard-intent-options {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+/* The panel is stretched to its cell on the overview, so a block layout left a
+   band of empty canvas under the last row. As a column the charts take the
+   slack instead — a taller window buys taller curves, not more background. */
+.performance-panel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.performance-panel > .section-heading,
+.performance-panel > .danger-text {
+  flex: 0 0 auto;
+}
+
+.performance-panel > .danger-text {
+  margin: 0;
+  padding: var(--space-3) var(--space-5) 0;
+}
+
+.performance-panel > .performance-body,
+.performance-panel > .empty-state,
+.performance-panel > .list-state {
+  flex: 1 1 auto;
+}
+
+.performance-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+}
+
+/* No `min-height: 0` on either of these: letting them shrink past their content
+   does not make the panel fit, it makes the cards spill over the strip below.
+   At their content height the panel scrolls in its cell instead. */
 .performance-history-grid {
   display: grid;
+  flex: 1 1 auto;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-3);
-  margin-bottom: var(--space-4);
 }
 
 .performance-history-grid > article {
-  display: grid;
+  display: flex;
   min-width: 0;
-  gap: var(--space-3);
+  flex-direction: column;
+  gap: var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-1);
+}
+
+/* The curve is the one part of the card worth the extra height. */
+.performance-history-grid > article > .sparkline {
+  height: auto;
+  min-height: 46px;
+  flex: 1 1 auto;
 }
 
 .performance-history-grid > article > div {
@@ -10050,6 +10491,86 @@ textarea:hover,
   font-size: 12px;
 }
 
+.performance-history-grid > article > div > strong {
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+/* The metric is missing, not zero — the reason has to stay on the card that
+   would otherwise just show a blank curve. */
+.performance-history-grid > article > small {
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
+.performance-series-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.performance-series-range strong {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+}
+
+.performance-stat-grid {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+/* One line per stat: a single number does not need the two-row card the series
+   above earn, and the height that shape cost pushed the strip out of the cell. */
+.performance-stat {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 var(--space-2);
+  padding: 6px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+}
+
+.performance-stat > svg {
+  flex: 0 0 auto;
+  color: var(--text-subtle);
+}
+
+.performance-stat > span {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-stat > strong {
+  color: var(--text-main);
+  font-size: var(--text-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-semibold);
+  line-height: 20px;
+}
+
+/* The reason a stat is missing is a sentence, not a figure: it takes the next
+   line rather than squeezing the value off this one. */
+.performance-stat > small {
+  flex: 0 0 100%;
+  color: var(--warning);
+  font-size: var(--text-sm);
+}
+
 .sparkline {
   width: 100%;
   height: 54px;
@@ -10061,6 +10582,38 @@ textarea:hover,
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.sparkline-area {
+  fill: currentColor;
+  fill-opacity: 0.14;
+  stroke: none;
+}
+
+/* The rules are reference marks, not data: they stay well under the curve so
+   the eye still lands on the series first. */
+.sparkline-axis {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.sparkline-grid {
+  stroke: var(--border-subtle);
+  stroke-dasharray: 2 4;
+  stroke-width: 1;
+}
+
+.sparkline-current {
+  stroke: currentColor;
+  stroke-dasharray: 3 3;
+  stroke-opacity: 0.45;
+  stroke-width: 1;
+}
+
+/* Invisible bands that only exist to carry the <title> tooltip for the sample
+   under the cursor. */
+.sparkline-hit {
+  fill: transparent;
 }
 
 .sparkline-warning {
@@ -10077,6 +10630,10 @@ textarea:hover,
   .performance-history-grid {
     grid-template-columns: 1fr;
   }
+
+  .performance-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* Server workbench */
@@ -10085,25 +10642,11 @@ textarea:hover,
  * One persistent server header, one vertical task rail, one content surface.
  */
 
-.command-deck-detail {
-  display: grid;
-  height: 100%;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  min-height: 0;
-}
-
-.command-deck-header {
-  min-height: 68px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 10px 16px;
-}
-
-.command-deck-header .detail-panel-title {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 18px;
-}
+/* The fixed three-row track assumed the backup error paragraph was always
+   rendered. It almost never is, so the workspace shell landed in the middle
+   `auto` row and the `1fr` row stayed empty — the panels stopped short and the
+   bottom of the window was blank. A flex column sizes by the children that
+   actually exist. */
 
 .detail-panel-name-row {
   display: flex;
@@ -10116,188 +10659,24 @@ textarea:hover,
   flex: 0 0 auto;
 }
 
-.server-header-telemetry {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 3px;
-  color: var(--text-subtle);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-}
+/* Same reason as .command-deck-detail: the view switcher only exists for the
+   sections that declare views, so a fixed two-row track stranded the content in
+   the `auto` row on every section without one. */
 
-.server-header-telemetry > span {
-  display: inline-flex;
-  height: 24px;
-  align-items: center;
-  gap: 5px;
-  border-radius: var(--radius-sm);
-  padding: 0 7px;
-  background: var(--bg-panel-muted);
-}
+/* Only the view switcher lives here now, so the row is sized by its content
+   instead of holding a 56px slot open for a title that was deleted. */
 
-.server-workspace-shell {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-columns: 164px minmax(0, 1fr);
-  background: var(--bg-app);
-}
+/* Underline tabs rather than a pill track: a second filled, rounded row sitting
+   directly under the filled, rounded nav read as another level of navigation.
+   The active marker sits on the header's own hairline, so the switcher adds no
+   chrome of its own. */
 
-.server-workspace-nav {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  gap: 2px;
-  border-right: 1px solid var(--border-subtle);
-  padding: 10px 8px;
-  background: var(--bg-sidebar);
-}
-
-.server-workspace-nav-item {
-  position: relative;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  height: 38px;
-  flex: 0 0 38px;
-  align-items: center;
-  gap: 9px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0 10px;
-  color: var(--text-muted);
-  background: transparent;
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 560;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    color var(--motion-fast) ease,
-    background var(--motion-fast) ease;
-}
-
-.server-workspace-nav-item:hover {
-  color: var(--text-main);
-  background: var(--bg-hover);
-}
-
-.server-workspace-nav-item-active {
-  color: var(--text-main);
-  background: var(--bg-elevated);
-}
-
-.server-workspace-nav-item-active::before {
-  position: absolute;
-  inset-block: 8px;
-  left: 0;
-  width: 2px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  content: "";
-}
-
-.server-workspace-nav-item:focus-visible,
-.workspace-view-option:focus-visible,
-.invite-friends > summary:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.server-workspace-main {
-  display: grid;
-  min-width: 0;
-  min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.server-workspace-heading {
-  display: flex;
-  min-width: 0;
-  min-height: 56px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 8px 20px;
-  background: var(--bg-raised);
-}
-
-.server-workspace-heading > div:first-child {
-  min-width: 112px;
-}
-
-.server-workspace-heading p {
-  margin: 0;
-  color: var(--text-subtle);
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  line-height: 14px;
-  text-transform: uppercase;
-}
-
-.server-workspace-heading h2 {
-  margin: 0;
-  font-size: var(--text-md);
-  font-weight: 650;
-  line-height: 21px;
-}
-
-.workspace-view-switcher {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 2px;
-  overflow-x: auto;
-  border-radius: var(--radius-md);
-  padding: 3px;
-  background: var(--bg-panel-muted);
-  scrollbar-width: none;
-}
-
-.workspace-view-switcher::-webkit-scrollbar {
-  display: none;
-}
-
-.workspace-view-option {
-  height: 28px;
-  flex: 0 0 auto;
-  border: 0;
-  border-radius: var(--radius-sm);
-  padding: 0 10px;
-  color: var(--text-muted);
-  background: transparent;
-  font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 550;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.workspace-view-option:hover {
-  color: var(--text-main);
-}
-
-.workspace-view-count {
-  margin-left: 6px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.workspace-view-option-active .workspace-view-count {
-  color: var(--text-main);
-}
-
-.workspace-view-option-active {
-  color: var(--text-main);
-  background: var(--bg-elevated);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-
+/* A block container left every short panel stranded at the top of a tall
+   canvas with the rest of the window blank. As a flex column, the panels whose
+   body is a terminal, table or list can claim the leftover height. */
 .server-workspace-content {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -10306,175 +10685,79 @@ textarea:hover,
   scrollbar-gutter: stable;
 }
 
-.invite-friends {
-  position: relative;
+/* Nothing shrinks by default: a long form has to scroll the canvas rather than
+   be squeezed into it. Filling is opt-in, below. */
+.server-workspace-content > * {
+  flex: 0 0 auto;
 }
 
-.invite-friends > summary {
-  display: inline-flex;
-  height: var(--button-height-md);
-  align-items: center;
-  gap: 6px;
-  list-style: none;
-  cursor: pointer;
+.server-workspace-content > .console-panel,
+.server-workspace-content > .players-panel,
+.server-workspace-content > .content-panel,
+.server-workspace-content > .files-panel,
+.server-workspace-content > .logs-panel,
+.server-workspace-content > .backups-panel,
+.server-workspace-content > .workspace-event-log,
+.server-workspace-content > .marketplace-panel,
+.server-workspace-content > .workspace-fill {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
-.invite-friends > summary::-webkit-details-marker {
-  display: none;
-}
-
-.invite-friends[open] > summary {
-  border-color: var(--accent);
-  color: var(--text-main);
-  background: var(--accent-muted);
-}
-
-.invite-friends-panel {
-  position: absolute;
-  z-index: 80;
-  top: calc(100% + 8px);
-  right: 0;
-  display: grid;
-  width: min(330px, calc(100vw - 28px));
-  gap: 12px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  padding: 14px;
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-overlay);
-}
-
-.invite-friends-heading {
-  display: grid;
-  gap: 3px;
-}
-
-.invite-friends-heading strong {
-  font-size: var(--text-base);
-}
-
-.invite-friends-heading span,
-.invite-friends-panel p {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 16px;
-}
-
-.invite-address {
+.activity-recent-header {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  padding: 7px 8px 7px 10px;
-  background: var(--bg-inset);
+  gap: var(--space-2);
 }
 
-.invite-address > div {
+/* The server could not answer; that is not the same as "nobody is online". */
+
+.overview-metric-list {
   display: grid;
-  gap: 2px;
+  gap: 4px;
+  margin: 0;
+  font-size: var(--text-sm);
 }
 
-.invite-address span {
+.overview-metric-list > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.overview-metric-list dt {
   color: var(--text-subtle);
-  font-size: var(--text-xs);
 }
 
-.invite-address code {
+.overview-metric-list dd {
+  margin: 0;
   color: var(--text-main);
   font-family: var(--font-mono);
-  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
 }
 
-.invite-tunnel-status {
+/* Settings that do not change while the operator is watching. Collapsed, so
+   they are one click away instead of occupying the top of the page. */
+
+.overview-config-grid {
   display: grid;
-  align-items: center;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  border-top: 1px solid var(--border-subtle);
-  padding-top: 10px;
+  gap: 12px 32px;
+  margin: 12px 0 4px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
 }
 
-.invite-tunnel-status > div {
-  display: grid;
-  gap: 1px;
-}
-
-.invite-tunnel-status > div span {
+.overview-config-grid dt {
   color: var(--text-subtle);
-  font-size: var(--text-xs);
+  font-size: var(--text-compact);
 }
 
-.invite-tunnel-status > div strong {
-  font-size: var(--text-sm);
-}
-
-.invite-tunnel-status > .button {
-  grid-column: 1 / -1;
-}
-
-.server-overview-workspace {
-  display: grid;
-  gap: 16px;
-}
-
-.server-overview-grid {
-  display: grid;
-  align-items: start;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 16px;
-}
-
-/* The overview reads as one system only when run info and recent activity sit
-   on the same panel surface as the checklist and quick links. */
-.server-overview-grid .activity-overview {
-  display: grid;
-  gap: 16px;
-}
-
-.server-overview-grid .update-status-grid,
-.server-overview-grid .activity-recent-section {
-  border-radius: var(--radius-lg);
-  padding: 14px 18px;
-  background: var(--bg-panel);
-  box-shadow: var(--shadow-panel);
-}
-
-.server-overview-grid .activity-recent-section {
-  display: grid;
-  gap: 10px;
-}
-
-.server-overview-quick-links {
-  display: grid;
-  gap: 8px;
-}
-
-.server-overview-quick-links .button {
-  height: auto;
-  min-height: 54px;
-  justify-content: flex-start;
-  gap: 10px;
-  padding: 9px 11px;
-  text-align: left;
-}
-
-.server-overview-quick-links .button > span {
-  display: grid;
-  gap: 2px;
-}
-
-.server-overview-quick-links strong {
+.overview-config-grid dd {
+  margin: 2px 0 0;
   color: var(--text-main);
   font-size: var(--text-sm);
-}
-
-.server-overview-quick-links small {
-  color: var(--text-subtle);
-  font-size: var(--text-xs);
-  font-weight: 400;
+  overflow-wrap: anywhere;
 }
 
 .workspace-section-heading {
@@ -10498,6 +10781,34 @@ textarea:hover,
   margin-top: 3px;
   color: var(--text-muted);
   font-size: var(--text-xs);
+}
+
+/* The event log sat on the bare canvas while performance, the roster and
+   diagnostics beside it all drew a card, so the overview read as three panels
+   and a loose list. */
+.workspace-event-log {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Only the rows scroll: a crash writes one row per stack frame, and the
+   heading and its refresh button have to stay reachable. */
+.workspace-event-log > .workspace-event-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+/* On a quiet server the panel is still full height beside its neighbours, so
+   the empty state takes the space rather than leaving a void under it. */
+.workspace-event-log > .empty-state,
+.workspace-event-log > .list-state {
+  flex: 1 1 auto;
 }
 
 .workspace-event-list {
@@ -10542,6 +10853,41 @@ textarea:hover,
   max-width: 920px;
   grid-template-columns: repeat(3, minmax(180px, 1fr));
   gap: 14px 16px;
+}
+
+/* A named band of related fields. The heading is what lets the form be scanned
+   instead of read top to bottom. */
+.settings-group {
+  padding: var(--space-4) var(--space-6) 0;
+}
+
+.settings-group + .settings-group {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.settings-group > h3 {
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-group > .settings-grid {
+  width: 100%;
+  max-width: none;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 20px;
+  padding: 0;
+}
+
+/* Text and choices earn the column; a port or a megabyte count does not. */
+.settings-group .field-control:not([type="number"]),
+.settings-group .select-trigger {
+  width: 100%;
+  max-width: none;
 }
 
 .server-workspace-content
@@ -10589,6 +10935,67 @@ textarea:hover,
   text-align: right;
 }
 
+/* The markup asked for a search field with its magnifier inside it, but no rule
+   ever claimed the class, so the icon fell out above the input as a stray glyph
+   on its own line under the label. */
+.field-with-icon {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 340px;
+}
+
+.field-with-icon > svg {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  transform: translateY(-50%);
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.field-with-icon > .field-control {
+  width: 100%;
+  max-width: none;
+  padding-left: 32px;
+}
+
+/* The property editor groups its fields in fieldsets, so its grids are not the
+   direct children the settings-panel rules reach and every one of them fell
+   through to the single narrow column meant for a page-width form: forty
+   controls stacked at 240px with the rest of the panel empty beside them. A
+   property row is a short key and a short value, so they tile. */
+.settings-panel .settings-section {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.settings-panel .settings-section > legend {
+  margin-bottom: var(--space-2);
+  padding: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settings-panel .settings-section > .settings-grid {
+  max-width: none;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 20px;
+  padding: 0;
+}
+
+/* A gamemode or a level seed earns the column it is given; the shared control
+   caps exist to stop a lone field spanning a page, which is not this case. */
+.settings-panel .settings-section > .settings-grid .field-control,
+.settings-panel .settings-section > .settings-grid .select-trigger {
+  width: 100%;
+  max-width: none;
+}
+
 .server-workspace-content .marketplace-panel {
   min-height: 100%;
   padding: 0;
@@ -10617,67 +11024,19 @@ textarea:hover,
 
 .server-workspace-content
   .marketplace-layout:not(.marketplace-layout-has-selection)
-  .marketplace-details {
+  .marketplace-detail-pane {
   display: none;
 }
 
+/* A selection now hands the whole canvas to the detail panel, so the workspace
+   no longer splits the layout into a list column and a detail column. */
 .server-workspace-content .marketplace-layout-has-selection {
-  grid-template-columns: minmax(320px, 0.9fr) minmax(380px, 1.1fr);
-}
-
-.server-workspace-content .marketplace-card-grid.marketplace-results {
-  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-  align-content: start;
-  padding: 10px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 @media (max-width: 1100px) {
-  .command-deck-header {
-    align-items: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .command-deck-header .detail-panel-title {
-    gap: 10px;
-  }
-
-  .detail-panel-actions {
-    margin-left: auto;
-  }
-
-  .server-workspace-shell {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  .server-workspace-nav {
-    align-items: center;
-    padding-inline: 6px;
-  }
-
-  .server-workspace-nav-item {
-    width: 40px;
-    justify-content: center;
-    padding: 0;
-  }
-
-  .server-workspace-nav-item span {
-    display: none;
-  }
-
-  .server-overview-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .server-overview-quick-links {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
   .server-workspace-content .marketplace-search-row {
     grid-template-columns: minmax(160px, 0.7fr) minmax(240px, 1.5fr) auto;
-  }
-
-  .server-workspace-content .marketplace-layout-has-selection {
-    grid-template-columns: minmax(280px, 0.8fr) minmax(340px, 1.2fr);
   }
 
   .server-workspace-content .server-settings .settings-panel > .settings-grid {
@@ -10686,83 +11045,12 @@ textarea:hover,
 }
 
 @media (max-width: 880px) {
-  .command-deck-header .detail-panel-title {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .server-workspace-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 6px;
-    padding-block: 8px;
-  }
-
-  .workspace-view-switcher {
-    max-width: 100%;
-  }
-
   .server-workspace-content {
     padding: 16px;
-  }
-
-  .server-workspace-content .marketplace-layout-has-selection {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .server-workspace-content
-    .marketplace-layout-has-selection
-    .marketplace-results {
-    border-right: 0;
-    border-bottom: 1px solid var(--border-subtle);
   }
 }
 
 @media (max-width: 720px) {
-  .command-deck-header {
-    padding-inline: 12px;
-  }
-
-  .server-header-telemetry {
-    display: none;
-  }
-
-  .detail-panel-actions {
-    width: 100%;
-    overflow-x: auto;
-    padding-bottom: 2px;
-  }
-
-  .server-workspace-shell {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: 48px minmax(0, 1fr);
-  }
-
-  .server-workspace-nav {
-    flex-direction: row;
-    justify-content: center;
-    gap: 2px;
-    overflow-x: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 5px 7px;
-  }
-
-  .server-workspace-nav-item {
-    height: 36px;
-    flex-basis: 36px;
-  }
-
-  .server-workspace-nav-item-active::before {
-    inset: auto 8px 0;
-    width: auto;
-    height: 2px;
-  }
-
-  .server-overview-quick-links {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .server-workspace-content {
     padding: 12px;
   }
@@ -10809,51 +11097,6 @@ textarea:hover,
     overflow: hidden;
   }
 
-  .app-body,
-  .app-body-sidebar-collapsed {
-    height: calc(
-      100vh - var(--window-titlebar-height) - var(--status-bar-height)
-    );
-    min-height: 0;
-    grid-template-columns: min(196px, 28vw) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    overflow: hidden;
-  }
-
-  .app-body-sidebar-collapsed {
-    grid-template-columns: var(--preview-sidebar-collapsed-width) minmax(0, 1fr);
-  }
-
-  .sidebar {
-    min-height: 0;
-    grid-row: auto;
-    overflow: hidden;
-    border-right: 1px solid var(--border-subtle);
-    border-bottom: 0;
-  }
-
-  .sidebar-header {
-    display: flex;
-  }
-
-  .primary-nav {
-    flex-flow: column nowrap;
-    gap: 2px;
-    overflow: visible;
-    padding: 6px 8px 8px;
-  }
-
-  .nav-item {
-    height: 34px;
-    flex: 0 0 34px;
-    justify-content: flex-start;
-  }
-
-  .server-nav-section {
-    display: flex;
-    min-height: 0;
-  }
-
   .page {
     min-height: 0;
     overflow-y: auto;
@@ -10863,19 +11106,5 @@ textarea:hover,
   .page:has(> .detail-panel) {
     overflow: hidden;
     padding: 0;
-  }
-}
-
-@media (max-width: 880px) {
-  .app-body,
-  .app-body-sidebar-collapsed {
-    grid-template-columns: var(--preview-sidebar-collapsed-width) minmax(0, 1fr);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .server-workspace-nav-item,
-  .workspace-view-option {
-    transition: none;
   }
 }

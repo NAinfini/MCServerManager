@@ -22,6 +22,7 @@ import {
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent,
+  type ReactNode,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
@@ -79,6 +80,7 @@ function NavTooltip({
 }
 
 interface SidebarProps {
+  workspaceNavigation?: ReactNode;
   servers: ServerProfile[];
   activePage: PrimaryPage;
   selectedServerId?: string;
@@ -132,6 +134,7 @@ type ContextMenuState =
   | { type: "group"; id: string; x: number; y: number };
 
 export function Sidebar({
+  workspaceNavigation,
   servers,
   activePage,
   selectedServerId,
@@ -474,15 +477,6 @@ export function Sidebar({
                       loaderType={server.loaderType}
                       minecraftVersion={server.minecraftVersion}
                     />
-                    {/* Hide the port when a status badge needs the room, so the
-                        loader/version never collapses into "P…". */}
-                    {status !== "crashed" && status !== "externalRunning" && (
-                      <span>
-                        {t("nav.port", {
-                          port: server.serverPort ?? t("nav.portUnset"),
-                        })}
-                      </span>
-                    )}
                   </span>
                 </span>
               )}
@@ -695,7 +689,11 @@ export function Sidebar({
       </nav>
 
       <section
-        className="server-nav-section"
+        className={
+          workspaceNavigation
+            ? "server-nav-section server-nav-section-with-workspace"
+            : "server-nav-section"
+        }
         aria-label={t("nav.serverProfiles")}
       >
         {!collapsed && (
@@ -713,6 +711,8 @@ export function Sidebar({
           </AnimatePresence>
         </div>
       </section>
+
+      {workspaceNavigation}
 
       <nav
         aria-label={t("nav.primary")}

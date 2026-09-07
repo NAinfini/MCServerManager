@@ -1,7 +1,11 @@
 import type { ButtonHTMLAttributes } from "react";
 import { cn } from "../../lib/cn";
 
-type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+/* Named after what the press does, not what it looks like: `success` brings
+   something up, `warning` interrupts it recoverably, `danger` ends or destroys
+   it. The colour follows from the name in app.css. */
+type ButtonVariant =
+  "primary" | "secondary" | "ghost" | "success" | "warning" | "danger";
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;

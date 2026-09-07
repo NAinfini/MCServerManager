@@ -111,12 +111,14 @@ describe("ServerPropertiesEditor", () => {
     expect(await screen.findByDisplayValue("Hello")).toBeInTheDocument();
     expect(screen.getByDisplayValue("25565")).toBeInTheDocument();
     await waitFor(() => {
+      // Fields are named for what they do; the raw key sits beside the label.
       expect(
-        screen.getByRole("combobox", { name: "gamemode" }),
+        screen.getByRole("combobox", { name: "Default game mode" }),
       ).toHaveTextContent("survival");
       expect(
-        screen.getByRole("combobox", { name: "difficulty" }),
+        screen.getByRole("combobox", { name: "Difficulty" }),
       ).toHaveTextContent("hard");
+      expect(screen.getByText("gamemode")).toBeInTheDocument();
     });
     expect(screen.getByDisplayValue("20")).toBeInTheDocument();
     expect(screen.getByDisplayValue("12")).toBeInTheDocument();

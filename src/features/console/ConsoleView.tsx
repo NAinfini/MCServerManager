@@ -4,14 +4,7 @@ import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
 import * as Toolbar from "@radix-ui/react-toolbar";
 import * as Separator from "@radix-ui/react-separator";
-import {
-  Copy,
-  Eraser,
-  PanelRightOpen,
-  RefreshCw,
-  Users,
-  X,
-} from "lucide-react";
+import { Copy, Eraser, RefreshCw, X } from "lucide-react";
 import {
   sendServerCommand,
   listProcessEvents,
@@ -24,13 +17,14 @@ import { TextField } from "../../components/ui/text-field";
 import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
 import { useServerRuntime } from "../servers/ServerRuntimeContext";
-import { CommandSuggestions } from "./CommandSuggestions";
-import { MC_COMMANDS } from "./mcCommands";
-import { GamerulesEditor } from "../config/GamerulesEditor";
+import {
+  CommandSuggestions,
+  applyCompletion,
+  hasCommandSuggestions,
+} from "./CommandSuggestions";
 
 interface ConsoleViewProps {
   serverId: string;
-  onOpenPlayers?: () => void;
 }
 
 const quickCommands = [
@@ -39,13 +33,66 @@ const quickCommands = [
   { labelKey: "console.templates.stop", command: "stop" },
 ];
 
-const whitelistOptions = [
-  { value: "whitelist reload", labelKey: "console.whitelist.reload" },
-  { value: "whitelist on", labelKey: "console.whitelist.on" },
-  { value: "whitelist off", labelKey: "console.whitelist.off" },
+/* Everything here fills the input rather than running — which is what makes a
+   template with an argument worth offering. `ban ` lands in the box with the
+   cursor after it, so the menu teaches the syntax instead of hiding it, and a
+   destructive command still needs a deliberate Enter. Grouped rather than laid
+   out as one wall of buttons: a dozen more chips on this bar would cost more
+   scanning than they save typing. */
+const commandGroups = [
+  {
+    id: "players",
+    labelKey: "console.group.players",
+    options: [
+      { value: "say ", labelKey: "console.command.say" },
+      { value: "tell ", labelKey: "console.command.tell" },
+      { value: "gamemode survival ", labelKey: "console.command.gamemode" },
+      { value: "op ", labelKey: "console.command.op" },
+      { value: "deop ", labelKey: "console.command.deop" },
+      { value: "kick ", labelKey: "console.command.kick" },
+      { value: "ban ", labelKey: "console.command.ban" },
+      { value: "pardon ", labelKey: "console.command.pardon" },
+    ],
+  },
+  {
+    id: "world",
+    labelKey: "console.group.world",
+    options: [
+      { value: "time set day", labelKey: "console.command.timeDay" },
+      { value: "time set night", labelKey: "console.command.timeNight" },
+      { value: "weather clear", labelKey: "console.command.weatherClear" },
+      { value: "weather rain", labelKey: "console.command.weatherRain" },
+      { value: "difficulty normal", labelKey: "console.command.difficulty" },
+      { value: "seed", labelKey: "console.command.seed" },
+    ],
+  },
+  {
+    id: "maintenance",
+    labelKey: "console.group.maintenance",
+    options: [
+      /* The backup pair. `save-off` before copying the world and `save-on`
+         after is the only safe way to take a copy of a running server, and it
+         is the one sequence people get wrong from memory. */
+      { value: "save-off", labelKey: "console.command.saveOff" },
+      { value: "save-on", labelKey: "console.command.saveOn" },
+      { value: "reload", labelKey: "console.command.reload" },
+      { value: "difficulty", labelKey: "console.command.readDifficulty" },
+    ],
+  },
+  {
+    id: "whitelist",
+    labelKey: "console.whitelist.label",
+    options: [
+      { value: "whitelist add ", labelKey: "console.whitelist.add" },
+      { value: "whitelist remove ", labelKey: "console.whitelist.remove" },
+      { value: "whitelist reload", labelKey: "console.whitelist.reload" },
+      { value: "whitelist on", labelKey: "console.whitelist.on" },
+      { value: "whitelist off", labelKey: "console.whitelist.off" },
+    ],
+  },
 ];
 
-export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
+export function ConsoleView({ serverId }: ConsoleViewProps) {
   const { t } = useAppSettings();
   const terminalInputId = useId();
   const runtime = useServerRuntime();
@@ -63,7 +110,7 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
     null,
   );
   const [warningsDismissed, setWarningsDismissed] = useState(false);
-  const [whitelistValue, setWhitelistValue] = useState("");
+  const [templateValue, setTemplateValue] = useState("");
   const normalizedSearch = searchText.trim().toLowerCase();
   const eventsQuery = useQuery({
     queryKey: processKeys.events(serverId),
@@ -78,9 +125,11 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
 
     let isMounted = true;
 
+    let observer: ResizeObserver | null = null;
+
     setTerminalLoadError(null);
-    import("@xterm/xterm")
-      .then(({ Terminal }) => {
+    Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")])
+      .then(([{ Terminal }, { FitAddon }]) => {
         if (!isMounted || !terminalElementRef.current) {
           return;
         }
@@ -91,12 +140,17 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
           disableStdin: true,
           fontFamily: "JetBrains Mono, Cascadia Mono, ui-monospace, monospace",
           fontSize: 12,
+          /* Opening size only. The fit below is what decides how tall the
+             console actually is; a terminal pinned at ten rows showed a
+             letterbox of output inside a panel several times its height. */
           rows: 10,
           theme: {
             background: "#090f17",
             foreground: "#e9eef4",
           },
         });
+        const fitAddon = new FitAddon();
+        terminal.loadAddon(fitAddon);
         terminal.open(terminalElementRef.current);
         const terminalInput =
           terminalElementRef.current.querySelector<HTMLTextAreaElement>(
@@ -107,6 +161,18 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
           terminalInput.name = "serverConsoleTerminalInput";
         }
         terminalRef.current = terminal;
+        const fit = () => {
+          /* The host is hidden while another workspace view is open, and
+             proposing a size for a zero-height box throws inside the addon. */
+          const host = terminalElementRef.current;
+          if (!host || host.clientHeight === 0 || host.clientWidth === 0) {
+            return;
+          }
+          fitAddon.fit();
+        };
+        fit();
+        observer = new ResizeObserver(fit);
+        observer.observe(terminalElementRef.current);
         setTerminalReadyToken((value) => value + 1);
       })
       .catch((error: unknown) => {
@@ -118,6 +184,8 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
 
     return () => {
       isMounted = false;
+      observer?.disconnect();
+      observer = null;
       terminalRef.current?.dispose();
       terminalRef.current = null;
       writtenEventIdsRef.current = new Set();
@@ -171,22 +239,16 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
       });
     },
   });
-  const commandQuery = useMemo(() => {
-    const trimmed = commandText.trimStart();
-    return trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-  }, [commandText]);
-  const hasSuggestionMatches = useMemo(() => {
-    const query = commandQuery.toLowerCase();
-    return (
-      query.length > 0 &&
-      !query.includes(" ") &&
-      MC_COMMANDS.some((entry) => entry.command.startsWith(query))
-    );
-  }, [commandQuery]);
+  /* The list decides what it can offer for the token being typed — a command
+     name or one of its arguments — so asking it is the only way to know whether
+     there is anything to show. */
+  const hasSuggestionMatches = useMemo(
+    () => hasCommandSuggestions(commandText),
+    [commandText],
+  );
   const suggestionsVisible = showSuggestions && hasSuggestionMatches;
-  const selectSuggestion = (command: string) => {
-    const hasSlash = commandText.trimStart().startsWith("/");
-    setCommandText(hasSlash ? `/${command}` : command);
+  const selectSuggestion = (completion: string) => {
+    setCommandText(applyCompletion(commandText, completion));
     setShowSuggestions(false);
   };
   const visibleEvents = useMemo(
@@ -286,26 +348,6 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
         </Toolbar.Root>
       </div>
 
-      <details className="console-quick-drawer">
-        <summary className="button button-secondary">
-          <PanelRightOpen aria-hidden="true" size={15} />
-          {t("console.tools.open")}
-        </summary>
-        <aside aria-label={t("console.tools.title")}>
-          <header>
-            <strong>{t("console.tools.title")}</strong>
-            <span>{t("console.tools.description")}</span>
-          </header>
-          <GamerulesEditor serverId={serverId} />
-          {onOpenPlayers ? (
-            <Button variant="secondary" onClick={onOpenPlayers}>
-              <Users aria-hidden="true" size={15} />
-              {t("console.tools.players")}
-            </Button>
-          ) : null}
-        </aside>
-      </details>
-
       {showWarnings ? (
         <div className="console-warning-banner" role="status">
           <div className="console-warning-banner-body">
@@ -367,19 +409,24 @@ export function ConsoleView({ serverId, onOpenPlayers }: ConsoleViewProps) {
             {t(template.labelKey)}
           </Button>
         ))}
-        <Select
-          ariaLabel={t("console.whitelist.label")}
-          placeholder={t("console.whitelist.label")}
-          value={whitelistValue}
-          options={whitelistOptions.map((option) => ({
-            value: option.value,
-            label: t(option.labelKey),
-          }))}
-          onValueChange={(value) => {
-            setWhitelistValue("");
-            fillCommand(value);
-          }}
-        />
+        {commandGroups.map((group) => (
+          <Select
+            ariaLabel={t(group.labelKey)}
+            key={group.id}
+            placeholder={t(group.labelKey)}
+            /* Always empty: these are menus of things to do, not a setting
+               that remembers the last pick. */
+            value={templateValue}
+            options={group.options.map((option) => ({
+              value: option.value,
+              label: t(option.labelKey),
+            }))}
+            onValueChange={(value) => {
+              setTemplateValue("");
+              fillCommand(value);
+            }}
+          />
+        ))}
       </div>
       <form
         className="console-command-form"

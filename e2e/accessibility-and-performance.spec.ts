@@ -1,36 +1,39 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "./support/fixtures";
 
-async function expectNoCriticalAxeViolations(
+async function expectNoSeriousAxeViolations(
   page: import("@playwright/test").Page,
 ) {
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa"])
     .analyze();
   expect(
-    results.violations.filter((violation) => violation.impact === "critical"),
+    results.violations.filter(
+      (violation) =>
+        violation.impact === "critical" || violation.impact === "serious",
+    ),
   ).toEqual([]);
 }
 
 test.describe("accessibility and idle performance", () => {
-  test("has no critical accessibility violations on primary surfaces", async ({
+  test("has no serious accessibility violations on primary surfaces", async ({
     appPage: page,
   }) => {
     test.setTimeout(60_000);
-    await expectNoCriticalAxeViolations(page);
+    await expectNoSeriousAxeViolations(page);
 
     await page
       .getByRole("list", { name: "Server overview" })
       .getByRole("button", { name: "Fabric Workshop", exact: true })
       .click();
-    await expectNoCriticalAxeViolations(page);
+    await expectNoSeriousAxeViolations(page);
 
     await page.getByRole("button", { name: "Settings", exact: true }).click();
-    await expectNoCriticalAxeViolations(page);
+    await expectNoSeriousAxeViolations(page);
 
     await page.getByRole("button", { name: "Dashboard", exact: true }).click();
     await page.getByRole("button", { name: "Create Server" }).click();
-    await expectNoCriticalAxeViolations(page);
+    await expectNoSeriousAxeViolations(page);
   });
 
   test("supports a complete keyboard route through the workbench and settings", async ({

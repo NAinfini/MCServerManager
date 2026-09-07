@@ -52,11 +52,44 @@ test.describe("marketplace and server creation", () => {
     await expect(
       details.getByRole("button", { name: /1\.4\.0/ }),
     ).toBeVisible();
+    await expect(projects).toBeHidden();
+    // Focused details replace browsing controls while retaining a clear exit.
+    const exit = page.getByRole("button", { name: "Exit setup" });
+    await expect(exit).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Search", exact: true }),
+    ).toBeHidden();
     await page.getByRole("button", { name: "Back" }).click();
     await expect(projects).toBeVisible();
   });
 
-  test("creates a blank server through every wizard step", async ({
+  test("keeps the pack detail free of sideways scroll while the action is hovered", async ({
+    appPage: page,
+  }) => {
+    await page.getByRole("button", { name: "Create Server" }).click();
+    await page.getByRole("button", { name: "Browse marketplace" }).click();
+    await page
+      .getByRole("region", { name: "Marketplace search results" })
+      .getByRole("button", { name: /Fabric Essentials/ })
+      .click();
+    await page.getByRole("button", { name: /1\.4\.0/ }).click();
+
+    // The action fills the version rail, and the rail ends where the detail's
+    // content box ends, so a hover effect that grows it outward pushes past
+    // that edge and the detail sprouts a horizontal scrollbar under the
+    // pointer.
+    await page.getByRole("button", { name: "Use selected version" }).hover();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const detail = document.querySelector(".marketplace-details");
+          return detail ? detail.scrollWidth - detail.clientWidth : -1;
+        }),
+      )
+      .toBe(0);
+  });
+
+  test("creates a blank server from the single setup step", async ({
     appPage: page,
     fakeDesktop,
   }) => {
@@ -70,12 +103,14 @@ test.describe("marketplace and server creation", () => {
     await page.getByLabel("Name").fill("Walkthrough");
     await page.getByRole("button", { name: "Continue", exact: true }).click();
 
+    // Compatibility, Java and the review are readiness rows on the setup step
+    // now, so there is nothing left to click through before creating.
     await expect(
-      page.getByRole("heading", { name: /compatibility/i }),
+      page.getByRole("region", { name: "Readiness checks" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Next" }).click();
-    await page.getByRole("button", { name: "Next" }).click();
-    await page.getByRole("button", { name: "Next" }).click();
+    await expect(
+      page.getByRole("complementary", { name: "What will be created" }),
+    ).toContainText("Walkthrough");
 
     await page.getByLabel("I accept the Minecraft EULA").check();
     await page.getByRole("button", { name: "Install and start" }).click();

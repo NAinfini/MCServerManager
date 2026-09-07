@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -10,13 +17,13 @@ import {
   Gamepad2,
   HardDrive,
   Info,
+  Network,
   Package,
   RefreshCw,
   Rocket,
   Server,
   ShieldCheck,
   Upload,
-  UsersRound,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
@@ -63,7 +70,7 @@ import { serverKeys } from "./queries";
 import { createWorldBackup } from "../backups/backupApi";
 import { startServer } from "../process/api";
 
-type WizardStep = 0 | 1 | 2 | 3 | 4 | 5;
+type WizardStep = 0 | 1 | 2;
 type SourceView = "choices" | "blank" | "marketplace";
 type ServerIntent = "vanilla" | "plugins" | "mods" | "advanced";
 export type CreateServerWizardLifecycle = "draft" | "running" | "complete";
@@ -74,13 +81,16 @@ export interface CreateServerWizardProgress {
 }
 
 export type CreateServerCompletionAction =
-  "overview" | "invite" | "content" | "backup";
+  "overview" | "network" | "content" | "backup";
 
 interface CreateServerWizardProps {
   onCreated?: () => void;
   onLifecycleChange?: (lifecycle: CreateServerWizardLifecycle) => void;
   onHeaderBackChange?: (handler: (() => void) | null) => void;
   onHeaderHiddenChange?: (hidden: boolean) => void;
+  /* Rendered inside the marketplace detail bar while the wizard header is
+     hidden, so the flow keeps an exit. */
+  marketplaceDetailAction?: ReactNode;
   onProgressChange?: (progress: CreateServerWizardProgress | null) => void;
   onRouteStateChange?: (state: {
     step: WizardStep;
@@ -94,6 +104,10 @@ interface CreateServerWizardProps {
   initialSourcePath?: string | null;
   initialStep?: number;
   initialJobId?: string | null;
+  /* Set when the user pressed "Import Server" rather than "Create Server".
+     Both used to land on this same chooser, which made the two buttons
+     indistinguishable. */
+  openFolderPickerOnMount?: boolean;
 }
 
 const loaders: LoaderType[] = [
@@ -148,12 +162,14 @@ export function CreateServerWizard({
   onLifecycleChange,
   onHeaderBackChange,
   onHeaderHiddenChange,
+  marketplaceDetailAction,
   onProgressChange,
   onRouteStateChange,
   onCompletionAction,
   showHeading = true,
   initialSourcePath = null,
   initialJobId = null,
+  openFolderPickerOnMount = false,
 }: CreateServerWizardProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
@@ -248,16 +264,16 @@ export function CreateServerWizard({
           : t("provisioning.wizard.step.sourceVersions")
         : t("provisioning.wizard.step.sourceChoice");
 
+  /* Three decisions, not six screens. Compatibility, the Java runtime and the
+     final review are checks the user cannot act on when they pass, so they are
+     status rows on the setup step instead of steps of their own. */
   const steps = useMemo(
     () => [
       {
         label: t("provisioning.wizard.step.source"),
         description: sourceStepDetail,
       },
-      { label: t("provisioning.wizard.step.compatibility") },
-      { label: t("provisioning.wizard.step.java") },
-      { label: t("provisioning.wizard.step.configuration") },
-      { label: t("provisioning.wizard.step.review") },
+      { label: t("provisioning.wizard.step.setup") },
       { label: t("provisioning.wizard.step.install") },
     ],
     [sourceStepDetail, t],
@@ -270,7 +286,7 @@ export function CreateServerWizard({
   useEffect(() => {
     onRouteStateChange?.({
       step,
-      ...(step === 5 && job?.id ? { jobId: job.id } : {}),
+      ...(step === 2 && job?.id ? { jobId: job.id } : {}),
     });
   }, [job?.id, onRouteStateChange, step]);
 
@@ -296,7 +312,7 @@ export function CreateServerWizard({
           recoveredJobIdRef.current = recovered.id;
           setJob(recovered);
           setIsRecoveredJob(true);
-          setStep(5);
+          setStep(2);
           publishLifecycle(
             recovered.stage === "ready" ? "complete" : "running",
           );
@@ -408,10 +424,13 @@ export function CreateServerWizard({
   ]);
 
   useEffect(() => {
-    if (step !== 2 || !sourcePlan || javaRuntime || javaPlan) return;
+    if (step !== 1 || !sourcePlan || javaRuntime || javaPlan) return;
     let active = true;
     setBusy(true);
-    planJavaRuntime(sourcePlan.requiredJavaMajor || 21)
+    planJavaRuntime(
+      sourcePlan.requiredJavaMajor || 21,
+      sourcePlan.maxJavaMajor ?? null,
+    )
       .then((plan) => {
         if (!active) return;
         setJavaPlan(plan);
@@ -495,6 +514,15 @@ export function CreateServerWizard({
     }
   };
 
+  // Fires once. Cancelling the picker leaves the chooser on screen, which is
+  // the right place to land anyway.
+  const folderPickerOpened = useRef(false);
+  useEffect(() => {
+    if (!openFolderPickerOnMount || folderPickerOpened.current) return;
+    folderPickerOpened.current = true;
+    void chooseExistingFolder();
+  }, [openFolderPickerOnMount]);
+
   const handleDrop = useCallback(
     async (event: React.DragEvent) => {
       event.preventDefault();
@@ -577,10 +605,37 @@ export function CreateServerWizard({
     configuration.minMemoryMb >= 256 &&
     configuration.maxMemoryMb >= configuration.minMemoryMb;
 
+  /* The three facts that decide whether the pack can run at all, on one line so
+     the setup step can state them without spending a screen on them. */
+  const runtimeSummary = [
+    [
+      sourcePlan?.loaderType ?? loaderType,
+      sourcePlan?.loaderVersion || loaderVersion,
+    ]
+      .filter(Boolean)
+      .join(" "),
+    sourcePlan?.minecraftVersion || minecraftVersion,
+    sourcePlan?.requiredJavaMajor ? `Java ${sourcePlan.requiredJavaMajor}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  /* Exactly one reason, in the order the user would fix them, so the nav bar
+     never has to say "something is wrong". */
+  const blockedReason = !compatibilityReady
+    ? t("provisioning.wizard.blocked.compatibility")
+    : !javaRuntime
+      ? t("provisioning.wizard.blocked.java")
+      : !configurationReady
+        ? t("provisioning.wizard.configurationHint")
+        : !eulaAccepted
+          ? t("provisioning.wizard.blocked.eula")
+          : null;
+
   const executeJob = async (created: ProvisioningJob) => {
     setJob(created);
     setIsRecoveredJob(false);
-    setStep(5);
+    setStep(2);
     publishLifecycle("running");
     pollIntervalRef.current = window.setInterval(() => {
       getProvisioningJob(created.id)
@@ -690,14 +745,9 @@ export function CreateServerWizard({
 
   const goBack = () => {
     if (step === 0) return;
-    if (step === 5 && job && job.stage !== "ready") return;
+    if (step === 2 && job && job.stage !== "ready") return;
     setError(null);
     setStep((step - 1) as WizardStep);
-  };
-
-  const goToStep = (next: WizardStep) => {
-    setError(null);
-    setStep(next);
   };
 
   const startFreshDraft = () => {
@@ -833,6 +883,7 @@ export function CreateServerWizard({
         {step === 0 && sourceView === "marketplace" ? (
           <div className="wizard-marketplace-step">
             <CreateServerMarketplaceBrowser
+              detailAction={marketplaceDetailAction}
               onDetailModeChange={onHeaderHiddenChange}
               onSelect={handleMarketplaceSelect}
             />
@@ -1002,332 +1053,252 @@ export function CreateServerWizard({
         ) : null}
 
         {step === 1 && sourcePlan ? (
-          <div className="provisioning-compatibility">
-            <h3>{t("provisioning.wizard.compatibilityTitle")}</h3>
-            {!sourcePlan.launchSpec ? (
-              <div className="form-grid provisioning-runtime-metadata">
-                <p>{t("provisioning.wizard.runtimeMetadataRequired")}</p>
-                <label>
-                  <span>{t("profileSettings.loader")}</span>
-                  <select
-                    aria-label={t("profileSettings.loader")}
-                    className="field-control"
-                    value={loaderType}
-                    onChange={(event) => {
-                      setLoaderType(event.target.value as LoaderType);
-                      setMinecraftVersion("");
-                      setLoaderVersion("");
-                    }}
-                  >
-                    {loaders.map((loader) => (
-                      <option key={loader} value={loader}>
-                        {loader}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>{t("profileSettings.minecraftVersion")}</span>
-                  <select
-                    aria-label={t("profileSettings.minecraftVersion")}
-                    className="field-control"
-                    value={minecraftVersion}
-                    onChange={(event) => {
-                      setMinecraftVersion(event.target.value);
-                      setLoaderVersion("");
-                    }}
-                  >
-                    <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((option, index) => (
-                      <option key={option.value} value={option.value}>
-                        {index === recommendedMinecraftIndex
-                          ? t("provisioning.wizard.recommendedOption", {
-                              label: option.label,
-                            })
-                          : option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>{t("profileSettings.loaderVersion")}</span>
-                  <select
-                    aria-label={t("profileSettings.loaderVersion")}
-                    className="field-control"
-                    value={loaderVersion}
-                    onChange={(event) => setLoaderVersion(event.target.value)}
-                  >
-                    <option value="">
-                      {t("provisioning.wizard.autoSelectLoader")}
-                    </option>
-                    {loaderOptions.map((option, index) => (
-                      <option key={option.value} value={option.value}>
-                        {index === recommendedLoaderIndex
-                          ? t("provisioning.wizard.recommendedOption", {
-                              label: option.label,
-                            })
-                          : option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  disabled={busy || !minecraftVersion}
-                  onClick={prepareUnverifiedRuntime}
+          <div className="provisioning-setup-step">
+            <div className="provisioning-setup-main">
+              {/* Compatibility and Java used to be screens of their own, which
+                  made the user click through two pages that say "fine" in the
+                  overwhelming majority of runs. They are status rows now and
+                  only open up when they actually block the install. */}
+              <section
+                aria-label={t("provisioning.wizard.readinessAria")}
+                className="provisioning-readiness"
+              >
+                <ReadinessStrip
+                  detail={runtimeSummary}
+                  title={t("provisioning.wizard.compatibilityTitle")}
+                  tone={compatibilityReady ? "ok" : "warn"}
                 >
-                  {t("provisioning.wizard.prepareRuntime")}
-                </Button>
-              </div>
-            ) : null}
-            <dl className="provisioning-detected">
-              <div>
-                <dt>{t("profileSettings.loader")}</dt>
-                <dd>{sourcePlan.loaderType ?? loaderType}</dd>
-              </div>
-              <div>
-                <dt>{t("profileSettings.minecraftVersion")}</dt>
-                <dd>
-                  {sourcePlan.minecraftVersion ||
-                    minecraftVersion ||
-                    t("provisioning.wizard.detectedUnknown")}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("profileSettings.loaderVersion")}</dt>
-                <dd>
-                  {sourcePlan.loaderVersion ||
-                    loaderVersion ||
-                    t("provisioning.wizard.detectedUnknown")}
-                </dd>
-              </div>
-              <div>
-                <dt>{t("provisioning.wizard.detectedJava")}</dt>
-                <dd>
-                  {sourcePlan.requiredJavaMajor
-                    ? `Java ${sourcePlan.requiredJavaMajor}`
-                    : t("provisioning.wizard.detectedUnknown")}
-                </dd>
-              </div>
-            </dl>
-            {sourcePlan.warnings.length === 0 ? (
-              <p className="provisioning-all-clear">
-                <ShieldCheck aria-hidden="true" size={16} />
-                {t("provisioning.wizard.noWarnings")}
-              </p>
-            ) : (
-              sourcePlan.warnings.map((warning) => (
-                <label
-                  className="provisioning-warning"
-                  data-blocking={
-                    warning.requiresAcknowledgement ? "true" : "false"
-                  }
-                  key={warning.code}
-                >
-                  <span className="provisioning-warning-message">
-                    {warning.requiresAcknowledgement ? (
-                      <AlertTriangle aria-hidden="true" size={15} />
-                    ) : (
-                      <Info aria-hidden="true" size={15} />
-                    )}
-                    {warning.message}
-                  </span>
-                  {warning.requiresAcknowledgement ? (
-                    <span className="checkbox-row">
-                      <input
-                        aria-label={t("provisioning.wizard.acceptWarning")}
-                        checked={acknowledgedWarnings.includes(warning.code)}
-                        type="checkbox"
-                        onChange={(event) =>
-                          setAcknowledgedWarnings((current) =>
-                            event.target.checked
-                              ? [...current, warning.code]
-                              : current.filter((code) => code !== warning.code),
-                          )
-                        }
-                      />
-                      {t("provisioning.wizard.acceptWarning")}
-                    </span>
+                  {!sourcePlan.launchSpec ? (
+                    <div className="form-grid provisioning-runtime-metadata">
+                      <p>{t("provisioning.wizard.runtimeMetadataRequired")}</p>
+                      <label>
+                        <span>{t("profileSettings.loader")}</span>
+                        <select
+                          aria-label={t("profileSettings.loader")}
+                          className="field-control"
+                          value={loaderType}
+                          onChange={(event) => {
+                            setLoaderType(event.target.value as LoaderType);
+                            setMinecraftVersion("");
+                            setLoaderVersion("");
+                          }}
+                        >
+                          {loaders.map((loader) => (
+                            <option key={loader} value={loader}>
+                              {loader}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>{t("profileSettings.minecraftVersion")}</span>
+                        <select
+                          aria-label={t("profileSettings.minecraftVersion")}
+                          className="field-control"
+                          value={minecraftVersion}
+                          onChange={(event) => {
+                            setMinecraftVersion(event.target.value);
+                            setLoaderVersion("");
+                          }}
+                        >
+                          <option value="">
+                            {t("provisioning.wizard.select")}
+                          </option>
+                          {minecraftOptions.map((option, index) => (
+                            <option key={option.value} value={option.value}>
+                              {index === recommendedMinecraftIndex
+                                ? t("provisioning.wizard.recommendedOption", {
+                                    label: option.label,
+                                  })
+                                : option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        <span>{t("profileSettings.loaderVersion")}</span>
+                        <select
+                          aria-label={t("profileSettings.loaderVersion")}
+                          className="field-control"
+                          value={loaderVersion}
+                          onChange={(event) =>
+                            setLoaderVersion(event.target.value)
+                          }
+                        >
+                          <option value="">
+                            {t("provisioning.wizard.autoSelectLoader")}
+                          </option>
+                          {loaderOptions.map((option, index) => (
+                            <option key={option.value} value={option.value}>
+                              {index === recommendedLoaderIndex
+                                ? t("provisioning.wizard.recommendedOption", {
+                                    label: option.label,
+                                  })
+                                : option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <Button
+                        disabled={busy || !minecraftVersion}
+                        onClick={prepareUnverifiedRuntime}
+                      >
+                        {t("provisioning.wizard.prepareRuntime")}
+                      </Button>
+                    </div>
                   ) : null}
-                </label>
-              ))
-            )}
-          </div>
-        ) : null}
+                  {sourcePlan.warnings.map((warning) => (
+                    <label
+                      className="provisioning-warning"
+                      data-blocking={
+                        warning.requiresAcknowledgement ? "true" : "false"
+                      }
+                      key={warning.code}
+                    >
+                      <span className="provisioning-warning-message">
+                        {warning.requiresAcknowledgement ? (
+                          <AlertTriangle aria-hidden="true" size={15} />
+                        ) : (
+                          <Info aria-hidden="true" size={15} />
+                        )}
+                        {warning.message}
+                      </span>
+                      {warning.requiresAcknowledgement ? (
+                        <span className="checkbox-row">
+                          <input
+                            aria-label={t("provisioning.wizard.acceptWarning")}
+                            checked={acknowledgedWarnings.includes(
+                              warning.code,
+                            )}
+                            type="checkbox"
+                            onChange={(event) =>
+                              setAcknowledgedWarnings((current) =>
+                                event.target.checked
+                                  ? [...current, warning.code]
+                                  : current.filter(
+                                      (code) => code !== warning.code,
+                                    ),
+                              )
+                            }
+                          />
+                          {t("provisioning.wizard.acceptWarning")}
+                        </span>
+                      ) : null}
+                    </label>
+                  ))}
+                </ReadinessStrip>
 
-        {step === 2 ? (
-          <div className="provisioning-java-step">
-            <h3>
-              {t("provisioning.wizard.javaTitle", {
-                version: sourcePlan?.requiredJavaMajor || 21,
-              })}
-            </h3>
-            {busy && !javaRuntime ? (
-              <p className="provisioning-step-hint">
-                {t("provisioning.wizard.javaPlanning")}
-              </p>
-            ) : null}
-            {javaRuntime ? (
-              <div className="provisioning-java-ready">
-                <ShieldCheck aria-hidden="true" size={16} />
-                <div>
-                  <strong>{t("provisioning.wizard.javaReady")}</strong>
-                  <code>{javaRuntime.path}</code>
-                </div>
-              </div>
-            ) : null}
-            {javaPlan?.action === "install" && !javaRuntime ? (
-              <div className="provisioning-java-install">
-                <p>{t("provisioning.wizard.javaDownload")}</p>
-                <dl className="provisioning-detected">
-                  <div>
-                    <dt>{t("provisioning.wizard.javaVendor")}</dt>
-                    <dd>{javaPlan.vendor || "-"}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("provisioning.wizard.javaVersion")}</dt>
-                    <dd>
-                      {javaPlan.version || `Java ${javaPlan.majorVersion}`}
-                    </dd>
-                  </div>
-                </dl>
-                {javaPlan.licenseUrl ? (
-                  <a
-                    className="provisioning-java-license"
-                    href={javaPlan.licenseUrl}
-                  >
-                    {t("provisioning.wizard.javaLicense")}
-                  </a>
-                ) : null}
-                <label className="checkbox-row">
-                  <input
-                    aria-label={t("provisioning.wizard.javaConsent")}
-                    checked={javaConsent}
-                    type="checkbox"
-                    onChange={(event) => setJavaConsent(event.target.checked)}
-                  />
-                  {t("provisioning.wizard.javaConsent")}
-                </label>
-                <Button
-                  disabled={!javaConsent || busy}
-                  onClick={installManagedJava}
-                >
-                  {t("provisioning.wizard.installJava", {
-                    version: javaPlan.majorVersion,
-                  })}
-                </Button>
-                {/* Both this button and Next start disabled, and nothing else on
-                    the step says which action unlocks which. Without this the
-                    user reads it as the wizard being broken. */}
-                <p className="provisioning-step-hint">
-                  {javaConsent
-                    ? t("provisioning.wizard.javaInstallHint")
-                    : t("provisioning.wizard.javaConsentHint")}
-                </p>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {step === 3 ? (
-          <div className="provisioning-configuration-step">
-            <ConfigSection
-              icon={Server}
-              title={t("provisioning.config.section.identity")}
-            >
-              <label className="field-span-2">
-                <span>{t("profileSettings.name")}</span>
-                <TextField
-                  aria-label={t("profileSettings.name")}
-                  maxLength={MAX_SERVER_NAME_LENGTH}
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </label>
-            </ConfigSection>
-            <ConfigSection
-              icon={Gamepad2}
-              title={t("provisioning.config.section.gameplay")}
-            >
-              <label>
-                <span>{t("provisioning.config.difficulty")}</span>
-                <select
-                  aria-label={t("provisioning.config.difficulty")}
-                  className="field-control"
-                  value={configuration.difficulty}
-                  onChange={(event) =>
-                    setConfiguration((current) => ({
-                      ...current,
-                      difficulty: event.target.value,
-                    }))
+                <ReadinessStrip
+                  detail={
+                    javaRuntime
+                      ? javaRuntime.path
+                      : javaPlan?.action === "install"
+                        ? t("provisioning.wizard.javaDownload")
+                        : t("provisioning.wizard.javaPlanning")
                   }
+                  title={t("provisioning.wizard.javaTitle", {
+                    version: sourcePlan.requiredJavaMajor || 21,
+                  })}
+                  tone={javaRuntime ? "ok" : javaPlan ? "warn" : "pending"}
                 >
-                  <option value="peaceful">
-                    {t("provisioning.config.difficulty.peaceful")}
-                  </option>
-                  <option value="easy">
-                    {t("provisioning.config.difficulty.easy")}
-                  </option>
-                  <option value="normal">
-                    {t("provisioning.config.difficulty.normal")}
-                  </option>
-                  <option value="hard">
-                    {t("provisioning.config.difficulty.hard")}
-                  </option>
-                </select>
-              </label>
-              <BooleanField
-                label={t("provisioning.config.whiteList")}
-                checked={configuration.whiteList === true}
-                onChange={(checked) =>
-                  setConfiguration((current) => ({
-                    ...current,
-                    whiteList: checked,
-                  }))
-                }
-              />
-            </ConfigSection>
+                  {javaPlan?.action === "install" && !javaRuntime ? (
+                    <div className="provisioning-java-install">
+                      <dl className="provisioning-detected">
+                        <div>
+                          <dt>{t("provisioning.wizard.javaVendor")}</dt>
+                          <dd>{javaPlan.vendor || "-"}</dd>
+                        </div>
+                        <div>
+                          <dt>{t("provisioning.wizard.javaVersion")}</dt>
+                          <dd>
+                            {javaPlan.version ||
+                              `Java ${javaPlan.majorVersion}`}
+                          </dd>
+                        </div>
+                      </dl>
+                      {javaPlan.licenseUrl ? (
+                        <a
+                          className="provisioning-java-license"
+                          href={javaPlan.licenseUrl}
+                        >
+                          {t("provisioning.wizard.javaLicense")}
+                        </a>
+                      ) : null}
+                      <label className="checkbox-row">
+                        <input
+                          aria-label={t("provisioning.wizard.javaConsent")}
+                          checked={javaConsent}
+                          type="checkbox"
+                          onChange={(event) =>
+                            setJavaConsent(event.target.checked)
+                          }
+                        />
+                        {t("provisioning.wizard.javaConsent")}
+                      </label>
+                      <Button
+                        disabled={!javaConsent || busy}
+                        onClick={installManagedJava}
+                      >
+                        {t("provisioning.wizard.installJava", {
+                          version: javaPlan.majorVersion,
+                        })}
+                      </Button>
+                      {/* The install button and the primary action both start
+                          disabled, and nothing else says which unlocks which. */}
+                      <p className="provisioning-step-hint">
+                        {javaConsent
+                          ? t("provisioning.wizard.javaInstallHint")
+                          : t("provisioning.wizard.javaConsentHint")}
+                      </p>
+                    </div>
+                  ) : null}
+                </ReadinessStrip>
+              </section>
 
-            <details className="provisioning-advanced-settings">
-              <summary>{t("provisioning.config.advanced")}</summary>
-              <p>{t("provisioning.config.advancedDescription")}</p>
               <ConfigSection
-                icon={HardDrive}
-                title={t("provisioning.config.section.location")}
+                icon={Server}
+                title={t("provisioning.config.section.identity")}
               >
                 <label className="field-span-2">
-                  <span>{t("profileSettings.serverFolder")}</span>
+                  <span>{t("profileSettings.name")}</span>
                   <TextField
-                    aria-label={t("profileSettings.serverFolder")}
-                    value={rootDir}
-                    onChange={(event) => setRootDir(event.target.value)}
+                    aria-label={t("profileSettings.name")}
+                    maxLength={MAX_SERVER_NAME_LENGTH}
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
                   />
                 </label>
               </ConfigSection>
               <ConfigSection
-                icon={Cpu}
-                title={t("provisioning.config.section.resources")}
+                icon={Gamepad2}
+                title={t("provisioning.config.section.gameplay")}
               >
-                <NumberField
-                  label={t("profileSettings.minMemoryMb")}
-                  value={configuration.minMemoryMb}
-                  onChange={(value) => setNumber("minMemoryMb", value)}
-                />
-                <NumberField
-                  label={t("profileSettings.maxMemoryMb")}
-                  value={configuration.maxMemoryMb}
-                  onChange={(value) => setNumber("maxMemoryMb", value)}
-                />
-                <label className="field-span-2 provisioning-port-field">
-                  <NumberField
-                    label={t("profileSettings.port")}
-                    value={configuration.serverPort}
-                    onChange={(value) => setNumber("serverPort", value)}
-                  />
-                  {takenPorts.includes(configuration.serverPort) ? (
-                    <small role="status">
-                      {t("provisioning.config.portTaken")}
-                    </small>
-                  ) : null}
+                <label>
+                  <span>{t("provisioning.config.difficulty")}</span>
+                  <select
+                    aria-label={t("provisioning.config.difficulty")}
+                    className="field-control"
+                    value={configuration.difficulty}
+                    onChange={(event) =>
+                      setConfiguration((current) => ({
+                        ...current,
+                        difficulty: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="peaceful">
+                      {t("provisioning.config.difficulty.peaceful")}
+                    </option>
+                    <option value="easy">
+                      {t("provisioning.config.difficulty.easy")}
+                    </option>
+                    <option value="normal">
+                      {t("provisioning.config.difficulty.normal")}
+                    </option>
+                    <option value="hard">
+                      {t("provisioning.config.difficulty.hard")}
+                    </option>
+                  </select>
                 </label>
                 <NumberField
                   label={t("provisioning.config.maxPlayers")}
@@ -1335,189 +1306,219 @@ export function CreateServerWizard({
                   onChange={(value) => setNumber("maxPlayers", value)}
                 />
                 <NumberField
-                  label={t("provisioning.config.viewDistance")}
-                  value={configuration.viewDistance || 10}
-                  onChange={(value) => setNumber("viewDistance", value)}
+                  label={t("profileSettings.maxMemoryMb")}
+                  value={configuration.maxMemoryMb}
+                  onChange={(value) => setNumber("maxMemoryMb", value)}
                 />
-                <NumberField
-                  label={t("provisioning.config.simulationDistance")}
-                  value={configuration.simulationDistance || 10}
-                  onChange={(value) => setNumber("simulationDistance", value)}
+                <BooleanField
+                  label={t("provisioning.config.whiteList")}
+                  checked={configuration.whiteList === true}
+                  onChange={(checked) =>
+                    setConfiguration((current) => ({
+                      ...current,
+                      whiteList: checked,
+                    }))
+                  }
                 />
               </ConfigSection>
-              <ConfigSection
-                icon={Gamepad2}
-                title={t("provisioning.config.advancedGameplay")}
-              >
-                <label className="field-span-2">
-                  <span>{t("provisioning.config.motd")}</span>
-                  <TextField
-                    aria-label={t("provisioning.config.motd")}
-                    value={configuration.motd}
-                    onChange={(event) =>
+
+              <details className="provisioning-advanced-settings">
+                <summary>{t("provisioning.config.advanced")}</summary>
+                <p>{t("provisioning.config.advancedDescription")}</p>
+                <ConfigSection
+                  icon={HardDrive}
+                  title={t("provisioning.config.section.location")}
+                >
+                  <label className="field-span-2">
+                    <span>{t("profileSettings.serverFolder")}</span>
+                    <TextField
+                      aria-label={t("profileSettings.serverFolder")}
+                      value={rootDir}
+                      onChange={(event) => setRootDir(event.target.value)}
+                    />
+                  </label>
+                </ConfigSection>
+                <ConfigSection
+                  icon={Cpu}
+                  title={t("provisioning.config.section.resources")}
+                >
+                  <NumberField
+                    label={t("profileSettings.minMemoryMb")}
+                    value={configuration.minMemoryMb}
+                    onChange={(value) => setNumber("minMemoryMb", value)}
+                  />
+                  {/* Not a label: `NumberField` brings its own, and a label
+                      wrapping a label left the port the one field in the form
+                      with its name beside the box instead of above it. */}
+                  <div className="provisioning-port-field">
+                    <NumberField
+                      label={t("profileSettings.port")}
+                      value={configuration.serverPort}
+                      onChange={(value) => setNumber("serverPort", value)}
+                    />
+                    {takenPorts.includes(configuration.serverPort) ? (
+                      <small role="status">
+                        {t("provisioning.config.portTaken")}
+                      </small>
+                    ) : null}
+                  </div>
+                  <NumberField
+                    label={t("provisioning.config.viewDistance")}
+                    value={configuration.viewDistance || 10}
+                    onChange={(value) => setNumber("viewDistance", value)}
+                  />
+                  <NumberField
+                    label={t("provisioning.config.simulationDistance")}
+                    value={configuration.simulationDistance || 10}
+                    onChange={(value) => setNumber("simulationDistance", value)}
+                  />
+                </ConfigSection>
+                <ConfigSection
+                  icon={Gamepad2}
+                  title={t("provisioning.config.advancedGameplay")}
+                >
+                  <label className="field-span-2">
+                    <span>{t("provisioning.config.motd")}</span>
+                    <TextField
+                      aria-label={t("provisioning.config.motd")}
+                      value={configuration.motd}
+                      onChange={(event) =>
+                        setConfiguration((current) => ({
+                          ...current,
+                          motd: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>{t("provisioning.config.gameMode")}</span>
+                    <select
+                      aria-label={t("provisioning.config.gameMode")}
+                      className="field-control"
+                      value={configuration.gameMode}
+                      onChange={(event) =>
+                        setConfiguration((current) => ({
+                          ...current,
+                          gameMode: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value="survival">
+                        {t("provisioning.config.gameMode.survival")}
+                      </option>
+                      <option value="creative">
+                        {t("provisioning.config.gameMode.creative")}
+                      </option>
+                      <option value="adventure">
+                        {t("provisioning.config.gameMode.adventure")}
+                      </option>
+                      <option value="spectator">
+                        {t("provisioning.config.gameMode.spectator")}
+                      </option>
+                    </select>
+                  </label>
+                  <BooleanField
+                    label={t("provisioning.config.onlineMode")}
+                    checked={configuration.onlineMode !== false}
+                    onChange={(checked) =>
                       setConfiguration((current) => ({
                         ...current,
-                        motd: event.target.value,
+                        onlineMode: checked,
                       }))
                     }
                   />
-                </label>
-                <label>
-                  <span>{t("provisioning.config.gameMode")}</span>
-                  <select
-                    aria-label={t("provisioning.config.gameMode")}
-                    className="field-control"
-                    value={configuration.gameMode}
-                    onChange={(event) =>
+                  <BooleanField
+                    label={t("provisioning.config.pvp")}
+                    checked={configuration.pvp !== false}
+                    onChange={(checked) =>
                       setConfiguration((current) => ({
                         ...current,
-                        gameMode: event.target.value,
+                        pvp: checked,
                       }))
                     }
-                  >
-                    <option value="survival">
-                      {t("provisioning.config.gameMode.survival")}
-                    </option>
-                    <option value="creative">
-                      {t("provisioning.config.gameMode.creative")}
-                    </option>
-                    <option value="adventure">
-                      {t("provisioning.config.gameMode.adventure")}
-                    </option>
-                    <option value="spectator">
-                      {t("provisioning.config.gameMode.spectator")}
-                    </option>
-                  </select>
-                </label>
-                <BooleanField
-                  label={t("provisioning.config.onlineMode")}
-                  checked={configuration.onlineMode !== false}
-                  onChange={(checked) =>
-                    setConfiguration((current) => ({
-                      ...current,
-                      onlineMode: checked,
-                    }))
-                  }
-                />
-                <BooleanField
-                  label={t("provisioning.config.pvp")}
-                  checked={configuration.pvp !== false}
-                  onChange={(checked) =>
-                    setConfiguration((current) => ({
-                      ...current,
-                      pvp: checked,
-                    }))
-                  }
-                />
-              </ConfigSection>
-              <ConfigSection
-                icon={RefreshCw}
-                title={t("provisioning.config.section.lifecycle")}
-              >
-                <BooleanField
-                  label={t("provisioning.config.restart")}
-                  checked={restartEnabled}
-                  onChange={setRestartEnabled}
-                />
-                <BooleanField
-                  label={t("provisioning.config.autoStart")}
-                  checked={autoStart}
-                  onChange={setAutoStart}
-                />
-              </ConfigSection>
-            </details>
-          </div>
-        ) : null}
-        {step === 3 && !configurationReady ? (
-          <p className="provisioning-step-hint" role="status">
-            {t("provisioning.wizard.configurationHint")}
-          </p>
-        ) : null}
+                  />
+                </ConfigSection>
+                <ConfigSection
+                  icon={RefreshCw}
+                  title={t("provisioning.config.section.lifecycle")}
+                >
+                  <BooleanField
+                    label={t("provisioning.config.restart")}
+                    checked={restartEnabled}
+                    onChange={setRestartEnabled}
+                  />
+                  <BooleanField
+                    label={t("provisioning.config.autoStart")}
+                    checked={autoStart}
+                    onChange={setAutoStart}
+                  />
+                </ConfigSection>
+              </details>
 
-        {step === 4 && sourcePlan ? (
-          <div className="wizard-review-step">
-            <h3>{t("provisioning.wizard.reviewTitle")}</h3>
-            <div className="wizard-review-groups">
-              <ConfigSection
-                icon={Server}
-                title={t("provisioning.config.section.identity")}
-              >
-                <dl className="wizard-review-fields">
-                  <div>
-                    <dt>{t("profileSettings.name")}</dt>
-                    <dd>{name}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("profileSettings.loader")}</dt>
-                    <dd>
-                      {loaderType} {loaderVersion}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t("profileSettings.minecraftVersion")}</dt>
-                    <dd>{minecraftVersion}</dd>
-                  </div>
-                </dl>
-              </ConfigSection>
-              <ConfigSection
-                icon={HardDrive}
-                title={t("provisioning.config.section.location")}
-              >
-                <dl className="wizard-review-fields">
-                  <div>
-                    <dt>{t("profileSettings.serverFolder")}</dt>
-                    <dd>
-                      <code>{rootDir}</code>
-                    </dd>
-                  </div>
-                  {javaRuntime ? (
-                    <div>
-                      <dt>{t("provisioning.wizard.detectedJava")}</dt>
-                      <dd>
-                        <code>{javaRuntime.path}</code>
-                      </dd>
-                    </div>
-                  ) : null}
-                </dl>
-              </ConfigSection>
-              <ConfigSection
-                icon={Cpu}
-                title={t("provisioning.config.section.resources")}
-              >
-                <dl className="wizard-review-fields">
-                  <div>
-                    <dt>{t("profileSettings.maxMemoryMb")}</dt>
-                    <dd>{configuration.maxMemoryMb} MB</dd>
-                  </div>
-                  <div>
-                    <dt>{t("profileSettings.port")}</dt>
-                    <dd>{configuration.serverPort}</dd>
-                  </div>
-                  <div>
-                    <dt>{t("provisioning.config.maxPlayers")}</dt>
-                    <dd>{configuration.maxPlayers || 20}</dd>
-                  </div>
-                </dl>
-              </ConfigSection>
+              <label className="provisioning-eula checkbox-row">
+                <input
+                  aria-label={t("provisioning.wizard.eulaAccept")}
+                  checked={eulaAccepted}
+                  type="checkbox"
+                  onChange={(event) => setEulaAccepted(event.target.checked)}
+                />
+                <span>
+                  {t("provisioning.wizard.eulaAccept")}{" "}
+                  <a href="https://aka.ms/MinecraftEULA">
+                    {t("provisioning.wizard.eulaLink")}
+                  </a>
+                </span>
+              </label>
             </div>
-            <label className="provisioning-eula checkbox-row">
-              <input
-                aria-label={t("provisioning.wizard.eulaAccept")}
-                checked={eulaAccepted}
-                type="checkbox"
-                onChange={(event) => setEulaAccepted(event.target.checked)}
-              />
-              <span>
-                {t("provisioning.wizard.eulaAccept")}{" "}
-                <a href="https://aka.ms/MinecraftEULA">
-                  {t("provisioning.wizard.eulaLink")}
-                </a>
-              </span>
-            </label>
+
+            {/* Replaces the review step: the same facts, shown while they are
+                still editable instead of one screen after. */}
+            <aside
+              aria-label={t("provisioning.wizard.summaryTitle")}
+              className="provisioning-summary"
+            >
+              <h3>{t("provisioning.wizard.summaryTitle")}</h3>
+              <dl className="wizard-review-fields">
+                <div>
+                  <dt>{t("profileSettings.name")}</dt>
+                  <dd>{name}</dd>
+                </div>
+                <div>
+                  <dt>{t("profileSettings.loader")}</dt>
+                  <dd>{runtimeSummary}</dd>
+                </div>
+                <div>
+                  <dt>{t("profileSettings.serverFolder")}</dt>
+                  <dd>
+                    <code>{rootDir}</code>
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("profileSettings.port")}</dt>
+                  <dd>{configuration.serverPort}</dd>
+                </div>
+                <div>
+                  <dt>{t("profileSettings.maxMemoryMb")}</dt>
+                  <dd>{configuration.maxMemoryMb} MB</dd>
+                </div>
+                <div>
+                  <dt>{t("provisioning.config.maxPlayers")}</dt>
+                  <dd>{configuration.maxPlayers || 20}</dd>
+                </div>
+                {javaRuntime ? (
+                  <div>
+                    <dt>{t("provisioning.wizard.detectedJava")}</dt>
+                    <dd>
+                      <code>{javaRuntime.path}</code>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </aside>
           </div>
         ) : null}
 
-        {step === 5 && job ? (
+        {step === 2 && job ? (
           <>
             <ProvisioningProgress
               busy={busy}
@@ -1550,10 +1551,10 @@ export function CreateServerWizard({
                   <Button
                     disabled={busy}
                     variant="secondary"
-                    onClick={() => void runCompletionAction("invite")}
+                    onClick={() => void runCompletionAction("network")}
                   >
-                    <UsersRound aria-hidden="true" size={15} />
-                    {t("provisioning.complete.invite")}
+                    <Network aria-hidden="true" size={15} />
+                    {t("provisioning.complete.network")}
                   </Button>
                   <Button
                     disabled={busy}
@@ -1600,7 +1601,7 @@ export function CreateServerWizard({
 
       {step === 0 && sourceView === "marketplace" ? null : (
         <div className="wizard-nav-bar">
-          {step > 0 && !(step === 5 && job?.stage !== "ready") ? (
+          {step > 0 && !(step === 2 && job?.stage !== "ready") ? (
             <Button variant="ghost" onClick={goBack}>
               {t("wizard.nav.back")}
             </Button>
@@ -1611,28 +1612,52 @@ export function CreateServerWizard({
           ) : null}
           <div className="wizard-nav-spacer" />
           {step === 1 ? (
-            <Button disabled={!compatibilityReady} onClick={() => goToStep(2)}>
-              {t("wizard.nav.next")}
-            </Button>
-          ) : null}
-          {step === 2 ? (
-            <Button disabled={!javaRuntime || busy} onClick={() => goToStep(3)}>
-              {t("wizard.nav.next")}
-            </Button>
-          ) : null}
-          {step === 3 ? (
-            <Button disabled={!configurationReady} onClick={() => goToStep(4)}>
-              {t("wizard.nav.next")}
-            </Button>
-          ) : null}
-          {step === 4 ? (
-            <Button disabled={!eulaAccepted || busy} onClick={installServer}>
-              {t("provisioning.wizard.install")}
-            </Button>
+            <>
+              {/* A disabled primary with no explanation reads as a broken
+                  wizard, so the bar names the one thing still missing. */}
+              {blockedReason ? (
+                <p className="wizard-nav-blocked" role="status">
+                  {blockedReason}
+                </p>
+              ) : null}
+              <Button
+                disabled={Boolean(blockedReason) || busy}
+                onClick={installServer}
+              >
+                {t("provisioning.wizard.install")}
+              </Button>
+            </>
           ) : null}
         </div>
       )}
     </section>
+  );
+}
+
+/* A readiness check that reads at a glance when it passes and expands into the
+   controls that fix it when it does not. */
+function ReadinessStrip({
+  tone,
+  title,
+  detail,
+  children,
+}: {
+  tone: "ok" | "warn" | "pending";
+  title: string;
+  detail: string;
+  children?: React.ReactNode;
+}) {
+  const Icon =
+    tone === "ok" ? ShieldCheck : tone === "warn" ? AlertTriangle : Info;
+  return (
+    <div className="provisioning-strip" data-tone={tone}>
+      <p className="provisioning-strip-head">
+        <Icon aria-hidden="true" size={16} />
+        <strong>{title}</strong>
+        <span>{detail}</span>
+      </p>
+      {children}
+    </div>
   );
 }
 

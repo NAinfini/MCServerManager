@@ -52,4 +52,8 @@ Target WCAG AA contrast, reduced motion, and color-independent status labels. Ke
 - Managed Eclipse Temurin installation requires separate user consent and does not alter the system `PATH`.
 - Users must read the Minecraft terms and provide explicit EULA confirmation; acceptance is never inferred or preselected.
 - Pack extraction removes pack-provided scripts before any loader installation, and pack scripts are never executed.
-- Installed content updates are manual: detect updates, then update all or update individual items.
+- Installed content updates are manual: detect compatible newer versions, respect pinned and ignored releases, then update selected or individual items. Disabled content stays disabled. Applied updates keep a recoverable history.
+- Server update checks query upstream versions and show Java/content readiness before installation. A completed update keeps a server snapshot for explicit rollback while stopped.
+- Backups record their actual paths in a manifest. World backups follow the configured world name and loader dimensions; full-server and custom profiles restore their recorded scope.
+- Text editing checks the on-disk revision before saving. Binary files remain read-only in the editor, and file mutations cannot escape the server directory or silently replace another file.
+- Automation supports repeat intervals and weekly local times, with explicit backup profile selection.

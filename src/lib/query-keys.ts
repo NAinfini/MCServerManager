@@ -21,6 +21,8 @@ export const queryKeys = {
     installed: (serverId: string) => ["installedContent", serverId] as const,
     updatePolicy: (serverId: string, contentId: string | null = null) =>
       ["contentUpdatePolicy", serverId, contentId] as const,
+    updateCheck: (serverId: string) =>
+      ["contentUpdateCheck", serverId] as const,
   },
   marketplace: {
     modrinthSearch: (
@@ -73,7 +75,6 @@ export const queryKeys = {
     providers: ["tunnelProviders"] as const,
     statuses: ["tunnelStatuses"] as const,
     bindings: ["tunnelBindings"] as const,
-    localAddresses: ["localNetworkAddresses"] as const,
   },
   provisioning: {
     recoverable: ["provisioning", "recoverable"] as const,

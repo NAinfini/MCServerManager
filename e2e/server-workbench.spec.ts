@@ -11,6 +11,31 @@ async function openServer(page: import("@playwright/test").Page) {
 }
 
 test.describe("server workbench", () => {
+  test("uses the application font and keeps workspace navigation in the sidebar", async ({
+    appPage: page,
+  }) => {
+    await openServer(page);
+    expect(
+      await page.evaluate(() => getComputedStyle(document.body).fontFamily),
+    ).toContain("Segoe UI");
+    const sidebar = page.locator("aside.sidebar");
+    const nav = sidebar.getByRole("navigation", {
+      name: "Fabric Workshop workspace",
+    });
+    await expect(nav.getByRole("button")).toHaveCount(7);
+    await expect(
+      page
+        .locator("main")
+        .getByRole("navigation", { name: "Fabric Workshop workspace" }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    await nav.getByRole("button", { name: "Content", exact: true }).click();
+    await expect(page).toHaveURL(/servers\/server-1\/content/);
+    await expect(
+      nav.getByRole("button", { name: "Content", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+  });
+
   test("loads all server workspaces through the fake desktop API", async ({
     appPage: page,
   }) => {
@@ -18,7 +43,7 @@ test.describe("server workbench", () => {
     await openServer(page);
     const workspaces = [
       { section: "Overview", views: [] },
-      { section: "Console", views: [] },
+      { section: "Console", views: ["Live output", "Log files"] },
       {
         section: "Players",
         views: ["Online", "Operators", "Whitelist", "Bans"],
@@ -31,20 +56,10 @@ test.describe("server workbench", () => {
         section: "Files & backups",
         views: ["Backups", "Files"],
       },
-      {
-        section: "Operations",
-        views: ["Performance", "Log files", "Events", "Diagnostics"],
-      },
       { section: "Automation", views: [] },
       {
         section: "Server settings",
-        views: [
-          "General",
-          "World properties",
-          "Network & access",
-          "Version upgrade",
-          "Import & export",
-        ],
+        views: ["General", "World properties", "Network & access"],
       },
     ];
     const workspaceNav = page.getByRole("navigation", {
@@ -72,10 +87,18 @@ test.describe("server workbench", () => {
       }
 
       if (workspace.section === "Console") {
-        await page.getByText("Tools", { exact: true }).click();
-        await expect(
-          page.getByRole("region", { name: "Gamerules" }),
-        ).toBeVisible();
+        // The loop above finished on the log files view; the quick commands
+        // belong to the live terminal.
+        await page
+          .getByRole("navigation", { name: "Workspace views" })
+          .getByRole("button", { name: "Live output", exact: true })
+          .click();
+        // A quick command has to land in the input, not just be listed.
+        await page.getByRole("combobox", { name: "World" }).click();
+        await page.getByRole("option", { name: "Set to day" }).click();
+        await expect(page.getByLabel("Command", { exact: true })).toHaveValue(
+          "time set day",
+        );
       }
 
       await expect(page.getByText("Could not load this panel")).toHaveCount(0);
@@ -133,7 +156,9 @@ test.describe("server workbench", () => {
       .getByRole("navigation", { name: "Workspace views" })
       .getByRole("button", { name: "Files", exact: true })
       .click();
-    await page.getByRole("button", { name: /server\.properties/ }).click();
+    await page
+      .getByRole("button", { name: "server.properties", exact: true })
+      .click();
 
     const motd = page.getByRole("textbox", { name: "motd value" });
     await expect(motd).toHaveValue("Fabric Workshop");
@@ -167,6 +192,93 @@ test.describe("server workbench", () => {
     await expect.poll(() => fakeDesktop.backups.length).toBe(1);
   });
 
+  test("creates, renames and confirms deletion of a server file", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    await openServer(page);
+    await page
+      .getByRole("navigation", { name: "Fabric Workshop workspace" })
+      .getByRole("button", { name: "Files & backups" })
+      .click();
+    await page
+      .getByRole("navigation", { name: "Workspace views" })
+      .getByRole("button", { name: "Files", exact: true })
+      .click();
+    await page.getByRole("button", { name: "New file", exact: true }).click();
+    await page
+      .getByRole("textbox", { name: "File name", exact: true })
+      .fill("notes.txt");
+    await page
+      .locator(".files-operation-bar")
+      .getByRole("button", { name: "Save", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "notes.txt", exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Rename notes.txt", exact: true })
+      .click();
+    await page
+      .getByRole("textbox", { name: "New name", exact: true })
+      .fill("readme.txt");
+    await page
+      .locator(".files-operation-bar")
+      .getByRole("button", { name: "Save", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "readme.txt", exact: true }),
+    ).toBeVisible();
+    expect(fakeDesktop.files).not.toHaveProperty(["notes.txt"]);
+    await page
+      .getByRole("button", { name: "Delete readme.txt", exact: true })
+      .click();
+    expect(fakeDesktop.files).toHaveProperty(["readme.txt"]);
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(
+      page.getByRole("button", { name: "readme.txt", exact: true }),
+    ).toHaveCount(0);
+    expect(fakeDesktop.files).not.toHaveProperty(["readme.txt"]);
+  });
+
+  test("previews backup contents before confirming a restore", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    fakeDesktop.processStatus = "stopped";
+    await openServer(page);
+    await page
+      .getByRole("navigation", { name: "Fabric Workshop workspace" })
+      .getByRole("button", { name: "Files & backups" })
+      .click();
+    await page
+      .getByRole("button", { name: "Restore backup", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Preview restore", exact: true })
+      .click();
+    const review = page.getByRole("alertdialog");
+    await expect(review).toContainText("world/level.dat");
+    expect(
+      fakeDesktop.calls.some((call) => call.command === "restore_world_backup"),
+    ).toBe(false);
+    await review
+      .getByRole("button", { name: "Restore backup", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        fakeDesktop.calls.some(
+          (call) =>
+            call.command === "restore_world_backup" &&
+            (call.args as any)?.input?.confirm === true,
+        ),
+      )
+      .toBe(true);
+  });
+
   test("keeps every workspace free of page-level overflow at all breakpoints", async ({
     appPage: page,
   }) => {
@@ -181,7 +293,6 @@ test.describe("server workbench", () => {
       "Players",
       "Content",
       "Files & backups",
-      "Operations",
       "Automation",
       "Server settings",
     ];

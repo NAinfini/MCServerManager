@@ -62,7 +62,7 @@ export function EditableStringList({
                 aria-label={removeLabel(value)}
                 className="icon-button"
                 title={removeLabel(value)}
-                variant="ghost"
+                variant="danger"
                 onClick={() =>
                   onChange(values.filter((_, itemIndex) => itemIndex !== index))
                 }

@@ -1,4 +1,11 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -184,16 +191,13 @@ describe("CreateServerWizard unified provisioning flow", () => {
         steps: expect.any(Array),
       }),
     );
-    expect(progress.steps).toHaveLength(6);
+    expect(progress.steps).toHaveLength(3);
     expect(progress.steps.every(({ label }) => label.trim().length > 0)).toBe(
       true,
     );
     expect(progress.steps.map(({ label }) => label)).toEqual([
       "Source",
-      "Compatibility",
-      "Java",
-      "Configure",
-      "Review",
+      "Setup",
       "Install",
     ]);
 
@@ -263,38 +267,36 @@ describe("CreateServerWizard unified provisioning flow", () => {
       ),
     ).toBeInTheDocument();
 
-    const compatibilityNext = screen.getByRole("button", { name: "Next" });
-    expect(compatibilityNext).toBeDisabled();
+    const create = screen.getByRole("button", { name: "Install and start" });
+    expect(create).toBeDisabled();
     await userEvent.click(
       screen.getByRole("checkbox", {
         name: /accept this compatibility warning/i,
       }),
     );
-    await userEvent.click(compatibilityNext);
 
-    expect(await screen.findByText(/Java 21/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(
+      await within(
+        screen.getByRole("region", { name: "Readiness checks" }),
+      ).findByText("C:/Java/bin/java.exe"),
+    ).toBeInTheDocument();
 
     await userEvent.clear(screen.getByLabelText("Max memory MB"));
     await userEvent.type(screen.getByLabelText("Max memory MB"), "6144");
+    await userEvent.click(screen.getByText("Advanced configuration"));
     await userEvent.clear(screen.getByLabelText("Message of the day"));
     await userEvent.type(
       screen.getByLabelText("Message of the day"),
       "Pack server",
     );
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const eula = screen.getByRole("checkbox", {
       name: /I accept the Minecraft EULA/i,
     });
     expect(eula).not.toBeChecked();
-    expect(
-      screen.getByRole("button", { name: "Install and start" }),
-    ).toBeDisabled();
+    expect(create).toBeDisabled();
     await userEvent.click(eula);
-    await userEvent.click(
-      screen.getByRole("button", { name: "Install and start" }),
-    );
+    await userEvent.click(create);
 
     await waitFor(() =>
       expect(provisioningApi.createProvisioningJob).toHaveBeenCalled(),
@@ -529,14 +531,14 @@ describe("CreateServerWizard unified provisioning flow", () => {
         /does not contain enough trusted server metadata/i,
       ),
     ).toBeInTheDocument();
-    const next = screen.getByRole("button", { name: "Next" });
-    expect(next).toBeDisabled();
+    const create = screen.getByRole("button", { name: "Install and start" });
+    expect(create).toBeDisabled();
     await userEvent.click(
       screen.getByRole("checkbox", {
         name: /accept this compatibility warning/i,
       }),
     );
-    expect(next).toBeDisabled();
+    expect(create).toBeDisabled();
     await userEvent.selectOptions(
       screen.getByLabelText("Minecraft version"),
       "1.21.4",
@@ -583,7 +585,6 @@ describe("CreateServerWizard unified provisioning flow", () => {
         name: /accept this compatibility warning/i,
       }),
     );
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
 
     const install = await screen.findByRole("button", {
       name: "Install Java 21",
@@ -642,20 +643,20 @@ describe("CreateServerWizard unified provisioning flow", () => {
     renderWizard({ onCompletionAction });
 
     expect(
-      await screen.findByRole("heading", { name: "Your server is ready" }),
+      await screen.findByRole("heading", { name: "What next" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Start and open server" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Invite friends" }),
+      screen.getByRole("button", { name: "Network & access" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Browse content" }),
     ).toBeInTheDocument();
     await userEvent.click(
-      screen.getByRole("button", { name: "Invite friends" }),
+      screen.getByRole("button", { name: "Network & access" }),
     );
-    expect(onCompletionAction).toHaveBeenCalledWith("server-1", "invite");
+    expect(onCompletionAction).toHaveBeenCalledWith("server-1", "network");
   });
 });

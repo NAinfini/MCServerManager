@@ -1,8 +1,16 @@
-import { FileText, Folder, RefreshCw } from "lucide-react";
+import {
+  ArrowRightLeft,
+  FileText,
+  Folder,
+  Pencil,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
 import { formatBytes } from "../../lib/format-bytes";
+import { formatDateTime } from "../../lib/date-format";
 import type { ServerFileEntry } from "./fileApi";
 
 interface FileBrowserProps {
@@ -12,6 +20,9 @@ interface FileBrowserProps {
   selectedPath: string | null;
   onOpenDirectory: (path: string) => void;
   onOpenFile: (path: string) => void;
+  onDelete?: (entry: ServerFileEntry) => void;
+  onMove?: (entry: ServerFileEntry) => void;
+  onRename?: (entry: ServerFileEntry) => void;
   onRetry?: () => void;
 }
 
@@ -22,9 +33,12 @@ export function FileBrowser({
   selectedPath,
   onOpenDirectory,
   onOpenFile,
+  onDelete,
+  onMove,
+  onRename,
   onRetry,
 }: FileBrowserProps) {
-  const { t } = useAppSettings();
+  const { language, t } = useAppSettings();
   return (
     <section className="files-browser" aria-label={t("files.browser.aria")}>
       {isLoading ? (
@@ -57,35 +71,104 @@ export function FileBrowser({
       ) : null}
 
       {!isLoading && !error && entries.length > 0 ? (
-        <div className="files-list" role="list">
-          {entries.map((entry) => {
-            const isDirectory = entry.kind === "directory";
-            const Icon = isDirectory ? Folder : FileText;
-            return (
-              <button
-                className={
-                  entry.relativePath === selectedPath
-                    ? "files-row files-row-selected"
-                    : "files-row"
-                }
-                key={entry.relativePath || entry.name}
-                type="button"
-                onClick={() =>
-                  isDirectory
-                    ? onOpenDirectory(entry.relativePath)
-                    : onOpenFile(entry.relativePath)
-                }
-              >
-                <Icon aria-hidden="true" size={16} />
-                <span>{entry.name}</span>
-                <small>
-                  {isDirectory
-                    ? t("files.folder")
-                    : formatBytes(entry.sizeBytes)}
-                </small>
-              </button>
-            );
-          })}
+        <div className="files-table-scroll">
+          <table className="files-table">
+            <caption className="visually-hidden">
+              {t("files.browser.aria")}
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">{t("files.table.name")}</th>
+                <th scope="col">{t("files.table.size")}</th>
+                <th scope="col">{t("files.table.modified")}</th>
+                <th scope="col">{t("files.table.actions")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => {
+                const isDirectory = entry.kind === "directory";
+                const Icon = isDirectory ? Folder : FileText;
+                return (
+                  <tr
+                    className={
+                      entry.relativePath === selectedPath
+                        ? "files-table-row files-table-row-selected"
+                        : "files-table-row"
+                    }
+                    key={entry.relativePath || entry.name}
+                  >
+                    <th scope="row">
+                      <button
+                        className="files-name-button"
+                        type="button"
+                        onClick={() =>
+                          isDirectory
+                            ? onOpenDirectory(entry.relativePath)
+                            : onOpenFile(entry.relativePath)
+                        }
+                      >
+                        <Icon aria-hidden="true" size={16} />
+                        <span title={entry.name}>{entry.name}</span>
+                      </button>
+                    </th>
+                    <td>
+                      {isDirectory
+                        ? t("files.folder")
+                        : formatBytes(entry.sizeBytes)}
+                    </td>
+                    <td>
+                      {entry.modifiedAt
+                        ? formatDateTime(entry.modifiedAt, language)
+                        : t("common.unknown")}
+                    </td>
+                    <td>
+                      <div className="files-row-actions">
+                        {onRename ? (
+                          <Button
+                            aria-label={t("files.actions.renameNamed", {
+                              name: entry.name,
+                            })}
+                            className="icon-button"
+                            title={t("files.actions.rename")}
+                            variant="ghost"
+                            onClick={() => onRename(entry)}
+                          >
+                            <Pencil aria-hidden="true" size={14} />
+                          </Button>
+                        ) : null}
+                        {onMove ? (
+                          <Button
+                            aria-label={t("files.actions.moveNamed", {
+                              name: entry.name,
+                            })}
+                            className="icon-button"
+                            title={t("files.actions.move")}
+                            variant="ghost"
+                            onClick={() => onMove(entry)}
+                          >
+                            <ArrowRightLeft aria-hidden="true" size={14} />
+                          </Button>
+                        ) : null}
+                        {onDelete ? (
+                          <Button
+                            aria-label={t("files.actions.deleteNamed", {
+                              name: entry.name,
+                            })}
+                            className="icon-button"
+                            title={t("files.actions.delete")}
+                            variant="danger"
+                            onClick={() => onDelete(entry)}
+                          >
+                            <Trash2 aria-hidden="true" size={14} />
+                          </Button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : null}
     </section>

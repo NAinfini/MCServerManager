@@ -68,6 +68,17 @@ describe("ServerBackupsView", () => {
       if (command === "list_backup_profiles") {
         return [];
       }
+      if (command === "preview_backup_restore") {
+        return {
+          backupId: backup.id,
+          serverId: server.id,
+          mode: "worldOnly",
+          relativePaths: ["world/level.dat"],
+          fileCount: 1,
+          sizeBytes: backup.sizeBytes,
+          warnings: [],
+        };
+      }
       return {};
     });
   });
@@ -103,9 +114,7 @@ describe("ServerBackupsView", () => {
     renderBackups();
 
     await user.click(await screen.findByTitle("Restore backup"));
-    fireEvent.submit(
-      screen.getByRole("button", { name: "Restore" }).closest("form")!,
-    );
+    await user.click(screen.getByRole("button", { name: "Preview restore" }));
     expect(invoke).not.toHaveBeenCalledWith("restore_world_backup", {
       input: {
         backupId: backup.id,
@@ -114,7 +123,19 @@ describe("ServerBackupsView", () => {
       },
     });
 
-    await user.click(screen.getByRole("button", { name: "Restore backup" }));
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("preview_backup_restore", {
+        input: {
+          serverId: server.id,
+          backupId: backup.id,
+          targetWorldDir: "world",
+        },
+      });
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Restore backup" }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("restore_world_backup", {
@@ -142,6 +163,42 @@ describe("ServerBackupsView", () => {
     expect(
       await screen.findByTitle("Stop the server before restoring a backup"),
     ).toBeDisabled();
+  });
+
+  it("previews and restores a full backup without a world target", async () => {
+    const user = userEvent.setup();
+    const fullBackup = { ...backup, kind: "fullServer", worldName: "server" };
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [fullBackup];
+      if (command === "list_backup_profiles") return [];
+      if (command === "preview_backup_restore") {
+        return {
+          backupId: backup.id,
+          serverId: server.id,
+          mode: "fullServer",
+          relativePaths: ["server.properties", "world/level.dat"],
+          fileCount: 2,
+          sizeBytes: backup.sizeBytes,
+          warnings: ["Existing files will be replaced."],
+        };
+      }
+      return {};
+    });
+
+    renderBackups();
+    await user.click(await screen.findByTitle("Restore backup"));
+
+    expect(screen.queryByLabelText("Target directory")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Preview restore" }));
+    expect(await screen.findByText("Full server restore")).toBeInTheDocument();
+    expect(screen.getByText("server.properties")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Restore backup" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("restore_world_backup", {
+        input: { backupId: backup.id, confirm: true },
+      });
+    });
   });
 
   it("shares the live server process status cache with server actions", async () => {

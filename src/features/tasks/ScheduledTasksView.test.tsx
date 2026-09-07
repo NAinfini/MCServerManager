@@ -47,6 +47,11 @@ function renderTasks() {
   );
 }
 
+/* The editor is a composer now: the list is what the panel shows first. */
+async function openComposer() {
+  fireEvent.click(await screen.findByRole("button", { name: "New task" }));
+}
+
 async function chooseAction(optionName: string) {
   await userEvent.click(await screen.findByLabelText(/action/i));
   await userEvent.click(
@@ -98,6 +103,7 @@ describe("ScheduledTasksView", () => {
     });
 
     renderTasks();
+    await openComposer();
     fireEvent.change(await screen.findByLabelText(/task name/i), {
       target: { value: "Nightly restart" },
     });
@@ -110,20 +116,27 @@ describe("ScheduledTasksView", () => {
           serverId: server.id,
           name: "Nightly restart",
           kind: "restart",
+          scheduleKind: "interval",
           intervalMinutes: 1440,
+          timeOfDay: null,
+          weekdays: [],
           command: null,
+          backupProfileId: null,
         },
       });
     });
   });
 
-  it("passes stable target versions for scheduled server update checks", async () => {
+  it("creates a weekly backup task with the selected backup profile", async () => {
     vi.mocked(invoke).mockImplementation(async (command) => {
       if (
         command === "list_scheduled_tasks" ||
         command === "list_scheduled_task_runs"
       ) {
         return [];
+      }
+      if (command === "list_backup_profiles") {
+        return [{ id: "profile-1", name: "Full server" }];
       }
       if (command === "create_scheduled_task") {
         return {};
@@ -132,26 +145,35 @@ describe("ScheduledTasksView", () => {
     });
 
     renderTasks();
+    await openComposer();
     fireEvent.change(await screen.findByLabelText(/task name/i), {
-      target: { value: "Check stable update" },
+      target: { value: "Weekly full backup" },
     });
-    await chooseAction("Server update check");
-    fireEvent.change(screen.getByLabelText(/target minecraft version/i), {
-      target: { value: "1.21.5" },
+    await userEvent.click(screen.getByLabelText("Schedule"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Weekly at a set time" }),
+    );
+    fireEvent.change(screen.getByLabelText("Local time"), {
+      target: { value: "02:30" },
     });
-    fireEvent.change(screen.getByLabelText(/target loader build/i), {
-      target: { value: "125" },
-    });
+    await userEvent.click(screen.getByLabelText("Backup profile"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Full server" }),
+    );
     fireEvent.click(screen.getByRole("button", { name: /add task/i }));
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("create_scheduled_task", {
         input: {
           serverId: server.id,
-          name: "Check stable update",
-          kind: "server_update_check",
+          name: "Weekly full backup",
+          kind: "world_backup",
+          scheduleKind: "weekly",
           intervalMinutes: 1440,
-          command: "1.21.5 125",
+          timeOfDay: "02:30",
+          weekdays: [1, 2, 3, 4, 5],
+          command: null,
+          backupProfileId: "profile-1",
         },
       });
     });
@@ -165,8 +187,12 @@ describe("ScheduledTasksView", () => {
             id: "task-1",
             name: "Nightly restart",
             kind: "restart",
+            scheduleKind: "interval",
             intervalMinutes: 1440,
+            timeOfDay: null,
+            weekdays: [],
             command: null,
+            backupProfileId: null,
             enabled: 1,
             nextRunAt: "2026-07-02T00:00:00Z",
             lastRunAt: null,
@@ -180,7 +206,9 @@ describe("ScheduledTasksView", () => {
     });
 
     renderTasks();
-    fireEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Delete Nightly restart" }),
+    );
     expect(invoke).not.toHaveBeenCalledWith("delete_scheduled_task", {
       taskId: "task-1",
     });

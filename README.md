@@ -6,12 +6,12 @@ MC Server Manager is a standalone Electron desktop application for managing loca
 
 ## Project Status
 
-This project is in active pre-release development. The local desktop management workflows are implemented end to end, with explicit safety checks and visible failure states. Remote public administration, RCON, and silent automatic content installation remain intentionally out of scope.
+Version 0.2.0 provides local desktop management workflows with explicit safety checks and visible failure states. Remote public administration, RCON, and silent automatic content installation remain intentionally out of scope.
 
 ## Interface Architecture
 
 - The dashboard aggregates all local servers, lifecycle state, backups, and items that need attention.
-- Each server opens a deep-linkable eight-section workbench: Overview, Console, Players, Content, Files & backups, Operations, Automation, and Server settings.
+- One sidebar combines the server inventory with seven deep-linkable workspaces: Overview, Console, Players, Content, Files & backups, Automation, and Server settings. Project details use the full task canvas.
 - Console output, lifecycle changes, player state, and performance samples use a shared desktop event channel; only the dashboard summary and active-server status retain bounded fallback polling.
 - Marketplace browsing is shared by server creation and installed-content management.
 - Structured Minecraft files use table or form editors where possible, while advanced source editing remains available for unsupported formats.
@@ -44,7 +44,6 @@ Interrupted installations are persisted. On the next launch, the app offers to r
 pnpm install
 pnpm dev              # full desktop app (Vite renderer + Electron local backend)
 pnpm dev:renderer     # renderer dev server only
-pnpm electron:dev     # compatibility alias for pnpm dev
 pnpm vitest run
 pnpm build
 pnpm electron:build
@@ -91,7 +90,9 @@ Packaged builds can check GitHub Releases for app updates. Update downloads are 
 
 ## Backups
 
-Backups are world-only by default. Backup profiles can broaden scope only when the user explicitly selects a non-default profile.
+Backups are world-only by default. Profiles can include worlds and configuration, the full server, or custom paths. Restore previews show the recorded scope before confirmation. Older backups without a trusted integrity manifest must be exported and restored manually.
+
+Direct server upgrades support Vanilla and Paper. Other loaders can discover upstream versions but require a complete runtime installation. An upgrade rollback restores the entire pre-upgrade snapshot, including worlds, configuration, and installed content.
 
 ## First-Version Limits
 

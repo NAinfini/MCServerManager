@@ -77,5 +77,17 @@ describe("DataTable", () => {
       expect.objectContaining({ id: "a" }),
       0,
     );
+
+    // Space and the mouse both used to do nothing on an activatable row.
+    onRowActivate.mockClear();
+    await userEvent.keyboard(" ");
+    expect(onRowActivate).toHaveBeenCalledTimes(1);
+
+    onRowActivate.mockClear();
+    await userEvent.click(within(table).getAllByRole("row")[2]);
+    expect(onRowActivate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "b" }),
+      1,
+    );
   });
 });

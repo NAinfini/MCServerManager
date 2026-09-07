@@ -9,6 +9,10 @@ import {
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
+import { queryKeys } from "../../lib/query-keys";
+import { listJavaRuntimes } from "../java/javaApi";
+import { javaDiagnosis } from "../java/javaDiagnosis";
+import { useJavaProvisioning } from "../java/useJavaProvisioning";
 import { getServerSetupStatus, type ServerSetupCheck } from "./setupApi";
 import { serverKeys } from "./queries";
 import type { ServerProfile } from "./types";
@@ -54,6 +58,28 @@ export function ServerSetupChecklist({
   const setupQuery = useQuery({
     queryKey: serverKeys.setupStatus(server.id),
     queryFn: () => getServerSetupStatus(server.id),
+  });
+  /* The checklist knows Java is wrong; only the scan knows why and what fixes
+     it. Reading it here is what turns "select a compatible runtime" — which is
+     where users got stuck — into a button that selects one. */
+  const javaQuery = useQuery({
+    queryKey: queryKeys.java.runtimes,
+    queryFn: listJavaRuntimes,
+  });
+  const javaState =
+    javaQuery.data?.compatibility.find((item) => item.serverId === server.id) ??
+    null;
+  const {
+    apply,
+    applyError,
+    busy: javaBusy,
+    dialog: javaInstallDialog,
+    start: startJavaInstall,
+  } = useJavaProvisioning({
+    onFinished: async () => {
+      await setupQuery.refetch();
+    },
+    serverNameFor: () => server.name,
   });
   const checks = setupQuery.data?.checks ?? [];
   const allReady =
@@ -122,10 +148,14 @@ export function ServerSetupChecklist({
           {setupQuery.data ? (
             <div className="server-setup-checks" role="list">
               {setupQuery.data.checks.map((check) => {
-                const showJavaAction =
-                  check.id === "java" &&
-                  check.status === "actionRequired" &&
-                  Boolean(onOpenJava);
+                const isJavaProblem =
+                  check.id === "java" && check.status !== "ready";
+                /* A runtime already on this machine that fits this server. The
+                   backend picks it, so "use it" is one press and no reading. */
+                const usable = isJavaProblem
+                  ? (javaState?.recommendedJavaPath ?? null)
+                  : null;
+                const required = javaState?.requiredMajorVersion;
                 return (
                   <article
                     className={`server-setup-check server-setup-check-${check.status}`}
@@ -140,14 +170,60 @@ export function ServerSetupChecklist({
                         <strong>{t(checkLabelKey(check.id))}</strong>
                         <span>{t(statusLabelKey(check.status))}</span>
                       </div>
-                      <p>{t(checkMessageKey(check))}</p>
-                      {showJavaAction ? (
+                      {/* The generic line says to select a compatible runtime;
+                          the scan says which one and why the current one is
+                          not. Prefer the sentence that names the problem. */}
+                      <p>
+                        {isJavaProblem && javaState
+                          ? javaDiagnosis(javaState, t)
+                          : t(checkMessageKey(check))}
+                      </p>
+                      {isJavaProblem && javaState?.configuredJavaPath ? (
+                        <small className="java-runtime-path">
+                          {javaState.configuredJavaPath}
+                        </small>
+                      ) : null}
+                      {isJavaProblem ? (
                         <div className="server-setup-check-actions">
-                          <Button variant="primary" onClick={onOpenJava}>
-                            <Coffee aria-hidden="true" size={15} />
-                            {t("server.setupChecklist.openJava")}
-                          </Button>
+                          {usable ? (
+                            <Button
+                              disabled={javaBusy}
+                              variant="primary"
+                              onClick={() => apply(server.id, usable)}
+                            >
+                              <Coffee aria-hidden="true" size={15} />
+                              {t("java.action.use", {
+                                version: required ?? "",
+                              })}
+                            </Button>
+                          ) : typeof required === "number" ? (
+                            <Button
+                              disabled={javaBusy}
+                              variant="primary"
+                              onClick={() =>
+                                startJavaInstall({
+                                  majorVersion: required,
+                                  maxMajorVersion:
+                                    javaState?.maxMajorVersion ?? null,
+                                  serverId: server.id,
+                                })
+                              }
+                            >
+                              <Coffee aria-hidden="true" size={15} />
+                              {t("java.action.install", { version: required })}
+                            </Button>
+                          ) : null}
+                          {onOpenJava ? (
+                            <Button variant="secondary" onClick={onOpenJava}>
+                              {t("server.setupChecklist.openJava")}
+                            </Button>
+                          ) : null}
                         </div>
+                      ) : null}
+                      {isJavaProblem && applyError ? (
+                        <span className="danger-text" role="alert">
+                          {applyError}
+                        </span>
                       ) : null}
                     </div>
                   </article>
@@ -166,6 +242,7 @@ export function ServerSetupChecklist({
         <RefreshCw aria-hidden="true" size={15} />
         {t("common.refresh")}
       </Button>
+      {javaInstallDialog}
     </section>
   );
 }

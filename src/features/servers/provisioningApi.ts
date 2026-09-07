@@ -45,6 +45,7 @@ export interface SourceProvisioningPlan {
   loaderType?: LoaderType | null;
   loaderVersion?: string | null;
   requiredJavaMajor?: number | null;
+  maxJavaMajor?: number | null;
   warnings: CompatibilityWarning[];
   launchSpec?: ServerLaunchSpec;
   [key: string]: unknown;

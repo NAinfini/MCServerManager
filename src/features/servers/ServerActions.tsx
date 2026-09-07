@@ -144,7 +144,7 @@ export function ServerActions({
             isPending ||
             isProcessStatusLoading
           }
-          variant={compact ? "ghost" : "primary"}
+          variant="success"
           onClick={() => {
             clearActionErrors();
             startMutation.mutate();
@@ -160,7 +160,7 @@ export function ServerActions({
           disabled={
             (!isRunning && !isCrashed) || isPending || isProcessStatusLoading
           }
-          variant="secondary"
+          variant="danger"
           onClick={() => {
             clearActionErrors();
             setPendingDangerAction("stop");
@@ -174,7 +174,7 @@ export function ServerActions({
         <Button
           aria-label={t("servers.actions.restartAria", { server: server.name })}
           disabled={isExternalRunning || isPending || isProcessStatusLoading}
-          variant="secondary"
+          variant="warning"
           onClick={() => {
             clearActionErrors();
             setPendingDangerAction("restart");

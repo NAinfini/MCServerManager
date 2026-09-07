@@ -182,16 +182,34 @@ export function serverPropertiesDefaultValues(
   ) as ServerPropertiesForm;
 }
 
-export function filterPropertyGroups(search: string) {
+export function propertyLabelKey(key: string) {
+  return `properties.field.${key}.label`;
+}
+
+export function propertyHintKey(key: string) {
+  return `properties.field.${key}.hint`;
+}
+
+/**
+ * The search has to accept both names a property has: the file key someone
+ * copied out of a wiki, and the label this editor shows them.
+ */
+export function filterPropertyGroups(
+  search: string,
+  translate: (key: string) => string = (key) => key,
+) {
   const normalizedSearch = search.trim().toLowerCase();
+  const matches = (definition: PropertyDefinition) =>
+    !normalizedSearch ||
+    definition.key.toLowerCase().includes(normalizedSearch) ||
+    translate(propertyLabelKey(definition.key))
+      .toLowerCase()
+      .includes(normalizedSearch);
   return propertyGroups
     .map((group) => ({
       group,
       definitions: propertyDefinitions.filter(
-        (definition) =>
-          definition.group === group &&
-          (!normalizedSearch ||
-            definition.key.toLowerCase().includes(normalizedSearch)),
+        (definition) => definition.group === group && matches(definition),
       ),
     }))
     .filter(({ definitions }) => definitions.length > 0);
@@ -287,7 +305,7 @@ export function ServerPropertiesEditor({
     (propertiesQuery.data.raw.length > 0 ||
       propertiesQuery.data.entries.length > 0),
   );
-  const groupedDefinitions = filterPropertyGroups(search);
+  const groupedDefinitions = filterPropertyGroups(search, t);
   const updateValue = <Key extends keyof ServerPropertiesForm>(
     key: Key,
     value: ServerPropertiesForm[Key],
@@ -347,16 +365,28 @@ export function ServerPropertiesEditor({
           {groupedDefinitions.map(({ group, definitions }) => (
             <fieldset className="settings-section" key={group}>
               <legend>{t(`properties.group.${group}`)}</legend>
-              <div className="settings-grid">
+              <div className="settings-grid property-grid">
                 {definitions.map((definition) => {
                   const error = form.formState.errors[definition.key]?.message;
                   const options = selectOptions(definition.kind);
+                  const label = t(propertyLabelKey(definition.key));
+                  /* The hint is the part that explains the consequence, and it
+                     reached nobody using a screen reader until it was bound to
+                     the control. */
+                  const hintId = `property-hint-${definition.key}`;
                   return (
-                    <label key={definition.key}>
-                      {definition.key}
+                    <label className="property-field" key={definition.key}>
+                      {/* The label says what the setting does; the raw key stays
+                          beside it because that is what every wiki, tutorial and
+                          the file itself calls it. */}
+                      <span className="property-field-name">
+                        {label}
+                        <code>{definition.key}</code>
+                      </span>
                       {options ? (
                         <Select
-                          ariaLabel={definition.key}
+                          ariaLabel={label}
+                          describedBy={error ? undefined : hintId}
                           key={`${definition.key}-${values[definition.key]}`}
                           options={options}
                           value={values[definition.key]}
@@ -369,7 +399,9 @@ export function ServerPropertiesEditor({
                         />
                       ) : (
                         <TextField
+                          aria-describedby={error ? undefined : hintId}
                           aria-invalid={Boolean(error)}
+                          aria-label={label}
                           value={values[definition.key]}
                           onChange={(event) =>
                             updateValue(definition.key, event.target.value)
@@ -380,7 +412,11 @@ export function ServerPropertiesEditor({
                         <small className="danger-text" role="alert">
                           {error}
                         </small>
-                      ) : null}
+                      ) : (
+                        <small className="property-field-hint" id={hintId}>
+                          {t(propertyHintKey(definition.key))}
+                        </small>
+                      )}
                     </label>
                   );
                 })}

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Bell, Check, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
@@ -18,17 +23,17 @@ interface ContentUpdatePolicyViewProps {
   server: ServerProfile;
 }
 
-type Preference = "automatic" | "notify" | "manual";
+type Preference = "batch" | "notify" | "manual";
 
 const preferenceToPolicy: Record<Preference, ContentUpdatePolicyMode> = {
-  automatic: "batch_confirm",
+  batch: "batch_confirm",
   notify: "notify_only",
   manual: "manual_only",
 };
 
 function policyToPreference(policy: ContentUpdatePolicyMode): Preference {
   if (policy === "notify_only") return "notify";
-  if (policy === "batch_confirm") return "automatic";
+  if (policy === "batch_confirm") return "batch";
   return "manual";
 }
 
@@ -45,6 +50,15 @@ export function ContentUpdatePolicyView({
   const contentQuery = useQuery({
     queryKey: contentKeys.installed(server.id),
     queryFn: () => listInstalledContent(server.id),
+  });
+  const exceptionQueries = useQueries({
+    queries: (contentQuery.data ?? []).map((content) => {
+      const contentId = content.contentId ?? content.id;
+      return {
+        queryKey: contentKeys.updatePolicy(server.id, contentId),
+        queryFn: () => getContentUpdatePolicy(server.id, contentId),
+      };
+    }),
   });
 
   useEffect(() => {
@@ -68,7 +82,7 @@ export function ContentUpdatePolicyView({
       policy,
     }: {
       content: InstalledContent;
-      policy: "pin_current" | "ignore_update";
+      policy: "manual_only" | "pin_current" | "ignore_update";
     }) =>
       saveContentUpdatePolicy(server.id, policy, {
         contentId: content.contentId ?? content.id,
@@ -76,13 +90,26 @@ export function ContentUpdatePolicyView({
           policy === "pin_current" ? (content.version ?? null) : null,
         ignoredUpdate: null,
       }),
-    onSuccess: () =>
-      void queryClient.invalidateQueries({
-        queryKey: contentKeys.updatePolicy(server.id),
-      }),
+    onSuccess: async (saved) => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: contentKeys.updatePolicy(
+            server.id,
+            saved.contentId ?? null,
+          ),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contentKeys.updateCheck(server.id),
+        }),
+      ]);
+    },
   });
 
-  if (policyQuery.isLoading || contentQuery.isLoading) {
+  if (
+    policyQuery.isLoading ||
+    contentQuery.isLoading ||
+    exceptionQueries.some((query) => query.isLoading)
+  ) {
     return (
       <section
         className="settings-panel content-update-policy"
@@ -92,8 +119,9 @@ export function ContentUpdatePolicyView({
       </section>
     );
   }
-  if (policyQuery.error || contentQuery.error) {
-    const error = policyQuery.error ?? contentQuery.error;
+  const exceptionError = exceptionQueries.find((query) => query.error)?.error;
+  if (policyQuery.error || contentQuery.error || exceptionError) {
+    const error = policyQuery.error ?? contentQuery.error ?? exceptionError;
     return (
       <section
         className="settings-panel content-update-policy"
@@ -111,6 +139,7 @@ export function ContentUpdatePolicyView({
             onClick={() => {
               void policyQuery.refetch();
               void contentQuery.refetch();
+              exceptionQueries.forEach((query) => void query.refetch());
             }}
           >
             <RefreshCw aria-hidden="true" size={15} />
@@ -123,9 +152,9 @@ export function ContentUpdatePolicyView({
 
   const options: Array<{ value: Preference; title: string; body: string }> = [
     {
-      value: "automatic",
-      title: t("content.policy.automatic"),
-      body: t("content.policy.automaticDescription"),
+      value: "batch",
+      title: t("content.policy.batch"),
+      body: t("content.policy.batchDescription"),
     },
     {
       value: "notify",
@@ -138,6 +167,12 @@ export function ContentUpdatePolicyView({
       body: t("content.policy.manualDescription"),
     },
   ];
+  const exceptionByContentId = new Map(
+    (contentQuery.data ?? []).map((content, index) => [
+      content.contentId ?? content.id,
+      exceptionQueries[index]?.data,
+    ]),
+  );
 
   return (
     <section
@@ -186,13 +221,18 @@ export function ContentUpdatePolicyView({
           {(savePreference.error ?? saveException.error)?.message}
         </div>
       ) : null}
-      <div className="list-state">
-        <div>
+      {/* Not a `.list-state`: that class is the centred placeholder shown when a
+          list has nothing in it, and wearing it centred this whole section and
+          floated its bullets. */}
+      <div className="policy-exceptions">
+        <div className="policy-exceptions-heading">
           <strong>{t("content.policy.exceptions")}</strong>
           <span>{t("content.policy.exceptionsDescription")}</span>
         </div>
         {(contentQuery.data ?? []).length === 0 ? (
-          <p>{t("content.policy.exceptionsEmpty")}</p>
+          <p className="settings-notice">
+            {t("content.policy.exceptionsEmpty")}
+          </p>
         ) : (
           <ul>
             {(contentQuery.data ?? []).map((content) => (
@@ -200,11 +240,41 @@ export function ContentUpdatePolicyView({
                 <span>
                   <strong>{content.name}</strong>
                   <small>{content.version ?? t("common.unknown")}</small>
+                  <small className="policy-current-state">
+                    {t("content.policy.currentState", {
+                      state: t(
+                        `content.policy.state.${
+                          exceptionByContentId.get(
+                            content.contentId ?? content.id,
+                          )?.policy ?? "manual_only"
+                        }`,
+                      ),
+                    })}
+                  </small>
                 </span>
                 <span>
                   <Button
                     disabled={saveException.isPending}
-                    variant="secondary"
+                    variant={
+                      exceptionByContentId.get(content.contentId ?? content.id)
+                        ?.policy === "manual_only"
+                        ? "primary"
+                        : "secondary"
+                    }
+                    onClick={() =>
+                      saveException.mutate({ content, policy: "manual_only" })
+                    }
+                  >
+                    {t("content.policy.allowUpdates")}
+                  </Button>
+                  <Button
+                    disabled={saveException.isPending}
+                    variant={
+                      exceptionByContentId.get(content.contentId ?? content.id)
+                        ?.policy === "pin_current"
+                        ? "primary"
+                        : "secondary"
+                    }
                     onClick={() =>
                       saveException.mutate({ content, policy: "pin_current" })
                     }
@@ -213,7 +283,12 @@ export function ContentUpdatePolicyView({
                   </Button>
                   <Button
                     disabled={saveException.isPending}
-                    variant="ghost"
+                    variant={
+                      exceptionByContentId.get(content.contentId ?? content.id)
+                        ?.policy === "ignore_update"
+                        ? "primary"
+                        : "secondary"
+                    }
                     onClick={() =>
                       saveException.mutate({ content, policy: "ignore_update" })
                     }

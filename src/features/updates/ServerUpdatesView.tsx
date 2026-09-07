@@ -4,11 +4,17 @@ import {
   CheckCircle2,
   ExternalLink,
   RefreshCw,
+  RotateCcw,
   ShieldAlert,
   Upload,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
+import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
+import {
+  DataTable,
+  type DataTableColumn,
+} from "../../components/data/DataTable";
 import { LoadingState } from "../../components/ui/loading-state";
 import { PathField } from "../../components/ui/path-field";
 import { StickyActionBar } from "../../components/ui/sticky-action-bar";
@@ -21,6 +27,13 @@ import { queryKeys } from "../../lib/query-keys";
 import type { ServerProfile } from "../../domain/server";
 import { serverKeys } from "../servers/queries";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
+import "../files/operations.css";
+
+interface ServerUpdateCheckItem {
+  id: string;
+  status: "ready" | "warning" | "blocked";
+  message: string;
+}
 
 interface ServerUpdateCheck {
   serverId: string;
@@ -29,9 +42,11 @@ interface ServerUpdateCheck {
   targetVersion?: string | null;
   latestVersion?: string | null;
   latestLoaderVersion?: string | null;
+  targetLoaderVersion: string | null;
   updateAvailable: boolean;
   installSupported: boolean;
   message: string;
+  checks: ServerUpdateCheckItem[];
 }
 
 interface ServerUpdateHistory {
@@ -43,6 +58,7 @@ interface ServerUpdateHistory {
   status: string;
   message: string;
   rollbackPath: string | null;
+  rollbackAvailable: boolean;
   createdAt: string;
 }
 
@@ -83,6 +99,8 @@ function historyStatusLabel(status: string, t: UpdateTranslator) {
     "current",
     "installed",
     "unsupported",
+    "rolledBack",
+    "rollbackFailed",
   ]);
   return knownStatuses.has(status)
     ? t(`serverUpdates.history.status.${status}`)
@@ -102,6 +120,8 @@ function historyMessage(entry: ServerUpdateHistory, t: UpdateTranslator) {
     return t("serverUpdates.history.message.current", values);
   if (entry.status === "unsupported")
     return t("serverUpdates.history.message.unsupported", values);
+  if (entry.status === "rolledBack")
+    return t("serverUpdates.history.message.rolledBack", values);
   return entry.message;
 }
 
@@ -141,7 +161,10 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
   const [serverJarPath, setServerJarPath] = useState("");
   const [serverJarSha256, setServerJarSha256] = useState("");
   const [backupConfirmed, setBackupConfirmed] = useState(false);
+  const [warningsAcknowledged, setWarningsAcknowledged] = useState(false);
   const [browseError, setBrowseError] = useState<string | null>(null);
+  const [rollbackEntry, setRollbackEntry] =
+    useState<ServerUpdateHistory | null>(null);
 
   const historyQuery = useQuery({
     queryKey: queryKeys.updates.server(server.id),
@@ -159,7 +182,12 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
           input: { serverId: server.id },
         },
       ),
-    onSuccess: async () => {
+    onSuccess: async (result) => {
+      setTargetVersion(result.targetVersion ?? result.latestVersion ?? "");
+      setTargetLoaderVersion(
+        result.targetLoaderVersion ?? result.latestLoaderVersion ?? "",
+      );
+      setWarningsAcknowledged(false);
       await queryClient.invalidateQueries({
         queryKey: queryKeys.updates.server(server.id),
       });
@@ -173,19 +201,45 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
         {
           input: {
             serverId: server.id,
-            targetVersion:
+            targetMinecraftVersion:
               targetVersion.trim() ||
               checkedVersion(checkMutation.data, server),
             targetLoaderVersion:
-              targetLoaderVersion.trim() || server.loaderVersion || null,
-            serverJarPath: serverJarPath.trim(),
+              targetLoaderVersion.trim() ||
+              checkMutation.data?.targetLoaderVersion ||
+              server.loaderVersion ||
+              null,
+            serverJarPath: serverJarPath.trim() || undefined,
             serverJarSha256: serverJarSha256.trim() || null,
+            acknowledgeWarnings: warningsAcknowledged,
             confirm: true,
           },
         },
       );
     },
     onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.updates.server(server.id),
+        }),
+        queryClient.invalidateQueries({ queryKey: serverKeys.profiles }),
+      ]);
+    },
+  });
+  const rollbackMutation = useMutation({
+    mutationFn: (entry: ServerUpdateHistory) =>
+      invokeDesktopCommandWithErrorHandling<ServerUpdateHistory>(
+        "rollback_server_update",
+        {
+          input: {
+            serverId: server.id,
+            historyId: entry.id,
+            confirm: true,
+          },
+        },
+      ),
+    onSuccess: async () => {
+      setRollbackEntry(null);
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: queryKeys.updates.server(server.id),
@@ -203,9 +257,19 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
   }, [checkMutation]);
 
   const check = checkMutation.data;
-  const canChooseJar = Boolean(check) && !checkMutation.isPending;
+  const updateChecks = check?.checks ?? [];
+  const hasBlockedCheck = updateChecks.some(
+    (item) => item.status === "blocked",
+  );
+  const hasWarnings = updateChecks.some((item) => item.status === "warning");
+  const canReviewUpdate =
+    Boolean(check?.installSupported) &&
+    !checkMutation.isPending &&
+    !hasBlockedCheck;
   const canInstall =
-    Boolean(serverJarPath.trim()) &&
+    Boolean(check?.installSupported) &&
+    !hasBlockedCheck &&
+    (!hasWarnings || warningsAcknowledged) &&
     backupConfirmed &&
     !installMutation.isPending;
   const resetDraft = () => {
@@ -215,16 +279,57 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
     setServerJarPath("");
     setServerJarSha256("");
     setBackupConfirmed(false);
+    setWarningsAcknowledged(false);
     setBrowseError(null);
   };
   const hasUnsavedDraft =
     !installMutation.isSuccess &&
     (step !== 1 ||
-      targetVersion !== "" ||
-      targetLoaderVersion !== "" ||
       serverJarPath !== "" ||
       serverJarSha256 !== "" ||
-      backupConfirmed);
+      backupConfirmed ||
+      warningsAcknowledged);
+
+  const historyColumns: DataTableColumn<ServerUpdateHistory>[] = [
+    {
+      id: "created",
+      header: t("serverUpdates.history.created"),
+      sortValue: (entry) => entry.createdAt,
+      cell: (entry) => formatDateTime(entry.createdAt, language),
+    },
+    {
+      id: "status",
+      header: t("serverUpdates.history.result"),
+      sortValue: (entry) => entry.status,
+      cell: (entry) => historyStatusLabel(entry.status, t),
+    },
+    {
+      id: "change",
+      header: t("serverUpdates.history.change"),
+      rowHeader: true,
+      cell: (entry) => historyMessage(entry, t),
+    },
+    {
+      id: "actions",
+      header: t("serverUpdates.history.actions"),
+      cell: (entry) =>
+        entry.rollbackAvailable ? (
+          <Button
+            disabled={rollbackMutation.isPending}
+            variant="secondary"
+            onClick={() => {
+              rollbackMutation.reset();
+              setRollbackEntry(entry);
+            }}
+          >
+            <RotateCcw aria-hidden="true" size={14} />
+            {t("serverUpdates.rollback.action")}
+          </Button>
+        ) : (
+          <span className="operation-muted">{t("common.unavailable")}</span>
+        ),
+    },
+  ];
   useUnsavedGuard({
     isDirty: hasUnsavedDraft,
     message: t("serverUpdates.unsaved.confirm"),
@@ -248,15 +353,10 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
   return (
     <section
       className="settings-panel update-wizard"
-      aria-labelledby="server-updates-title"
+      aria-label={t("serverUpdates.title")}
     >
-      <div className="section-heading">
-        <div>
-          <h2 id="server-updates-title">{t("serverUpdates.title")}</h2>
-          <span>{t("serverUpdates.description")}</span>
-        </div>
-      </div>
-
+      {/* The dialog that hosts this wizard already names it; repeating the
+          title and its description inside the panel was two headings deep. */}
       <ol
         className="update-wizard-steps"
         aria-label={t("serverUpdates.stepsAria")}
@@ -312,11 +412,34 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
             </p>
           ) : null}
           {check ? (
-            <div className="list-state">
+            <div className="update-check-summary">
               <ShieldAlert aria-hidden="true" size={18} />
-              <strong>{t("serverUpdates.checkComplete")}</strong>
-              <span>{checkSummary(check, server, t)}</span>
+              <div>
+                <strong>{t("serverUpdates.checkComplete")}</strong>
+                <span>{checkSummary(check, server, t)}</span>
+              </div>
+              {!check.installSupported ? (
+                <a
+                  href={SOURCE_LINKS[server.loaderType]}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {t("serverUpdates.source.open", {
+                    loader: server.loaderType,
+                  })}
+                </a>
+              ) : null}
             </div>
+          ) : null}
+          {updateChecks.length ? (
+            <ul className="update-check-list">
+              {updateChecks.map((item) => (
+                <li data-status={item.status} key={item.id}>
+                  <span>{t(`serverUpdates.checkStatus.${item.status}`)}</span>
+                  <p>{item.message}</p>
+                </li>
+              ))}
+            </ul>
           ) : null}
           <div className="form-actions">
             <Button
@@ -327,7 +450,7 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
               <RefreshCw aria-hidden="true" size={15} />
               {t("serverUpdates.checkAgain")}
             </Button>
-            <Button disabled={!canChooseJar} onClick={() => setStep(2)}>
+            <Button disabled={!canReviewUpdate} onClick={() => setStep(2)}>
               {t("serverUpdates.continue")}
             </Button>
           </div>
@@ -336,11 +459,11 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
 
       {step === 2 ? (
         <div className="update-wizard-stage">
-          <div className="list-state update-source-note">
+          <div className="update-source-note">
             <ExternalLink aria-hidden="true" size={18} />
             <div>
               <strong>{t("serverUpdates.source.title")}</strong>
-              <span>{t("serverUpdates.source.description")}</span>
+              <span>{t("serverUpdates.source.automaticDescription")}</span>
             </div>
             <a
               href={SOURCE_LINKS[server.loaderType]}
@@ -383,6 +506,9 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
                 value={serverJarPath}
                 onChange={(event) => setServerJarPath(event.target.value)}
               />
+              <small className="field-hint">
+                {t("serverUpdates.manualJarHint")}
+              </small>
             </label>
             <label>
               {t("serverUpdates.sha256")}
@@ -402,7 +528,7 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
             <Button variant="secondary" onClick={() => setStep(1)}>
               {t("serverUpdates.back")}
             </Button>
-            <Button disabled={!serverJarPath.trim()} onClick={() => setStep(3)}>
+            <Button disabled={!canReviewUpdate} onClick={() => setStep(3)}>
               {t("serverUpdates.continue")}
             </Button>
           </div>
@@ -432,6 +558,17 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
             />
             {t("serverUpdates.backup.confirm")}
           </label>
+          {hasWarnings ? (
+            <label className="checkbox-row">
+              <Checkbox
+                checked={warningsAcknowledged}
+                onCheckedChange={(checked) =>
+                  setWarningsAcknowledged(checked === true)
+                }
+              />
+              {t("serverUpdates.warnings.confirm")}
+            </label>
+          ) : null}
           {installMutation.error ? (
             <p className="danger-text" role="alert">
               {t("serverUpdates.installFailed")} {installMutation.error.message}
@@ -484,21 +621,14 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
           </div>
         ) : null}
         {historyQuery.data?.length ? (
-          <div className="compatibility-list">
-            {historyQuery.data.map((entry) => (
-              <div key={entry.id}>
-                <strong>{historyStatusLabel(entry.status, t)}</strong>
-                <span>{historyMessage(entry, t)}</span>
-                {entry.rollbackPath ? (
-                  <span>
-                    {t("serverUpdates.history.rollback", {
-                      path: entry.rollbackPath,
-                    })}
-                  </span>
-                ) : null}
-                <span>{formatDateTime(entry.createdAt, language)}</span>
-              </div>
-            ))}
+          <div className="operation-table-scroll">
+            <DataTable
+              caption={t("serverUpdates.history.title")}
+              className="operation-table update-history-table"
+              columns={historyColumns}
+              getRowKey={(entry) => entry.id}
+              rows={historyQuery.data}
+            />
           </div>
         ) : null}
         {!historyQuery.isLoading &&
@@ -507,6 +637,25 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
           <div className="list-state">{t("serverUpdates.history.empty")}</div>
         ) : null}
       </section>
+      {rollbackMutation.error ? (
+        <p className="danger-text" role="alert">
+          {rollbackMutation.error.message}
+        </p>
+      ) : null}
+      <ConfirmDangerDialog
+        confirmLabel={t("serverUpdates.rollback.confirm")}
+        description={t("serverUpdates.rollback.description", {
+          version: rollbackEntry?.fromVersion ?? t("common.unknown"),
+        })}
+        error={rollbackMutation.error?.message ?? null}
+        isConfirming={rollbackMutation.isPending}
+        isOpen={rollbackEntry !== null}
+        title={t("serverUpdates.rollback.title")}
+        onCancel={() => setRollbackEntry(null)}
+        onConfirm={() => {
+          if (rollbackEntry) rollbackMutation.mutate(rollbackEntry);
+        }}
+      />
     </section>
   );
 }

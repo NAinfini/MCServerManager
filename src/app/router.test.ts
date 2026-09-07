@@ -18,10 +18,18 @@ describe("app hash router", () => {
       name: "create-server",
       sourcePath: "C:\\server.zip",
     });
-    expect(parseAppHash("#/servers/new?step=5&job=job-1")).toEqual({
+    expect(parseAppHash("#/servers/new?step=2&job=job-1")).toEqual({
       name: "create-server",
-      step: 5,
+      step: 2,
       jobId: "job-1",
+    });
+    // Import Server and Create Server used to be the same link.
+    expect(parseAppHash("#/servers/new?intent=import")).toEqual({
+      name: "create-server",
+      intent: "import",
+    });
+    expect(parseAppHash("#/servers/new?intent=nonsense")).toEqual({
+      name: "create-server",
     });
   });
 
@@ -57,24 +65,60 @@ describe("app hash router", () => {
     });
   });
 
+  it("maps retired workspace routes onto their successor", () => {
+    expect(parseAppHash("#/servers/server-1/monitor?view=logs")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "console",
+      view: "logs",
+    });
+    expect(parseAppHash("#/servers/server-1/monitor?view=diagnostics")).toEqual(
+      {
+        name: "server",
+        serverId: "server-1",
+        section: "overview",
+      },
+    );
+    expect(parseAppHash("#/servers/server-1/monitor")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "overview",
+    });
+    expect(parseAppHash("#/servers/server-1/settings/updates")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "settings",
+      view: "general",
+    });
+    expect(parseAppHash("#/servers/server-1/settings/contentPolicy")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "content",
+      view: "updates",
+    });
+  });
+
   it("serializes canonical deep links", () => {
     expect(toAppHash({ name: "dashboard" })).toBe("#/dashboard");
     expect(
       toAppHash({
         name: "create-server",
         sourcePath: "C:\\server.zip",
-        step: 5,
+        step: 2,
         jobId: "job-1",
       }),
-    ).toBe("#/servers/new?source=C%3A%5Cserver.zip&step=5&job=job-1");
+    ).toBe("#/servers/new?source=C%3A%5Cserver.zip&step=2&job=job-1");
+    expect(toAppHash({ name: "create-server", intent: "import" })).toBe(
+      "#/servers/new?intent=import",
+    );
     expect(
       toAppHash({
         name: "server",
         serverId: "server 1",
-        section: "monitor",
-        view: "diagnostics",
+        section: "console",
+        view: "logs",
       }),
-    ).toBe("#/servers/server%201/monitor?view=diagnostics");
+    ).toBe("#/servers/server%201/console?view=logs");
     expect(
       toAppHash({
         name: "server",

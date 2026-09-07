@@ -38,11 +38,10 @@ describe("project documentation", () => {
     expect(scripts.dev).toBe(
       'concurrently -k "pnpm dev:renderer" "wait-on http://localhost:1420 && electron ."',
     );
-    expect(scripts["electron:dev"]).toBe("pnpm dev");
   });
 
   it("documents every development entry point in both READMEs", () => {
-    const commands = ["pnpm dev", "pnpm dev:renderer", "pnpm electron:dev"];
+    const commands = ["pnpm dev", "pnpm dev:renderer"];
 
     for (const path of ["README.md", "README.zh-CN.md"]) {
       const contents = read(path);

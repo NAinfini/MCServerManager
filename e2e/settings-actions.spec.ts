@@ -20,6 +20,26 @@ test.describe("settings actions", () => {
         ),
       )
       .toBe(true);
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-density",
+      "compact",
+    );
+    await expect(page.locator("html")).toHaveAttribute("data-motion", "off");
+    await page.getByRole("combobox", { name: "Font size" }).click();
+    await page.getByRole("option", { name: "Large", exact: true }).click();
+    await expect(page.locator("html")).toHaveAttribute(
+      "data-font-size",
+      "large",
+    );
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).fontSize,
+          ),
+        ),
+      )
+      .toBeGreaterThan(14);
 
     await page.getByRole("button", { name: "Defaults", exact: true }).click();
     const retention = page.getByRole("spinbutton", { name: "Retention days" });

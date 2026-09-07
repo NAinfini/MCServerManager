@@ -31,11 +31,19 @@ describe("fake desktop backend", () => {
 
   it("persists file writes and backup creation", async () => {
     const state = createFakeDesktopState();
-
+    const original = await handleFakeDesktopCommand(
+      state,
+      "read_server_text_file",
+      {
+        serverId: "server-1",
+        relativePath: "server.properties",
+      },
+    );
     await handleFakeDesktopCommand(state, "write_server_text_file", {
       serverId: "server-1",
       relativePath: "server.properties",
       content: "motd=Changed\n",
+      expectedRevision: original.revision,
     });
     expect(
       await handleFakeDesktopCommand(state, "read_server_text_file", {

@@ -1,38 +1,41 @@
 /*
 THESIS: Command Studio — a precise native desktop surface for local Minecraft operations.
-SIGNATURE: Compact server rail + embedded telemetry + one adaptive split workbench.
-GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible.
+SIGNATURE: One server/workspace sidebar and one focused task canvas.
+GUARDRAIL: Every control supports a real operation; task content owns the width.
 */
 
 :root {
   color-scheme: dark;
 
-  --bg-app: #111823;
-  --bg-sidebar: #101722;
-  --bg-raised: #151e2a;
-  --bg-panel: #151e2a;
-  --bg-panel-muted: #0f1620;
-  --bg-elevated: #1b2634;
-  --bg-hover: #1b2634;
-  --bg-inset: #090f17;
-  --bg-titlebar: #0d131c;
+  --bg-app: #17191d;
+  --bg-sidebar: #121417;
+  --bg-raised: #202328;
+  --bg-panel: #202328;
+  --bg-panel-muted: #1b1e23;
+  --bg-elevated: #282c32;
+  --bg-hover: #30353c;
+  --bg-inset: #15171b;
+  --bg-titlebar: #121417;
   --surface-canvas: var(--bg-app);
   --surface-sidebar: var(--bg-sidebar);
   --surface-panel: var(--bg-panel);
   --surface-raised: var(--bg-elevated);
 
-  --text-main: #eef4fb;
-  --text-muted: #a3afbd;
-  --text-subtle: #758295;
+  --text-main: #edf0f3;
+  --text-muted: #acb3bc;
+  --text-subtle: #989fa9;
   --text-inverse: #ffffff;
 
-  --border-subtle: #263142;
-  --border-strong: #34435a;
+  --border-subtle: #353a42;
+  --border-strong: #505861;
   --border-panel: var(--border-subtle);
 
-  --accent: #3478f6;
-  --accent-hover: #4c8cff;
-  --accent-soft: #172b4d;
+  --accent: #78a8ff;
+  --accent-hover: #a0c2ff;
+  /* Text accents and white-text button fills need separate contrast pairs. */
+  --accent-solid: #2f6ee0;
+  --accent-solid-hover: #3271e2;
+  --accent-soft: #26344d;
   --accent-muted: rgba(52, 120, 246, 0.12);
   --focus-ring: #72a2ff;
 
@@ -40,11 +43,12 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --success: var(--running);
   --starting: #e5a62d;
   --stopped: #758295;
-  --crashed: #ed5c62;
+  --crashed: #ff8388;
   --warning: var(--starting);
   --info: var(--accent);
   --danger: var(--crashed);
   --danger-hover: #f1767b;
+  --danger-solid: #aa2c3e;
   --danger-soft: #351c24;
 
   --console-bg: #090f17;
@@ -54,11 +58,20 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --console-warning: #efb747;
   --console-error: #f2747a;
 
+  /* Both stacks name a CJK face explicitly. Segoe UI and Cascadia Code carry no
+     Chinese glyphs, so without this every Chinese run fell through to whatever
+     the platform picked — in the mono stack that meant labels rendered in a
+     face and at a weight that matched nothing else on screen. Latin text and
+     digits still get Segoe/Cascadia; only the CJK runs reach the fallback. */
+  --font-cjk:
+    "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC",
+    "Source Han Sans SC";
   --font-sans:
     "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui,
-    sans-serif;
+    var(--font-cjk), sans-serif;
   --font-mono:
-    "Cascadia Code", "Cascadia Mono", "JetBrains Mono", ui-monospace, monospace;
+    "Cascadia Code", "Cascadia Mono", "JetBrains Mono", ui-monospace,
+    var(--font-cjk), monospace;
 
   --radius-xs: 3px;
   --radius-sm: 6px;
@@ -74,14 +87,15 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --space-6: 24px;
   --space-7: 32px;
   --space-8: 40px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-compact: 12px;
-  --text-base: 13px;
-  --text-md: 14px;
-  --text-lg: 16px;
-  --text-xl: 20px;
-  --text-display: 24px;
+  --ui-font-scale: 1;
+  --text-xs: calc(11px * var(--ui-font-scale));
+  --text-sm: calc(12px * var(--ui-font-scale));
+  --text-compact: calc(12px * var(--ui-font-scale));
+  --text-base: calc(13px * var(--ui-font-scale));
+  --text-md: calc(14px * var(--ui-font-scale));
+  --text-lg: calc(16px * var(--ui-font-scale));
+  --text-xl: calc(20px * var(--ui-font-scale));
+  --text-display: calc(24px * var(--ui-font-scale));
   --weight-normal: 400;
   --weight-medium: 500;
   --weight-semibold: 650;
@@ -112,8 +126,8 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --page-padding: 20px;
   --panel-padding-inline: 18px;
   --panel-padding-block: 16px;
-  --sidebar-width: 252px;
-  --sidebar-collapsed-width: 60px;
+  --sidebar-width: 232px;
+  --sidebar-collapsed-width: 64px;
   --window-titlebar-height: 30px;
   --status-bar-height: 24px;
   --accent-warm: #d8b45b;
@@ -130,44 +144,50 @@ GUARDRAIL: The task owns the canvas; context is real, resizable, and dismissible
   --preview-radius-panel: 8px;
   --preview-shadow-panel: none;
 
-  font-size: 14px;
+  font-family: var(--font-sans);
+  color: var(--text-main);
+  font-size: var(--text-md);
   line-height: 20px;
 }
 
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #f2f5f9;
-  --bg-sidebar: #e7ecf3;
+  --bg-app: #f7f7f5;
+  --bg-sidebar: #eeefec;
   --bg-raised: #ffffff;
   --bg-panel: #ffffff;
-  --bg-panel-muted: #edf1f6;
-  --bg-elevated: #e8edf4;
-  --bg-hover: #e2e8f1;
-  --bg-inset: #f8fafc;
-  --bg-titlebar: #e7ecf3;
+  --bg-panel-muted: #f2f3f0;
+  --bg-elevated: #e9ebe7;
+  --bg-hover: #e3e6e1;
+  --bg-inset: #ffffff;
+  --bg-titlebar: #eeefec;
 
-  --text-main: #172131;
-  --text-muted: #516174;
-  --text-subtle: #5b687a;
+  --text-main: #242923;
+  --text-muted: #535d55;
+  --text-subtle: #626b63;
   --text-inverse: #ffffff;
 
-  --border-subtle: #d1d9e4;
-  --border-strong: #aebac9;
-  --accent: #2568dc;
+  --border-subtle: #dce0d9;
+  --border-strong: #aab3a9;
+  --accent: #1955bc;
   --accent-hover: #1d58bc;
+  /* Light theme's accent is already dark enough to carry white text. */
+  --accent-solid: var(--accent);
+  --accent-solid-hover: var(--accent-hover);
   --accent-soft: #dce8fb;
   --accent-muted: rgba(37, 104, 220, 0.1);
   --focus-ring: #2568dc;
 
   --running: #176b3a;
-  --starting: #946100;
+  --starting: #805200;
   --stopped: #5b687a;
   --crashed: #a52936;
   --warning: var(--starting);
   --info: var(--accent);
   --danger: var(--crashed);
   --danger-hover: #a9323c;
+  --danger-solid: #a52936;
   --danger-soft: #f9e5e7;
 
   --console-bg: #101722;

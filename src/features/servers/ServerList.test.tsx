@@ -112,15 +112,21 @@ describe("ServerList states", () => {
     expect(await screen.findByText("No backups yet")).toBeInTheDocument();
   });
 
-  it("swaps a running card's stored facts for live telemetry", async () => {
+  it("adds live telemetry to a running card without dropping its stored facts", async () => {
     renderList({
       servers: [server],
       serverStatuses: { [server.id]: "running" },
     });
 
     expect(await screen.findByText("19.8")).toBeInTheDocument();
-    expect(screen.getByText("42%")).toBeInTheDocument();
-    expect(screen.queryByText("Last backup")).not.toBeInTheDocument();
+    // Once on the telemetry row, once as the CPU curve's current reading. The
+    // curve's per-sample <title> tooltips repeat the figure too, and those are
+    // not readouts.
+    expect(
+      screen.getAllByText("42%", { ignore: "script, style, title" }),
+    ).toHaveLength(2);
+    // The card is wide now, so the facts stay beside the live numbers.
+    expect(screen.getByText("Last backup")).toBeInTheDocument();
   });
 
   it("drops the create tile while a name filter is active", async () => {

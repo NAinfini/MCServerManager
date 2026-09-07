@@ -31,6 +31,12 @@ const allowedHtmlTags = new Set([
   "SPAN",
   "STRONG",
   "SUMMARY",
+  "TABLE",
+  "TBODY",
+  "TD",
+  "TH",
+  "THEAD",
+  "TR",
   "UL",
 ]);
 
@@ -226,6 +232,30 @@ function renderList(lines: string[], ordered: boolean) {
   return `<${tag}>${items}</${tag}>`;
 }
 
+/* Pack descriptions routinely put the hardware requirements in a table. Without
+   this the pipes render literally, which is exactly how a "| 8 GB | 21 |" row
+   ends up looking like corrupted text in the detail panel. */
+function isTableDivider(line: string) {
+  return /^\s*\|?(?:\s*:?-{3,}:?\s*\|)*\s*:?-{3,}:?\s*\|?\s*$/.test(line);
+}
+
+function splitTableRow(line: string) {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+}
+
+function startsTable(lines: string[], index: number) {
+  return (
+    lines[index].includes("|") &&
+    index + 1 < lines.length &&
+    isTableDivider(lines[index + 1])
+  );
+}
+
 function convertMarkdownInHtml(source: string) {
   let result = source
     .replace(/\r\n?/g, "\n")
@@ -324,6 +354,30 @@ function renderMarkdown(source: string) {
       continue;
     }
 
+    if (startsTable(lines, index)) {
+      const header = splitTableRow(line);
+      index += 2;
+      const bodyRows: string[] = [];
+      while (
+        index < lines.length &&
+        lines[index].trim() &&
+        lines[index].includes("|")
+      ) {
+        bodyRows.push(
+          `<tr>${splitTableRow(lines[index])
+            .map((cell) => `<td>${renderInlineMarkdown(cell)}</td>`)
+            .join("")}</tr>`,
+        );
+        index += 1;
+      }
+      blocks.push(
+        `<table><thead><tr>${header
+          .map((cell) => `<th>${renderInlineMarkdown(cell)}</th>`)
+          .join("")}</tr></thead><tbody>${bodyRows.join("")}</tbody></table>`,
+      );
+      continue;
+    }
+
     if (/^\s*>\s?/.test(line)) {
       const quoteLines: string[] = [];
       while (index < lines.length && /^\s*>\s?/.test(lines[index])) {
@@ -344,7 +398,8 @@ function renderMarkdown(source: string) {
       !/^\s*[-*+]\s+/.test(lines[index]) &&
       !/^\s*\d+[.)]\s+/.test(lines[index]) &&
       !/^\s*>\s?/.test(lines[index]) &&
-      !/^```/.test(lines[index].trim())
+      !/^```/.test(lines[index].trim()) &&
+      !startsTable(lines, index)
     ) {
       paragraphLines.push(lines[index]);
       index += 1;

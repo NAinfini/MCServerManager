@@ -13,9 +13,32 @@ export interface ServerTextFile {
   relativePath: string;
   content: string;
   sizeBytes: number;
+  revision: string;
   readOnly: boolean;
   warning?: string | null;
 }
+
+export type ServerFileMutation =
+  | {
+      operation: "createFile" | "createDirectory";
+      relativePath: string;
+      content?: string;
+    }
+  | {
+      operation: "rename" | "move";
+      relativePath: string;
+      targetRelativePath: string;
+    }
+  | {
+      operation: "delete";
+      relativePath: string;
+      confirmDelete: true;
+    }
+  | {
+      operation: "upload";
+      relativePath: string;
+      sourcePaths: string[];
+    };
 
 export function listServerFiles(serverId: string, relativePath = "") {
   return invokeDesktopCommandWithErrorHandling<ServerFileEntry[]>(
@@ -41,6 +64,7 @@ export function writeServerTextFile(
   serverId: string,
   relativePath: string,
   content: string,
+  expectedRevision: string,
 ) {
   return invokeDesktopCommandWithErrorHandling<ServerTextFile>(
     "write_server_text_file",
@@ -48,7 +72,18 @@ export function writeServerTextFile(
       serverId,
       relativePath,
       content,
+      expectedRevision,
     },
+  );
+}
+
+export function mutateServerFiles(
+  serverId: string,
+  mutation: ServerFileMutation,
+) {
+  return invokeDesktopCommandWithErrorHandling<{ relativePaths: string[] }>(
+    "mutate_server_files",
+    { input: { serverId, ...mutation } },
   );
 }
 

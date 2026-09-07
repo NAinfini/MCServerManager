@@ -16,6 +16,9 @@ export type ThemeSetting = "system" | "light" | "dark";
 interface AppSettingsContextValue {
   formatCompactNumber: (value?: number) => string;
   language: Language;
+  // What "system" actually resolved to. Anything that cannot read the CSS
+  // variables — an embedded editor, a canvas — needs this rather than `theme`.
+  resolvedTheme: "light" | "dark";
   setLanguage: (language: Language) => void;
   setTheme: (theme: ThemeSetting) => void;
   t: (
@@ -52,11 +55,15 @@ function systemPrefersDark() {
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
 }
 
+function resolveTheme(theme: ThemeSetting): "light" | "dark" {
+  return theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme;
+}
+
 function applyTheme(theme: ThemeSetting) {
-  const resolvedTheme =
-    theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme;
+  const resolvedTheme = resolveTheme(theme);
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.style.colorScheme = resolvedTheme;
+  return resolvedTheme;
 }
 
 export function translate(
@@ -78,6 +85,9 @@ export function translate(
 export function AppSettingsProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
   const [theme, setThemeState] = useState<ThemeSetting>(readStoredTheme);
+  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">(() =>
+    resolveTheme(readStoredTheme()),
+  );
 
   useEffect(() => {
     localStorage.setItem(LANGUAGE_KEY, language);
@@ -86,13 +96,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     localStorage.setItem(THEME_KEY, theme);
-    applyTheme(theme);
+    setResolvedTheme(applyTheme(theme));
     if (theme !== "system" || !window.matchMedia) {
       return;
     }
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => applyTheme("system");
+    const handleChange = () => setResolvedTheme(applyTheme("system"));
     media.addEventListener("change", handleChange);
     return () => media.removeEventListener("change", handleChange);
   }, [theme]);
@@ -108,12 +118,13 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         );
       },
       language,
+      resolvedTheme,
       setLanguage: setLanguageState,
       setTheme: setThemeState,
       t: (key, values) => translate(language, key, values),
       theme,
     }),
-    [language, theme],
+    [language, resolvedTheme, theme],
   );
 
   return createElement(AppSettingsContext.Provider, { value }, children);

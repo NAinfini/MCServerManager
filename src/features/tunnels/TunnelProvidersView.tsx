@@ -1,4 +1,4 @@
-﻿import { FormEvent, useState } from "react";
+﻿import { FormEvent, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import {
@@ -88,7 +88,18 @@ export function TunnelProvidersView({
   embedded = false,
 }: TunnelProvidersViewProps) {
   const { t } = useAppSettings();
-  const [name, setName] = useState("Custom tunnel");
+  const defaultName = t("tunnels.form.defaultName");
+  const [name, setName] = useState(defaultName);
+  /* The default was captured once at mount, so switching language left the
+     previous language's placeholder sitting in the field. Retranslate it while
+     it is still untouched. */
+  const appliedDefaultName = useRef(defaultName);
+  useEffect(() => {
+    if (appliedDefaultName.current === defaultName) return;
+    const previousDefault = appliedDefaultName.current;
+    appliedDefaultName.current = defaultName;
+    setName((current) => (current === previousDefault ? defaultName : current));
+  }, [defaultName]);
   const [kind, setKind] = useState<CreateTunnelProviderInput["kind"]>("custom");
   const [command, setCommand] = useState("ngrok tcp 25565");
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -191,7 +202,7 @@ export function TunnelProvidersView({
 
   function clearProviderForm() {
     setEditingProviderId(null);
-    setName("Custom tunnel");
+    setName(t("tunnels.form.defaultName"));
     setKind("custom");
     setCommand("ngrok tcp 25565");
     setPickerError(null);
@@ -536,7 +547,7 @@ export function TunnelProvidersView({
                       <Button
                         disabled={deleteMutation.isPending}
                         type="button"
-                        variant="secondary"
+                        variant="danger"
                         onClick={() => {
                           deleteMutation.reset();
                           setDangerAction({ kind: "delete", provider });
