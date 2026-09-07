@@ -66,6 +66,20 @@ function database(action) {
     db.close();
   }
 }
+function throughLinkedRoot(profile) {
+  const alias = `${profile.rootDir}-alias`;
+  fs.symlinkSync(
+    profile.rootDir,
+    alias,
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  database((db) =>
+    db
+      .prepare("UPDATE servers SET root_dir = ? WHERE id = ?")
+      .run(alias, profile.id),
+  );
+  return { ...profile, rootDir: alias };
+}
 async function jar(file, text) {
   const zip = new yazl.ZipFile();
   zip.addBuffer(
@@ -477,7 +491,7 @@ describe("content integrity and update policy", () => {
     expect(fs.readdirSync(path.join(s.rootDir, "mods"))).toEqual([]);
   });
   it("reuses required dependencies and avoids duplicate project installations", async () => {
-    const s = server();
+    const s = throughLinkedRoot(server());
     const dependency = version("dep-v1", "1.0", { project_id: "dependency" });
     const main = version("main-v1", "2.0", {
       dependencies: [
@@ -733,7 +747,7 @@ describe("server upstream discovery and recoverable upgrades", () => {
     );
   });
   it("upgrades a stopped server and restores its runtime, properties and world from history", async () => {
-    const s = server("paper", "paper");
+    const s = throughLinkedRoot(server("paper", "paper"));
     const before = await jar(path.join(s.rootDir, "server.jar"), "before");
     const localContent = path.join(root, "plugin.jar");
     write(localContent, "plugin before");
@@ -741,6 +755,19 @@ describe("server upstream discovery and recoverable upgrades", () => {
       serverId: s.id,
       sourcePath: localContent,
     });
+    // Persisted metadata can retain the user-selected alias of the same file.
+    database((db) =>
+      db
+        .prepare("UPDATE installed_content SET installed_path = ? WHERE id = ?")
+        .run(
+          path.join(
+            s.rootDir,
+            "plugins",
+            path.basename(installed.installedPath),
+          ),
+          installed.id,
+        ),
+    );
     write(path.join(s.rootDir, "world", "level.dat"), "old world");
     const source = path.join(root, "new.jar");
     await jar(source, "after");

@@ -4411,9 +4411,13 @@ function restoreBackupDatabaseState(db, serverId, root, manifest) {
     nowIso(),
     serverId,
   );
+  const relativeContentPath = (installedPath) =>
+    path
+      .relative(root, resolveThroughLinks(path.resolve(installedPath)))
+      .replace(/\\/g, "/");
   const covered = (installedPath) =>
     !backupFiles.excluded(
-      path.relative(root, installedPath).replace(/\\/g, "/"),
+      relativeContentPath(installedPath),
       manifest.excludes,
     );
   for (const row of db
@@ -4429,9 +4433,7 @@ function restoreBackupDatabaseState(db, serverId, root, manifest) {
   for (const row of state.installedContent) {
     if (
       covered(row.installed_path) &&
-      savedFiles.has(
-        path.relative(root, row.installed_path).replace(/\\/g, "/"),
-      )
+      savedFiles.has(relativeContentPath(row.installed_path))
     )
       insert.run(
         row.id,
@@ -4804,7 +4806,11 @@ async function listInstalledContent(db, serverId) {
    that is needed to make those files manageable. */
 async function adoptContentOnDisk(db, serverId) {
   const profile = getServerProfile(db, serverId);
-  const targetDir = path.join(profile.rootDir, contentTargetDir(profile));
+  const targetDir = safeServerPath(
+    db,
+    serverId,
+    contentTargetDir(profile),
+  ).target;
   if (!fs.existsSync(targetDir)) return;
   const onDisk = fs
     .readdirSync(targetDir, { withFileTypes: true })
@@ -4818,7 +4824,9 @@ async function adoptContentOnDisk(db, serverId) {
       "SELECT id, installed_path FROM installed_content WHERE server_id = ?",
     )
     .all(serverId);
-  const known = new Set(rows.map((row) => path.resolve(row.installed_path)));
+  const known = new Set(
+    rows.map((row) => resolveThroughLinks(path.resolve(row.installed_path))),
+  );
 
   for (const filePath of onDisk) {
     if (known.has(path.resolve(filePath))) continue;
@@ -4850,7 +4858,7 @@ async function adoptContentOnDisk(db, serverId) {
      pointing somewhere unreadable is left alone rather than silently discarded. */
   const resolvedDir = path.resolve(targetDir);
   for (const row of rows) {
-    const resolved = path.resolve(row.installed_path);
+    const resolved = resolveThroughLinks(path.resolve(row.installed_path));
     if (path.dirname(resolved) !== resolvedDir) continue;
     if (fs.existsSync(resolved)) continue;
     db.prepare("DELETE FROM installed_content WHERE id = ?").run(row.id);
@@ -8740,7 +8748,9 @@ async function installServerUpdate(db, input) {
             mode: "full_server",
             include_paths: "[]",
             exclude_paths: JSON.stringify([
-              path.relative(profile.rootDir, staged).replace(/\\/g, "/"),
+              path
+                .relative(safeServerPath(db, profile.id).root, staged)
+                .replace(/\\/g, "/"),
             ]),
           },
           operation,
