@@ -1,3 +1,4 @@
+import { Alert } from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
@@ -76,9 +77,9 @@ export function PlayerActionDialog({
       }
     >
       {error ? (
-        <div className="inline-error" role="alert">
+        <Alert color="red" role="alert" variant="light">
           {error}
-        </div>
+        </Alert>
       ) : null}
     </DialogSurface>
   );

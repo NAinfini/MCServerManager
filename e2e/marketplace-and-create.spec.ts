@@ -99,7 +99,9 @@ test.describe("marketplace and server creation", () => {
 
     // The version lists preselect their recommended entry, so the only field
     // left before Continue is the name.
-    await expect(page.getByLabel("Minecraft version")).toHaveValue("1.21.1");
+    await expect(
+      page.getByRole("combobox", { name: "Minecraft version" }),
+    ).toHaveValue(/^1\.21\.1\b/);
     await page.getByLabel("Name").fill("Walkthrough");
     await page.getByRole("button", { name: "Continue", exact: true }).click();
 

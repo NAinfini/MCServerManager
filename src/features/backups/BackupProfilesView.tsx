@@ -1,13 +1,24 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Archive, Pencil, Plus, Trash2, X } from "lucide-react";
+import {
+  Alert,
+  Checkbox,
+  Group,
+  NumberInput,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EditableStringList } from "../../components/ui/editable-string-list";
 import { LoadingState } from "../../components/ui/loading-state";
 import { Select } from "../../components/ui/select";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../../domain/server";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
@@ -203,201 +214,201 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
   }
 
   return (
-    <section className="settings-panel" aria-label={t("backups.profiles.aria")}>
-      <div className="section-heading">
-        <div className="section-heading-copy">
-          <h2>{t("backups.profiles.title")}</h2>
-        </div>
+    <Stack aria-label={t("backups.profiles.aria")} component="section" gap="sm">
+      <Group justify="space-between">
+        <Title order={4}>{t("backups.profiles.title")}</Title>
         <Button
           disabled={isSaving}
-          variant="primary"
+          variant="secondary"
           onClick={() => {
             createMutation.reset();
             clearForm();
             setComposing(true);
           }}
         >
-          <Plus aria-hidden="true" size={15} />
+          <Plus aria-hidden="true" size={14} />
           {/* Not "Add profile": that is the composer's own submit button, and
               two controls with the same name are two controls nobody can tell
               apart — by name or by screen reader. */}
           {t("backups.profiles.new")}
         </Button>
-      </div>
-      {createMutation.error ? (
-        <p className="danger-text" role="alert">
-          {createMutation.error.message}
-        </p>
-      ) : null}
-      {updateMutation.error ? (
-        <p className="danger-text" role="alert">
-          {updateMutation.error.message}
-        </p>
-      ) : null}
-      {runMutation.error ? (
-        <p className="danger-text" role="alert">
-          {runMutation.error.message}
-        </p>
-      ) : null}
-      {deleteMutation.error ? (
-        <p className="danger-text" role="alert">
-          {deleteMutation.error.message}
-        </p>
-      ) : null}
+      </Group>
+      {[createMutation, updateMutation, runMutation, deleteMutation].map(
+        (mutation, index) =>
+          mutation.error ? (
+            <Alert color="red" key={index} py="xs">
+              {mutation.error.message}
+            </Alert>
+          ) : null,
+      )}
       {editorOpen ? (
-        <div className="profile-editor">
-          <div className="settings-grid">
-            <label>
-              {t("backups.profiles.name")}
-              <TextField
+        <Paper bg="var(--mantine-color-default-hover)" p="md">
+          <Stack gap="md">
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+              <TextInput
+                autoComplete="off"
+                label={t("backups.profiles.name")}
                 value={name}
                 onChange={(event) => setName(event.target.value)}
               />
-            </label>
-            <label>
-              {t("backups.profiles.mode")}
-              <Select
-                ariaLabel={t("backups.profiles.modeAria")}
-                options={backupModeOptions}
-                value={mode}
-                onValueChange={(value) => setMode(value as BackupProfileMode)}
-              />
-            </label>
-            <div className="structured-field structured-field-wide">
-              <span className="structured-field-label">
-                {t("backups.profiles.includePaths")}
-              </span>
-              <EditableStringList
-                addLabel={t("backups.profiles.addIncludePath")}
-                emptyText={t("backups.profiles.includePathsEmpty")}
-                inputLabel={t("backups.profiles.newIncludePath")}
-                itemLabel={(index) =>
-                  t("backups.profiles.includePathItem", { index: index + 1 })
-                }
-                placeholder={t("backups.profiles.pathPlaceholder")}
-                removeLabel={(path) =>
-                  t("backups.profiles.removeIncludePath", { path })
-                }
-                values={includePaths}
-                onChange={setIncludePaths}
-              />
-            </div>
-            <div className="structured-field structured-field-wide">
-              <span className="structured-field-label">
-                {t("backups.profiles.excludePaths")}
-              </span>
-              <EditableStringList
-                addLabel={t("backups.profiles.addExcludePath")}
-                emptyText={t("backups.profiles.excludePathsEmpty")}
-                inputLabel={t("backups.profiles.newExcludePath")}
-                itemLabel={(index) =>
-                  t("backups.profiles.excludePathItem", { index: index + 1 })
-                }
-                placeholder={t("backups.profiles.pathPlaceholder")}
-                removeLabel={(path) =>
-                  t("backups.profiles.removeExcludePath", { path })
-                }
-                values={excludePaths}
-                onChange={setExcludePaths}
-              />
-            </div>
-            <label>
-              {t("backups.profiles.retentionCount")}
-              <TextField
-                min="1"
-                type="number"
-                value={retentionCount}
-                onChange={(event) => setRetentionCount(event.target.value)}
-              />
-              <small className="field-hint">
-                {t("backups.profiles.retentionHelp")}
-              </small>
-            </label>
-            {mode === "fullServer" ? (
-              <label className="checkbox-row">
-                <Checkbox
-                  checked={confirmFullServer}
-                  onCheckedChange={(checked) =>
-                    setConfirmFullServer(checked === true)
-                  }
+              <Stack gap={4}>
+                <Text fw={500} size="sm">
+                  {t("backups.profiles.mode")}
+                </Text>
+                <Select
+                  ariaLabel={t("backups.profiles.modeAria")}
+                  options={backupModeOptions}
+                  value={mode}
+                  onValueChange={(value) => setMode(value as BackupProfileMode)}
                 />
-                {t("backups.profiles.includeFullServer")}
-              </label>
+              </Stack>
+              <Stack gap={4}>
+                <Text fw={500} size="sm">
+                  {t("backups.profiles.includePaths")}
+                </Text>
+                <EditableStringList
+                  addLabel={t("backups.profiles.addIncludePath")}
+                  emptyText={t("backups.profiles.includePathsEmpty")}
+                  inputLabel={t("backups.profiles.newIncludePath")}
+                  itemLabel={(index) =>
+                    t("backups.profiles.includePathItem", { index: index + 1 })
+                  }
+                  placeholder={t("backups.profiles.pathPlaceholder")}
+                  removeLabel={(path) =>
+                    t("backups.profiles.removeIncludePath", { path })
+                  }
+                  values={includePaths}
+                  onChange={setIncludePaths}
+                />
+              </Stack>
+              <Stack gap={4}>
+                <Text fw={500} size="sm">
+                  {t("backups.profiles.excludePaths")}
+                </Text>
+                <EditableStringList
+                  addLabel={t("backups.profiles.addExcludePath")}
+                  emptyText={t("backups.profiles.excludePathsEmpty")}
+                  inputLabel={t("backups.profiles.newExcludePath")}
+                  itemLabel={(index) =>
+                    t("backups.profiles.excludePathItem", { index: index + 1 })
+                  }
+                  placeholder={t("backups.profiles.pathPlaceholder")}
+                  removeLabel={(path) =>
+                    t("backups.profiles.removeExcludePath", { path })
+                  }
+                  values={excludePaths}
+                  onChange={setExcludePaths}
+                />
+              </Stack>
+              <NumberInput
+                allowDecimal={false}
+                allowNegative={false}
+                description={t("backups.profiles.retentionHelp")}
+                label={t("backups.profiles.retentionCount")}
+                min={1}
+                value={retentionCount}
+                onChange={(value) => setRetentionCount(String(value))}
+              />
+            </SimpleGrid>
+            {mode === "fullServer" ? (
+              <Checkbox
+                checked={confirmFullServer}
+                label={t("backups.profiles.includeFullServer")}
+                onChange={(event) =>
+                  setConfirmFullServer(event.currentTarget.checked)
+                }
+              />
             ) : null}
-          </div>
-          <div className="form-actions">
-            <Button
-              disabled={isSaving || name.trim() === ""}
-              onClick={saveProfile}
-            >
-              <Plus aria-hidden="true" size={15} />
-              {editingProfileId
-                ? t("backups.profiles.save")
-                : t("backups.profiles.add")}
-            </Button>
-            <Button disabled={isSaving} variant="secondary" onClick={clearForm}>
-              <X aria-hidden="true" size={15} />
-              {t("common.cancel")}
-            </Button>
-          </div>
-        </div>
+            <Group gap="xs" justify="flex-end">
+              <Button disabled={isSaving} variant="ghost" onClick={clearForm}>
+                <X aria-hidden="true" size={14} />
+                {t("common.cancel")}
+              </Button>
+              <Button
+                disabled={isSaving || name.trim() === ""}
+                variant="primary"
+                onClick={saveProfile}
+              >
+                <Plus aria-hidden="true" size={14} />
+                {editingProfileId
+                  ? t("backups.profiles.save")
+                  : t("backups.profiles.add")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
       ) : null}
       {profilesQuery.isLoading ? (
         <LoadingState message={t("backups.profiles.loading")} />
       ) : profilesQuery.error ? (
-        <div
+        <Alert
           aria-label={t("backups.profiles.loadError")}
-          className="list-state list-state-error"
-          role="alert"
+          color="red"
+          title={t("backups.profiles.loadError")}
         >
-          <strong>{t("backups.profiles.loadError")}</strong>
-          <span>{profilesQuery.error.message}</span>
-          <Button
-            disabled={profilesQuery.isFetching}
-            variant="secondary"
-            onClick={() => profilesQuery.refetch()}
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{profilesQuery.error.message}</Text>
+            <Button
+              disabled={profilesQuery.isFetching}
+              variant="secondary"
+              onClick={() => profilesQuery.refetch()}
+            >
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : profiles.length ? (
-        <div className="compatibility-list">
-          {profiles.map((profile) => (
-            <div key={profile.id}>
-              <strong>{profile.name}</strong>
-              <span>{profileSummary(profile, t)}</span>
-              <Button
-                disabled={runMutation.isPending}
-                variant="secondary"
-                onClick={() => runMutation.mutate(profile.id)}
-              >
-                <Archive aria-hidden="true" size={14} />
-                {t("backups.profiles.run")}
-              </Button>
-              <Button
-                disabled={isSaving}
-                variant="secondary"
-                onClick={() => editProfile(profile)}
-              >
-                <Pencil aria-hidden="true" size={14} />
-                {t("backups.profiles.actions.edit")}
-              </Button>
-              <Button
-                disabled={deleteMutation.isPending}
-                variant="danger"
-                onClick={() => {
-                  deleteMutation.reset();
-                  setDeleteProfile(profile);
-                }}
-              >
-                <Trash2 aria-hidden="true" size={14} />
-                {t("backups.profiles.actions.delete")}
-              </Button>
-            </div>
-          ))}
-        </div>
+        <Table highlightOnHover verticalSpacing="xs">
+          <Table.Tbody>
+            {profiles.map((profile) => (
+              <Table.Tr key={profile.id}>
+                <Table.Td>
+                  <Text fw={500} size="sm">
+                    {profile.name}
+                  </Text>
+                  <Text c="dimmed" size="xs">
+                    {profileSummary(profile, t)}
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Group gap="xs" justify="flex-end" wrap="nowrap">
+                    <Button
+                      disabled={runMutation.isPending}
+                      variant="secondary"
+                      onClick={() => runMutation.mutate(profile.id)}
+                    >
+                      <Archive aria-hidden="true" size={14} />
+                      {t("backups.profiles.run")}
+                    </Button>
+                    <Button
+                      disabled={isSaving}
+                      variant="ghost"
+                      onClick={() => editProfile(profile)}
+                    >
+                      <Pencil aria-hidden="true" size={14} />
+                      {t("backups.profiles.actions.edit")}
+                    </Button>
+                    <Button
+                      disabled={deleteMutation.isPending}
+                      variant="danger"
+                      onClick={() => {
+                        deleteMutation.reset();
+                        setDeleteProfile(profile);
+                      }}
+                    >
+                      <Trash2 aria-hidden="true" size={14} />
+                      {t("backups.profiles.actions.delete")}
+                    </Button>
+                  </Group>
+                </Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
       ) : (
-        <div className="list-state">{t("backups.profiles.empty")}</div>
+        <Text c="dimmed" size="sm">
+          {t("backups.profiles.empty")}
+        </Text>
       )}
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteBackupProfile")}
@@ -415,6 +426,6 @@ export function BackupProfilesView({ server }: BackupProfilesViewProps) {
           }
         }}
       />
-    </section>
+    </Stack>
   );
 }

@@ -40,7 +40,6 @@ export function ConfirmDangerDialog({
   return (
     <DialogSurface
       open={isOpen}
-      className="confirm-danger-dialog"
       description={description}
       footer={
         <>
@@ -56,7 +55,6 @@ export function ConfirmDangerDialog({
           </Button>
         </>
       }
-      role="alertdialog"
       title={title}
       onOpenChange={(open) => {
         if (!open) {

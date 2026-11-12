@@ -59,7 +59,7 @@ test.describe("application navigation", () => {
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Logs", exact: true }).click();
-    const dialog = page.getByRole("alertdialog", {
+    const dialog = page.getByRole("dialog", {
       name: "Discard server creation?",
     });
     await expect(dialog).toBeVisible();
@@ -70,7 +70,7 @@ test.describe("application navigation", () => {
 
     await page.getByRole("button", { name: "Logs", exact: true }).click();
     await page
-      .getByRole("alertdialog", { name: "Discard server creation?" })
+      .getByRole("dialog", { name: "Discard server creation?" })
       .getByRole("button", { name: "Discard creation" })
       .click();
     await expect(

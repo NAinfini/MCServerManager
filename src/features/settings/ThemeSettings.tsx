@@ -1,4 +1,6 @@
-import { Monitor, Moon, Palette, Sun } from "lucide-react";
+import { Group, Radio, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { SettingSection } from "../../components/ui/setting-row";
 import { useAppSettings, type ThemeSetting } from "../../i18n";
 
 export function ThemeSettings() {
@@ -14,48 +16,51 @@ export function ThemeSettings() {
   ];
 
   return (
-    <section
-      className="settings-plain-section"
+    <SettingSection
+      title={t("settings.theme.title")}
       aria-label={t("settings.theme.title")}
     >
-      <div className="section-heading">
-        <h2>{t("settings.theme.title")}</h2>
-        <Palette aria-hidden="true" size={18} />
-      </div>
-      <div
-        aria-label={t("settings.theme.label")}
-        className="theme-choice-grid"
+      <SimpleGrid
+        cols={3}
+        spacing="sm"
+        py="sm"
         role="radiogroup"
+        aria-label={t("settings.theme.label")}
       >
         {choices.map(({ icon: Icon, label, value }) => (
-          <button
-            aria-checked={theme === value}
-            aria-label={label}
-            className={`theme-choice${
-              theme === value ? " theme-choice-active" : ""
-            }`}
+          <Radio.Card
             key={value}
-            role="radio"
-            type="button"
+            name="theme"
+            value={value}
+            checked={theme === value}
+            aria-label={label}
+            p="xs"
             onClick={() => setTheme(value)}
           >
-            <span
-              aria-hidden="true"
-              className={`theme-preview theme-preview-${value}`}
-            >
-              <span className="theme-preview-sidebar" />
-              <span className="theme-preview-content">
-                <span />
-                <span />
+            {/* The swatch depicts a theme other than the active one, so it is
+                drawn from fixed colours rather than Mantine tokens. */}
+            <Stack gap="xs">
+              <span
+                aria-hidden="true"
+                className={`theme-preview theme-preview-${value}`}
+              >
+                <span className="theme-preview-sidebar" />
+                <span className="theme-preview-content">
+                  <span />
+                  <span />
+                </span>
               </span>
-            </span>
-            <span className="theme-choice-label">
-              <Icon aria-hidden="true" size={14} />
-              {label}
-            </span>
-          </button>
+              <Group gap={6} wrap="nowrap">
+                <Radio.Indicator size="xs" />
+                <Icon aria-hidden="true" size={14} />
+                <Text size="sm" fw={500} truncate>
+                  {label}
+                </Text>
+              </Group>
+            </Stack>
+          </Radio.Card>
         ))}
-      </div>
-    </section>
+      </SimpleGrid>
+    </SettingSection>
   );
 }

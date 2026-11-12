@@ -1,4 +1,15 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  Accordion,
+  Badge,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
+import { PlayerHead } from "../../components/ui/player-head";
 import { useAppSettings } from "../../i18n";
 import { ServerEventsView } from "../activity/ServerEventsView";
 import { DiagnosticsView } from "../diagnostics/DiagnosticsView";
@@ -25,40 +36,51 @@ function OverviewPlayers({ serverId }: { serverId: string }) {
   );
 
   return (
-    <section
+    <Paper
       aria-label={t("server.overview.online.title")}
-      className="overview-cell-narrow overview-column"
+      component="section"
+      p="md"
     >
-      <header className="overview-column-head">
-        <h3>{t("server.overview.online.title")}</h3>
-        <b>{playersQuery.data ? online.length : "—"}</b>
-      </header>
+      <Group justify="space-between" mb="sm">
+        <Title order={3} fz="sm">
+          {t("server.overview.online.title")}
+        </Title>
+        <Text ff="monospace" fw={600} size="sm">
+          {playersQuery.data ? online.length : "—"}
+        </Text>
+      </Group>
       {playersQuery.error ? (
-        <p
-          className="overview-column-note overview-column-note-warn"
-          role="alert"
-        >
+        <Text c="yellow" role="alert" size="sm">
           {playersQuery.error.message}
-        </p>
+        </Text>
       ) : playersQuery.data?.unavailableReason ? (
-        <p className="overview-column-note overview-column-note-warn">
+        <Text c="yellow" size="sm">
           {playersQuery.data.unavailableReason}
-        </p>
+        </Text>
       ) : online.length === 0 ? (
-        <p className="overview-column-note">
+        <Text c="dimmed" size="sm">
           {t("server.overview.online.empty")}
-        </p>
+        </Text>
       ) : (
-        <ul className="overview-player-list">
+        <Stack component="ul" gap={6} m={0} p={0} style={{ listStyle: "none" }}>
           {online.slice(0, 8).map((player) => (
-            <li key={player.uuid ?? player.username}>
-              <span>{player.username}</span>
-              {player.operator ? <em>{t("players.state.operator")}</em> : null}
-            </li>
+            <Group component="li" gap="xs" key={player.uuid ?? player.username}>
+              <PlayerHead
+                size={18}
+                username={player.username}
+                uuid={player.uuid}
+              />
+              <Text size="sm">{player.username}</Text>
+              {player.operator ? (
+                <Badge size="xs" variant="light">
+                  {t("players.state.operator")}
+                </Badge>
+              ) : null}
+            </Group>
           ))}
-        </ul>
+        </Stack>
       )}
-    </section>
+    </Paper>
   );
 }
 
@@ -71,52 +93,66 @@ export function ServerOverviewWorkspace({
 }) {
   const { language, t } = useAppSettings();
 
+  const facts = [
+    {
+      label: t("server.overview.rootFolder"),
+      value: server.rootDir,
+      mono: true,
+    },
+    {
+      label: t("server.overview.restartPolicy"),
+      value: server.restartPolicy.enabled
+        ? t("server.overview.restartOnCrash", {
+            attempts: server.restartPolicy.maxAttempts,
+          })
+        : t("server.overview.restartDisabled"),
+    },
+    {
+      label: t("server.overview.autoStart"),
+      value: server.autoStart
+        ? t("server.overview.enabled")
+        : t("server.overview.disabled"),
+    },
+    {
+      label: t("server.overview.lastUpdated"),
+      value: formatDate(server.updatedAt, language),
+    },
+  ];
+
   return (
-    <div className="server-overview-workspace">
+    <Stack gap="md">
       <ServerSetupChecklist server={server} onOpenJava={onOpenJava} />
-      <div className="server-overview-grid">
-        <section className="overview-cell overview-performance">
-          <PerformanceHistoryView server={server} />
-        </section>
-        <section className="overview-cell overview-diagnostics">
-          <DiagnosticsView server={server} />
-        </section>
-        <section className="overview-cell overview-events">
-          <ServerEventsView serverId={server.id} />
-        </section>
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <PerformanceHistoryView server={server} />
+        <DiagnosticsView server={server} />
+        <ServerEventsView serverId={server.id} />
         <OverviewPlayers serverId={server.id} />
-      </div>
-      <details className="server-overview-config">
-        <summary>{t("server.overview.configTitle")}</summary>
-        <dl className="overview-config-grid">
-          <div>
-            <dt>{t("server.overview.rootFolder")}</dt>
-            <dd>{server.rootDir}</dd>
-          </div>
-          <div>
-            <dt>{t("server.overview.restartPolicy")}</dt>
-            <dd>
-              {server.restartPolicy.enabled
-                ? t("server.overview.restartOnCrash", {
-                    attempts: server.restartPolicy.maxAttempts,
-                  })
-                : t("server.overview.restartDisabled")}
-            </dd>
-          </div>
-          <div>
-            <dt>{t("server.overview.autoStart")}</dt>
-            <dd>
-              {server.autoStart
-                ? t("server.overview.enabled")
-                : t("server.overview.disabled")}
-            </dd>
-          </div>
-          <div>
-            <dt>{t("server.overview.lastUpdated")}</dt>
-            <dd>{formatDate(server.updatedAt, language)}</dd>
-          </div>
-        </dl>
-      </details>
-    </div>
+      </SimpleGrid>
+      <Accordion variant="contained">
+        <Accordion.Item value="config">
+          <Accordion.Control>
+            {t("server.overview.configTitle")}
+          </Accordion.Control>
+          <Accordion.Panel>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              {facts.map((fact) => (
+                <div key={fact.label}>
+                  <Text c="dimmed" size="xs">
+                    {fact.label}
+                  </Text>
+                  <Text
+                    ff={fact.mono ? "monospace" : undefined}
+                    size="sm"
+                    style={{ overflowWrap: "anywhere" }}
+                  >
+                    {fact.value}
+                  </Text>
+                </div>
+              ))}
+            </SimpleGrid>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
+    </Stack>
   );
 }

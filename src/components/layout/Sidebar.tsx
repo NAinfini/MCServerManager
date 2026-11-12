@@ -23,11 +23,26 @@ import {
   type ReactNode,
 } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import * as Tooltip from "@radix-ui/react-tooltip";
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button as MantineButton,
+  Group,
+  Image,
+  Indicator,
+  NavLink,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
 import { useAppSettings } from "../../i18n";
 import { Button } from "../ui/button";
 import { DialogSurface } from "../ui/dialog-surface";
-import { TextField } from "../ui/text-field";
 import { ServerCover } from "../ui/server-cover";
 import type { ServerProfile } from "../../domain/server";
 import type { ManagedProcessStatus } from "../../features/process/api";
@@ -37,6 +52,14 @@ import { type SidebarServerGroup, useSidebarStore } from "./sidebarStore";
 export type PrimaryPage = "servers" | "java" | "logger" | "settings";
 
 const SERVER_DRAG_TYPE = "application/x-mcsm-server-id";
+
+/* Green, amber and red only ever mean server state. */
+const statusColors: Record<string, string> = {
+  running: "green",
+  stopping: "yellow",
+  crashed: "red",
+  stopped: "gray",
+};
 
 const primaryItems = [
   { id: "java", labelKey: "nav.java", icon: Coffee },
@@ -50,31 +73,6 @@ const enabledPages = new Set<PrimaryPage>([
   "logger",
   "settings",
 ]);
-
-function NavTooltip({
-  label,
-  enabled,
-  children,
-}: {
-  label: string;
-  enabled: boolean;
-  children: React.ReactElement;
-}) {
-  if (!enabled) return children;
-  return (
-    <Tooltip.Provider delayDuration={300}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content className="tooltip-content" sideOffset={6}>
-            {label}
-            <Tooltip.Arrow className="tooltip-arrow" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
-}
 
 interface SidebarProps {
   notifications?: ReactNode;
@@ -103,12 +101,13 @@ function ServerDropZone({ testId, onDropServer }: ServerDropZoneProps) {
   const [active, setActive] = useState(false);
 
   return (
-    <div
+    <Box
       aria-hidden="true"
-      className={
-        active ? "server-drop-zone server-drop-zone-active" : "server-drop-zone"
-      }
+      bg={active ? "azure.6" : undefined}
       data-testid={testId}
+      h={4}
+      mx="xs"
+      style={{ borderRadius: 2 }}
       onDragEnter={(event) => {
         event.preventDefault();
         setActive(true);
@@ -124,6 +123,32 @@ function ServerDropZone({ testId, onDropServer }: ServerDropZoneProps) {
         }
       }}
     />
+  );
+}
+
+function ContextMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: typeof FolderOpen;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <MantineButton
+      color="gray"
+      fullWidth
+      fw={400}
+      justify="flex-start"
+      leftSection={<Icon aria-hidden="true" size={14} />}
+      role="menuitem"
+      size="xs"
+      variant="subtle"
+      onClick={onClick}
+    >
+      {label}
+    </MantineButton>
   );
 }
 
@@ -167,7 +192,7 @@ export function Sidebar({
     null,
   );
   const [renameValue, setRenameValue] = useState("");
-  const sidebarRef = useRef<HTMLElement | null>(null);
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
   const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement | null>(null);
   const contextMenuTargetRef = useRef<Omit<ContextMenuState, "x" | "y"> | null>(
@@ -248,13 +273,13 @@ export function Sidebar({
       if (target.type === "group") return groupById.has(target.id);
       return (
         serverById.has(target.id) &&
-        Boolean(element.closest(".server-nav-group")) ===
+        Boolean(element.closest('[role="group"]')) ===
           groupedServerIds.has(target.id)
       );
     });
     const fallback =
       matchingTrigger ??
-      sidebarRef.current?.querySelector<HTMLElement>(".sidebar-brand");
+      sidebarRef.current?.querySelector<HTMLElement>("[data-sidebar-brand]");
 
     fallback?.focus();
   }, [contextMenu, groupById, groupedServerIds, serverById]);
@@ -405,7 +430,6 @@ export function Sidebar({
       return (
         <motion.div
           key={server.id}
-          className="server-nav-row"
           data-testid={`server-nav-row-${server.id}`}
           layout
           animate={
@@ -422,25 +446,74 @@ export function Sidebar({
             scale: { duration: 0.16 },
           }}
         >
-          <NavTooltip enabled={collapsed} label={server.name}>
-            <button
+          <Tooltip disabled={!collapsed} label={server.name} position="right">
+            <NavLink
+              active={isActive}
               aria-label={server.name}
               aria-current={isActive ? "page" : undefined}
               aria-expanded={
                 contextMenu?.type === "server" && contextMenu.id === server.id
               }
               aria-haspopup="menu"
+              component="button"
               data-context-menu-trigger={`server:${server.id}`}
-              className={[
-                "server-nav-item",
-                isActive ? "server-nav-item-active" : "",
-                isDragging ? "server-nav-item-dragging" : "",
-                options.grouped ? "server-nav-item-grouped" : "",
-              ]
-                .filter(Boolean)
-                .join(" ")}
+              description={
+                collapsed ? undefined : (
+                  <>
+                    <Text
+                      c="dimmed"
+                      component="span"
+                      display="block"
+                      size="xs"
+                      truncate
+                    >
+                      {getLoaderBranding(server.loaderType).label}{" "}
+                      {server.minecraftVersion ?? ""}
+                    </Text>
+                    <Text
+                      c={
+                        dotStatus === "stopped"
+                          ? "dimmed"
+                          : `${statusColors[dotStatus]}.5`
+                      }
+                      component="span"
+                      data-tone={dotStatus}
+                      display="block"
+                      fw={dotStatus === "crashed" ? 600 : undefined}
+                      size="xs"
+                    >
+                      {t(`server.statusLine.${status}`)}
+                    </Text>
+                  </>
+                )
+              }
               draggable
-              title={collapsed ? undefined : server.name}
+              noWrap
+              label={collapsed ? undefined : server.name}
+              leftSection={
+                <Indicator
+                  color={statusColors[dotStatus]}
+                  data-status={dotStatus}
+                  offset={3}
+                  position="bottom-end"
+                  size={10}
+                  withBorder
+                >
+                  <ServerCover
+                    loaderType={server.loaderType}
+                    size={collapsed ? 32 : 36}
+                  />
+                </Indicator>
+              }
+              ml={options.grouped && !collapsed ? "sm" : undefined}
+              opacity={isDragging ? 0.7 : 1}
+              px={collapsed ? 6 : "xs"}
+              py={6}
+              styles={{
+                label: { fontWeight: 600 },
+                section: collapsed ? { marginInlineEnd: 0 } : undefined,
+                body: collapsed ? { display: "none" } : undefined,
+              }}
               type="button"
               onClick={() => onSelectServer?.(server.id)}
               onContextMenu={(event) =>
@@ -456,34 +529,8 @@ export function Sidebar({
               onDragOver={(event) => event.preventDefault()}
               onDragStart={(event) => beginServerDrag(event, server.id)}
               onDrop={(event) => dropOnServer(event, server.id)}
-            >
-              <span
-                className={`status-dot status-dot-${dotStatus}`}
-                aria-hidden="true"
-              />
-              {!collapsed && (
-                <ServerCover
-                  className="server-nav-cover"
-                  loaderType={server.loaderType}
-                  size={40}
-                />
-              )}
-              {!collapsed && (
-                <span className="server-nav-copy">
-                  <span className="server-nav-name">{server.name}</span>
-                  <span className="server-nav-meta">
-                    {getLoaderBranding(server.loaderType).label}{" "}
-                    {server.minecraftVersion ?? ""}
-                  </span>
-                  <span
-                    className={`server-nav-status server-nav-status-${dotStatus}`}
-                  >
-                    {t(`server.statusLine.${status}`)}
-                  </span>
-                </span>
-              )}
-            </button>
-          </NavTooltip>
+            />
+          </Tooltip>
         </motion.div>
       );
     },
@@ -505,11 +552,7 @@ export function Sidebar({
 
   const renderServerEntry = useCallback(
     (server: ServerProfile, options: { grouped?: boolean } = {}) => (
-      <motion.div
-        key={`entry-${server.id}`}
-        className="server-nav-entry"
-        layout
-      >
+      <motion.div key={`entry-${server.id}`} layout>
         <ServerDropZone
           testId={`drop-before-${server.id}`}
           onDropServer={(serverId) => moveServerBefore(serverId, server.id)}
@@ -535,56 +578,60 @@ export function Sidebar({
       }
 
       return (
-        <motion.div
-          key={group.id}
-          aria-label={groupName}
-          className="server-nav-group"
-          layout
-          role="group"
-        >
-          <button
-            aria-label={groupName}
-            aria-expanded={!group.collapsed}
-            aria-haspopup="menu"
-            data-context-menu-trigger={`group:${group.id}`}
-            className="server-nav-group-header"
-            type="button"
-            onClick={() => toggleGroup(group.id)}
-            onContextMenu={(event) =>
-              openContextMenu(event, { type: "group", id: group.id })
-            }
-            onKeyDown={(event) =>
-              openContextMenuFromKeyboard(event, {
-                type: "group",
-                id: group.id,
-              })
-            }
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => dropIntoGroup(event, group.id)}
-          >
-            <ChevronDown
-              aria-hidden="true"
-              className={
-                group.collapsed
-                  ? "server-nav-group-chevron collapsed"
-                  : "server-nav-group-chevron"
+        <motion.div key={group.id} aria-label={groupName} layout role="group">
+          <Tooltip disabled={!collapsed} label={groupName} position="right">
+            <NavLink
+              aria-label={groupName}
+              aria-expanded={!group.collapsed}
+              aria-haspopup="menu"
+              component="button"
+              data-context-menu-trigger={`group:${group.id}`}
+              label={collapsed ? undefined : groupName}
+              leftSection={
+                <Group gap={4} wrap="nowrap">
+                  <ChevronDown
+                    aria-hidden="true"
+                    size={14}
+                    style={{
+                      transform: group.collapsed ? "rotate(-90deg)" : undefined,
+                      transition: "transform 120ms ease",
+                    }}
+                  />
+                  <FolderOpen aria-hidden="true" size={16} />
+                </Group>
               }
-              size={15}
+              noWrap
+              px={collapsed ? 6 : "xs"}
+              rightSection={
+                collapsed ? undefined : (
+                  <Badge color="gray" size="sm" variant="light">
+                    {t("nav.serverGroup.count", { count: groupServers.length })}
+                  </Badge>
+                )
+              }
+              styles={{
+                label: { fontWeight: 600 },
+                section: collapsed ? { marginInlineEnd: 0 } : undefined,
+                body: collapsed ? { display: "none" } : undefined,
+              }}
+              type="button"
+              onClick={() => toggleGroup(group.id)}
+              onContextMenu={(event) =>
+                openContextMenu(event, { type: "group", id: group.id })
+              }
+              onKeyDown={(event) =>
+                openContextMenuFromKeyboard(event, {
+                  type: "group",
+                  id: group.id,
+                })
+              }
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => dropIntoGroup(event, group.id)}
             />
-            <FolderOpen aria-hidden="true" size={16} />
-            {!collapsed && (
-              <>
-                <span className="server-nav-group-name">{groupName}</span>
-                <span className="server-nav-group-count">
-                  {t("nav.serverGroup.count", { count: groupServers.length })}
-                </span>
-              </>
-            )}
-          </button>
+          </Tooltip>
           <AnimatePresence initial={false}>
             {!group.collapsed && (
               <motion.div
-                className="server-nav-group-list"
                 initial={reduceMotion ? false : { opacity: 0, y: -3 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -3 }}
@@ -621,261 +668,263 @@ export function Sidebar({
   const menuServerGrouped =
     contextMenu?.type === "server" && groupedServerIds.has(contextMenu.id);
 
+  const toggleLabel = collapsed
+    ? t("nav.expandSidebar")
+    : t("nav.collapseSidebar");
+  const contextMenuStyle = contextMenu
+    ? { left: contextMenu.x, top: contextMenu.y, zIndex: 300 }
+    : undefined;
+
   return (
-    <aside
-      ref={sidebarRef}
-      className={collapsed ? "sidebar sidebar-collapsed" : "sidebar"}
-    >
-      <div className="sidebar-header">
-        <button
-          className="sidebar-brand"
-          type="button"
+    <Stack ref={sidebarRef} className="sidebar" component="aside" gap={0}>
+      <Group
+        gap={4}
+        justify={collapsed ? "center" : "space-between"}
+        px="sm"
+        py="sm"
+        wrap={collapsed ? "wrap" : "nowrap"}
+      >
+        <UnstyledButton
           aria-label={t("nav.servers")}
+          data-sidebar-brand
+          p={4}
+          style={{ borderRadius: "var(--mantine-radius-md)", minWidth: 0 }}
           onClick={() => onSelectPage("servers")}
         >
-          <span className="app-mark">
-            <img
+          <Group gap="sm" wrap="nowrap">
+            <Image
               alt=""
               aria-hidden="true"
-              height="28"
+              h={28}
+              radius="sm"
               src="./app-icon.png"
-              width="28"
+              w={28}
             />
-          </span>
-          {!collapsed && (
-            <div className="sidebar-brand-copy">
-              <p className="sidebar-title">MC Server Manager</p>
-              <p className="sidebar-subtitle">
-                <span>{t("nav.localRuntime")}</span>
-              </p>
-            </div>
-          )}
-        </button>
-        <button
-          aria-label={
-            collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")
-          }
-          className="sidebar-toggle-button"
-          title={collapsed ? t("nav.expandSidebar") : t("nav.collapseSidebar")}
-          type="button"
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? (
-            <PanelLeftOpen aria-hidden="true" size={17} strokeWidth={2} />
-          ) : (
-            <PanelLeftClose aria-hidden="true" size={17} strokeWidth={2} />
-          )}
-        </button>
-      </div>
+            {!collapsed && (
+              <div style={{ minWidth: 0 }}>
+                <Text fw={650} size="sm" truncate>
+                  MC Server Manager
+                </Text>
+                <Text c="dimmed" size="xs" truncate>
+                  {t("nav.localRuntime")}
+                </Text>
+              </div>
+            )}
+          </Group>
+        </UnstyledButton>
+        <Tooltip label={toggleLabel} position="right">
+          <ActionIcon aria-label={toggleLabel} onClick={toggleCollapsed}>
+            {collapsed ? (
+              <PanelLeftOpen aria-hidden="true" size={16} />
+            ) : (
+              <PanelLeftClose aria-hidden="true" size={16} />
+            )}
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
-      <section
-        className="server-nav-section"
+      <Stack
         aria-label={t("nav.serverProfiles")}
+        component="section"
+        gap={4}
+        mih={0}
+        style={{ flex: 1 }}
       >
         {!collapsed && (
-          <div className="sidebar-section-label">{t("nav.servers")}</div>
+          <Text c="dimmed" fw={500} px="md" size="xs">
+            {t("nav.servers")}
+          </Text>
         )}
-        <div className="server-nav-list">
-          <AnimatePresence initial={false}>
-            {visibleRootItems.map((item) => {
-              if (item.type === "group") {
-                return renderGroup(groupById.get(item.id)!);
-              }
-              const server = serverById.get(item.id);
-              return server ? renderServerEntry(server) : null;
-            })}
-          </AnimatePresence>
-        </div>
-      </section>
+        <ScrollArea scrollbarSize={6} style={{ flex: 1 }} type="hover">
+          <Box px={collapsed ? 6 : "xs"}>
+            <AnimatePresence initial={false}>
+              {visibleRootItems.map((item) => {
+                if (item.type === "group") {
+                  return renderGroup(groupById.get(item.id)!);
+                }
+                const server = serverById.get(item.id);
+                return server ? renderServerEntry(server) : null;
+              })}
+            </AnimatePresence>
+          </Box>
+        </ScrollArea>
+      </Stack>
 
       {!collapsed && onCreateServer ? (
-        <button
-          className="sidebar-drop-hint"
-          type="button"
+        <UnstyledButton
+          c="dimmed"
+          fz="xs"
+          mx="sm"
+          my="xs"
+          p="sm"
+          style={{
+            border: "1px dashed var(--mantine-color-default-border)",
+            borderRadius: "var(--mantine-radius-md)",
+          }}
+          ta="center"
           onClick={onCreateServer}
         >
           {t("nav.dropHint")}
-        </button>
+        </UnstyledButton>
       ) : null}
 
-      <nav
-        aria-label={t("nav.primary")}
-        className="primary-nav sidebar-footer-nav"
-      >
+      <Stack aria-label={t("nav.primary")} component="nav" gap={2} p="xs">
         {primaryItems.map((item) => (
-          <NavTooltip
+          <Tooltip
             key={item.id}
-            enabled={collapsed}
+            disabled={!collapsed}
+            position="right"
             label={t(item.labelKey)}
           >
-            <button
+            <NavLink
+              active={activePage === item.id}
               aria-label={t(item.labelKey)}
-              className={
-                activePage === item.id ? "nav-item nav-item-active" : "nav-item"
-              }
+              component="button"
               disabled={!enabledPages.has(item.id)}
+              label={collapsed ? undefined : t(item.labelKey)}
+              leftSection={<item.icon aria-hidden="true" size={16} />}
+              styles={{
+                section: collapsed ? { marginInlineEnd: 0 } : undefined,
+                body: collapsed ? { display: "none" } : undefined,
+                root: collapsed ? { justifyContent: "center" } : undefined,
+              }}
               type="button"
               onClick={() => onSelectPage(item.id)}
-            >
-              <item.icon aria-hidden="true" size={18} strokeWidth={2} />
-              {!collapsed && <span>{t(item.labelKey)}</span>}
-            </button>
-          </NavTooltip>
+            />
+          </Tooltip>
         ))}
         {notifications ? (
-          <div className="sidebar-notifications">{notifications}</div>
+          <Group justify={collapsed ? "center" : "flex-start"} px={4}>
+            {notifications}
+          </Group>
         ) : null}
-      </nav>
+      </Stack>
 
       {contextMenu && menuServer && (
-        <div
+        <Paper
           ref={contextMenuRef}
           aria-label={t("nav.serverContext.menu", { server: menuServer.name })}
-          className="sidebar-context-menu"
+          miw={200}
+          p={4}
+          pos="fixed"
           role="menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          shadow="md"
+          style={contextMenuStyle}
+          withBorder
           onClick={(event) => event.stopPropagation()}
           onKeyDown={handleContextMenuKeyDown}
         >
-          <button
-            role="menuitem"
-            type="button"
+          <ContextMenuItem
+            icon={FolderOpen}
+            label={t("nav.serverContext.open")}
             onClick={() => {
               onSelectServer?.(menuServer.id);
               closeContextMenu(true);
             }}
-          >
-            <FolderOpen aria-hidden="true" size={15} />
-            <span>{t("nav.serverContext.open")}</span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={FolderPlus}
+            label={t("nav.serverContext.createGroup")}
             onClick={() => {
               createGroupFromServer(menuServer.id);
               closeContextMenu(true);
             }}
-          >
-            <FolderPlus aria-hidden="true" size={15} />
-            <span>{t("nav.serverContext.createGroup")}</span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={MoveUp}
+            label={t("nav.serverContext.moveTop")}
             onClick={() => {
               moveServerToTop(menuServer.id);
               closeContextMenu(true);
             }}
-          >
-            <MoveUp aria-hidden="true" size={15} />
-            <span>{t("nav.serverContext.moveTop")}</span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={MoveUp}
+            label={t("nav.serverContext.moveUp")}
             onClick={() => {
               moveServerByOffset(menuServer.id, -1);
               closeContextMenu(true);
             }}
-          >
-            <MoveUp aria-hidden="true" size={15} />
-            <span>{t("nav.serverContext.moveUp")}</span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={MoveDown}
+            label={t("nav.serverContext.moveDown")}
             onClick={() => {
               moveServerByOffset(menuServer.id, 1);
               closeContextMenu(true);
             }}
-          >
-            <MoveDown aria-hidden="true" size={15} />
-            <span>{t("nav.serverContext.moveDown")}</span>
-          </button>
+          />
           {groups
             .filter((group) => !group.serverIds.includes(menuServer.id))
             .map((group) => (
-              <button
+              <ContextMenuItem
                 key={group.id}
-                role="menuitem"
-                type="button"
+                icon={FolderPlus}
+                label={t("nav.serverContext.moveToGroup", {
+                  group: group.name || t("nav.serverGroup.default"),
+                })}
                 onClick={() => {
                   addServerToGroup(menuServer.id, group.id);
                   closeContextMenu(true);
                 }}
-              >
-                <FolderPlus aria-hidden="true" size={15} />
-                <span>
-                  {t("nav.serverContext.moveToGroup", {
-                    group: group.name || t("nav.serverGroup.default"),
-                  })}
-                </span>
-              </button>
+              />
             ))}
           {menuServerGrouped && (
-            <button
-              role="menuitem"
-              type="button"
+            <ContextMenuItem
+              icon={Ungroup}
+              label={t("nav.serverContext.ungroup")}
               onClick={() => {
                 ungroupServer(menuServer.id);
                 closeContextMenu(true);
               }}
-            >
-              <Ungroup aria-hidden="true" size={15} />
-              <span>{t("nav.serverContext.ungroup")}</span>
-            </button>
+            />
           )}
-        </div>
+        </Paper>
       )}
 
       {contextMenu && menuGroup && (
-        <div
+        <Paper
           ref={contextMenuRef}
           aria-label={t("nav.serverGroup.menu", { group: menuGroupName })}
-          className="sidebar-context-menu"
+          miw={200}
+          p={4}
+          pos="fixed"
           role="menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          shadow="md"
+          style={contextMenuStyle}
+          withBorder
           onClick={(event) => event.stopPropagation()}
           onKeyDown={handleContextMenuKeyDown}
         >
-          <button
-            role="menuitem"
-            type="button"
+          <ContextMenuItem
+            icon={ChevronDown}
+            label={
+              menuGroup.collapsed
+                ? t("nav.serverGroup.expand")
+                : t("nav.serverGroup.collapse")
+            }
             onClick={() => {
               toggleGroup(menuGroup.id);
               closeContextMenu(true);
             }}
-          >
-            <ChevronDown aria-hidden="true" size={15} />
-            <span>
-              {menuGroup.collapsed
-                ? t("nav.serverGroup.expand")
-                : t("nav.serverGroup.collapse")}
-            </span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={FolderOpen}
+            label={t("nav.serverGroup.rename")}
             onClick={() => {
               openRenameGroup(menuGroup);
               closeContextMenu(true);
             }}
-          >
-            <FolderOpen aria-hidden="true" size={15} />
-            <span>{t("nav.serverGroup.rename")}</span>
-          </button>
-          <button
-            role="menuitem"
-            type="button"
+          />
+          <ContextMenuItem
+            icon={Ungroup}
+            label={t("nav.serverGroup.disband")}
             onClick={() => {
               disbandGroup(menuGroup.id);
               closeContextMenu(true);
             }}
-          >
-            <Ungroup aria-hidden="true" size={15} />
-            <span>{t("nav.serverGroup.disband")}</span>
-          </button>
-        </div>
+          />
+        </Paper>
       )}
       <DialogSurface
         open={Boolean(renameTarget)}
@@ -902,11 +951,13 @@ export function Sidebar({
           </>
         }
       >
-        <TextField
+        <TextInput
           aria-label={t("nav.serverGroup.renamePrompt")}
-          autoFocus
+          autoComplete="off"
+          data-autofocus
+          mt="md"
           value={renameValue}
-          onChange={(event) => setRenameValue(event.target.value)}
+          onChange={(event) => setRenameValue(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || !renameTarget || !renameValue.trim())
               return;
@@ -915,6 +966,6 @@ export function Sidebar({
           }}
         />
       </DialogSurface>
-    </aside>
+    </Stack>
   );
 }

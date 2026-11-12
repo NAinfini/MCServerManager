@@ -4,8 +4,29 @@ import {
   useMemo,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
 } from "react";
+import {
+  Accordion,
+  Alert,
+  Anchor,
+  Badge,
+  Box,
+  Card,
+  Checkbox,
+  Grid,
+  Group,
+  NumberInput,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+  UnstyledButton,
+} from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -27,7 +48,8 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { TextField } from "../../components/ui/text-field";
+import { Select } from "../../components/ui/select";
+import { getLoaderBranding } from "../loaders/loaderBranding";
 import {
   invokeDesktopCommand,
   isDesktopRuntimeAvailable,
@@ -225,6 +247,34 @@ export function CreateServerWizard({
   const recommendedLoaderIndex = loaderOptions.findIndex(
     (option) => option.stable,
   );
+  const markRecommended = (
+    options: LoaderVersionOption[],
+    recommendedIndex: number,
+  ) =>
+    options.map((option, index) => ({
+      value: option.value,
+      label:
+        index === recommendedIndex
+          ? t("provisioning.wizard.recommendedOption", { label: option.label })
+          : option.label,
+    }));
+  const minecraftSelectOptions = markRecommended(
+    minecraftOptions,
+    recommendedMinecraftIndex,
+  );
+  const loaderSelectOptions = markRecommended(
+    loaderOptions,
+    recommendedLoaderIndex,
+  );
+  const loaderTypeOptions = loaders.map((loader) => {
+    const branding = getLoaderBranding(loader);
+    return {
+      value: loader,
+      label: branding.label,
+      iconSrc: branding.iconSrc,
+      iconText: branding.shortLabel,
+    };
+  });
   const plannedInitialPath = useRef<string | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
@@ -797,38 +847,124 @@ export function CreateServerWizard({
     setLoaderVersion("");
   };
 
-  return (
-    <section
-      aria-label={t("createServer.title")}
-      className="create-server-panel"
-    >
-      {showHeading ? <h2>{t("createServer.title")}</h2> : null}
+  /* The loader and version pickers appear on the blank-server form and again
+     when a dropped pack lacks runtime metadata; both read and reset the same
+     state. */
+  const loaderTypeSelect = (
+    <SelectField
+      label={t("profileSettings.loader")}
+      name="server-loader"
+      options={loaderTypeOptions}
+      value={loaderType}
+      onValueChange={(value) => {
+        setLoaderType(value as LoaderType);
+        setMinecraftVersion("");
+        setLoaderVersion("");
+      }}
+    />
+  );
+  const minecraftVersionSelect = (
+    <SelectField
+      label={t("profileSettings.minecraftVersion")}
+      name="minecraft-version"
+      options={minecraftSelectOptions}
+      placeholder={t("provisioning.wizard.select")}
+      value={minecraftVersion}
+      onValueChange={(value) => {
+        setMinecraftVersion(value);
+        setLoaderVersion("");
+      }}
+    />
+  );
+  const loaderVersionSelect = (emptyLabel: string, emptyIsChoice: boolean) => (
+    <SelectField
+      label={t("profileSettings.loaderVersion")}
+      name="loader-version"
+      options={
+        emptyIsChoice
+          ? [{ value: "", label: emptyLabel }, ...loaderSelectOptions]
+          : loaderSelectOptions
+      }
+      placeholder={emptyLabel}
+      value={loaderVersion}
+      onValueChange={setLoaderVersion}
+    />
+  );
 
-      <div className="wizard-step-content unified-provisioning-wizard">
+  const choiceCard = (choice: {
+    key: string;
+    icon: LucideIcon;
+    label: string;
+    description: string;
+    badge?: string;
+    onClick: () => void;
+  }) => (
+    <Card
+      aria-label={choice.label}
+      component="button"
+      key={choice.key}
+      ta="left"
+      type="button"
+      withBorder
+      onClick={choice.onClick}
+    >
+      <Group align="flex-start" gap="sm" wrap="nowrap">
+        <ThemeIcon size="lg" variant="light">
+          <choice.icon aria-hidden="true" size={18} />
+        </ThemeIcon>
+        <Stack gap={2} miw={0}>
+          <Group gap="xs">
+            <Text fw={600} size="sm">
+              {choice.label}
+            </Text>
+            {choice.badge ? (
+              <Badge size="xs" variant="light">
+                {choice.badge}
+              </Badge>
+            ) : null}
+          </Group>
+          <Text c="dimmed" size="xs">
+            {choice.description}
+          </Text>
+        </Stack>
+      </Group>
+    </Card>
+  );
+
+  return (
+    <Stack aria-label={t("createServer.title")} component="section" gap="md">
+      {showHeading ? <Title order={2}>{t("createServer.title")}</Title> : null}
+
+      <Stack gap="md">
         {step === 0 && sourceView === "choices" ? (
-          <div className="wizard-pick-view">
-            <button
+          <Stack gap="md">
+            <UnstyledButton
               aria-label={t("provisioning.wizard.drop")}
-              className="wizard-dropzone"
               data-testid="server-pack-drop-zone"
               disabled={busy}
-              type="button"
+              p="xl"
+              style={{
+                border: "1px dashed var(--mantine-color-default-border)",
+                borderRadius: "var(--mantine-radius-md)",
+              }}
               onClick={chooseLocalFile}
               onDragOver={(event) => event.preventDefault()}
               onDrop={handleDrop}
             >
-              <Upload aria-hidden="true" size={20} />
-              <span className="wizard-dropzone-title">
-                {t("provisioning.wizard.dropTitle")}
-              </span>
-              <span className="wizard-dropzone-hint">
-                {t("provisioning.wizard.dropHint")}
-              </span>
-            </button>
-            <p className="wizard-source-question">
+              <Stack align="center" gap={6}>
+                <ThemeIcon radius="xl" size="xl" variant="light">
+                  <Upload aria-hidden="true" size={20} />
+                </ThemeIcon>
+                <Text fw={600}>{t("provisioning.wizard.dropTitle")}</Text>
+                <Text c="dimmed" size="sm" ta="center">
+                  {t("provisioning.wizard.dropHint")}
+                </Text>
+              </Stack>
+            </UnstyledButton>
+            <Text c="dimmed" size="sm">
               {t("provisioning.wizard.sourceQuestion")}
-            </p>
-            <div className="wizard-actions">
+            </Text>
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
               {[
                 {
                   key: "blank",
@@ -861,695 +997,579 @@ export function CreateServerWizard({
                   description: t("createServer.openModpackFile.description"),
                   onClick: chooseLocalFile,
                 },
-              ].map((choice) => (
-                <button
-                  aria-label={choice.label}
-                  className="wizard-action"
-                  key={choice.key}
-                  type="button"
-                  onClick={choice.onClick}
-                >
-                  <choice.icon
-                    aria-hidden="true"
-                    className="wizard-action-icon"
-                    size={18}
-                  />
-                  <span className="wizard-action-title">{choice.label}</span>
-                  <span className="wizard-action-description">
-                    {choice.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+              ].map(choiceCard)}
+            </SimpleGrid>
+          </Stack>
         ) : null}
 
         {step === 0 && sourceView === "marketplace" ? (
-          <div className="wizard-marketplace-step">
-            <CreateServerMarketplaceBrowser
-              detailAction={marketplaceDetailAction}
-              onDetailModeChange={onHeaderHiddenChange}
-              onSelect={handleMarketplaceSelect}
-            />
-          </div>
+          <CreateServerMarketplaceBrowser
+            detailAction={marketplaceDetailAction}
+            onDetailModeChange={onHeaderHiddenChange}
+            onSelect={handleMarketplaceSelect}
+          />
         ) : null}
 
         {step === 0 && sourceView === "blank" ? (
           serverIntent === null ? (
-            <div className="wizard-intent-picker">
-              <div className="wizard-intent-heading">
-                <h2>{t("createServer.intent.title")}</h2>
-                <p>{t("createServer.intent.description")}</p>
+            <Stack gap="md">
+              <div>
+                <Title order={2}>{t("createServer.intent.title")}</Title>
+                <Text c="dimmed" size="sm">
+                  {t("createServer.intent.description")}
+                </Text>
               </div>
-              <div className="wizard-intent-options">
-                {[
-                  {
-                    key: "vanilla" as const,
-                    icon: Gamepad2,
-                    label: t("createServer.intent.vanilla"),
-                    description: t("createServer.intent.vanilla.description"),
-                  },
-                  {
-                    key: "plugins" as const,
-                    icon: Package,
-                    label: t("createServer.intent.plugins"),
-                    description: t("createServer.intent.plugins.description"),
-                    badge: t("createServer.intent.recommended"),
-                  },
-                  {
-                    key: "mods" as const,
-                    icon: Cpu,
-                    label: t("createServer.intent.mods"),
-                    description: t("createServer.intent.mods.description"),
-                  },
-                  {
-                    key: "advanced" as const,
-                    icon: ShieldCheck,
-                    label: t("createServer.intent.advanced"),
-                    description: t("createServer.intent.advanced.description"),
-                  },
-                ].map((intent) => (
-                  <button
-                    aria-label={intent.label}
-                    className="wizard-intent-option"
-                    key={intent.key}
-                    type="button"
-                    onClick={() => chooseServerIntent(intent.key)}
-                  >
-                    <intent.icon aria-hidden="true" size={19} />
-                    <span className="wizard-intent-title">
-                      <strong>{intent.label}</strong>
-                      {intent.badge ? <em>{intent.badge}</em> : null}
-                    </span>
-                    <span>{intent.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                {(
+                  [
+                    {
+                      key: "vanilla",
+                      icon: Gamepad2,
+                      label: t("createServer.intent.vanilla"),
+                      description: t("createServer.intent.vanilla.description"),
+                    },
+                    {
+                      key: "plugins",
+                      icon: Package,
+                      label: t("createServer.intent.plugins"),
+                      description: t("createServer.intent.plugins.description"),
+                      badge: t("createServer.intent.recommended"),
+                    },
+                    {
+                      key: "mods",
+                      icon: Cpu,
+                      label: t("createServer.intent.mods"),
+                      description: t("createServer.intent.mods.description"),
+                    },
+                    {
+                      key: "advanced",
+                      icon: ShieldCheck,
+                      label: t("createServer.intent.advanced"),
+                      description: t(
+                        "createServer.intent.advanced.description",
+                      ),
+                    },
+                  ] as const
+                ).map((intent) =>
+                  choiceCard({
+                    ...intent,
+                    onClick: () => chooseServerIntent(intent.key),
+                  }),
+                )}
+              </SimpleGrid>
+            </Stack>
           ) : (
-            <div className="provisioning-source-shell">
-              <div className="wizard-intent-summary">
-                <div>
-                  <span>{t("createServer.intent.selected")}</span>
-                  <strong>{t(`createServer.intent.${serverIntent}`)}</strong>
-                </div>
-                <Button variant="ghost" onClick={() => setServerIntent(null)}>
-                  {t("createServer.intent.change")}
-                </Button>
-              </div>
-              <div className="form-grid provisioning-source-form">
-                <label>
-                  <span>{t("profileSettings.name")}</span>
-                  <TextField
-                    aria-label={t("profileSettings.name")}
-                    maxLength={MAX_SERVER_NAME_LENGTH}
-                    name="server-name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-                {serverIntent === "advanced" ? (
-                  <label>
-                    <span>{t("profileSettings.loader")}</span>
-                    <select
-                      aria-label={t("profileSettings.loader")}
-                      className="field-control"
-                      name="server-loader"
-                      value={loaderType}
-                      onChange={(event) => {
-                        setLoaderType(event.target.value as LoaderType);
-                        setMinecraftVersion("");
-                        setLoaderVersion("");
-                      }}
-                    >
-                      {loaders.map((loader) => (
-                        <option key={loader} value={loader}>
-                          {loader}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                <label>
-                  <span>{t("profileSettings.minecraftVersion")}</span>
-                  <select
-                    aria-label={t("profileSettings.minecraftVersion")}
-                    className="field-control"
-                    name="minecraft-version"
-                    value={minecraftVersion}
-                    onChange={(event) => {
-                      setMinecraftVersion(event.target.value);
-                      setLoaderVersion("");
-                    }}
+            <Paper maw={560} p="md">
+              <Stack gap="md">
+                <Group justify="space-between">
+                  <div>
+                    <Text c="dimmed" size="xs">
+                      {t("createServer.intent.selected")}
+                    </Text>
+                    <Text fw={600}>
+                      {t(`createServer.intent.${serverIntent}`)}
+                    </Text>
+                  </div>
+                  <Button variant="ghost" onClick={() => setServerIntent(null)}>
+                    {t("createServer.intent.change")}
+                  </Button>
+                </Group>
+                <TextInput
+                  aria-label={t("profileSettings.name")}
+                  label={t("profileSettings.name")}
+                  maxLength={MAX_SERVER_NAME_LENGTH}
+                  name="server-name"
+                  value={name}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                />
+                {serverIntent === "advanced" ? loaderTypeSelect : null}
+                {minecraftVersionSelect}
+                {loaderVersionSelect(t("provisioning.wizard.select"), false)}
+                <Group justify="flex-end">
+                  <Button
+                    disabled={
+                      busy || !name || !minecraftVersion || !loaderVersion
+                    }
+                    variant="primary"
+                    onClick={() =>
+                      planSource({
+                        source: { kind: "blank" },
+                        name,
+                        loaderType,
+                        minecraftVersion,
+                        loaderVersion,
+                      })
+                    }
                   >
-                    <option value="">{t("provisioning.wizard.select")}</option>
-                    {minecraftOptions.map((option, index) => (
-                      <option key={option.value} value={option.value}>
-                        {index === recommendedMinecraftIndex
-                          ? t("provisioning.wizard.recommendedOption", {
-                              label: option.label,
-                            })
-                          : option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span>{t("profileSettings.loaderVersion")}</span>
-                  <select
-                    aria-label={t("profileSettings.loaderVersion")}
-                    className="field-control"
-                    name="loader-version"
-                    value={loaderVersion}
-                    onChange={(event) => setLoaderVersion(event.target.value)}
-                  >
-                    <option value="">{t("provisioning.wizard.select")}</option>
-                    {loaderOptions.map((option, index) => (
-                      <option key={option.value} value={option.value}>
-                        {index === recommendedLoaderIndex
-                          ? t("provisioning.wizard.recommendedOption", {
-                              label: option.label,
-                            })
-                          : option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <Button
-                  disabled={
-                    busy || !name || !minecraftVersion || !loaderVersion
-                  }
-                  onClick={() =>
-                    planSource({
-                      source: { kind: "blank" },
-                      name,
-                      loaderType,
-                      minecraftVersion,
-                      loaderVersion,
-                    })
-                  }
-                >
-                  {t("provisioning.wizard.analyze")}
-                </Button>
-              </div>
-            </div>
+                    {t("provisioning.wizard.analyze")}
+                  </Button>
+                </Group>
+              </Stack>
+            </Paper>
           )
         ) : null}
 
         {step === 1 && sourcePlan ? (
-          <div className="provisioning-setup-step">
-            <div className="provisioning-setup-main">
-              {/* Compatibility and Java used to be screens of their own, which
-                  made the user click through two pages that say "fine" in the
-                  overwhelming majority of runs. They are status rows now and
-                  only open up when they actually block the install. */}
-              <section
-                aria-label={t("provisioning.wizard.readinessAria")}
-                className="provisioning-readiness"
-              >
-                <ReadinessStrip
-                  detail={runtimeSummary}
-                  title={t("provisioning.wizard.compatibilityTitle")}
-                  tone={compatibilityReady ? "ok" : "warn"}
+          <Grid gap="md">
+            <Grid.Col span={{ base: 12, lg: 8 }}>
+              <Stack gap="md">
+                {/* Compatibility and Java used to be screens of their own, which
+                    made the user click through two pages that say "fine" in the
+                    overwhelming majority of runs. They are status rows now and
+                    only open up when they actually block the install. */}
+                <Stack
+                  aria-label={t("provisioning.wizard.readinessAria")}
+                  component="section"
+                  gap="sm"
                 >
-                  {!sourcePlan.launchSpec ? (
-                    <div className="form-grid provisioning-runtime-metadata">
-                      <p>{t("provisioning.wizard.runtimeMetadataRequired")}</p>
-                      <label>
-                        <span>{t("profileSettings.loader")}</span>
-                        <select
-                          aria-label={t("profileSettings.loader")}
-                          className="field-control"
-                          value={loaderType}
-                          onChange={(event) => {
-                            setLoaderType(event.target.value as LoaderType);
-                            setMinecraftVersion("");
-                            setLoaderVersion("");
-                          }}
-                        >
-                          {loaders.map((loader) => (
-                            <option key={loader} value={loader}>
-                              {loader}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>{t("profileSettings.minecraftVersion")}</span>
-                        <select
-                          aria-label={t("profileSettings.minecraftVersion")}
-                          className="field-control"
-                          value={minecraftVersion}
-                          onChange={(event) => {
-                            setMinecraftVersion(event.target.value);
-                            setLoaderVersion("");
-                          }}
-                        >
-                          <option value="">
-                            {t("provisioning.wizard.select")}
-                          </option>
-                          {minecraftOptions.map((option, index) => (
-                            <option key={option.value} value={option.value}>
-                              {index === recommendedMinecraftIndex
-                                ? t("provisioning.wizard.recommendedOption", {
-                                    label: option.label,
-                                  })
-                                : option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>{t("profileSettings.loaderVersion")}</span>
-                        <select
-                          aria-label={t("profileSettings.loaderVersion")}
-                          className="field-control"
-                          value={loaderVersion}
-                          onChange={(event) =>
-                            setLoaderVersion(event.target.value)
-                          }
-                        >
-                          <option value="">
-                            {t("provisioning.wizard.autoSelectLoader")}
-                          </option>
-                          {loaderOptions.map((option, index) => (
-                            <option key={option.value} value={option.value}>
-                              {index === recommendedLoaderIndex
-                                ? t("provisioning.wizard.recommendedOption", {
-                                    label: option.label,
-                                  })
-                                : option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <Button
-                        disabled={busy || !minecraftVersion}
-                        onClick={prepareUnverifiedRuntime}
+                  <ReadinessStrip
+                    detail={runtimeSummary}
+                    title={t("provisioning.wizard.compatibilityTitle")}
+                    tone={compatibilityReady ? "ok" : "warn"}
+                  >
+                    {!sourcePlan.launchSpec ? (
+                      <Stack gap="sm">
+                        <Text size="sm">
+                          {t("provisioning.wizard.runtimeMetadataRequired")}
+                        </Text>
+                        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
+                          {loaderTypeSelect}
+                          {minecraftVersionSelect}
+                          {loaderVersionSelect(
+                            t("provisioning.wizard.autoSelectLoader"),
+                            true,
+                          )}
+                        </SimpleGrid>
+                        <Group>
+                          <Button
+                            disabled={busy || !minecraftVersion}
+                            variant="primary"
+                            onClick={prepareUnverifiedRuntime}
+                          >
+                            {t("provisioning.wizard.prepareRuntime")}
+                          </Button>
+                        </Group>
+                      </Stack>
+                    ) : null}
+                    {sourcePlan.warnings.map((warning) => (
+                      <Alert
+                        color={
+                          warning.requiresAcknowledgement ? "yellow" : "gray"
+                        }
+                        icon={
+                          warning.requiresAcknowledgement ? (
+                            <AlertTriangle aria-hidden="true" size={16} />
+                          ) : (
+                            <Info aria-hidden="true" size={16} />
+                          )
+                        }
+                        key={warning.code}
+                        role="note"
+                        variant="light"
                       >
-                        {t("provisioning.wizard.prepareRuntime")}
-                      </Button>
-                    </div>
-                  ) : null}
-                  {sourcePlan.warnings.map((warning) => (
-                    <label
-                      className="provisioning-warning"
-                      data-blocking={
-                        warning.requiresAcknowledgement ? "true" : "false"
-                      }
-                      key={warning.code}
-                    >
-                      <span className="provisioning-warning-message">
-                        {warning.requiresAcknowledgement ? (
-                          <AlertTriangle aria-hidden="true" size={15} />
-                        ) : (
-                          <Info aria-hidden="true" size={15} />
-                        )}
-                        {warning.message}
-                      </span>
-                      {warning.requiresAcknowledgement ? (
-                        <span className="checkbox-row">
-                          <input
-                            aria-label={t("provisioning.wizard.acceptWarning")}
-                            checked={acknowledgedWarnings.includes(
-                              warning.code,
-                            )}
-                            type="checkbox"
-                            onChange={(event) =>
-                              setAcknowledgedWarnings((current) =>
-                                event.target.checked
-                                  ? [...current, warning.code]
-                                  : current.filter(
-                                      (code) => code !== warning.code,
-                                    ),
-                              )
-                            }
-                          />
-                          {t("provisioning.wizard.acceptWarning")}
-                        </span>
-                      ) : null}
-                    </label>
-                  ))}
-                </ReadinessStrip>
+                        <Stack gap="xs">
+                          <Text size="sm">{warning.message}</Text>
+                          {warning.requiresAcknowledgement ? (
+                            <Checkbox
+                              checked={acknowledgedWarnings.includes(
+                                warning.code,
+                              )}
+                              label={t("provisioning.wizard.acceptWarning")}
+                              onChange={(event) => {
+                                const checked = event.currentTarget.checked;
+                                setAcknowledgedWarnings((current) =>
+                                  checked
+                                    ? [...current, warning.code]
+                                    : current.filter(
+                                        (code) => code !== warning.code,
+                                      ),
+                                );
+                              }}
+                            />
+                          ) : null}
+                        </Stack>
+                      </Alert>
+                    ))}
+                  </ReadinessStrip>
 
-                <ReadinessStrip
-                  detail={
-                    javaRuntime
-                      ? javaRuntime.path
-                      : javaPlan?.action === "install"
-                        ? t("provisioning.wizard.javaDownload")
-                        : t("provisioning.wizard.javaPlanning")
-                  }
-                  title={t("provisioning.wizard.javaTitle", {
-                    version: sourcePlan.requiredJavaMajor || 21,
-                  })}
-                  tone={javaRuntime ? "ok" : javaPlan ? "warn" : "pending"}
-                >
-                  {javaPlan?.action === "install" && !javaRuntime ? (
-                    <div className="provisioning-java-install">
-                      <dl className="provisioning-detected">
-                        <div>
-                          <dt>{t("provisioning.wizard.javaVendor")}</dt>
-                          <dd>{javaPlan.vendor || "-"}</dd>
-                        </div>
-                        <div>
-                          <dt>{t("provisioning.wizard.javaVersion")}</dt>
-                          <dd>
-                            {javaPlan.version ||
-                              `Java ${javaPlan.majorVersion}`}
-                          </dd>
-                        </div>
-                      </dl>
-                      {javaPlan.licenseUrl ? (
-                        <a
-                          className="provisioning-java-license"
-                          href={javaPlan.licenseUrl}
-                        >
-                          {t("provisioning.wizard.javaLicense")}
-                        </a>
-                      ) : null}
-                      <label className="checkbox-row">
-                        <input
-                          aria-label={t("provisioning.wizard.javaConsent")}
+                  <ReadinessStrip
+                    detail={
+                      javaRuntime
+                        ? javaRuntime.path
+                        : javaPlan?.action === "install"
+                          ? t("provisioning.wizard.javaDownload")
+                          : t("provisioning.wizard.javaPlanning")
+                    }
+                    title={t("provisioning.wizard.javaTitle", {
+                      version: sourcePlan.requiredJavaMajor || 21,
+                    })}
+                    tone={javaRuntime ? "ok" : javaPlan ? "warn" : "pending"}
+                  >
+                    {javaPlan?.action === "install" && !javaRuntime ? (
+                      <Stack gap="sm">
+                        <SimpleGrid cols={2} spacing="sm">
+                          <div>
+                            <Text c="dimmed" size="xs">
+                              {t("provisioning.wizard.javaVendor")}
+                            </Text>
+                            <Text size="sm">{javaPlan.vendor || "-"}</Text>
+                          </div>
+                          <div>
+                            <Text c="dimmed" size="xs">
+                              {t("provisioning.wizard.javaVersion")}
+                            </Text>
+                            <Text ff="monospace" size="sm">
+                              {javaPlan.version ||
+                                `Java ${javaPlan.majorVersion}`}
+                            </Text>
+                          </div>
+                        </SimpleGrid>
+                        {javaPlan.licenseUrl ? (
+                          <Anchor href={javaPlan.licenseUrl} size="sm">
+                            {t("provisioning.wizard.javaLicense")}
+                          </Anchor>
+                        ) : null}
+                        <Checkbox
                           checked={javaConsent}
-                          type="checkbox"
+                          label={t("provisioning.wizard.javaConsent")}
                           onChange={(event) =>
-                            setJavaConsent(event.target.checked)
+                            setJavaConsent(event.currentTarget.checked)
                           }
                         />
-                        {t("provisioning.wizard.javaConsent")}
-                      </label>
-                      <Button
-                        disabled={!javaConsent || busy}
-                        onClick={installManagedJava}
-                      >
-                        {t("provisioning.wizard.installJava", {
-                          version: javaPlan.majorVersion,
-                        })}
-                      </Button>
-                      {/* The install button and the primary action both start
-                          disabled, and nothing else says which unlocks which. */}
-                      <p className="provisioning-step-hint">
-                        {javaConsent
-                          ? t("provisioning.wizard.javaInstallHint")
-                          : t("provisioning.wizard.javaConsentHint")}
-                      </p>
-                    </div>
-                  ) : null}
-                </ReadinessStrip>
-              </section>
-
-              <ConfigSection
-                icon={Server}
-                title={t("provisioning.config.section.identity")}
-              >
-                <label className="field-span-2">
-                  <span>{t("profileSettings.name")}</span>
-                  <TextField
-                    aria-label={t("profileSettings.name")}
-                    maxLength={MAX_SERVER_NAME_LENGTH}
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-              </ConfigSection>
-              <ConfigSection
-                icon={Gamepad2}
-                title={t("provisioning.config.section.gameplay")}
-              >
-                <label>
-                  <span>{t("provisioning.config.difficulty")}</span>
-                  <select
-                    aria-label={t("provisioning.config.difficulty")}
-                    className="field-control"
-                    value={configuration.difficulty}
-                    onChange={(event) =>
-                      setConfiguration((current) => ({
-                        ...current,
-                        difficulty: event.target.value,
-                      }))
-                    }
-                  >
-                    <option value="peaceful">
-                      {t("provisioning.config.difficulty.peaceful")}
-                    </option>
-                    <option value="easy">
-                      {t("provisioning.config.difficulty.easy")}
-                    </option>
-                    <option value="normal">
-                      {t("provisioning.config.difficulty.normal")}
-                    </option>
-                    <option value="hard">
-                      {t("provisioning.config.difficulty.hard")}
-                    </option>
-                  </select>
-                </label>
-                <NumberField
-                  label={t("provisioning.config.maxPlayers")}
-                  value={configuration.maxPlayers || 20}
-                  onChange={(value) => setNumber("maxPlayers", value)}
-                />
-                <NumberField
-                  label={t("profileSettings.maxMemoryMb")}
-                  value={configuration.maxMemoryMb}
-                  onChange={(value) => setNumber("maxMemoryMb", value)}
-                />
-                <BooleanField
-                  label={t("provisioning.config.whiteList")}
-                  checked={configuration.whiteList === true}
-                  onChange={(checked) =>
-                    setConfiguration((current) => ({
-                      ...current,
-                      whiteList: checked,
-                    }))
-                  }
-                />
-              </ConfigSection>
-
-              <details className="provisioning-advanced-settings">
-                <summary>{t("provisioning.config.advanced")}</summary>
-                <p>{t("provisioning.config.advancedDescription")}</p>
-                <ConfigSection
-                  icon={HardDrive}
-                  title={t("provisioning.config.section.location")}
-                >
-                  <label className="field-span-2">
-                    <span>{t("profileSettings.serverFolder")}</span>
-                    <TextField
-                      aria-label={t("profileSettings.serverFolder")}
-                      value={rootDir}
-                      onChange={(event) => setRootDir(event.target.value)}
-                    />
-                  </label>
-                </ConfigSection>
-                <ConfigSection
-                  icon={Cpu}
-                  title={t("provisioning.config.section.resources")}
-                >
-                  <NumberField
-                    label={t("profileSettings.minMemoryMb")}
-                    value={configuration.minMemoryMb}
-                    onChange={(value) => setNumber("minMemoryMb", value)}
-                  />
-                  {/* Not a label: `NumberField` brings its own, and a label
-                      wrapping a label left the port the one field in the form
-                      with its name beside the box instead of above it. */}
-                  <div className="provisioning-port-field">
-                    <NumberField
-                      label={t("profileSettings.port")}
-                      value={configuration.serverPort}
-                      onChange={(value) => setNumber("serverPort", value)}
-                    />
-                    {takenPorts.includes(configuration.serverPort) ? (
-                      <small role="status">
-                        {t("provisioning.config.portTaken")}
-                      </small>
+                        <Group gap="sm">
+                          <Button
+                            disabled={!javaConsent || busy}
+                            variant="primary"
+                            onClick={installManagedJava}
+                          >
+                            {t("provisioning.wizard.installJava", {
+                              version: javaPlan.majorVersion,
+                            })}
+                          </Button>
+                          {/* The install button and the primary action both
+                              start disabled, and nothing else says which
+                              unlocks which. */}
+                          <Text c="dimmed" size="xs">
+                            {javaConsent
+                              ? t("provisioning.wizard.javaInstallHint")
+                              : t("provisioning.wizard.javaConsentHint")}
+                          </Text>
+                        </Group>
+                      </Stack>
                     ) : null}
-                  </div>
-                  <NumberField
-                    label={t("provisioning.config.viewDistance")}
-                    value={configuration.viewDistance || 10}
-                    onChange={(value) => setNumber("viewDistance", value)}
-                  />
-                  <NumberField
-                    label={t("provisioning.config.simulationDistance")}
-                    value={configuration.simulationDistance || 10}
-                    onChange={(value) => setNumber("simulationDistance", value)}
+                  </ReadinessStrip>
+                </Stack>
+
+                <ConfigSection
+                  icon={Server}
+                  title={t("provisioning.config.section.identity")}
+                >
+                  <TextInput
+                    aria-label={t("profileSettings.name")}
+                    label={t("profileSettings.name")}
+                    maxLength={MAX_SERVER_NAME_LENGTH}
+                    style={{ gridColumn: "1 / -1" }}
+                    value={name}
+                    onChange={(event) => setName(event.currentTarget.value)}
                   />
                 </ConfigSection>
                 <ConfigSection
                   icon={Gamepad2}
-                  title={t("provisioning.config.advancedGameplay")}
+                  title={t("provisioning.config.section.gameplay")}
                 >
-                  <label className="field-span-2">
-                    <span>{t("provisioning.config.motd")}</span>
-                    <TextField
-                      aria-label={t("provisioning.config.motd")}
-                      value={configuration.motd}
-                      onChange={(event) =>
-                        setConfiguration((current) => ({
-                          ...current,
-                          motd: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    <span>{t("provisioning.config.gameMode")}</span>
-                    <select
-                      aria-label={t("provisioning.config.gameMode")}
-                      className="field-control"
-                      value={configuration.gameMode}
-                      onChange={(event) =>
-                        setConfiguration((current) => ({
-                          ...current,
-                          gameMode: event.target.value,
-                        }))
-                      }
-                    >
-                      <option value="survival">
-                        {t("provisioning.config.gameMode.survival")}
-                      </option>
-                      <option value="creative">
-                        {t("provisioning.config.gameMode.creative")}
-                      </option>
-                      <option value="adventure">
-                        {t("provisioning.config.gameMode.adventure")}
-                      </option>
-                      <option value="spectator">
-                        {t("provisioning.config.gameMode.spectator")}
-                      </option>
-                    </select>
-                  </label>
-                  <BooleanField
-                    label={t("provisioning.config.onlineMode")}
-                    checked={configuration.onlineMode !== false}
-                    onChange={(checked) =>
+                  <SelectField
+                    label={t("provisioning.config.difficulty")}
+                    options={["peaceful", "easy", "normal", "hard"].map(
+                      (value) => ({
+                        value,
+                        label: t(`provisioning.config.difficulty.${value}`),
+                      }),
+                    )}
+                    value={configuration.difficulty ?? "normal"}
+                    onValueChange={(value) =>
                       setConfiguration((current) => ({
                         ...current,
-                        onlineMode: checked,
+                        difficulty: value,
                       }))
                     }
                   />
+                  <NumberField
+                    label={t("provisioning.config.maxPlayers")}
+                    value={configuration.maxPlayers || 20}
+                    onChange={(value) => setNumber("maxPlayers", value)}
+                  />
+                  <NumberField
+                    label={t("profileSettings.maxMemoryMb")}
+                    step={512}
+                    value={configuration.maxMemoryMb}
+                    onChange={(value) => setNumber("maxMemoryMb", value)}
+                  />
                   <BooleanField
-                    label={t("provisioning.config.pvp")}
-                    checked={configuration.pvp !== false}
+                    label={t("provisioning.config.whiteList")}
+                    checked={configuration.whiteList === true}
                     onChange={(checked) =>
                       setConfiguration((current) => ({
                         ...current,
-                        pvp: checked,
+                        whiteList: checked,
                       }))
                     }
                   />
                 </ConfigSection>
-                <ConfigSection
-                  icon={RefreshCw}
-                  title={t("provisioning.config.section.lifecycle")}
-                >
-                  <BooleanField
-                    label={t("provisioning.config.restart")}
-                    checked={restartEnabled}
-                    onChange={setRestartEnabled}
-                  />
-                  <BooleanField
-                    label={t("provisioning.config.autoStart")}
-                    checked={startAfterInstall}
-                    onChange={setStartAfterInstall}
-                  />
-                </ConfigSection>
-              </details>
 
-              <label className="provisioning-eula checkbox-row">
-                <input
+                <Accordion variant="contained">
+                  <Accordion.Item value="advanced">
+                    <Accordion.Control>
+                      {t("provisioning.config.advanced")}
+                    </Accordion.Control>
+                    <Accordion.Panel>
+                      <Stack gap="md">
+                        <Text c="dimmed" size="sm">
+                          {t("provisioning.config.advancedDescription")}
+                        </Text>
+                        <ConfigSection
+                          icon={HardDrive}
+                          title={t("provisioning.config.section.location")}
+                        >
+                          <TextInput
+                            aria-label={t("profileSettings.serverFolder")}
+                            ff="monospace"
+                            label={t("profileSettings.serverFolder")}
+                            style={{ gridColumn: "1 / -1" }}
+                            value={rootDir}
+                            onChange={(event) =>
+                              setRootDir(event.currentTarget.value)
+                            }
+                          />
+                        </ConfigSection>
+                        <ConfigSection
+                          icon={Cpu}
+                          title={t("provisioning.config.section.resources")}
+                        >
+                          <NumberField
+                            label={t("profileSettings.minMemoryMb")}
+                            step={512}
+                            value={configuration.minMemoryMb}
+                            onChange={(value) =>
+                              setNumber("minMemoryMb", value)
+                            }
+                          />
+                          <NumberField
+                            description={
+                              takenPorts.includes(configuration.serverPort) ? (
+                                <Text
+                                  c="yellow"
+                                  component="span"
+                                  inherit
+                                  role="status"
+                                >
+                                  {t("provisioning.config.portTaken")}
+                                </Text>
+                              ) : undefined
+                            }
+                            label={t("profileSettings.port")}
+                            value={configuration.serverPort}
+                            onChange={(value) => setNumber("serverPort", value)}
+                          />
+                          <NumberField
+                            label={t("provisioning.config.viewDistance")}
+                            value={configuration.viewDistance || 10}
+                            onChange={(value) =>
+                              setNumber("viewDistance", value)
+                            }
+                          />
+                          <NumberField
+                            label={t("provisioning.config.simulationDistance")}
+                            value={configuration.simulationDistance || 10}
+                            onChange={(value) =>
+                              setNumber("simulationDistance", value)
+                            }
+                          />
+                        </ConfigSection>
+                        <ConfigSection
+                          icon={Gamepad2}
+                          title={t("provisioning.config.advancedGameplay")}
+                        >
+                          <TextInput
+                            aria-label={t("provisioning.config.motd")}
+                            label={t("provisioning.config.motd")}
+                            style={{ gridColumn: "1 / -1" }}
+                            value={configuration.motd}
+                            onChange={(event) => {
+                              const motd = event.currentTarget.value;
+                              setConfiguration((current) => ({
+                                ...current,
+                                motd,
+                              }));
+                            }}
+                          />
+                          <SelectField
+                            label={t("provisioning.config.gameMode")}
+                            options={[
+                              "survival",
+                              "creative",
+                              "adventure",
+                              "spectator",
+                            ].map((value) => ({
+                              value,
+                              label: t(`provisioning.config.gameMode.${value}`),
+                            }))}
+                            value={configuration.gameMode ?? "survival"}
+                            onValueChange={(value) =>
+                              setConfiguration((current) => ({
+                                ...current,
+                                gameMode: value,
+                              }))
+                            }
+                          />
+                          <BooleanField
+                            label={t("provisioning.config.onlineMode")}
+                            checked={configuration.onlineMode !== false}
+                            onChange={(checked) =>
+                              setConfiguration((current) => ({
+                                ...current,
+                                onlineMode: checked,
+                              }))
+                            }
+                          />
+                          <BooleanField
+                            label={t("provisioning.config.pvp")}
+                            checked={configuration.pvp !== false}
+                            onChange={(checked) =>
+                              setConfiguration((current) => ({
+                                ...current,
+                                pvp: checked,
+                              }))
+                            }
+                          />
+                        </ConfigSection>
+                        <ConfigSection
+                          icon={RefreshCw}
+                          title={t("provisioning.config.section.lifecycle")}
+                        >
+                          <BooleanField
+                            label={t("provisioning.config.restart")}
+                            checked={restartEnabled}
+                            onChange={setRestartEnabled}
+                          />
+                          <BooleanField
+                            label={t("provisioning.config.autoStart")}
+                            checked={startAfterInstall}
+                            onChange={setStartAfterInstall}
+                          />
+                        </ConfigSection>
+                      </Stack>
+                    </Accordion.Panel>
+                  </Accordion.Item>
+                </Accordion>
+
+                <Checkbox
                   aria-label={t("provisioning.wizard.eulaAccept")}
                   checked={eulaAccepted}
-                  type="checkbox"
-                  onChange={(event) => setEulaAccepted(event.target.checked)}
+                  label={
+                    <>
+                      {t("provisioning.wizard.eulaAccept")}{" "}
+                      <Anchor href="https://aka.ms/MinecraftEULA" inherit>
+                        {t("provisioning.wizard.eulaLink")}
+                      </Anchor>
+                    </>
+                  }
+                  onChange={(event) =>
+                    setEulaAccepted(event.currentTarget.checked)
+                  }
                 />
-                <span>
-                  {t("provisioning.wizard.eulaAccept")}{" "}
-                  <a href="https://aka.ms/MinecraftEULA">
-                    {t("provisioning.wizard.eulaLink")}
-                  </a>
-                </span>
-              </label>
-            </div>
+              </Stack>
+            </Grid.Col>
 
             {/* Replaces the review step: the same facts, shown while they are
                 still editable instead of one screen after. */}
-            <aside
-              aria-label={t("provisioning.wizard.summaryTitle")}
-              className="provisioning-summary"
-            >
-              <h3>{t("provisioning.wizard.summaryTitle")}</h3>
-              <dl className="wizard-review-fields">
-                <div>
-                  <dt>{t("profileSettings.name")}</dt>
-                  <dd>{name}</dd>
-                </div>
-                <div>
-                  <dt>{t("profileSettings.loader")}</dt>
-                  <dd>{runtimeSummary}</dd>
-                </div>
-                <div>
-                  <dt>{t("profileSettings.serverFolder")}</dt>
-                  <dd>
-                    <code>{rootDir}</code>
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t("profileSettings.port")}</dt>
-                  <dd>{configuration.serverPort}</dd>
-                </div>
-                <div>
-                  <dt>{t("profileSettings.maxMemoryMb")}</dt>
-                  <dd>{configuration.maxMemoryMb} MB</dd>
-                </div>
-                <div>
-                  <dt>{t("provisioning.config.maxPlayers")}</dt>
-                  <dd>{configuration.maxPlayers || 20}</dd>
-                </div>
-                {javaRuntime ? (
-                  <div>
-                    <dt>{t("provisioning.wizard.detectedJava")}</dt>
-                    <dd>
-                      <code>{javaRuntime.path}</code>
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
-            </aside>
-          </div>
+            <Grid.Col span={{ base: 12, lg: 4 }}>
+              <Paper
+                aria-label={t("provisioning.wizard.summaryTitle")}
+                component="aside"
+                p="md"
+              >
+                <Title mb="sm" order={3}>
+                  {t("provisioning.wizard.summaryTitle")}
+                </Title>
+                <Stack gap="xs">
+                  {[
+                    [t("profileSettings.name"), name, false],
+                    [t("profileSettings.loader"), runtimeSummary, false],
+                    [t("profileSettings.serverFolder"), rootDir, true],
+                    [t("profileSettings.port"), configuration.serverPort, true],
+                    [
+                      t("profileSettings.maxMemoryMb"),
+                      `${configuration.maxMemoryMb} MB`,
+                      true,
+                    ],
+                    [
+                      t("provisioning.config.maxPlayers"),
+                      configuration.maxPlayers || 20,
+                      true,
+                    ],
+                    ...(javaRuntime
+                      ? [
+                          [
+                            t("provisioning.wizard.detectedJava"),
+                            javaRuntime.path,
+                            true,
+                          ] as const,
+                        ]
+                      : []),
+                  ].map(([label, value, mono]) => (
+                    <div key={String(label)}>
+                      <Text c="dimmed" size="xs">
+                        {label}
+                      </Text>
+                      <Text
+                        ff={mono ? "monospace" : undefined}
+                        size="sm"
+                        style={{ overflowWrap: "anywhere" }}
+                      >
+                        {value}
+                      </Text>
+                    </div>
+                  ))}
+                </Stack>
+              </Paper>
+            </Grid.Col>
+          </Grid>
         ) : null}
 
         {step === 2 && job ? (
           <>
-            <ProvisioningProgress
-              busy={busy}
-              job={job}
-              onCancel={cancelJob}
-              onRetry={retryJob}
-            />
+            <Paper p="md">
+              <ProvisioningProgress
+                busy={busy}
+                job={job}
+                onCancel={cancelJob}
+                onRetry={retryJob}
+              />
+            </Paper>
             {isRecoveredJob && !busy && job.stage !== "ready" ? (
-              <Button variant="ghost" onClick={startFreshDraft}>
-                {t("provisioning.wizard.startFresh")}
-              </Button>
+              <Group>
+                <Button variant="ghost" onClick={startFreshDraft}>
+                  {t("provisioning.wizard.startFresh")}
+                </Button>
+              </Group>
             ) : null}
             {job.stage === "ready" && job.serverId ? (
-              <section
+              <Paper
                 aria-label={t("provisioning.complete.aria")}
-                className="provisioning-complete-actions"
+                component="section"
+                p="md"
               >
-                <div>
-                  <h3>{t("provisioning.complete.title")}</h3>
-                  <p>{t("provisioning.complete.description")}</p>
-                </div>
-                <div className="provisioning-complete-action-grid">
+                <Title order={3}>{t("provisioning.complete.title")}</Title>
+                <Text c="dimmed" mb="md" size="sm">
+                  {t("provisioning.complete.description")}
+                </Text>
+                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                   <Button
                     disabled={busy}
+                    variant="primary"
                     onClick={() => void runCompletionAction("overview")}
                   >
-                    <Rocket aria-hidden="true" size={15} />
+                    <Rocket aria-hidden="true" size={16} />
                     {t("provisioning.complete.start")}
                   </Button>
                   <Button
@@ -1557,7 +1577,7 @@ export function CreateServerWizard({
                     variant="secondary"
                     onClick={() => void runCompletionAction("network")}
                   >
-                    <Network aria-hidden="true" size={15} />
+                    <Network aria-hidden="true" size={16} />
                     {t("provisioning.complete.network")}
                   </Button>
                   <Button
@@ -1565,7 +1585,7 @@ export function CreateServerWizard({
                     variant="secondary"
                     onClick={() => void runCompletionAction("content")}
                   >
-                    <Boxes aria-hidden="true" size={15} />
+                    <Boxes aria-hidden="true" size={16} />
                     {t("provisioning.complete.content")}
                   </Button>
                   <Button
@@ -1573,11 +1593,11 @@ export function CreateServerWizard({
                     variant="secondary"
                     onClick={() => void runCompletionAction("backup")}
                   >
-                    <Archive aria-hidden="true" size={15} />
+                    <Archive aria-hidden="true" size={16} />
                     {t("provisioning.complete.backup")}
                   </Button>
-                </div>
-              </section>
+                </SimpleGrid>
+              </Paper>
             ) : null}
           </>
         ) : null}
@@ -1585,26 +1605,32 @@ export function CreateServerWizard({
         {/* ProvisioningProgress already reports a failed job, so the wizard-level
             error would repeat the same sentence directly beneath it. */}
         {error && !job?.error ? (
-          <div className="form-error" role="alert">
-            <span>{error}</span>
-            {metadataFailed ? (
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setError(null);
-                  setMetadataFailed(false);
-                  setMetadataAttempt((attempt) => attempt + 1);
-                }}
-              >
-                {t("common.retry")}
-              </Button>
-            ) : null}
-          </div>
+          <Alert
+            color="red"
+            icon={<AlertTriangle aria-hidden="true" size={16} />}
+            variant="light"
+          >
+            <Group gap="sm" justify="space-between">
+              <Text size="sm">{error}</Text>
+              {metadataFailed ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setError(null);
+                    setMetadataFailed(false);
+                    setMetadataAttempt((attempt) => attempt + 1);
+                  }}
+                >
+                  {t("common.retry")}
+                </Button>
+              ) : null}
+            </Group>
+          </Alert>
         ) : null}
-      </div>
+      </Stack>
 
       {step === 0 && sourceView === "marketplace" ? null : (
-        <div className="wizard-nav-bar">
+        <Group gap="sm" wrap="nowrap">
           {step > 0 && !(step === 2 && job?.stage !== "ready") ? (
             <Button variant="ghost" onClick={goBack}>
               {t("wizard.nav.back")}
@@ -1614,27 +1640,28 @@ export function CreateServerWizard({
               {t("wizard.nav.back")}
             </Button>
           ) : null}
-          <div className="wizard-nav-spacer" />
+          <Box flex={1} />
           {step === 1 ? (
             <>
               {/* A disabled primary with no explanation reads as a broken
                   wizard, so the bar names the one thing still missing. */}
               {blockedReason ? (
-                <p className="wizard-nav-blocked" role="status">
+                <Text c="dimmed" role="status" size="sm" ta="right">
                   {blockedReason}
-                </p>
+                </Text>
               ) : null}
               <Button
                 disabled={Boolean(blockedReason) || busy}
+                variant="primary"
                 onClick={installServer}
               >
                 {t("provisioning.wizard.install")}
               </Button>
             </>
           ) : null}
-        </div>
+        </Group>
       )}
-    </section>
+    </Stack>
   );
 }
 
@@ -1654,14 +1681,28 @@ function ReadinessStrip({
   const Icon =
     tone === "ok" ? ShieldCheck : tone === "warn" ? AlertTriangle : Info;
   return (
-    <div className="provisioning-strip" data-tone={tone}>
-      <p className="provisioning-strip-head">
-        <Icon aria-hidden="true" size={16} />
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </p>
-      {children}
-    </div>
+    <Paper p="md">
+      <Stack gap="sm">
+        <Group gap="sm" wrap="nowrap">
+          <ThemeIcon
+            color={
+              tone === "ok" ? "green" : tone === "warn" ? "yellow" : "gray"
+            }
+            size="md"
+            variant="light"
+          >
+            <Icon aria-hidden="true" size={16} />
+          </ThemeIcon>
+          <Text fw={600} size="sm">
+            {title}
+          </Text>
+          <Text c="dimmed" ff="monospace" size="xs" truncate>
+            {detail}
+          </Text>
+        </Group>
+        {children}
+      </Stack>
+    </Paper>
   );
 }
 
@@ -1675,36 +1716,57 @@ function ConfigSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="wizard-form-section">
-      <h4>
+    <Paper component="section" p="md">
+      <Group gap={6} mb="sm">
         <Icon aria-hidden="true" size={14} />
-        {title}
-      </h4>
-      <div className="form-grid">{children}</div>
-    </section>
+        <Title order={4}>{title}</Title>
+      </Group>
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm" verticalSpacing="sm">
+        {children}
+      </SimpleGrid>
+    </Paper>
+  );
+}
+
+function SelectField({
+  label,
+  ...props
+}: { label: string } & Omit<ComponentProps<typeof Select>, "ariaLabel">) {
+  return (
+    <Stack gap={4}>
+      <Text fw={500} size="sm">
+        {label}
+      </Text>
+      <Select ariaLabel={label} {...props} />
+    </Stack>
   );
 }
 
 function NumberField({
   label,
+  description,
+  step,
   value,
   onChange,
 }: {
   label: string;
+  description?: ReactNode;
+  step?: number;
   value: number;
   onChange: (value: string) => void;
 }) {
   return (
-    <label>
-      <span>{label}</span>
-      <TextField
-        aria-label={label}
-        min={1}
-        type="number"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </label>
+    <NumberInput
+      aria-label={label}
+      description={description}
+      ff="monospace"
+      inputWrapperOrder={["label", "input", "description"]}
+      label={label}
+      min={1}
+      step={step}
+      value={value}
+      onChange={(next) => onChange(String(next))}
+    />
   );
 }
 
@@ -1718,14 +1780,10 @@ function BooleanField({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="checkbox-row">
-      <input
-        aria-label={label}
-        checked={checked}
-        type="checkbox"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span>{label}</span>
-    </label>
+    <Checkbox
+      checked={checked}
+      label={label}
+      onChange={(event) => onChange(event.currentTarget.checked)}
+    />
   );
 }

@@ -1,29 +1,33 @@
-import type { InputHTMLAttributes } from "react";
+import { forwardRef, type InputHTMLAttributes } from "react";
+import { Group, TextInput } from "@mantine/core";
 import { Button } from "./button";
-import { TextField } from "./text-field";
 
-interface PathFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+interface PathFieldProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "size"
+> {
   browseLabel: string;
   onBrowse: () => void;
 }
 
-export function PathField({
-  browseLabel,
-  disabled,
-  onBrowse,
-  ...inputProps
-}: PathFieldProps) {
-  return (
-    <div className="path-field">
-      <TextField disabled={disabled} {...inputProps} />
-      <Button
-        disabled={disabled}
-        type="button"
-        variant="secondary"
-        onClick={onBrowse}
-      >
-        {browseLabel}
-      </Button>
-    </div>
-  );
-}
+export const PathField = forwardRef<HTMLInputElement, PathFieldProps>(
+  function PathField({ browseLabel, disabled, onBrowse, ...inputProps }, ref) {
+    return (
+      <Group gap="xs" wrap="nowrap">
+        <TextInput
+          autoComplete="off"
+          disabled={disabled}
+          ref={ref}
+          style={{ flex: 1 }}
+          styles={{
+            input: { fontFamily: "var(--mantine-font-family-monospace)" },
+          }}
+          {...inputProps}
+        />
+        <Button disabled={disabled} variant="secondary" onClick={onBrowse}>
+          {browseLabel}
+        </Button>
+      </Group>
+    );
+  },
+);

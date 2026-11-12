@@ -26,6 +26,16 @@ import {
   type CreateServerWizardProgress,
 } from "./CreateServerWizard";
 
+/* Mantine Select is a combobox: open it, then pick the option whose label
+   starts with the value (labels may carry a "recommended" suffix). */
+async function pickOption(label: string, value: string) {
+  await userEvent.click(screen.getByRole("combobox", { name: label }));
+  const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  await userEvent.click(
+    await screen.findByRole("option", { name: new RegExp(`^${escaped}`, "i") }),
+  );
+}
+
 vi.mock("../../lib/desktop-runtime", () => ({
   invokeDesktopCommand: vi.fn(),
   isDesktopRuntimeAvailable: vi.fn(() => true),
@@ -206,10 +216,10 @@ describe("CreateServerWizard unified provisioning flow", () => {
   });
 
   it("does not render the step indicator inside the wizard body", () => {
-    const { container } = renderWizard({ onProgressChange: vi.fn() });
+    renderWizard({ onProgressChange: vi.fn() });
 
     expect(
-      container.querySelector(".create-server-panel .wizard-steps"),
+      screen.queryByRole("navigation", { name: "Wizard progress" }),
     ).not.toBeInTheDocument();
   });
 
@@ -356,17 +366,11 @@ describe("CreateServerWizard unified provisioning flow", () => {
     expect(screen.queryByLabelText("Loader")).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Plugins" }));
     await userEvent.type(screen.getByLabelText("Name"), "Quilt Realm");
-    await userEvent.selectOptions(
-      screen.getByLabelText("Minecraft version"),
-      "1.21.4",
-    );
+    await pickOption("Minecraft version", "1.21.4");
     await waitFor(() =>
       expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"),
     );
-    await userEvent.selectOptions(
-      screen.getByLabelText("Loader version"),
-      "0.16.10",
-    );
+    await pickOption("Loader version", "0.16.10");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
@@ -396,39 +400,33 @@ describe("CreateServerWizard unified provisioning flow", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /advanced/i }));
     await userEvent.type(screen.getByLabelText("Name"), "Fabric Realm");
-    await userEvent.selectOptions(
-      screen.getByLabelText("Minecraft version"),
-      "1.21.4",
-    );
+    await pickOption("Minecraft version", "1.21.4");
     await waitFor(() =>
       expect(listLoaderVersions).toHaveBeenCalledWith("paper", "1.21.4"),
     );
-    await userEvent.selectOptions(
-      screen.getByLabelText("Loader version"),
-      "1.1",
-    );
+    await pickOption("Loader version", "1.1");
 
     // Switching the loader invalidates the Paper build number that is still
     // selected. It must not survive: the refetched Fabric list replaces it with
     // that list's recommended build, so the value itself is the assertion that
     // catches the bug.
-    await userEvent.selectOptions(screen.getByLabelText("Loader"), "fabric");
+    await pickOption("Loader", "fabric");
     await waitFor(() =>
-      expect(screen.getByLabelText("Loader version")).toHaveValue("0.19.3"),
+      expect(
+        (
+          screen.getByRole("combobox", {
+            name: "Loader version",
+          }) as HTMLInputElement
+        ).value,
+      ).toMatch(/^0\.19\.3\b/),
     );
 
     // The only path forward is re-picking Minecraft and a real Fabric version.
-    await userEvent.selectOptions(
-      screen.getByLabelText("Minecraft version"),
-      "26.1.1",
-    );
+    await pickOption("Minecraft version", "26.1.1");
     await waitFor(() =>
       expect(listLoaderVersions).toHaveBeenCalledWith("fabric", "26.1.1"),
     );
-    await userEvent.selectOptions(
-      screen.getByLabelText("Loader version"),
-      "0.19.3",
-    );
+    await pickOption("Loader version", "0.19.3");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(provisioningApi.planServerProvisioning).toHaveBeenCalledWith({
@@ -481,14 +479,14 @@ describe("CreateServerWizard unified provisioning flow", () => {
 
   it("fills the marketplace step and keeps its back action in the host header", async () => {
     const onHeaderBackChange = vi.fn();
-    const { container } = renderWizard({ onHeaderBackChange });
+    renderWizard({ onHeaderBackChange });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Browse marketplace" }),
     );
 
     expect(
-      container.querySelector(".wizard-marketplace-step"),
+      screen.getByRole("button", { name: "Select marketplace fixture" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Back" }),
@@ -539,10 +537,7 @@ describe("CreateServerWizard unified provisioning flow", () => {
       }),
     );
     expect(create).toBeDisabled();
-    await userEvent.selectOptions(
-      screen.getByLabelText("Minecraft version"),
-      "1.21.4",
-    );
+    await pickOption("Minecraft version", "1.21.4");
     await userEvent.click(
       screen.getByRole("button", { name: "Prepare server runtime" }),
     );

@@ -1,7 +1,14 @@
 import { KeyboardEvent, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import {
+  ActionIcon,
+  Group,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
 import { Button } from "./button";
-import { TextField } from "./text-field";
 
 interface EditableStringListProps {
   addLabel: string;
@@ -44,43 +51,48 @@ export function EditableStringList({
   }
 
   return (
-    <div className="editable-string-list">
+    <Stack gap="xs">
       {values.length ? (
-        <div className="editable-string-list-rows">
-          {values.map((value, index) => (
-            <div className="editable-string-list-row" key={index}>
-              <TextField
-                aria-label={itemLabel(index)}
-                value={value}
-                onChange={(event) => {
-                  const nextValues = [...values];
-                  nextValues[index] = event.target.value;
-                  onChange(nextValues);
-                }}
-              />
-              <Button
+        values.map((value, index) => (
+          <Group gap="xs" key={index} wrap="nowrap">
+            <TextInput
+              aria-label={itemLabel(index)}
+              autoComplete="off"
+              style={{ flex: 1 }}
+              value={value}
+              onChange={(event) => {
+                const nextValues = [...values];
+                nextValues[index] = event.currentTarget.value;
+                onChange(nextValues);
+              }}
+            />
+            <Tooltip label={removeLabel(value)}>
+              <ActionIcon
                 aria-label={removeLabel(value)}
-                className="icon-button"
-                title={removeLabel(value)}
-                variant="danger"
+                color="red"
+                size="lg"
                 onClick={() =>
                   onChange(values.filter((_, itemIndex) => itemIndex !== index))
                 }
               >
-                <Trash2 aria-hidden="true" size={15} />
-              </Button>
-            </div>
-          ))}
-        </div>
+                <Trash2 aria-hidden="true" size={16} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        ))
       ) : (
-        <p className="editable-string-list-empty">{emptyText}</p>
+        <Text c="dimmed" size="sm">
+          {emptyText}
+        </Text>
       )}
-      <div className="editable-string-list-add">
-        <TextField
+      <Group gap="xs" wrap="nowrap">
+        <TextInput
           aria-label={inputLabel}
+          autoComplete="off"
           placeholder={placeholder}
+          style={{ flex: 1 }}
           value={pendingValue}
-          onChange={(event) => setPendingValue(event.target.value)}
+          onChange={(event) => setPendingValue(event.currentTarget.value)}
           onKeyDown={handlePendingKeyDown}
         />
         <Button
@@ -90,10 +102,10 @@ export function EditableStringList({
           variant="secondary"
           onClick={addValue}
         >
-          <Plus aria-hidden="true" size={15} />
+          <Plus aria-hidden="true" size={16} />
           {addLabel}
         </Button>
-      </div>
-    </div>
+      </Group>
+    </Stack>
   );
 }

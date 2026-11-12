@@ -1,6 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
+  Anchor,
+  Badge,
+  Checkbox,
+  Group,
+  Input,
+  List,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+} from "@mantine/core";
+import {
   CheckCircle2,
   ExternalLink,
   RefreshCw,
@@ -9,7 +26,6 @@ import {
   Upload,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import {
   DataTable,
@@ -18,7 +34,6 @@ import {
 import { LoadingState } from "../../components/ui/loading-state";
 import { PathField } from "../../components/ui/path-field";
 import { StickyActionBar } from "../../components/ui/sticky-action-bar";
-import { TextField } from "../../components/ui/text-field";
 import { createWorldBackup } from "../backups/backupApi";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
@@ -27,7 +42,6 @@ import { queryKeys } from "../../lib/query-keys";
 import type { ServerProfile } from "../../domain/server";
 import { serverKeys } from "../servers/queries";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
-import "../files/operations.css";
 
 interface ServerUpdateCheckItem {
   id: string;
@@ -73,6 +87,12 @@ const SOURCE_LINKS: Record<ServerProfile["loaderType"], string> = {
   forge: "https://files.minecraftforge.net/net/minecraftforge/forge/",
   neoForge: "https://neoforged.net/",
   quilt: "https://quiltmc.org/en/install/server/",
+};
+
+const CHECK_COLORS: Record<ServerUpdateCheckItem["status"], string> = {
+  ready: "gray",
+  warning: "yellow",
+  blocked: "red",
 };
 
 type UpdateStep = 1 | 2 | 3;
@@ -326,7 +346,9 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
             {t("serverUpdates.rollback.action")}
           </Button>
         ) : (
-          <span className="operation-muted">{t("common.unavailable")}</span>
+          <Text size="sm" c="dimmed">
+            {t("common.unavailable")}
+          </Text>
         ),
     },
   ];
@@ -350,235 +372,284 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
     }
   }
 
+  const statusFacts = [
+    [t("serverUpdates.loader"), server.loaderType],
+    [
+      t("serverUpdates.version"),
+      server.minecraftVersion ?? t("common.unknown"),
+    ],
+    [
+      t("serverUpdates.status"),
+      check
+        ? check.updateAvailable
+          ? t("settings.updates.available")
+          : t("serverUpdates.current")
+        : t("serverUpdates.pendingCheck"),
+    ],
+    [
+      t("serverUpdates.install"),
+      check?.installSupported
+        ? t("serverUpdates.supported")
+        : t("serverUpdates.manualOnly"),
+    ],
+  ];
+
   return (
-    <section
-      className="settings-panel update-wizard"
-      aria-label={t("serverUpdates.title")}
-    >
+    <Stack component="section" gap="md" aria-label={t("serverUpdates.title")}>
       {/* The dialog that hosts this wizard already names it; repeating the
           title and its description inside the panel was two headings deep. */}
-      <ol
-        className="update-wizard-steps"
+      <Group
+        component="ol"
+        gap="lg"
+        m={0}
+        p={0}
+        style={{ listStyle: "none" }}
         aria-label={t("serverUpdates.stepsAria")}
       >
         {([1, 2, 3] as UpdateStep[]).map((value) => (
-          <li
-            key={value}
-            data-active={step === value}
-            data-complete={step > value}
-          >
-            <span>{value}</span>
-            {t(`serverUpdates.step.${value}.title`)}
-          </li>
+          <Group component="li" key={value} gap="xs" wrap="nowrap">
+            <ThemeIcon
+              radius="xl"
+              size={22}
+              color={step >= value ? "azure" : "gray"}
+              variant={step === value ? "filled" : "light"}
+            >
+              <Text span fz="xs" fw={600}>
+                {value}
+              </Text>
+            </ThemeIcon>
+            <Text
+              size="sm"
+              fw={step === value ? 600 : 400}
+              c={step === value ? undefined : "dimmed"}
+            >
+              {t(`serverUpdates.step.${value}.title`)}
+            </Text>
+          </Group>
         ))}
-      </ol>
+      </Group>
 
       {step === 1 ? (
-        <div className="update-wizard-stage">
-          <div className="update-status-grid">
-            <div>
-              <span>{t("serverUpdates.loader")}</span>
-              <strong>{server.loaderType}</strong>
-            </div>
-            <div>
-              <span>{t("serverUpdates.version")}</span>
-              <strong>{server.minecraftVersion ?? t("common.unknown")}</strong>
-            </div>
-            <div>
-              <span>{t("serverUpdates.status")}</span>
-              <strong>
-                {check
-                  ? check.updateAvailable
-                    ? t("settings.updates.available")
-                    : t("serverUpdates.current")
-                  : t("serverUpdates.pendingCheck")}
-              </strong>
-            </div>
-            <div>
-              <span>{t("serverUpdates.install")}</span>
-              <strong>
-                {check?.installSupported
-                  ? t("serverUpdates.supported")
-                  : t("serverUpdates.manualOnly")}
-              </strong>
-            </div>
-          </div>
+        <Stack gap="sm">
+          <Paper p="md">
+            <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
+              {statusFacts.map(([label, value]) => (
+                <Stack gap={2} key={label}>
+                  <Text size="xs" c="dimmed">
+                    {label}
+                  </Text>
+                  <Text size="sm" fw={600}>
+                    {value}
+                  </Text>
+                </Stack>
+              ))}
+            </SimpleGrid>
+          </Paper>
           {checkMutation.isPending ? (
             <LoadingState message={t("serverUpdates.checking")} />
           ) : null}
           {checkMutation.error ? (
-            <p className="danger-text" role="alert">
+            <Alert color="red" role="alert">
               {checkMutation.error.message}
-            </p>
+            </Alert>
           ) : null}
           {check ? (
-            <div className="update-check-summary">
-              <ShieldAlert aria-hidden="true" size={18} />
-              <div>
-                <strong>{t("serverUpdates.checkComplete")}</strong>
-                <span>{checkSummary(check, server, t)}</span>
-              </div>
-              {!check.installSupported ? (
-                <a
-                  href={SOURCE_LINKS[server.loaderType]}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  {t("serverUpdates.source.open", {
-                    loader: server.loaderType,
-                  })}
-                </a>
-              ) : null}
-            </div>
+            <Alert
+              color="azure"
+              role="status"
+              icon={<ShieldAlert aria-hidden="true" size={16} />}
+              title={t("serverUpdates.checkComplete")}
+            >
+              <Stack gap={4} align="flex-start">
+                <Text size="sm">{checkSummary(check, server, t)}</Text>
+                {!check.installSupported ? (
+                  <Anchor
+                    href={SOURCE_LINKS[server.loaderType]}
+                    rel="noreferrer"
+                    size="sm"
+                    target="_blank"
+                  >
+                    {t("serverUpdates.source.open", {
+                      loader: server.loaderType,
+                    })}
+                  </Anchor>
+                ) : null}
+              </Stack>
+            </Alert>
           ) : null}
           {updateChecks.length ? (
-            <ul className="update-check-list">
+            <Stack
+              component="ul"
+              gap="xs"
+              m={0}
+              p={0}
+              style={{ listStyle: "none" }}
+            >
               {updateChecks.map((item) => (
-                <li data-status={item.status} key={item.id}>
-                  <span>{t(`serverUpdates.checkStatus.${item.status}`)}</span>
-                  <p>{item.message}</p>
-                </li>
+                <Group
+                  component="li"
+                  key={item.id}
+                  gap="sm"
+                  wrap="nowrap"
+                  align="flex-start"
+                >
+                  <Badge
+                    variant="light"
+                    color={CHECK_COLORS[item.status]}
+                    style={{ flexShrink: 0 }}
+                  >
+                    {t(`serverUpdates.checkStatus.${item.status}`)}
+                  </Badge>
+                  <Text size="sm">{item.message}</Text>
+                </Group>
               ))}
-            </ul>
+            </Stack>
           ) : null}
-          <div className="form-actions">
+          <Group justify="flex-end" gap="xs">
             <Button
               disabled={checkMutation.isPending}
               variant="secondary"
               onClick={() => checkMutation.mutate()}
             >
-              <RefreshCw aria-hidden="true" size={15} />
+              <RefreshCw aria-hidden="true" size={16} />
               {t("serverUpdates.checkAgain")}
             </Button>
             <Button disabled={!canReviewUpdate} onClick={() => setStep(2)}>
               {t("serverUpdates.continue")}
             </Button>
-          </div>
-        </div>
+          </Group>
+        </Stack>
       ) : null}
 
       {step === 2 ? (
-        <div className="update-wizard-stage">
-          <div className="update-source-note">
-            <ExternalLink aria-hidden="true" size={18} />
-            <div>
-              <strong>{t("serverUpdates.source.title")}</strong>
-              <span>{t("serverUpdates.source.automaticDescription")}</span>
-            </div>
-            <a
-              href={SOURCE_LINKS[server.loaderType]}
-              rel="noreferrer"
-              target="_blank"
+        <Stack gap="sm">
+          <Alert
+            color="gray"
+            role="note"
+            icon={<ExternalLink aria-hidden="true" size={16} />}
+            title={t("serverUpdates.source.title")}
+          >
+            <Stack gap={4} align="flex-start">
+              <Text size="sm">
+                {t("serverUpdates.source.automaticDescription")}
+              </Text>
+              <Anchor
+                href={SOURCE_LINKS[server.loaderType]}
+                rel="noreferrer"
+                size="sm"
+                target="_blank"
+              >
+                {t("serverUpdates.source.open", { loader: server.loaderType })}
+              </Anchor>
+            </Stack>
+          </Alert>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+            <TextInput
+              label={t("serverUpdates.targetMinecraftVersion")}
+              placeholder={
+                checkedVersion(check, server) ??
+                t("serverUpdates.targetVersionPlaceholder")
+              }
+              value={targetVersion}
+              onChange={(event) => setTargetVersion(event.currentTarget.value)}
+            />
+            <TextInput
+              label={t("serverUpdates.targetLoaderBuild")}
+              placeholder={
+                server.loaderType === "paper"
+                  ? t("serverUpdates.paperBuild")
+                  : t("serverUpdates.loaderVersion")
+              }
+              value={targetLoaderVersion}
+              onChange={(event) =>
+                setTargetLoaderVersion(event.currentTarget.value)
+              }
+            />
+            <Input.Wrapper
+              id="server-update-jar"
+              label={t("serverUpdates.downloadedJar")}
+              description={t("serverUpdates.manualJarHint")}
+              inputWrapperOrder={["label", "input", "description"]}
+              style={{ gridColumn: "1 / -1" }}
             >
-              {t("serverUpdates.source.open", { loader: server.loaderType })}
-            </a>
-          </div>
-          <div className="settings-grid">
-            <label>
-              {t("serverUpdates.targetMinecraftVersion")}
-              <TextField
-                placeholder={
-                  checkedVersion(check, server) ??
-                  t("serverUpdates.targetVersionPlaceholder")
-                }
-                value={targetVersion}
-                onChange={(event) => setTargetVersion(event.target.value)}
-              />
-            </label>
-            <label>
-              {t("serverUpdates.targetLoaderBuild")}
-              <TextField
-                placeholder={
-                  server.loaderType === "paper"
-                    ? t("serverUpdates.paperBuild")
-                    : t("serverUpdates.loaderVersion")
-                }
-                value={targetLoaderVersion}
-                onChange={(event) => setTargetLoaderVersion(event.target.value)}
-              />
-            </label>
-            <label className="field-span-2">
-              {t("serverUpdates.downloadedJar")}
               <PathField
+                id="server-update-jar"
                 browseLabel={t("serverUpdates.browseJar")}
                 onBrowse={handleBrowseJar}
                 placeholder={t("serverUpdates.jarPlaceholder")}
                 value={serverJarPath}
                 onChange={(event) => setServerJarPath(event.target.value)}
               />
-              <small className="field-hint">
-                {t("serverUpdates.manualJarHint")}
-              </small>
-            </label>
-            <label>
-              {t("serverUpdates.sha256")}
-              <TextField
-                placeholder={t("serverUpdates.optionalChecksum")}
-                value={serverJarSha256}
-                onChange={(event) => setServerJarSha256(event.target.value)}
-              />
-            </label>
-          </div>
+            </Input.Wrapper>
+            <TextInput
+              label={t("serverUpdates.sha256")}
+              placeholder={t("serverUpdates.optionalChecksum")}
+              value={serverJarSha256}
+              onChange={(event) =>
+                setServerJarSha256(event.currentTarget.value)
+              }
+            />
+          </SimpleGrid>
           {browseError ? (
-            <p className="danger-text" role="alert">
+            <Alert color="red" role="alert">
               {browseError}
-            </p>
+            </Alert>
           ) : null}
-          <div className="form-actions">
+          <Group justify="flex-end" gap="xs">
             <Button variant="secondary" onClick={() => setStep(1)}>
               {t("serverUpdates.back")}
             </Button>
             <Button disabled={!canReviewUpdate} onClick={() => setStep(3)}>
               {t("serverUpdates.continue")}
             </Button>
-          </div>
-        </div>
+          </Group>
+        </Stack>
       ) : null}
 
       {step === 3 ? (
-        <div className="update-wizard-stage">
-          <div className="list-state update-consequences">
-            <ShieldAlert aria-hidden="true" size={18} />
-            <div>
-              <strong>{t("serverUpdates.backup.title")}</strong>
-              <span>{t("serverUpdates.backup.description")}</span>
-            </div>
-          </div>
-          <ul className="update-consequence-list">
-            <li>{t("serverUpdates.backup.world")}</li>
-            <li>{t("serverUpdates.backup.rollback")}</li>
-            <li>{t("serverUpdates.backup.failure")}</li>
-          </ul>
-          <label className="checkbox-row">
+        <Stack gap="sm">
+          <Alert
+            color="yellow"
+            role="note"
+            icon={<ShieldAlert aria-hidden="true" size={16} />}
+            title={t("serverUpdates.backup.title")}
+          >
+            <Text size="sm">{t("serverUpdates.backup.description")}</Text>
+            <List size="sm" mt="xs" spacing={2}>
+              <List.Item>{t("serverUpdates.backup.world")}</List.Item>
+              <List.Item>{t("serverUpdates.backup.rollback")}</List.Item>
+              <List.Item>{t("serverUpdates.backup.failure")}</List.Item>
+            </List>
+          </Alert>
+          <Checkbox
+            checked={backupConfirmed}
+            label={t("serverUpdates.backup.confirm")}
+            onChange={(event) =>
+              setBackupConfirmed(event.currentTarget.checked)
+            }
+          />
+          {hasWarnings ? (
             <Checkbox
-              checked={backupConfirmed}
-              onCheckedChange={(checked) =>
-                setBackupConfirmed(checked === true)
+              checked={warningsAcknowledged}
+              label={t("serverUpdates.warnings.confirm")}
+              onChange={(event) =>
+                setWarningsAcknowledged(event.currentTarget.checked)
               }
             />
-            {t("serverUpdates.backup.confirm")}
-          </label>
-          {hasWarnings ? (
-            <label className="checkbox-row">
-              <Checkbox
-                checked={warningsAcknowledged}
-                onCheckedChange={(checked) =>
-                  setWarningsAcknowledged(checked === true)
-                }
-              />
-              {t("serverUpdates.warnings.confirm")}
-            </label>
           ) : null}
           {installMutation.error ? (
-            <p className="danger-text" role="alert">
+            <Alert color="red" role="alert">
               {t("serverUpdates.installFailed")} {installMutation.error.message}
-            </p>
+            </Alert>
           ) : null}
           {installMutation.data ? (
-            <div className="success-panel" role="status">
-              <CheckCircle2 aria-hidden="true" size={16} />
+            <Alert
+              color="azure"
+              role="status"
+              icon={<CheckCircle2 aria-hidden="true" size={16} />}
+            >
               {t("serverUpdates.installSucceeded")}
-            </div>
+            </Alert>
           ) : null}
           <StickyActionBar>
             <Button variant="secondary" onClick={() => setStep(2)}>
@@ -588,59 +659,66 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
               disabled={!canInstall}
               onClick={() => installMutation.mutate()}
             >
-              <Upload aria-hidden="true" size={15} />
+              <Upload aria-hidden="true" size={16} />
               {installMutation.isPending
                 ? t("serverUpdates.installing")
                 : t("serverUpdates.backupAndInstall")}
             </Button>
           </StickyActionBar>
-        </div>
+        </Stack>
       ) : null}
 
-      <section
-        className="update-history"
+      <Stack
+        component="section"
+        gap="sm"
         aria-labelledby="server-update-history-title"
       >
-        <h3 id="server-update-history-title">
+        <Title order={3} size="h4" id="server-update-history-title">
           {t("serverUpdates.history.title")}
-        </h3>
+        </Title>
         {historyQuery.isLoading ? (
           <LoadingState message={t("serverUpdates.history.loading")} />
         ) : null}
         {historyQuery.error ? (
-          <div className="list-state list-state-error" role="alert">
-            <strong>{t("serverUpdates.history.loadError")}</strong>
-            <span>{historyQuery.error.message}</span>
-            <Button
-              disabled={historyQuery.isFetching}
-              variant="secondary"
-              onClick={() => historyQuery.refetch()}
-            >
-              {t("common.retry")}
-            </Button>
-          </div>
+          <Alert
+            color="red"
+            role="alert"
+            title={t("serverUpdates.history.loadError")}
+          >
+            <Group justify="space-between" gap="sm">
+              <Text size="sm">{historyQuery.error.message}</Text>
+              <Button
+                disabled={historyQuery.isFetching}
+                variant="secondary"
+                onClick={() => historyQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </Group>
+          </Alert>
         ) : null}
         {historyQuery.data?.length ? (
-          <div className="operation-table-scroll">
+          <Table.ScrollContainer minWidth={560}>
             <DataTable
               caption={t("serverUpdates.history.title")}
-              className="operation-table update-history-table"
               columns={historyColumns}
               getRowKey={(entry) => entry.id}
               rows={historyQuery.data}
             />
-          </div>
+          </Table.ScrollContainer>
         ) : null}
         {!historyQuery.isLoading &&
         !historyQuery.error &&
         !historyQuery.data?.length ? (
-          <div className="list-state">{t("serverUpdates.history.empty")}</div>
+          <Text size="sm" c="dimmed">
+            {t("serverUpdates.history.empty")}
+          </Text>
         ) : null}
-      </section>
+      </Stack>
       {rollbackMutation.error ? (
-        <p className="danger-text" role="alert">
+        <Alert color="red" role="alert">
           {rollbackMutation.error.message}
-        </p>
+        </Alert>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={t("serverUpdates.rollback.confirm")}
@@ -656,6 +734,6 @@ export function ServerUpdatesView({ server }: ServerUpdatesViewProps) {
           if (rollbackEntry) rollbackMutation.mutate(rollbackEntry);
         }}
       />
-    </section>
+    </Stack>
   );
 }

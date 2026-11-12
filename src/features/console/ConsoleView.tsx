@@ -1,8 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  ActionIcon,
+  Alert,
+  Box,
+  Button as MantineButton,
+  Group,
+  Menu,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { ChevronDown, Copy, Eraser } from "lucide-react";
+import { ChevronDown, Copy, Eraser, Search } from "lucide-react";
 import {
   sendServerCommand,
   listProcessEvents,
@@ -57,7 +70,8 @@ export function colorizeConsoleLine(level: string, message: string) {
 /* The app's own lifecycle lines, said in the user's language and set apart
    from the log, so the moment a server became joinable or finished stopping
    is easy to spot. */
-const LIFECYCLE_LINE = /^(?:Server process|Stop requested|Force stop requested|Restart|Auto restart)/;
+const LIFECYCLE_LINE =
+  /^(?:Server process|Stop requested|Force stop requested|Restart|Auto restart)/;
 const SETTLED_LINE = /^Server process (?:ready|stopped)\.$/;
 
 const quickCommands = [
@@ -142,7 +156,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const [terminalLoadError, setTerminalLoadError] = useState<string | null>(
     null,
   );
-  const quickMenuRef = useRef<HTMLDetailsElement | null>(null);
+  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const normalizedSearch = searchText.trim().toLowerCase();
   const eventsQuery = useQuery({
     queryKey: processKeys.events(serverId),
@@ -320,194 +334,239 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const fillCommand = (command: string) => {
     setCommandText(command);
     setShowSuggestions(false);
-    if (quickMenuRef.current) quickMenuRef.current.open = false;
+    setQuickMenuOpen(false);
     document.getElementById(`console-command-${serverId}`)?.focus();
   };
 
   return (
-    <div className="console-panel" aria-label={t("console.aria")}>
-      <div className="console-toolbar">
-        <input
+    <Stack
+      aria-label={t("console.aria")}
+      gap={0}
+      h="100%"
+      mih={0}
+      style={{ flex: 1 }}
+    >
+      <Group gap="xs" px="sm" py={6} wrap="nowrap">
+        <TextInput
           aria-label={t("console.search")}
-          className="console-search"
+          flex={1}
+          leftSection={<Search aria-hidden="true" size={14} />}
+          maw={320}
           placeholder={t("console.search")}
+          size="xs"
           type="search"
           value={searchText}
-          onChange={(event) => setSearchText(event.target.value)}
+          onChange={(event) => setSearchText(event.currentTarget.value)}
         />
-        <span className="console-event-count">
+        <Text
+          c="dimmed"
+          ff="monospace"
+          size="xs"
+          style={{ whiteSpace: "nowrap" }}
+        >
           {t("console.events", { count: visibleEvents.length })}
-        </span>
-        <details className="console-quick-menu" ref={quickMenuRef}>
-          <summary aria-label={t("console.templates.aria")}>
-            {t("console.templates.aria")}
-            <ChevronDown aria-hidden="true" size={13} />
-          </summary>
-          <div className="console-quick-panel">
-            <div className="console-quick-group">
+        </Text>
+        <Box flex={1} />
+        <Menu
+          opened={quickMenuOpen}
+          position="bottom-end"
+          returnFocus={false}
+          width={240}
+          onChange={setQuickMenuOpen}
+        >
+          <Menu.Target>
+            <MantineButton
+              aria-label={t("console.templates.aria")}
+              color="gray"
+              rightSection={<ChevronDown aria-hidden="true" size={14} />}
+              size="xs"
+              variant="subtle"
+            >
+              {t("console.templates.aria")}
+            </MantineButton>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <ScrollArea.Autosize mah={380} type="auto">
               {quickCommands.map((template) => (
-                <button
+                <Menu.Item
                   key={template.command}
                   title={template.command}
-                  type="button"
                   onClick={() => fillCommand(template.command)}
                 >
                   {t(template.labelKey)}
-                </button>
+                </Menu.Item>
               ))}
-            </div>
-            {commandGroups.map((group) => (
-              <div className="console-quick-group" key={group.id}>
-                <h4>{t(group.labelKey)}</h4>
-                {group.options.map((option) => (
-                  <button
-                    key={option.value}
-                    title={option.value.trim()}
-                    type="button"
-                    onClick={() => fillCommand(option.value)}
-                  >
-                    {t(option.labelKey)}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        </details>
-        <button
-          aria-label={t("console.clear")}
-          className="console-icon-button"
-          title={t("console.clear")}
-          type="button"
-          onClick={() => {
-            terminalRef.current?.clear();
-          }}
-        >
-          <Eraser aria-hidden="true" size={15} />
-        </button>
-        <button
-          aria-label={t("console.copy")}
-          className="console-icon-button"
-          disabled={visibleEvents.length === 0}
-          title={t("console.copy")}
-          type="button"
-          onClick={copyConsole}
-        >
-          <Copy aria-hidden="true" size={15} />
-        </button>
-      </div>
+              {commandGroups.map((group) => (
+                <Fragment key={group.id}>
+                  <Menu.Divider />
+                  <Menu.Label>{t(group.labelKey)}</Menu.Label>
+                  {group.options.map((option) => (
+                    <Menu.Item
+                      key={option.value}
+                      title={option.value.trim()}
+                      onClick={() => fillCommand(option.value)}
+                    >
+                      {t(option.labelKey)}
+                    </Menu.Item>
+                  ))}
+                </Fragment>
+              ))}
+            </ScrollArea.Autosize>
+          </Menu.Dropdown>
+        </Menu>
+        <Tooltip label={t("console.clear")}>
+          <ActionIcon
+            aria-label={t("console.clear")}
+            onClick={() => {
+              terminalRef.current?.clear();
+            }}
+          >
+            <Eraser aria-hidden="true" size={16} />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip label={t("console.copy")}>
+          <ActionIcon
+            aria-label={t("console.copy")}
+            disabled={visibleEvents.length === 0}
+            onClick={copyConsole}
+          >
+            <Copy aria-hidden="true" size={16} />
+          </ActionIcon>
+        </Tooltip>
+      </Group>
 
-      <div className="console-output">
+      <Stack
+        bg="#0e1014"
+        gap={0}
+        mih={220}
+        pos="relative"
+        style={{ flex: "1 1 auto", overflow: "hidden" }}
+      >
         {eventsQuery.error ? (
-          <div className="list-state list-state-error" role="alert">
-            <strong>{t("console.eventsError.title")}</strong>
-            <span>{eventsQuery.error.message}</span>
-            <Button variant="secondary" onClick={() => eventsQuery.refetch()}>
-              {t("common.retry")}
-            </Button>
-          </div>
+          <Alert
+            color="red"
+            m="sm"
+            role="alert"
+            title={t("console.eventsError.title")}
+            variant="light"
+          >
+            <Stack align="flex-start" gap="xs">
+              <Text size="sm">{eventsQuery.error.message}</Text>
+              <Button variant="secondary" onClick={() => eventsQuery.refetch()}>
+                {t("common.retry")}
+              </Button>
+            </Stack>
+          </Alert>
         ) : null}
         {terminalLoadError ? (
-          <div className="inline-error console-load-error" role="alert">
+          <Alert color="red" m="sm" role="alert" variant="light">
             {terminalLoadError}
-          </div>
+          </Alert>
         ) : null}
         {!eventsQuery.error && eventsQuery.data?.length === 0 ? (
-          <p className="console-empty">{t("console.empty.description")}</p>
+          <Text c="dimmed" px="md" pt="sm" size="sm">
+            {t("console.empty.description")}
+          </Text>
         ) : null}
         <div className="xterm-host" ref={terminalElementRef} />
-      </div>
+      </Stack>
 
       {commandText.trim() && !canSendCommand && !runtime.isLoading ? (
-        <p className="console-command-hint" role="status">
+        <Text c="yellow" px="sm" pt={6} role="status" size="xs">
           {t("console.command.startFirst")}
-        </p>
+        </Text>
       ) : null}
       <form
-        className="console-command-form"
         onSubmit={(event) => {
           event.preventDefault();
           sendCommandMutation.mutate();
         }}
       >
-        <label className="console-prompt" htmlFor={`console-command-${serverId}`}>
-          <span aria-hidden="true">/</span>
-          <span className="visually-hidden">{t("console.command.label")}</span>
-        </label>
-        <div className="cmd-suggest-container">
-          <input
-            autoComplete="off"
-            className="console-command-input"
-            id={`console-command-${serverId}`}
-            placeholder={
-              canSendCommand || runtime.isLoading
-                ? t("console.command.placeholder")
-                : runtime.status === "stopping"
-                  ? t("processEvents.stopRequested")
-                  : t("console.command.startFirst")
+        <Group gap="xs" p="sm" wrap="nowrap">
+          <Box flex={1} miw={0} pos="relative">
+            <TextInput
+              aria-label={t("console.command.label")}
+              autoComplete="off"
+              id={`console-command-${serverId}`}
+              leftSection={
+                <Text aria-hidden="true" c="dimmed" ff="monospace" fw={600}>
+                  /
+                </Text>
+              }
+              placeholder={
+                canSendCommand || runtime.isLoading
+                  ? t("console.command.placeholder")
+                  : runtime.status === "stopping"
+                    ? t("processEvents.stopRequested")
+                    : t("console.command.startFirst")
+              }
+              styles={{
+                input: { fontFamily: "var(--mantine-font-family-monospace)" },
+              }}
+              value={commandText}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                setCommandText(value);
+                setShowSuggestions(value.trim().length > 0);
+              }}
+              onKeyDown={(event) => {
+                if (suggestionsVisible) {
+                  return;
+                }
+                if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+                  return;
+                }
+                const history = commandHistoryRef.current;
+                if (history.length === 0) {
+                  return;
+                }
+                event.preventDefault();
+                if (event.key === "ArrowUp") {
+                  const nextIndex =
+                    historyIndex === null
+                      ? history.length - 1
+                      : Math.max(historyIndex - 1, 0);
+                  setHistoryIndex(nextIndex);
+                  setCommandText(history[nextIndex]);
+                  return;
+                }
+                if (historyIndex === null) {
+                  return;
+                }
+                if (historyIndex >= history.length - 1) {
+                  setHistoryIndex(null);
+                  setCommandText("");
+                  return;
+                }
+                setHistoryIndex(historyIndex + 1);
+                setCommandText(history[historyIndex + 1]);
+              }}
+            />
+            <CommandSuggestions
+              input={commandText}
+              onSelect={selectSuggestion}
+              visible={suggestionsVisible}
+            />
+          </Box>
+          <Button
+            disabled={
+              !canSendCommand ||
+              commandText.trim().length === 0 ||
+              sendCommandMutation.isPending ||
+              runtime.isLoading
             }
-            value={commandText}
-            onChange={(event) => {
-              const value = event.target.value;
-              setCommandText(value);
-              setShowSuggestions(value.trim().length > 0);
-            }}
-            onKeyDown={(event) => {
-              if (suggestionsVisible) {
-                return;
-              }
-              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
-                return;
-              }
-              const history = commandHistoryRef.current;
-              if (history.length === 0) {
-                return;
-              }
-              event.preventDefault();
-              if (event.key === "ArrowUp") {
-                const nextIndex =
-                  historyIndex === null
-                    ? history.length - 1
-                    : Math.max(historyIndex - 1, 0);
-                setHistoryIndex(nextIndex);
-                setCommandText(history[nextIndex]);
-                return;
-              }
-              if (historyIndex === null) {
-                return;
-              }
-              if (historyIndex >= history.length - 1) {
-                setHistoryIndex(null);
-                setCommandText("");
-                return;
-              }
-              setHistoryIndex(historyIndex + 1);
-              setCommandText(history[historyIndex + 1]);
-            }}
-          />
-          <CommandSuggestions
-            input={commandText}
-            onSelect={selectSuggestion}
-            visible={suggestionsVisible}
-          />
-        </div>
-        <Button
-          className="button-small"
-          disabled={
-            !canSendCommand ||
-            commandText.trim().length === 0 ||
-            sendCommandMutation.isPending ||
-            runtime.isLoading
-          }
-          type="submit"
-        >
-          {t("console.send")}
-        </Button>
+            style={{ flexShrink: 0 }}
+            type="submit"
+          >
+            {t("console.send")}
+          </Button>
+        </Group>
       </form>
       {sendCommandMutation.error ? (
-        <div className="inline-error console-command-error" role="alert">
+        <Alert color="red" mb="sm" mx="sm" role="alert" variant="light">
           {sendCommandMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
-    </div>
+    </Stack>
   );
 }

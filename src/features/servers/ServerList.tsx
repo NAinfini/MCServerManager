@@ -1,4 +1,17 @@
+import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  Box,
+  Card,
+  Group,
+  Progress,
+  SimpleGrid,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title,
+  UnstyledButton,
+} from "@mantine/core";
 import { FolderOpen, Plus, RefreshCw } from "lucide-react";
 import { ServerActions } from "./ServerActions";
 import { StatusBadge } from "../../components/ui/status-badge";
@@ -10,7 +23,6 @@ import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { ServerCover } from "../../components/ui/server-cover";
 import { Sparkline } from "../../components/data/Sparkline";
-import { cn } from "../../lib/cn";
 import { useAppSettings } from "../../i18n";
 import {
   getPerformanceHistory,
@@ -84,18 +96,40 @@ function ServerCardTrend({ serverId }: { serverId: string }) {
   const latest = samples[0];
 
   return (
-    <figure className="server-card-trend">
-      <figcaption>
-        <span>{t("servers.card.cpuTrend")}</span>
-        <b>{metricValue(latest?.cpuPercent, "%")}</b>
-      </figcaption>
+    <Stack gap={4}>
+      <Group justify="space-between">
+        <Text c="dimmed" size="xs">
+          {t("servers.card.cpuTrend")}
+        </Text>
+        <Text ff="monospace" fw={600} size="xs">
+          {metricValue(latest?.cpuPercent, "%")}
+        </Text>
+      </Group>
+      <Progress
+        aria-hidden="true"
+        size="xs"
+        value={Math.min(latest?.cpuPercent ?? 0, 100)}
+      />
       <Sparkline
         formatValue={(value) => `${value}%`}
         label={t("servers.card.cpuTrend")}
         max={100}
         values={[...samples].reverse().map((sample) => sample.cpuPercent)}
       />
-    </figure>
+    </Stack>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div>
+      <Text c="dimmed" size="xs">
+        {label}
+      </Text>
+      <Text ff="monospace" fw={500} size="sm">
+        {value}
+      </Text>
+    </div>
   );
 }
 
@@ -109,20 +143,17 @@ function ServerCardTelemetry({ serverId }: { serverId: string }) {
   const latest = historyQuery.data?.samples?.[0];
 
   return (
-    <div className="server-card-telemetry">
-      <span>
-        {t("performance.cpu")}
-        <b>{metricValue(latest?.cpuPercent, "%")}</b>
-      </span>
-      <span>
-        {t("performance.players")}
-        <b>{metricValue(latest?.playerCount)}</b>
-      </span>
-      <span>
-        {t("performance.tps")}
-        <b>{metricValue(latest?.tps)}</b>
-      </span>
-    </div>
+    <>
+      <Fact
+        label={t("performance.cpu")}
+        value={metricValue(latest?.cpuPercent, "%")}
+      />
+      <Fact
+        label={t("performance.players")}
+        value={metricValue(latest?.playerCount)}
+      />
+      <Fact label={t("performance.tps")} value={metricValue(latest?.tps)} />
+    </>
   );
 }
 
@@ -145,65 +176,75 @@ function ServerCard({
   const isLive = liveStatuses.has(status);
 
   return (
-    <li
-      className={cn(
-        "server-card",
-        isLive && "server-card-live",
-        selected && "server-card-selected",
-      )}
+    <Card
+      component="li"
+      style={{
+        cursor: "pointer",
+        borderColor: selected ? "var(--mantine-color-azure-6)" : undefined,
+      }}
+      withBorder
+      /* The whole card opens the server; its own controls, and anything they
+         portal out (a confirm dialog), keep their clicks. */
+      onClick={(event) => {
+        const target = event.target as Element;
+        if (
+          !event.currentTarget.contains(target) ||
+          target.closest("button, a, input")
+        ) {
+          return;
+        }
+        onSelect?.(server.id);
+      }}
     >
-      <div className="server-card-top">
-        <ServerCover loaderType={server.loaderType} size={40} />
-        <div className="server-card-identity">
-          <h3 className="server-card-name">
-            {/* The button covers the whole card through ::after, so the card is
-                clickable without nesting the action buttons inside a control. */}
-            <button
-              className="server-card-open"
-              type="button"
-              onClick={() => onSelect?.(server.id)}
-            >
-              {server.name}
-            </button>
-          </h3>
-          <p className="server-card-meta">
-            <LoaderPill
-              loaderType={server.loaderType}
-              minecraftVersion={server.minecraftVersion}
-            />
-            <span>
-              {t("server.meta.port", {
-                port: server.serverPort ?? t("server.meta.unset"),
-              })}
-            </span>
-          </p>
-        </div>
-        <StatusBadge status={status} />
-      </div>
+      <Stack gap="md">
+        <Group align="flex-start" gap="sm" wrap="nowrap">
+          <ServerCover loaderType={server.loaderType} size={40} />
+          <Stack gap={4} miw={0} style={{ flex: 1 }}>
+            <Title order={3} fz="md">
+              <UnstyledButton
+                fw="inherit"
+                fz="inherit"
+                maw="100%"
+                style={{ overflowWrap: "anywhere" }}
+                onClick={() => onSelect?.(server.id)}
+              >
+                {server.name}
+              </UnstyledButton>
+            </Title>
+            <Group gap="xs">
+              <LoaderPill
+                loaderType={server.loaderType}
+                minecraftVersion={server.minecraftVersion}
+              />
+              <Text c="dimmed" ff="monospace" size="xs">
+                {t("server.meta.port", {
+                  port: server.serverPort ?? t("server.meta.unset"),
+                })}
+              </Text>
+            </Group>
+          </Stack>
+          <StatusBadge status={status} />
+        </Group>
 
-      <div className="server-card-body">
-        <div className="server-card-readouts">
+        <SimpleGrid cols={{ base: 2, xs: isLive ? 3 : 2 }} spacing="sm">
           {isLive ? <ServerCardTelemetry serverId={server.id} /> : null}
-          <dl className="server-card-facts">
-            <div>
-              <dt>{t("servers.card.memory")}</dt>
-              <dd>{formatMemory(server, t("server.meta.unset"))}</dd>
-            </div>
-            <div>
-              <dt>{t("servers.card.lastBackup")}</dt>
-              <dd>
-                <ServerLastBackup createdAt={lastBackup} />
-              </dd>
-            </div>
-          </dl>
-        </div>
-        <ServerCardTrend serverId={server.id} />
-      </div>
+          <Fact
+            label={t("servers.card.memory")}
+            value={formatMemory(server, t("server.meta.unset"))}
+          />
+          <Fact
+            label={t("servers.card.lastBackup")}
+            value={<ServerLastBackup createdAt={lastBackup} />}
+          />
+        </SimpleGrid>
 
-      <div className="server-card-actions">
-        <ServerActions processStatus={status} server={server} />
-      </div>
-    </li>
+        <ServerCardTrend serverId={server.id} />
+
+        <Group justify="flex-end">
+          <ServerActions processStatus={status} server={server} />
+        </Group>
+      </Stack>
+    </Card>
   );
 }
 
@@ -234,12 +275,10 @@ export function ServerList({
         description={error.message}
       >
         {onRetry ? (
-          <div className="empty-state-actions">
-            <Button variant="secondary" onClick={onRetry}>
-              <RefreshCw aria-hidden="true" size={15} />
-              {t("common.retry")}
-            </Button>
-          </div>
+          <Button variant="secondary" onClick={onRetry}>
+            <RefreshCw aria-hidden="true" size={16} />
+            {t("common.retry")}
+          </Button>
         ) : null}
       </EmptyState>
     );
@@ -248,7 +287,6 @@ export function ServerList({
   if (servers.length === 0 && filtered) {
     return (
       <EmptyState
-        illustration="/illustrations/no-results.png"
         title={t("servers.filter.emptyTitle")}
         description={t("servers.filter.emptyDescription")}
       />
@@ -258,30 +296,40 @@ export function ServerList({
   if (servers.length === 0) {
     return (
       <EmptyState
-        illustration="/illustrations/no-servers.png"
         title={t("servers.empty.title")}
         description={t("servers.empty.description")}
       >
-        <div className="empty-state-actions">
+        <Group gap="sm" justify="center">
           {onCreateServer ? (
             <Button variant="primary" onClick={onCreateServer}>
-              <Plus aria-hidden="true" size={15} />
+              <Plus aria-hidden="true" size={16} />
               {t("servers.create.button")}
             </Button>
           ) : null}
           {onImportServer ? (
             <Button variant="secondary" onClick={onImportServer}>
-              <FolderOpen aria-hidden="true" size={15} />
+              <FolderOpen aria-hidden="true" size={16} />
               {t("servers.import.button")}
             </Button>
           ) : null}
-        </div>
+        </Group>
       </EmptyState>
     );
   }
 
   return (
-    <ul aria-label={t("servers.grid.aria")} className="server-card-grid">
+    <Box
+      aria-label={t("servers.grid.aria")}
+      component="ul"
+      m={0}
+      p={0}
+      style={{
+        display: "grid",
+        gap: "var(--mantine-spacing-md)",
+        gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+        listStyle: "none",
+      }}
+    >
       {servers.map((server) => (
         <ServerCard
           key={server.id}
@@ -295,20 +343,37 @@ export function ServerList({
       {/* Hidden while filtering: a create tile next to "no matches" reads as a
           search result rather than an action. */}
       {onCreateServer && !filtered ? (
-        <li className="server-card-create-item">
-          <button
-            className="server-card-create"
-            type="button"
+        <li>
+          <UnstyledButton
+            h="100%"
+            mih={180}
+            p="md"
+            style={{
+              border: "1px dashed var(--mantine-color-default-border)",
+              borderRadius: "var(--mantine-radius-md)",
+            }}
+            w="100%"
             onClick={onCreateServer}
           >
-            <span aria-hidden="true" className="server-card-create-mark">
-              <Plus size={18} />
-            </span>
-            <strong>{t("servers.card.createTitle")}</strong>
-            <span>{t("servers.card.createDescription")}</span>
-          </button>
+            <Stack align="center" gap={6}>
+              <ThemeIcon
+                aria-hidden="true"
+                radius="xl"
+                size="lg"
+                variant="light"
+              >
+                <Plus size={16} />
+              </ThemeIcon>
+              <Text fw={600} size="sm">
+                {t("servers.card.createTitle")}
+              </Text>
+              <Text c="dimmed" size="xs" ta="center">
+                {t("servers.card.createDescription")}
+              </Text>
+            </Stack>
+          </UnstyledButton>
         </li>
       ) : null}
-    </ul>
+    </Box>
   );
 }

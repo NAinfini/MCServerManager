@@ -1,5 +1,14 @@
 import { Unlink } from "lucide-react";
-import { Button } from "../../components/ui/button";
+import {
+  ActionIcon,
+  Badge,
+  Card,
+  Group,
+  Stack,
+  Text,
+  Title,
+  Tooltip,
+} from "@mantine/core";
 import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../../domain/server";
@@ -35,61 +44,86 @@ export function TunnelBindingEditor({
   }
 
   return (
-    <section
-      className="tunnel-workbench-section"
-      aria-labelledby="tunnel-bindings-title"
-    >
-      <div className="section-heading">
-        <h2 id="tunnel-bindings-title">{t("tunnels.bindings.title")}</h2>
-        <span>{t("tunnels.bindings.description")}</span>
-      </div>
+    <Stack aria-labelledby="tunnel-bindings-title" component="section" gap={0}>
+      <Stack gap={2} mb="sm">
+        <Title id="tunnel-bindings-title" order={3}>
+          {t("tunnels.bindings.title")}
+        </Title>
+        <Text c="dimmed" size="sm">
+          {t("tunnels.bindings.description")}
+        </Text>
+      </Stack>
 
       {providers.length === 0 || servers.length === 0 ? (
-        <div className="list-state">
-          <strong>{t("tunnels.bindings.empty.title")}</strong>
-          <span>{t("tunnels.bindings.empty.description")}</span>
-        </div>
+        <Stack gap={2}>
+          <Text fw={600} size="sm">
+            {t("tunnels.bindings.empty.title")}
+          </Text>
+          <Text c="dimmed" size="sm">
+            {t("tunnels.bindings.empty.description")}
+          </Text>
+        </Stack>
       ) : (
-        <div className="compatibility-list">
+        <Stack gap="xs">
           {providers.map((provider) => (
-            <div key={provider.id}>
-              <strong>{provider.name}</strong>
-              <span>
-                {provider.kind === "application"
-                  ? t("tunnels.bindings.application")
-                  : provider.command}
-              </span>
-              {(bindingsByProvider.get(provider.id) ?? []).map((binding) => (
-                <span className="binding-chip" key={binding.id}>
-                  {binding.serverName}
-                  <Button
-                    className="binding-chip-action"
-                    disabled={isSaving}
-                    variant="ghost"
-                    onClick={() => onUnbind(provider.id, binding.serverId)}
-                  >
-                    <Unlink aria-hidden="true" size={13} />
-                    {t("tunnels.bindings.unbind")}
-                  </Button>
-                </span>
-              ))}
-              <Select
-                ariaLabel={t("tunnels.bindings.aria", {
-                  provider: provider.name,
-                })}
-                disabled={isSaving}
-                options={serverOptions}
-                value="none"
-                onValueChange={(serverId) => {
-                  if (serverId !== "none") {
-                    onBind(provider.id, serverId);
-                  }
-                }}
-              />
-            </div>
+            <Card key={provider.id} p="sm">
+              <Group align="center" justify="space-between" wrap="nowrap">
+                <Stack gap={4} miw={0}>
+                  <Text fw={600} size="sm">
+                    {provider.name}
+                  </Text>
+                  <Text c="dimmed" ff="monospace" size="xs" truncate>
+                    {provider.kind === "application"
+                      ? t("tunnels.bindings.application")
+                      : provider.command}
+                  </Text>
+                  <Group gap={6}>
+                    {(bindingsByProvider.get(provider.id) ?? []).map(
+                      (binding) => (
+                        <Badge
+                          key={binding.id}
+                          pr={2}
+                          rightSection={
+                            <Tooltip label={t("tunnels.bindings.unbind")}>
+                              <ActionIcon
+                                aria-label={t("tunnels.bindings.unbind")}
+                                disabled={isSaving}
+                                size="xs"
+                                onClick={() =>
+                                  onUnbind(provider.id, binding.serverId)
+                                }
+                              >
+                                <Unlink aria-hidden="true" size={12} />
+                              </ActionIcon>
+                            </Tooltip>
+                          }
+                          tt="none"
+                          variant="light"
+                        >
+                          {binding.serverName}
+                        </Badge>
+                      ),
+                    )}
+                  </Group>
+                </Stack>
+                <Select
+                  ariaLabel={t("tunnels.bindings.aria", {
+                    provider: provider.name,
+                  })}
+                  disabled={isSaving}
+                  options={serverOptions}
+                  value="none"
+                  onValueChange={(serverId) => {
+                    if (serverId !== "none") {
+                      onBind(provider.id, serverId);
+                    }
+                  }}
+                />
+              </Group>
+            </Card>
           ))}
-        </div>
+        </Stack>
       )}
-    </section>
+    </Stack>
   );
 }

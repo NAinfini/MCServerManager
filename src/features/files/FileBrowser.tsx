@@ -1,4 +1,16 @@
 import {
+  ActionIcon,
+  Alert,
+  Box,
+  Group,
+  Loader,
+  ScrollArea,
+  Table,
+  Text,
+  Tooltip,
+  UnstyledButton,
+} from "@mantine/core";
+import {
   ArrowRightLeft,
   FileText,
   Folder,
@@ -7,7 +19,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
 import { formatBytes } from "../../lib/format-bytes";
 import { formatDateTime } from "../../lib/date-format";
@@ -40,137 +51,159 @@ export function FileBrowser({
 }: FileBrowserProps) {
   const { language, t } = useAppSettings();
   return (
-    <section className="files-browser" aria-label={t("files.browser.aria")}>
+    <Box
+      aria-label={t("files.browser.aria")}
+      component="section"
+      h="100%"
+      mih={0}
+    >
       {isLoading ? (
-        <div className="list-state">{t("files.loading")}</div>
+        <Group gap="xs" p="md">
+          <Loader size="xs" />
+          <Text c="dimmed" size="sm">
+            {t("files.loading")}
+          </Text>
+        </Group>
       ) : null}
 
       {!isLoading && error ? (
-        <div
+        <Alert
           aria-label={t("files.loadError")}
-          className="list-state list-state-error"
+          color="red"
+          m="sm"
           role="alert"
+          title={t("files.loadError")}
         >
-          <strong>{t("files.loadError")}</strong>
-          <span>{error.message}</span>
+          <Text size="sm">{error.message}</Text>
           {onRetry ? (
-            <Button variant="secondary" onClick={onRetry}>
-              <RefreshCw aria-hidden="true" size={15} />
-              {t("common.retry")}
-            </Button>
+            <Group mt="xs">
+              <Button variant="secondary" onClick={onRetry}>
+                <RefreshCw aria-hidden="true" size={14} />
+                {t("common.retry")}
+              </Button>
+            </Group>
           ) : null}
-        </div>
+        </Alert>
       ) : null}
 
       {!isLoading && !error && entries.length === 0 ? (
-        <EmptyState
-          illustration="/illustrations/empty-folder.png"
-          title={t("files.emptyDirectory.title")}
-          description={t("files.emptyDirectory.description")}
-        />
+        <Box p="md">
+          <Text fw={600} size="sm">
+            {t("files.emptyDirectory.title")}
+          </Text>
+          <Text c="dimmed" size="sm">
+            {t("files.emptyDirectory.description")}
+          </Text>
+        </Box>
       ) : null}
 
       {!isLoading && !error && entries.length > 0 ? (
-        <div className="files-table-scroll">
-          <table className="files-table">
+        <ScrollArea h="100%">
+          <Table highlightOnHover stickyHeader verticalSpacing="xs">
             <caption className="visually-hidden">
               {t("files.browser.aria")}
             </caption>
-            <thead>
-              <tr>
-                <th scope="col">{t("files.table.name")}</th>
-                <th scope="col">{t("files.table.size")}</th>
-                <th scope="col">{t("files.table.modified")}</th>
-                <th scope="col">{t("files.table.actions")}</th>
-              </tr>
-            </thead>
-            <tbody>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>{t("files.table.name")}</Table.Th>
+                <Table.Th>{t("files.table.size")}</Table.Th>
+                <Table.Th>{t("files.table.modified")}</Table.Th>
+                <Table.Th ta="end">{t("files.table.actions")}</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
               {entries.map((entry) => {
                 const isDirectory = entry.kind === "directory";
                 const Icon = isDirectory ? Folder : FileText;
                 return (
-                  <tr
-                    className={
+                  <Table.Tr
+                    bg={
                       entry.relativePath === selectedPath
-                        ? "files-table-row files-table-row-selected"
-                        : "files-table-row"
+                        ? "var(--mantine-primary-color-light)"
+                        : undefined
                     }
                     key={entry.relativePath || entry.name}
                   >
-                    <th scope="row">
-                      <button
-                        className="files-name-button"
-                        type="button"
+                    <Table.Th fw={500} maw={0} scope="row" w="100%">
+                      <UnstyledButton
+                        maw="100%"
                         onClick={() =>
                           isDirectory
                             ? onOpenDirectory(entry.relativePath)
                             : onOpenFile(entry.relativePath)
                         }
                       >
-                        <Icon aria-hidden="true" size={16} />
-                        <span title={entry.name}>{entry.name}</span>
-                      </button>
-                    </th>
-                    <td>
+                        <Group gap={8} wrap="nowrap">
+                          <Icon aria-hidden="true" size={14} />
+                          <Text size="sm" title={entry.name} truncate>
+                            {entry.name}
+                          </Text>
+                        </Group>
+                      </UnstyledButton>
+                    </Table.Th>
+                    <Table.Td
+                      c="dimmed"
+                      ff="monospace"
+                      fz="xs"
+                      style={{ whiteSpace: "nowrap" }}
+                    >
                       {isDirectory
                         ? t("files.folder")
                         : formatBytes(entry.sizeBytes)}
-                    </td>
-                    <td>
+                    </Table.Td>
+                    <Table.Td c="dimmed" style={{ whiteSpace: "nowrap" }}>
                       {entry.modifiedAt
                         ? formatDateTime(entry.modifiedAt, language)
                         : t("common.unknown")}
-                    </td>
-                    <td>
-                      <div className="files-row-actions">
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={2} justify="flex-end" wrap="nowrap">
                         {onRename ? (
-                          <Button
-                            aria-label={t("files.actions.renameNamed", {
-                              name: entry.name,
-                            })}
-                            className="icon-button"
-                            title={t("files.actions.rename")}
-                            variant="ghost"
-                            onClick={() => onRename(entry)}
-                          >
-                            <Pencil aria-hidden="true" size={14} />
-                          </Button>
+                          <Tooltip label={t("files.actions.rename")}>
+                            <ActionIcon
+                              aria-label={t("files.actions.renameNamed", {
+                                name: entry.name,
+                              })}
+                              onClick={() => onRename(entry)}
+                            >
+                              <Pencil aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
                         ) : null}
                         {onMove ? (
-                          <Button
-                            aria-label={t("files.actions.moveNamed", {
-                              name: entry.name,
-                            })}
-                            className="icon-button"
-                            title={t("files.actions.move")}
-                            variant="ghost"
-                            onClick={() => onMove(entry)}
-                          >
-                            <ArrowRightLeft aria-hidden="true" size={14} />
-                          </Button>
+                          <Tooltip label={t("files.actions.move")}>
+                            <ActionIcon
+                              aria-label={t("files.actions.moveNamed", {
+                                name: entry.name,
+                              })}
+                              onClick={() => onMove(entry)}
+                            >
+                              <ArrowRightLeft aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
                         ) : null}
                         {onDelete ? (
-                          <Button
-                            aria-label={t("files.actions.deleteNamed", {
-                              name: entry.name,
-                            })}
-                            className="icon-button"
-                            title={t("files.actions.delete")}
-                            variant="danger"
-                            onClick={() => onDelete(entry)}
-                          >
-                            <Trash2 aria-hidden="true" size={14} />
-                          </Button>
+                          <Tooltip label={t("files.actions.delete")}>
+                            <ActionIcon
+                              aria-label={t("files.actions.deleteNamed", {
+                                name: entry.name,
+                              })}
+                              color="red"
+                              onClick={() => onDelete(entry)}
+                            >
+                              <Trash2 aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
                         ) : null}
-                      </div>
-                    </td>
-                  </tr>
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
                 );
               })}
-            </tbody>
-          </table>
-        </div>
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       ) : null}
-    </section>
+    </Box>
   );
 }

@@ -1,3 +1,13 @@
+import {
+  Alert,
+  Group,
+  List,
+  Loader,
+  Progress,
+  Stack,
+  Text,
+  ThemeIcon,
+} from "@mantine/core";
 import { AlertTriangle, CheckCircle2, Circle } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
@@ -57,16 +67,16 @@ export function ProvisioningProgress({
     job.progress.committed !== true;
 
   return (
-    <section className="provisioning-progress" aria-live="polite">
+    <Stack aria-live="polite" component="section" gap="md">
       {/* The stage is the headline. A fixed "Installing" title with the stage
           demoted to a subtitle told the user nothing they could not already see
           from the spinner. */}
-      <div className="provisioning-progress-heading">
+      <Group justify="space-between" wrap="nowrap">
         <div>
-          <strong>
+          <Text fw={600} size="md">
             {t(`provisioning.stage.${displayedStage || "planned"}`)}
-          </strong>
-          <span>
+          </Text>
+          <Text c="dimmed" ff="monospace" size="xs">
             {[
               stageIndex >= 0
                 ? t("provisioning.progress.stageCounter", {
@@ -78,22 +88,26 @@ export function ProvisioningProgress({
             ]
               .filter(Boolean)
               .join(" · ")}
-          </span>
+          </Text>
         </div>
         {job.stage === "ready" ? (
-          <CheckCircle2 aria-hidden="true" size={20} />
+          <ThemeIcon color="green" radius="xl" variant="light">
+            <CheckCircle2 aria-hidden="true" size={16} />
+          </ThemeIcon>
         ) : null}
-      </div>
-      <progress
-        aria-label={t("provisioning.progress.aria")}
-        aria-valuenow={progressValue(job)}
-        max={100}
-        value={progressValue(job)}
-      />
+      </Group>
+      <Progress.Root size="sm">
+        <Progress.Section
+          animated={job.stage !== "ready" && job.stage !== "failed"}
+          aria-label={t("provisioning.progress.aria")}
+          color={job.stage === "failed" ? "red" : undefined}
+          value={progressValue(job)}
+        />
+      </Progress.Root>
       {/* Install is the longest step in the wizard and used to show a single
           line of text. The checklist names what is done, what is running, and
           what is still ahead. */}
-      <ol className="provisioning-stage-list">
+      <List listStyleType="none" size="sm" spacing={6} type="ordered">
         {activeStages.map((stage) => {
           const index = activeStages.indexOf(stage);
           const currentIndex = activeStages.indexOf(
@@ -104,39 +118,53 @@ export function ProvisioningProgress({
             job.progress.completedStages?.includes(stage) === true ||
             (currentIndex >= 0 && index < currentIndex);
           const current = index === currentIndex && job.stage !== "ready";
+          const failed = current && job.stage === "failed";
           return (
-            <li
-              className="provisioning-stage-item"
+            <List.Item
+              c={failed ? "red" : current || done ? undefined : "dimmed"}
               data-state={
                 current
-                  ? job.stage === "failed"
+                  ? failed
                     ? "failed"
                     : "current"
                   : done
                     ? "done"
                     : "pending"
               }
+              fw={current ? 600 : undefined}
+              icon={
+                done ? (
+                  <CheckCircle2
+                    aria-hidden="true"
+                    color="var(--mantine-color-green-6)"
+                    size={14}
+                  />
+                ) : failed ? (
+                  <AlertTriangle aria-hidden="true" size={14} />
+                ) : current ? (
+                  <Loader size={12} />
+                ) : (
+                  <Circle aria-hidden="true" size={14} />
+                )
+              }
               key={stage}
             >
-              {done ? (
-                <CheckCircle2 aria-hidden="true" size={14} />
-              ) : current && job.stage === "failed" ? (
-                <AlertTriangle aria-hidden="true" size={14} />
-              ) : (
-                <Circle aria-hidden="true" size={14} />
-              )}
-              <span>{t(`provisioning.stage.${stage}`)}</span>
-            </li>
+              {t(`provisioning.stage.${stage}`)}
+            </List.Item>
           );
         })}
-      </ol>
+      </List>
       {job.error ? (
-        <div className="form-error" role="alert">
-          <AlertTriangle aria-hidden="true" size={16} />
-          <span>{job.error.message}</span>
-        </div>
+        <Alert
+          color="red"
+          icon={<AlertTriangle aria-hidden="true" size={16} />}
+          role="alert"
+          variant="light"
+        >
+          {job.error.message}
+        </Alert>
       ) : null}
-      <div className="provisioning-progress-actions">
+      <Group gap="sm">
         {job.error?.retryable ? (
           <Button
             disabled={busy}
@@ -155,7 +183,7 @@ export function ProvisioningProgress({
             {t("provisioning.action.cancel")}
           </Button>
         ) : null}
-      </div>
-    </section>
+      </Group>
+    </Stack>
   );
 }

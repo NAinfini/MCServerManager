@@ -7,6 +7,23 @@ import {
   RefreshCw,
   Trash2,
 } from "lucide-react";
+import {
+  ActionIcon,
+  Alert,
+  Anchor,
+  Badge,
+  Code,
+  Group,
+  Image,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  ThemeIcon,
+  Title,
+  Tooltip,
+} from "@mantine/core";
+import type { ReactNode } from "react";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { EmptyState } from "../../components/ui/empty-state";
@@ -29,14 +46,38 @@ import {
 import { javaDiagnosis } from "./javaDiagnosis";
 import { useJavaProvisioning, type JavaTarget } from "./useJavaProvisioning";
 
-function compatibilityClass(status: string) {
-  if (status === "compatible") {
-    return "java-status-compatible";
-  }
-  if (status === "warning") {
-    return "java-status-warning";
-  }
-  return "java-status-unknown";
+function compatibilityColor(status: string) {
+  if (status === "compatible") return "green";
+  if (status === "warning") return "yellow";
+  return "gray";
+}
+
+/* One surface per question the page answers, named by its heading so it reads
+   as a region. */
+function JavaPanel({
+  id,
+  title,
+  subtitle,
+  children,
+}: {
+  id: string;
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+}) {
+  return (
+    <Paper aria-labelledby={id} component="section" p="md">
+      <Group align="baseline" justify="space-between" mb="sm">
+        <Title id={id} order={3}>
+          {title}
+        </Title>
+        <Text c="dimmed" size="xs">
+          {subtitle}
+        </Text>
+      </Group>
+      {children}
+    </Paper>
+  );
 }
 
 function isAdoptiumRuntime(vendor?: string | null) {
@@ -161,23 +202,24 @@ export function JavaRuntimesView() {
       rowHeader: true,
       sortValue: (runtime) => runtime.majorVersion,
       cell: (runtime) => (
-        <span className="java-runtime-identity">
+        <Group gap="xs" wrap="nowrap">
           {isAdoptiumRuntime(runtime.vendor) ? (
-            <img
+            <Image
               alt=""
               aria-hidden="true"
-              className="provider-icon"
-              height="17"
+              h={18}
               src={publicAssetUrl("/brand/adoptium-logo.svg")}
-              width="17"
+              w={18}
             />
           ) : (
-            <span className="java-runtime-icon">
+            <ThemeIcon color="gray" size="sm" variant="light">
               <Coffee aria-hidden="true" size={14} />
-            </span>
+            </ThemeIcon>
           )}
-          <span>Java {runtime.majorVersion}</span>
-        </span>
+          <Text fw={600} size="sm" style={{ whiteSpace: "nowrap" }}>
+            Java {runtime.majorVersion}
+          </Text>
+        </Group>
       ),
     },
     {
@@ -203,31 +245,38 @@ export function JavaRuntimesView() {
           samePath(item.configuredJavaPath, runtime.path),
         );
         if (users.length === 0) {
-          return <span className="text-muted">{t("java.table.unused")}</span>;
+          return (
+            <Text c="dimmed" size="sm">
+              {t("java.table.unused")}
+            </Text>
+          );
         }
         /* One line, truncated, with the full name on hover — a server name can
            be longer than any column width worth giving it. The link is a real
            anchor so the name is also the way to go look at that server. */
         return (
-          <span
-            className="java-usedby"
+          <Text
+            maw={220}
+            size="sm"
             title={users.map((item) => item.serverName).join(", ")}
+            truncate
           >
             {users.map((item, index) => (
               <span key={item.serverId}>
                 {index > 0 ? ", " : null}
-                <a
+                <Anchor
                   href={toAppHash({
                     name: "server",
                     serverId: item.serverId,
                     section: "console",
                   })}
+                  size="sm"
                 >
                   {item.serverName}
-                </a>
+                </Anchor>
               </span>
             ))}
-          </span>
+          </Text>
         );
       },
     },
@@ -235,121 +284,146 @@ export function JavaRuntimesView() {
       id: "source",
       header: t("java.table.source"),
       cell: (runtime) => (
-        <span className="java-source-chip">
+        <Badge color="gray" size="sm" tt="none" variant="light">
           {runtimeSourceLabel(runtime.source, t)}
-        </span>
+        </Badge>
       ),
     },
     {
       id: "path",
       header: t("java.table.path"),
-      cellClassName: "path-cell",
       /* Paths run past any column width, so the cell shows what fits and keeps
          the rest one hover away rather than wrapping the whole row. */
-      cell: (runtime) => <span title={runtime.path}>{runtime.path}</span>,
+      cell: (runtime) => (
+        <Text
+          c="dimmed"
+          ff="monospace"
+          maw={320}
+          size="xs"
+          title={runtime.path}
+          truncate
+        >
+          {runtime.path}
+        </Text>
+      ),
     },
     {
       id: "actions",
       header: t("java.table.actions"),
-      cellClassName: "java-actions-cell",
+
       /* Only the runtimes this app downloaded. The others belong to the machine
          and are uninstalled the way they were installed; the backend refuses
          them too, so this is the honest affordance rather than the only guard. */
       cell: (runtime) =>
         runtime.managed ? (
-          <Button
-            disabled={removeMutation.isPending}
-            type="button"
-            variant="danger"
-            onClick={() => {
-              removeMutation.reset();
-              setPendingRemoval(runtime);
-            }}
-          >
-            <Trash2 aria-hidden="true" size={14} />
-            {t("common.delete")}
-          </Button>
+          <Tooltip label={t("common.delete")}>
+            <ActionIcon
+              aria-label={t("common.delete")}
+              color="red"
+              disabled={removeMutation.isPending}
+              onClick={() => {
+                removeMutation.reset();
+                setPendingRemoval(runtime);
+              }}
+            >
+              <Trash2 aria-hidden="true" size={16} />
+            </ActionIcon>
+          </Tooltip>
         ) : null,
     },
   ];
 
   return (
-    <section aria-labelledby="java-runtimes-title" className="java-page">
-      <div className="page-header">
-        <div>
-          <h1 id="java-runtimes-title" tabIndex={-1}>
-            {t("java.title")}
-          </h1>
-        </div>
-        <div className="page-header-actions">
-          <Button
-            disabled={javaQuery.isFetching}
-            variant="secondary"
-            onClick={() => javaQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("java.scan")}
-          </Button>
-        </div>
-      </div>
+    <Stack aria-labelledby="java-runtimes-title" component="section" gap="md">
+      <Group justify="space-between">
+        <Title id="java-runtimes-title" order={1} tabIndex={-1}>
+          {t("java.title")}
+        </Title>
+        <Button
+          disabled={javaQuery.isFetching}
+          variant="secondary"
+          onClick={() => javaQuery.refetch()}
+        >
+          <RefreshCw aria-hidden="true" size={16} />
+          {t("java.scan")}
+        </Button>
+      </Group>
 
       {javaQuery.isLoading ? (
         <LoadingState message={t("java.scanning")} />
       ) : null}
 
       {javaQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("java.scanError.title")}</strong>
-          <span>{javaQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => javaQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert
+          color="red"
+          role="alert"
+          title={t("java.scanError.title")}
+          variant="light"
+        >
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{javaQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => javaQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
 
       {javaQuery.data ? (
-        <div className="java-layout">
+        <>
           {/* Servers first. The page used to open on the runtime inventory and
               bury this at the bottom, which asked the reader to translate "I
               have these four Javas" into "so can my server start?" on their
               own. That translation is the product's job. */}
-          <section className="java-panel java-panel-servers">
-            <div className="section-heading">
-              <h2>{t("java.servers.title")}</h2>
-              <span>
-                {unresolved.length > 0
-                  ? t("java.servers.needAttention", {
-                      count: unresolved.length,
-                    })
-                  : t("java.servers.allReady")}
-              </span>
-            </div>
-            <div className="compatibility-list">
+          <JavaPanel
+            id="java-servers-title"
+            subtitle={
+              unresolved.length > 0
+                ? t("java.servers.needAttention", {
+                    count: unresolved.length,
+                  })
+                : t("java.servers.allReady")
+            }
+            title={t("java.servers.title")}
+          >
+            <Stack gap="xs">
               {compatibility.map((item) => {
                 const Icon =
                   item.status === "compatible" ? CheckCircle2 : AlertTriangle;
                 const required = item.requiredMajorVersion;
                 const usable = item.recommendedJavaPath;
                 return (
-                  <div className="compatibility-row" key={item.serverId}>
-                    <Icon
-                      aria-hidden="true"
-                      className={compatibilityClass(item.status)}
-                      size={17}
-                    />
-                    <div>
-                      <strong>{item.serverName}</strong>
-                      <span>{javaDiagnosis(item, t)}</span>
+                  <Group
+                    align="center"
+                    gap="sm"
+                    key={item.serverId}
+                    wrap="nowrap"
+                  >
+                    <ThemeIcon
+                      color={compatibilityColor(item.status)}
+                      size="md"
+                      variant="light"
+                    >
+                      <Icon aria-hidden="true" size={16} />
+                    </ThemeIcon>
+                    <Stack flex={1} gap={2} miw={0}>
+                      <Text fw={600} size="sm">
+                        {item.serverName}
+                      </Text>
+                      <Text c="dimmed" size="sm">
+                        {javaDiagnosis(item, t)}
+                      </Text>
                       {item.configuredJavaPath ? (
-                        <small className="java-runtime-path">
+                        <Text c="dimmed" ff="monospace" size="xs" truncate>
                           {item.configuredJavaPath}
-                        </small>
+                        </Text>
                       ) : null}
-                    </div>
+                    </Stack>
                     {item.status !== "compatible" &&
                     typeof required === "number" ? (
                       <Button
                         disabled={busy}
+                        style={{ flexShrink: 0 }}
                         type="button"
                         variant={usable ? "secondary" : "primary"}
                         onClick={() =>
@@ -367,13 +441,13 @@ export function JavaRuntimesView() {
                           : t("java.action.install", { version: required })}
                       </Button>
                     ) : null}
-                  </div>
+                  </Group>
                 );
               })}
               {applyError ? (
-                <p className="danger-text" role="alert">
+                <Text c="red" role="alert" size="sm">
                   {applyError}
-                </p>
+                </Text>
               ) : null}
               {compatibility.length === 0 ? (
                 <EmptyState
@@ -381,41 +455,39 @@ export function JavaRuntimesView() {
                   description={t("java.compatibility.empty.description")}
                 />
               ) : null}
-            </div>
-          </section>
+            </Stack>
+          </JavaPanel>
 
-          <section className="java-panel java-panel-installed">
-            <div className="section-heading">
-              <h2>{t("java.installed.title")}</h2>
-              <span>{t("java.detected", { count: runtimes.length })}</span>
-            </div>
+          <JavaPanel
+            id="java-installed-title"
+            subtitle={t("java.detected", { count: runtimes.length })}
+            title={t("java.installed.title")}
+          >
             {runtimes.length === 0 ? (
               <EmptyState
-                illustration="/illustrations/no-java.png"
                 title={t("java.empty.title")}
                 description={t("java.empty.description")}
               />
             ) : (
-              <div className="java-table-scroll">
+              <Table.ScrollContainer minWidth={860}>
                 <DataTable
                   caption={t("java.installed.title")}
-                  className="java-table"
                   columns={runtimeColumns}
                   getRowKey={(runtime) => `${runtime.path}-${runtime.version}`}
                   rows={runtimes}
                 />
-              </div>
+              </Table.ScrollContainer>
             )}
-          </section>
+          </JavaPanel>
 
-          <section className="java-panel java-panel-acquire">
-            <div className="section-heading">
-              <h2>{t("java.managed.title")}</h2>
-              <span>{t("java.managed.subtitle")}</span>
-            </div>
-            <div className="java-panel-body">
-              <p>{t("java.managed.description")}</p>
-              <div className="java-acquire-actions">
+          <JavaPanel
+            id="java-acquire-title"
+            subtitle={t("java.managed.subtitle")}
+            title={t("java.managed.title")}
+          >
+            <Stack gap="sm">
+              <Text size="sm">{t("java.managed.description")}</Text>
+              <Group gap="xs">
                 {acquirable.map((entry) => (
                   <Button
                     disabled={busy}
@@ -427,60 +499,62 @@ export function JavaRuntimesView() {
                     {t("java.action.install", { version: entry.majorVersion })}
                   </Button>
                 ))}
-                <span className="java-acquire-links">
-                  <a
+                <Group gap="md" ml="xs">
+                  <Anchor
                     href="https://www.java.com/download/"
                     rel="noreferrer noopener"
+                    size="sm"
                     target="_blank"
                   >
                     {t("java.managed.oracleLink")}
-                  </a>
-                  <a
+                  </Anchor>
+                  <Anchor
                     href={javaDownloadUrl(
                       acquirable[acquirable.length - 1].majorVersion,
                     )}
                     rel="noreferrer noopener"
+                    size="sm"
                     target="_blank"
                   >
                     {t("java.managed.temurinLink")}
-                  </a>
-                </span>
-              </div>
-            </div>
-          </section>
+                  </Anchor>
+                </Group>
+              </Group>
+            </Stack>
+          </JavaPanel>
 
           {javaQuery.data.failures.length > 0 ? (
-            <section className="java-panel java-panel-failures">
-              <div className="section-heading">
-                <h2>{t("java.failures.title")}</h2>
-                <span>
-                  {t("java.failures.count", {
-                    count: javaQuery.data.failures.length,
-                  })}
-                </span>
-              </div>
-              <div className="failure-list">
+            <JavaPanel
+              id="java-failures-title"
+              subtitle={t("java.failures.count", {
+                count: javaQuery.data.failures.length,
+              })}
+              title={t("java.failures.title")}
+            >
+              <Stack gap="xs">
                 {javaQuery.data.failures.map((failure) => (
-                  <div
-                    className="failure-row"
-                    key={`${failure.path}-${failure.source}`}
-                  >
-                    <strong>{runtimeSourceLabel(failure.source, t)}</strong>
-                    <span>{failure.path}</span>
-                    <small>{failureMessage(failure, t)}</small>
-                  </div>
+                  <Stack gap={2} key={`${failure.path}-${failure.source}`}>
+                    <Text fw={600} size="sm">
+                      {runtimeSourceLabel(failure.source, t)}
+                    </Text>
+                    <Text c="dimmed" ff="monospace" size="xs">
+                      {failure.path}
+                    </Text>
+                    <Text c="red" size="xs">
+                      {failureMessage(failure, t)}
+                    </Text>
+                  </Stack>
                 ))}
-              </div>
-            </section>
+              </Stack>
+            </JavaPanel>
           ) : null}
-        </div>
+        </>
       ) : null}
 
       {/* Deleting files off disk is not undoable, so it is confirmed. The
           dialog names the exact folder that goes, because "Java 25" is not
           enough to tell two installs apart. */}
       <DialogSurface
-        className="java-remove-dialog"
         description={t("java.remove.description")}
         open={pendingRemoval !== null}
         title={t("java.remove.title", {
@@ -510,15 +584,15 @@ export function JavaRuntimesView() {
           if (!open) setPendingRemoval(null);
         }}
       >
-        <p className="java-runtime-path">{pendingRemoval?.path}</p>
+        <Code block>{pendingRemoval?.path}</Code>
         {removeMutation.error ? (
-          <div className="inline-error" role="alert">
+          <Alert color="red" mt="sm" role="alert" variant="light">
             {removeMutation.error.message}
-          </div>
+          </Alert>
         ) : null}
       </DialogSurface>
 
       {installDialog}
-    </section>
+    </Stack>
   );
 }

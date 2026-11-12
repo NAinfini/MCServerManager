@@ -53,7 +53,9 @@ async function openComposer() {
 }
 
 async function chooseAction(optionName: string) {
-  await userEvent.click(await screen.findByLabelText(/action/i));
+  await userEvent.click(
+    await screen.findByRole("combobox", { name: /action/i }),
+  );
   await userEvent.click(
     await screen.findByRole("option", { name: optionName }),
   );
@@ -149,14 +151,16 @@ describe("ScheduledTasksView", () => {
     fireEvent.change(await screen.findByLabelText(/task name/i), {
       target: { value: "Weekly full backup" },
     });
-    await userEvent.click(screen.getByLabelText("Schedule"));
+    await userEvent.click(screen.getByRole("combobox", { name: "Schedule" }));
     await userEvent.click(
       await screen.findByRole("option", { name: "Weekly at a set time" }),
     );
     fireEvent.change(screen.getByLabelText("Local time"), {
       target: { value: "02:30" },
     });
-    await userEvent.click(screen.getByLabelText("Backup profile"));
+    await userEvent.click(
+      screen.getByRole("combobox", { name: "Backup profile" }),
+    );
     await userEvent.click(
       await screen.findByRole("option", { name: "Full server" }),
     );

@@ -1,4 +1,4 @@
-import { LoaderCircle } from "lucide-react";
+import { Group, Loader, Skeleton, Stack, Text } from "@mantine/core";
 import { useAppSettings } from "../../i18n";
 
 interface LoadingStateProps {
@@ -13,28 +13,27 @@ export function LoadingState({
   const { t } = useAppSettings();
   const label = message ?? t("common.loading");
 
+  if (variant === "skeleton") {
+    return (
+      <Stack aria-live="polite" gap="sm" p="md" role="status">
+        <Stack aria-hidden="true" className="loading-skeleton" gap="xs">
+          <Skeleton h={14} />
+          <Skeleton h={14} w="80%" />
+          <Skeleton h={14} w="60%" />
+        </Stack>
+        <Text c="dimmed" size="sm">
+          {label}
+        </Text>
+      </Stack>
+    );
+  }
+
   return (
-    <div
-      className={
-        variant === "skeleton"
-          ? "list-state loading-state-skeleton"
-          : "list-state"
-      }
-      role="status"
-      aria-live="polite"
-    >
-      {variant === "skeleton" ? (
-        <div className="loading-skeleton" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      ) : (
-        <div className="loading-spinner" aria-hidden="true">
-          <LoaderCircle size={28} strokeWidth={2} />
-        </div>
-      )}
-      <span>{label}</span>
-    </div>
+    <Group aria-live="polite" gap="sm" justify="center" p="xl" role="status">
+      <Loader aria-hidden="true" size="sm" />
+      <Text c="dimmed" size="sm">
+        {label}
+      </Text>
+    </Group>
   );
 }

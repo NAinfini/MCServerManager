@@ -5,7 +5,20 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Bell, Check, RefreshCw } from "lucide-react";
+import {
+  Alert,
+  ButtonGroup,
+  Divider,
+  Group,
+  Paper,
+  Radio,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from "@mantine/core";
+import { RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
@@ -111,42 +124,33 @@ export function ContentUpdatePolicyView({
     exceptionQueries.some((query) => query.isLoading)
   ) {
     return (
-      <section
-        className="settings-panel content-update-policy"
-        aria-label={t("content.policy.title")}
-      >
+      <Paper aria-label={t("content.policy.title")} component="section" p="md">
         <LoadingState message={t("content.policy.loading")} />
-      </section>
+      </Paper>
     );
   }
   const exceptionError = exceptionQueries.find((query) => query.error)?.error;
   if (policyQuery.error || contentQuery.error || exceptionError) {
     const error = policyQuery.error ?? contentQuery.error ?? exceptionError;
     return (
-      <section
-        className="settings-panel content-update-policy"
-        aria-label={t("content.policy.title")}
-      >
-        <div
-          aria-label={t("content.policy.loadError")}
-          className="list-state list-state-error"
-          role="alert"
-        >
-          <strong>{t("content.policy.loadError")}</strong>
-          <span>{error?.message}</span>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              void policyQuery.refetch();
-              void contentQuery.refetch();
-              exceptionQueries.forEach((query) => void query.refetch());
-            }}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("common.retry")}
-          </Button>
-        </div>
-      </section>
+      <Paper aria-label={t("content.policy.title")} component="section" p="md">
+        <Alert color="red" title={t("content.policy.loadError")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{error?.message}</Text>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                void policyQuery.refetch();
+                void contentQuery.refetch();
+                exceptionQueries.forEach((query) => void query.refetch());
+              }}
+            >
+              <RefreshCw aria-hidden="true" size={16} />
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
+      </Paper>
     );
   }
 
@@ -174,133 +178,124 @@ export function ContentUpdatePolicyView({
     ]),
   );
 
+  const policyOf = (content: InstalledContent) =>
+    exceptionByContentId.get(content.contentId ?? content.id)?.policy;
+  const exceptionChoices = [
+    { policy: "manual_only", label: t("content.policy.allowUpdates") },
+    { policy: "pin_current", label: t("content.policy.keepCurrent") },
+    { policy: "ignore_update", label: t("content.policy.ignore") },
+  ] as const;
+
   return (
-    <section
-      className="settings-panel content-update-policy"
-      aria-label={t("content.policy.title")}
-    >
-      <div className="content-toolbar">
-        <div>
-          <strong>{t("content.policy.title")}</strong>
-          <span>{t("content.policy.description")}</span>
-        </div>
-      </div>
-      <div
-        aria-label={t("content.policy.defaultBehavior")}
-        className="settings-grid"
-        role="radiogroup"
-      >
-        {options.map((option) => (
-          <button
-            aria-checked={preference === option.value}
-            className={
-              preference === option.value
-                ? "button button-primary"
-                : "button button-secondary"
-            }
-            disabled={savePreference.isPending}
-            key={option.value}
-            role="radio"
-            type="button"
-            onClick={() => savePreference.mutate(option.value)}
-          >
-            {preference === option.value ? (
-              <Check aria-hidden="true" size={16} />
-            ) : (
-              <Bell aria-hidden="true" size={16} />
-            )}
-            <span>
-              <strong>{option.title}</strong>
-              <small>{option.body}</small>
-            </span>
-          </button>
-        ))}
-      </div>
-      {savePreference.error || saveException.error ? (
-        <div className="inline-error" role="alert">
-          {(savePreference.error ?? saveException.error)?.message}
-        </div>
-      ) : null}
-      {/* Not a `.list-state`: that class is the centred placeholder shown when a
-          list has nothing in it, and wearing it centred this whole section and
-          floated its bullets. */}
-      <div className="policy-exceptions">
-        <div className="policy-exceptions-heading">
-          <strong>{t("content.policy.exceptions")}</strong>
-          <span>{t("content.policy.exceptionsDescription")}</span>
-        </div>
-        {(contentQuery.data ?? []).length === 0 ? (
-          <p className="settings-notice">
-            {t("content.policy.exceptionsEmpty")}
-          </p>
-        ) : (
-          <ul>
-            {(contentQuery.data ?? []).map((content) => (
-              <li key={content.id}>
-                <span>
-                  <strong>{content.name}</strong>
-                  <small>{content.version ?? t("common.unknown")}</small>
-                  <small className="policy-current-state">
-                    {t("content.policy.currentState", {
-                      state: t(
-                        `content.policy.state.${
-                          exceptionByContentId.get(
-                            content.contentId ?? content.id,
-                          )?.policy ?? "manual_only"
-                        }`,
-                      ),
-                    })}
-                  </small>
-                </span>
-                <span>
-                  <Button
-                    disabled={saveException.isPending}
-                    variant={
-                      exceptionByContentId.get(content.contentId ?? content.id)
-                        ?.policy === "manual_only"
-                        ? "primary"
-                        : "secondary"
-                    }
-                    onClick={() =>
-                      saveException.mutate({ content, policy: "manual_only" })
-                    }
-                  >
-                    {t("content.policy.allowUpdates")}
-                  </Button>
-                  <Button
-                    disabled={saveException.isPending}
-                    variant={
-                      exceptionByContentId.get(content.contentId ?? content.id)
-                        ?.policy === "pin_current"
-                        ? "primary"
-                        : "secondary"
-                    }
-                    onClick={() =>
-                      saveException.mutate({ content, policy: "pin_current" })
-                    }
-                  >
-                    {t("content.policy.keepCurrent")}
-                  </Button>
-                  <Button
-                    disabled={saveException.isPending}
-                    variant={
-                      exceptionByContentId.get(content.contentId ?? content.id)
-                        ?.policy === "ignore_update"
-                        ? "primary"
-                        : "secondary"
-                    }
-                    onClick={() =>
-                      saveException.mutate({ content, policy: "ignore_update" })
-                    }
-                  >
-                    {t("content.policy.ignore")}
-                  </Button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
+    <Paper aria-label={t("content.policy.title")} component="section" p="md">
+      <Stack gap="md">
+        <Stack gap={2}>
+          <Title order={3}>{t("content.policy.title")}</Title>
+          <Text c="dimmed" size="sm">
+            {t("content.policy.description")}
+          </Text>
+        </Stack>
+        <SimpleGrid
+          aria-label={t("content.policy.defaultBehavior")}
+          cols={{ base: 1, sm: 3 }}
+          role="radiogroup"
+          spacing="sm"
+        >
+          {options.map((option) => (
+            <Radio.Card
+              checked={preference === option.value}
+              disabled={savePreference.isPending}
+              key={option.value}
+              p="sm"
+              onClick={() => savePreference.mutate(option.value)}
+            >
+              <Group align="flex-start" gap="sm" wrap="nowrap">
+                <Radio.Indicator />
+                <Stack gap={2}>
+                  <Text fw={600} size="sm">
+                    {option.title}
+                  </Text>
+                  <Text c="dimmed" size="xs">
+                    {option.body}
+                  </Text>
+                </Stack>
+              </Group>
+            </Radio.Card>
+          ))}
+        </SimpleGrid>
+        {savePreference.error || saveException.error ? (
+          <Alert color="red">
+            {(savePreference.error ?? saveException.error)?.message}
+          </Alert>
+        ) : null}
+        <Divider />
+        <Stack gap="xs">
+          <Stack gap={2}>
+            <Title order={4}>{t("content.policy.exceptions")}</Title>
+            <Text c="dimmed" size="xs">
+              {t("content.policy.exceptionsDescription")}
+            </Text>
+          </Stack>
+          {(contentQuery.data ?? []).length === 0 ? (
+            <Text c="dimmed" size="sm">
+              {t("content.policy.exceptionsEmpty")}
+            </Text>
+          ) : (
+            <Table.ScrollContainer minWidth={560}>
+              <Table highlightOnHover verticalSpacing="xs">
+                <Table.Tbody>
+                  {(contentQuery.data ?? []).map((content) => (
+                    <Table.Tr key={content.id}>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <Text fw={500} size="sm">
+                            {content.name}
+                          </Text>
+                          <Text c="dimmed" ff="monospace" size="xs">
+                            {content.version ?? t("common.unknown")}
+                          </Text>
+                        </Group>
+                        <Text c="dimmed" size="xs">
+                          {t("content.policy.currentState", {
+                            state: t(
+                              `content.policy.state.${
+                                policyOf(content) ?? "manual_only"
+                              }`,
+                            ),
+                          })}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <ButtonGroup>
+                          {exceptionChoices.map((choice) => (
+                            <Button
+                              disabled={saveException.isPending}
+                              key={choice.policy}
+                              variant={
+                                policyOf(content) === choice.policy
+                                  ? "primary"
+                                  : "secondary"
+                              }
+                              onClick={() =>
+                                saveException.mutate({
+                                  content,
+                                  policy: choice.policy,
+                                })
+                              }
+                            >
+                              {choice.label}
+                            </Button>
+                          ))}
+                        </ButtonGroup>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </Stack>
+      </Stack>
+    </Paper>
   );
 }

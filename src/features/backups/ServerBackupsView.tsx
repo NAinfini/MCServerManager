@@ -9,15 +9,33 @@ import {
   ShieldCheck,
   Trash2,
 } from "lucide-react";
+import {
+  Accordion,
+  ActionIcon,
+  Alert,
+  Badge,
+  Box,
+  Checkbox,
+  Code,
+  Group,
+  NumberInput,
+  Paper,
+  ScrollArea,
+  SimpleGrid,
+  Stack,
+  Switch,
+  Table,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+  Tooltip,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
-import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { PathField } from "../../components/ui/path-field";
 import { Select } from "../../components/ui/select";
-import { Switch } from "../../components/ui/switch";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { formatDateTime } from "../../lib/date-format";
@@ -40,8 +58,6 @@ import {
 } from "./backupApi";
 import { BackupProfilesView } from "./BackupProfilesView";
 import { backupKeys } from "./queries";
-import "../files/operations.css";
-import "../../styles/backups.css";
 
 interface ServerBackupsViewProps {
   server: ServerProfile;
@@ -141,9 +157,7 @@ function draftFrom(settings: BackupSettings): SettingsDraft {
     keepRecent: String(settings.keepRecent),
     keepDaily: String(settings.keepDaily),
     keepWeekly: String(settings.keepWeekly),
-    maxTotalGb: settings.maxTotalMb
-      ? String(settings.maxTotalMb / 1024)
-      : "",
+    maxTotalGb: settings.maxTotalMb ? String(settings.maxTotalMb / 1024) : "",
     location: settings.location ?? "",
   };
 }
@@ -215,127 +229,133 @@ function BackupSettingsPanel({
   const retentionValid = [draft.keepRecent, draft.keepDaily, draft.keepWeekly]
     .map(Number)
     .every((value) => Number.isInteger(value) && value >= 0);
-  const capValid =
-    !draft.maxTotalGb.trim() || Number(draft.maxTotalGb) > 0;
-  const canSave =
-    retentionValid && capValid && Number(draft.keepRecent) >= 1;
+  const capValid = !draft.maxTotalGb.trim() || Number(draft.maxTotalGb) > 0;
+  const canSave = retentionValid && capValid && Number(draft.keepRecent) >= 1;
 
   return (
     <form
-      className="bk-settings-form"
       onSubmit={(event) => {
         event.preventDefault();
         saveMutation.mutate();
       }}
     >
-      <div className="bk-field bk-field-inline">
+      <Stack gap="md">
         <Switch
           aria-label={t("backups.settings.enabled")}
           checked={draft.enabled}
-          onCheckedChange={(checked) => patch({ enabled: checked })}
+          label={t("backups.settings.enabled")}
+          onChange={(event) => patch({ enabled: event.currentTarget.checked })}
         />
-        <span>{t("backups.settings.enabled")}</span>
-      </div>
-      <div className="bk-field">
-        <span className="bk-field-label">{t("backups.settings.interval")}</span>
-        <Select
-          ariaLabel={t("backups.settings.interval")}
-          disabled={!draft.enabled}
-          options={intervalOptions}
-          value={String(draft.intervalMinutes)}
-          onValueChange={(value) => patch({ intervalMinutes: Number(value) })}
-        />
-      </div>
-      <div className="bk-field">
-        <span className="bk-field-label">{t("backups.settings.also")}</span>
-        <label className="bk-check">
-          <Checkbox
-            checked={draft.beforeRestart}
-            onCheckedChange={(checked) =>
-              patch({ beforeRestart: checked === true })
-            }
-          />
-          {t("backups.settings.beforeRestart")}
-        </label>
-        <label className="bk-check">
-          <Checkbox
-            checked={draft.beforeUpdate}
-            onCheckedChange={(checked) =>
-              patch({ beforeUpdate: checked === true })
-            }
-          />
-          {t("backups.settings.beforeUpdate")}
-        </label>
-      </div>
-      <div className="bk-field bk-field-wide">
-        <span className="bk-field-label">{t("backups.settings.keep")}</span>
-        <div className="bk-keep">
-          {(
-            [
-              ["keepRecent", "backups.settings.keepRecent"],
-              ["keepDaily", "backups.settings.keepDaily"],
-              ["keepWeekly", "backups.settings.keepWeekly"],
-            ] as const
-          ).map(([key, label]) => (
-            <label key={key}>
-              <span>{t(label)}</span>
-              <TextField
-                inputMode="numeric"
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <Stack gap={4}>
+            <Text fw={500} size="sm">
+              {t("backups.settings.interval")}
+            </Text>
+            <Select
+              ariaLabel={t("backups.settings.interval")}
+              disabled={!draft.enabled}
+              options={intervalOptions}
+              value={String(draft.intervalMinutes)}
+              onValueChange={(value) =>
+                patch({ intervalMinutes: Number(value) })
+              }
+            />
+          </Stack>
+          <Stack gap={6}>
+            <Text fw={500} size="sm">
+              {t("backups.settings.also")}
+            </Text>
+            <Checkbox
+              checked={draft.beforeRestart}
+              label={t("backups.settings.beforeRestart")}
+              onChange={(event) =>
+                patch({ beforeRestart: event.currentTarget.checked })
+              }
+            />
+            <Checkbox
+              checked={draft.beforeUpdate}
+              label={t("backups.settings.beforeUpdate")}
+              onChange={(event) =>
+                patch({ beforeUpdate: event.currentTarget.checked })
+              }
+            />
+          </Stack>
+        </SimpleGrid>
+        <Stack gap={4}>
+          <Text fw={500} size="sm">
+            {t("backups.settings.keep")}
+          </Text>
+          <SimpleGrid cols={3} spacing="sm">
+            {(
+              [
+                ["keepRecent", "backups.settings.keepRecent"],
+                ["keepDaily", "backups.settings.keepDaily"],
+                ["keepWeekly", "backups.settings.keepWeekly"],
+              ] as const
+            ).map(([key, label]) => (
+              <NumberInput
+                allowDecimal={false}
+                allowNegative={false}
+                key={key}
+                label={t(label)}
                 min={key === "keepRecent" ? 1 : 0}
-                type="number"
                 value={draft[key]}
-                onChange={(event) => patch({ [key]: event.target.value })}
+                onChange={(value) => patch({ [key]: String(value) })}
               />
-            </label>
-          ))}
-        </div>
-        <p className="bk-help">{t("backups.settings.keepHelp")}</p>
-      </div>
-      <div className="bk-field">
-        <label className="bk-field-label" htmlFor={`backup-cap-${server.id}`}>
-          {t("backups.settings.cap")}
-        </label>
-        <input
-          className="text-input"
+            ))}
+          </SimpleGrid>
+          <Text c="dimmed" size="xs">
+            {t("backups.settings.keepHelp")}
+          </Text>
+        </Stack>
+        <TextInput
+          autoComplete="off"
+          description={t("backups.settings.capHelp")}
+          ff="monospace"
           id={`backup-cap-${server.id}`}
           inputMode="decimal"
+          label={t("backups.settings.cap")}
+          maw={240}
           placeholder={t("backups.settings.capAuto")}
           value={draft.maxTotalGb}
           onChange={(event) => patch({ maxTotalGb: event.target.value })}
         />
-        <p className="bk-help">{t("backups.settings.capHelp")}</p>
-      </div>
-      <div className="bk-field bk-field-wide">
-        <span className="bk-field-label">{t("backups.settings.location")}</span>
-        <PathField
-          aria-label={t("backups.settings.location")}
-          browseLabel={t("backups.settings.browse")}
-          placeholder={t("backups.settings.locationDefault")}
-          value={draft.location}
-          onBrowse={() => browseMutation.mutate()}
-          onChange={(event) => patch({ location: event.target.value })}
-        />
-        <p className="bk-help">{t("backups.settings.locationHelp")}</p>
-      </div>
-      {saveMutation.error ? (
-        <p className="danger-text bk-form-note" role="alert">
-          {saveMutation.error.message}
-        </p>
-      ) : null}
-      {saved ? (
-        <p className="bk-form-note" role="status">
-          {t("backups.settings.saved")}
-        </p>
-      ) : null}
-      <div className="bk-form-actions">
-        <Button
-          disabled={saveMutation.isPending || !canSave}
-          type="submit"
-          variant="primary"
-        >
-          {t("backups.settings.save")}
-        </Button>
-      </div>
+        <Stack gap={4}>
+          <Text fw={500} size="sm">
+            {t("backups.settings.location")}
+          </Text>
+          <PathField
+            aria-label={t("backups.settings.location")}
+            browseLabel={t("backups.settings.browse")}
+            placeholder={t("backups.settings.locationDefault")}
+            value={draft.location}
+            onBrowse={() => browseMutation.mutate()}
+            onChange={(event) => patch({ location: event.target.value })}
+          />
+          <Text c="dimmed" size="xs">
+            {t("backups.settings.locationHelp")}
+          </Text>
+        </Stack>
+        {saveMutation.error ? (
+          <Alert color="red" py="xs">
+            {saveMutation.error.message}
+          </Alert>
+        ) : null}
+        <Group justify="flex-end">
+          {saved ? (
+            <Text c="dimmed" role="status" size="sm">
+              {t("backups.settings.saved")}
+            </Text>
+          ) : null}
+          <Button
+            disabled={saveMutation.isPending || !canSave}
+            type="submit"
+            variant="primary"
+          >
+            {t("backups.settings.save")}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }
@@ -361,7 +381,10 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
   // "Next backup in 3 hours" must not freeze while the page stays open.
   const [, setTick] = useState(0);
   useEffect(() => {
-    const timer = window.setInterval(() => setTick((value) => value + 1), 60_000);
+    const timer = window.setInterval(
+      () => setTick((value) => value + 1),
+      60_000,
+    );
     return () => window.clearInterval(timer);
   }, []);
   const refreshAll = () =>
@@ -504,138 +527,158 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
     (backup.format ?? "full") === "full";
 
   return (
-    <section
-      className="backups-panel bk-page"
+    <Stack
       aria-label={t("backups.aria")}
+      component="section"
       data-testid="backups-page"
+      gap="md"
     >
-      <div
-        className="bk-status"
-        data-testid="backups-status"
-        data-tone={tone}
-        role="status"
-      >
-        <span aria-hidden="true" className="bk-status-icon">
-          {tone === "ok" ? (
-            <ShieldCheck size={20} />
-          ) : (
-            <ShieldAlert size={20} />
-          )}
-        </span>
-        <div className="bk-status-copy">
-          <strong>{headline}</strong>
-          {detailParts.length ? <span>{detailParts.join(" · ")}</span> : null}
-        </div>
-        <Button
-          disabled={createMutation.isPending}
-          variant="primary"
-          onClick={() => createMutation.mutate()}
-        >
-          <Archive aria-hidden="true" size={15} />
-          {createMutation.isPending
-            ? t("backups.creating")
-            : t("backups.now")}
-        </Button>
-      </div>
+      <Paper data-testid="backups-status" data-tone={tone} p="md" role="status">
+        <Group justify="space-between" wrap="nowrap">
+          <Group gap="sm" miw={0} wrap="nowrap">
+            <ThemeIcon
+              aria-hidden="true"
+              color={tone === "ok" ? "green" : "yellow"}
+              size="lg"
+              variant="light"
+            >
+              {tone === "ok" ? (
+                <ShieldCheck size={18} />
+              ) : (
+                <ShieldAlert size={18} />
+              )}
+            </ThemeIcon>
+            <Box miw={0}>
+              <Text fw={600}>{headline}</Text>
+              {detailParts.length ? (
+                <Text c="dimmed" size="sm">
+                  {detailParts.join(" · ")}
+                </Text>
+              ) : null}
+            </Box>
+          </Group>
+          <Button
+            disabled={createMutation.isPending}
+            variant="primary"
+            onClick={() => createMutation.mutate()}
+          >
+            <Archive aria-hidden="true" size={14} />
+            {createMutation.isPending
+              ? t("backups.creating")
+              : t("backups.now")}
+          </Button>
+        </Group>
+      </Paper>
 
       {createMutation.error ? (
-        <div className="inline-error backups-error" role="alert">
+        <Alert color="red" py="xs" role="alert">
           {createMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
       {restoreMutation.error ? (
-        <div className="inline-error backups-error">
+        <Alert color="red" py="xs">
           {restoreMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
       {deleteMutation.error ? (
-        <div className="inline-error backups-error">
+        <Alert color="red" py="xs">
           {deleteMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
       {exportMutation.error ? (
-        <div className="inline-error backups-error">
+        <Alert color="red" py="xs">
           {exportMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
       {exportMutation.data?.exportedPath ? (
-        <div className="success-panel backups-note" role="status">
+        <Alert color="green" py="xs" role="status">
           {t("backups.exported", { path: exportMutation.data.exportedPath })}
-        </div>
+        </Alert>
       ) : null}
 
       {restoreBackup ? (
-        <form
-          className="inline-dialog backup-restore-dialog"
-          onSubmit={(event) => {
-            event.preventDefault();
-            restoreMutation.reset();
-            previewMutation.mutate();
-          }}
-        >
-          <div>
-            <h3>
-              {t("backups.restore.title", { world: restoreBackup.worldName })}
-            </h3>
-            <p>{t("backups.restore.description")}</p>
-          </div>
-          {expectsWorldTarget ? (
-            <label>
-              <span>{t("backups.restore.target")}</span>
-              <TextField
-                autoFocus
-                required
-                placeholder={restoreBackup.worldName}
-                value={targetWorldDir}
-                onChange={(event) => {
-                  setTargetWorldDir(event.target.value);
-                  setRestorePreview(null);
-                  previewMutation.reset();
-                }}
-              />
-            </label>
-          ) : (
-            <p className="info-note">{t("backups.restore.fullScope")}</p>
-          )}
-          {expectsWorldTarget && !canRestoreTarget ? (
-            <p className="danger-text">{t("backups.restore.invalidTarget")}</p>
-          ) : null}
-          {previewMutation.error ? (
-            <p className="danger-text" role="alert">
-              {previewMutation.error.message}
-            </p>
-          ) : null}
-          <div className="dialog-actions">
-            <Button
-              disabled={restoreMutation.isPending}
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                restoreMutation.reset();
-                setIsRestoreConfirmOpen(false);
-                setRestoreBackup(null);
-                setRestorePreview(null);
-                setTargetWorldDir("");
-              }}
-            >
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={
-                previewMutation.isPending ||
-                restoreMutation.isPending ||
-                !canRestoreTarget
-              }
-              type="submit"
-              variant="danger"
-            >
-              <ScanSearch aria-hidden="true" size={14} />
-              {previewMutation.isPending
-                ? t("backups.restore.previewing")
-                : t("backups.restore.preview")}
-            </Button>
-          </div>
-        </form>
+        <Paper p="md">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              restoreMutation.reset();
+              previewMutation.mutate();
+            }}
+          >
+            <Stack gap="sm">
+              <Box>
+                <Title order={4}>
+                  {t("backups.restore.title", {
+                    world: restoreBackup.worldName,
+                  })}
+                </Title>
+                <Text c="dimmed" size="sm">
+                  {t("backups.restore.description")}
+                </Text>
+              </Box>
+              {expectsWorldTarget ? (
+                <TextInput
+                  autoFocus
+                  required
+                  autoComplete="off"
+                  error={
+                    canRestoreTarget
+                      ? undefined
+                      : t("backups.restore.invalidTarget")
+                  }
+                  ff="monospace"
+                  label={t("backups.restore.target")}
+                  maw={360}
+                  placeholder={restoreBackup.worldName}
+                  value={targetWorldDir}
+                  withAsterisk={false}
+                  onChange={(event) => {
+                    setTargetWorldDir(event.target.value);
+                    setRestorePreview(null);
+                    previewMutation.reset();
+                  }}
+                />
+              ) : (
+                <Text size="sm">{t("backups.restore.fullScope")}</Text>
+              )}
+              {previewMutation.error ? (
+                <Alert color="red" py="xs" role="alert">
+                  {previewMutation.error.message}
+                </Alert>
+              ) : null}
+              <Group gap="xs" justify="flex-end">
+                <Button
+                  disabled={restoreMutation.isPending}
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    restoreMutation.reset();
+                    setIsRestoreConfirmOpen(false);
+                    setRestoreBackup(null);
+                    setRestorePreview(null);
+                    setTargetWorldDir("");
+                  }}
+                >
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  disabled={
+                    previewMutation.isPending ||
+                    restoreMutation.isPending ||
+                    !canRestoreTarget
+                  }
+                  type="submit"
+                  variant="danger"
+                >
+                  <ScanSearch aria-hidden="true" size={14} />
+                  {previewMutation.isPending
+                    ? t("backups.restore.previewing")
+                    : t("backups.restore.preview")}
+                </Button>
+              </Group>
+            </Stack>
+          </form>
+        </Paper>
       ) : null}
 
       {backupsQuery.isLoading ? (
@@ -643,158 +686,211 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
       ) : null}
 
       {backupsQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("backups.loadError.title")}</strong>
-          <span>{backupsQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => backupsQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert color="red" role="alert" title={t("backups.loadError.title")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{backupsQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => backupsQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
 
       {!backupsQuery.isLoading &&
       !backupsQuery.error &&
       backups.length === 0 ? (
-        <EmptyState
-          illustration="/illustrations/no-backups.png"
-          title={t("backups.empty.title")}
-          description={t("backups.empty.description")}
-        />
+        <Paper p="md">
+          <Text fw={600} size="sm">
+            {t("backups.empty.title")}
+          </Text>
+          <Text c="dimmed" size="sm">
+            {t("backups.empty.description")}
+          </Text>
+        </Paper>
       ) : null}
 
       {backups.length > 0 ? (
-        <div className="bk-list-panel" data-testid="backups-list">
-          <div className="bk-list-head">
-            <span>{t("backups.points.title")}</span>
-            <span>{t("backups.points.count", { count: backups.length })}</span>
-          </div>
-          <ul aria-label={t("backups.points.title")} className="bk-list">
-            {backups.map((backup) => {
-              const completed = backup.status === "completed";
-              return (
-                <li
-                  className={`bk-row${completed ? "" : " is-failed"}`}
-                  data-testid="backup-row"
-                  key={backup.id}
-                >
-                  <div className="bk-row-when">
-                    <strong>{formatDateTime(backup.createdAt, language)}</strong>
-                    <span>{formatRelativeTime(backup.createdAt, language)}</span>
-                  </div>
-                  <span className="bk-row-kind">
-                    {triggerLabel(backup, t)}
-                    {isLegacyCopy(backup) ? (
-                      <small>{t("backups.format.full")}</small>
-                    ) : backup.kind === "fullServer" ? (
-                      <small>{t("backups.format.fullServer")}</small>
-                    ) : null}
-                  </span>
-                  <span className="bk-row-size">
-                    {completed ? (
-                      <>
-                        {formatBytes(backup.logicalBytes ?? backup.sizeBytes)}
-                        {!isLegacyCopy(backup) &&
-                        backup.newBytes !== undefined ? (
-                          <small>
-                            {t("backups.points.added", {
-                              size: formatBytes(backup.newBytes),
-                            })}
-                          </small>
-                        ) : null}
-                      </>
-                    ) : (
-                      t("backups.failed")
-                    )}
-                  </span>
-                  <code
-                    className="bk-row-path"
-                    title={backup.error ?? backup.archivePath}
-                  >
-                    {backup.error ?? baseName(backup.archivePath)}
-                  </code>
-                  <div className="bk-row-actions">
-                    <Button
-                      aria-label={t("backups.restore.titleAttr")}
-                      className="icon-button"
-                      disabled={
-                        !completed || restoreBlocked || restoreMutation.isPending
-                      }
-                      title={
-                        restoreBlocked
-                          ? t("backups.restore.runningTitle")
-                          : completed
-                            ? t("backups.restore.titleAttr")
-                            : t("backups.restore.unavailableTitle")
-                      }
-                      variant="ghost"
-                      onClick={() => {
-                        restoreMutation.reset();
-                        setRestoreBackup(backup);
-                        setRestorePreview(null);
-                        previewMutation.reset();
-                        setTargetWorldDir(backup.worldName || "world");
-                      }}
-                    >
-                      <RotateCcw aria-hidden="true" size={14} />
-                    </Button>
-                    <Button
-                      aria-label={t("backups.export.titleAttr")}
-                      className="icon-button"
-                      disabled={!completed || exportMutation.isPending}
-                      title={t("backups.export.titleAttr")}
-                      variant="ghost"
-                      onClick={() => exportMutation.mutate(backup.id)}
-                    >
-                      <Download aria-hidden="true" size={14} />
-                    </Button>
-                    <Button
-                      aria-label={t("backups.delete.titleAttr")}
-                      className="icon-button"
-                      disabled={deleteMutation.isPending}
-                      title={t("backups.delete.titleAttr")}
-                      variant="danger"
-                      onClick={() => {
-                        deleteMutation.reset();
-                        setDeleteBackup(backup);
-                      }}
-                    >
-                      <Trash2 aria-hidden="true" size={14} />
-                    </Button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
+        <Paper data-testid="backups-list" p={0}>
+          <Group justify="space-between" px="md" py="sm">
+            <Title order={4}>{t("backups.points.title")}</Title>
+            <Text c="dimmed" size="sm">
+              {t("backups.points.count", { count: backups.length })}
+            </Text>
+          </Group>
+          <Table.ScrollContainer minWidth={640}>
+            <Table
+              aria-label={t("backups.points.title")}
+              highlightOnHover
+              verticalSpacing="xs"
+            >
+              <Table.Tbody>
+                {backups.map((backup) => {
+                  const completed = backup.status === "completed";
+                  return (
+                    <Table.Tr data-testid="backup-row" key={backup.id}>
+                      <Table.Td style={{ whiteSpace: "nowrap" }}>
+                        <Text fw={500} size="sm">
+                          {formatDateTime(backup.createdAt, language)}
+                        </Text>
+                        <Text c="dimmed" size="xs">
+                          {formatRelativeTime(backup.createdAt, language)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group
+                          gap={6}
+                          preventGrowOverflow={false}
+                          wrap="nowrap"
+                        >
+                          <Badge color="gray">{triggerLabel(backup, t)}</Badge>
+                          {isLegacyCopy(backup) ? (
+                            <Badge color="gray" variant="outline">
+                              {t("backups.format.full")}
+                            </Badge>
+                          ) : backup.kind === "fullServer" ? (
+                            <Badge variant="outline">
+                              {t("backups.format.fullServer")}
+                            </Badge>
+                          ) : null}
+                        </Group>
+                      </Table.Td>
+                      <Table.Td style={{ whiteSpace: "nowrap" }}>
+                        {completed ? (
+                          <>
+                            <Text ff="monospace" size="sm">
+                              {formatBytes(
+                                backup.logicalBytes ?? backup.sizeBytes,
+                              )}
+                            </Text>
+                            {!isLegacyCopy(backup) &&
+                            backup.newBytes !== undefined ? (
+                              <Text c="dimmed" ff="monospace" size="xs">
+                                {t("backups.points.added", {
+                                  size: formatBytes(backup.newBytes),
+                                })}
+                              </Text>
+                            ) : null}
+                          </>
+                        ) : (
+                          <Badge color="red">{t("backups.failed")}</Badge>
+                        )}
+                      </Table.Td>
+                      <Table.Td maw={0} w="100%">
+                        <Text
+                          c={backup.error ? "red" : "dimmed"}
+                          ff="monospace"
+                          size="xs"
+                          title={backup.error ?? backup.archivePath}
+                          truncate
+                        >
+                          {backup.error ?? baseName(backup.archivePath)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap={2} justify="flex-end" wrap="nowrap">
+                          <Tooltip
+                            label={
+                              restoreBlocked
+                                ? t("backups.restore.runningTitle")
+                                : completed
+                                  ? t("backups.restore.titleAttr")
+                                  : t("backups.restore.unavailableTitle")
+                            }
+                          >
+                            <ActionIcon
+                              aria-label={t("backups.restore.titleAttr")}
+                              disabled={
+                                !completed ||
+                                restoreBlocked ||
+                                restoreMutation.isPending
+                              }
+                              onClick={() => {
+                                restoreMutation.reset();
+                                setRestoreBackup(backup);
+                                setRestorePreview(null);
+                                previewMutation.reset();
+                                setTargetWorldDir(backup.worldName || "world");
+                              }}
+                            >
+                              <RotateCcw aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label={t("backups.export.titleAttr")}>
+                            <ActionIcon
+                              aria-label={t("backups.export.titleAttr")}
+                              disabled={!completed || exportMutation.isPending}
+                              onClick={() => exportMutation.mutate(backup.id)}
+                            >
+                              <Download aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label={t("backups.delete.titleAttr")}>
+                            <ActionIcon
+                              aria-label={t("backups.delete.titleAttr")}
+                              color="red"
+                              disabled={deleteMutation.isPending}
+                              onClick={() => {
+                                deleteMutation.reset();
+                                setDeleteBackup(backup);
+                              }}
+                            >
+                              <Trash2 aria-hidden="true" size={14} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Paper>
       ) : null}
 
-      <details className="bk-settings" data-testid="backups-settings">
-        <summary>
-          <span className="bk-settings-title">{t("backups.settings.title")}</span>
-          {settings ? (
-            <span className="bk-settings-summary">
-              {settingsSummary(settings, t)}
-            </span>
-          ) : null}
-        </summary>
-        {settings ? (
-          <BackupSettingsPanel
-            key={server.id}
-            server={server}
-            settings={settings}
-          />
-        ) : statusQuery.error ? (
-          <p className="danger-text" role="alert">
-            {statusQuery.error.message}
-          </p>
-        ) : (
-          <LoadingState message={t("backups.loading")} />
-        )}
-        <details className="bk-advanced">
-          <summary>{t("backups.profiles.advancedTitle")}</summary>
-          <BackupProfilesView server={server} />
-        </details>
-      </details>
+      <Accordion chevronPosition="left" variant="separated">
+        <Accordion.Item data-testid="backups-settings" value="settings">
+          <Accordion.Control>
+            <Group gap="sm" justify="space-between" wrap="nowrap">
+              <Text fw={600}>{t("backups.settings.title")}</Text>
+              {settings ? (
+                <Text c="dimmed" size="sm">
+                  {settingsSummary(settings, t)}
+                </Text>
+              ) : null}
+            </Group>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <Stack gap="md">
+              {settings ? (
+                <BackupSettingsPanel
+                  key={server.id}
+                  server={server}
+                  settings={settings}
+                />
+              ) : statusQuery.error ? (
+                <Alert color="red" py="xs" role="alert">
+                  {statusQuery.error.message}
+                </Alert>
+              ) : (
+                <LoadingState message={t("backups.loading")} />
+              )}
+              <Accordion chevronPosition="left">
+                <Accordion.Item value="profiles">
+                  <Accordion.Control>
+                    <Text fw={500} size="sm">
+                      {t("backups.profiles.advancedTitle")}
+                    </Text>
+                  </Accordion.Control>
+                  <Accordion.Panel>
+                    <BackupProfilesView server={server} />
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            </Stack>
+          </Accordion.Panel>
+        </Accordion.Item>
+      </Accordion>
 
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.restoreBackup")}
@@ -814,38 +910,50 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
         onConfirm={() => restoreMutation.mutate()}
       >
         {restorePreview ? (
-          <div className="restore-preview">
-            <div className="restore-preview-summary">
-              <strong>
+          <Stack gap="xs">
+            <Group justify="space-between">
+              <Text fw={600} size="sm">
                 {t(`backups.restore.mode.${restorePreview.mode}`)}
-              </strong>
-              <span>
+              </Text>
+              <Text c="dimmed" size="sm">
                 {t("backups.restore.previewSummary", {
                   count: restorePreview.fileCount,
                   size: formatBytes(restorePreview.sizeBytes),
                 })}
-              </span>
-            </div>
-            <ul className="restore-preview-paths">
-              {restorePreview.relativePaths.slice(0, 8).map((relativePath) => (
-                <li key={relativePath}>{relativePath}</li>
-              ))}
-            </ul>
+              </Text>
+            </Group>
+            <Paper bg="var(--mantine-color-default-hover)" p="xs">
+              <ScrollArea.Autosize mah={180}>
+                <Stack gap={2}>
+                  {restorePreview.relativePaths
+                    .slice(0, 8)
+                    .map((relativePath) => (
+                      <Code bg="transparent" key={relativePath}>
+                        {relativePath}
+                      </Code>
+                    ))}
+                </Stack>
+              </ScrollArea.Autosize>
+            </Paper>
             {restorePreview.relativePaths.length > 8 ? (
-              <p>
+              <Text c="dimmed" size="sm">
                 {t("backups.restore.morePaths", {
                   count: restorePreview.relativePaths.length - 8,
                 })}
-              </p>
+              </Text>
             ) : null}
             {restorePreview.warnings.length ? (
-              <ul className="restore-preview-warnings">
-                {restorePreview.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
-                ))}
-              </ul>
+              <Alert color="yellow" py="xs">
+                <Stack gap={2}>
+                  {restorePreview.warnings.map((warning) => (
+                    <Text key={warning} size="sm">
+                      {warning}
+                    </Text>
+                  ))}
+                </Stack>
+              </Alert>
             ) : null}
-          </div>
+          </Stack>
         ) : null}
       </ConfirmDangerDialog>
       <ConfirmDangerDialog
@@ -864,6 +972,6 @@ export function ServerBackupsView({ server }: ServerBackupsViewProps) {
           }
         }}
       />
-    </section>
+    </Stack>
   );
 }

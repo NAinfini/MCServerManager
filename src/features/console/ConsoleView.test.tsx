@@ -43,12 +43,8 @@ function mockRunningServer() {
   });
 }
 
-function openQuickCommands() {
-  const menu = screen
-    .getByText("Quick commands")
-    .closest("details") as HTMLDetailsElement;
-  menu.open = true;
-  return menu;
+async function openQuickCommands() {
+  await userEvent.click(screen.getByRole("button", { name: "Quick commands" }));
 }
 
 function renderConsole() {
@@ -113,16 +109,18 @@ describe("ConsoleView", () => {
     renderConsole();
 
     const input = await commandInput();
-    const menu = openQuickCommands();
+    await openQuickCommands();
 
-    await userEvent.click(screen.getByRole("button", { name: /save world/i }));
+    await userEvent.click(
+      screen.getByRole("menuitem", { name: /save world/i }),
+    );
     expect(input).toHaveValue("save-all flush");
     // It fills, and never runs: a command only goes out on a deliberate Send.
     expect(invoke).not.toHaveBeenCalledWith(
       "send_server_command",
       expect.anything(),
     );
-    expect(menu.open).toBe(false);
+    expect(screen.queryByRole("menu")).toBeNull();
     expect(input).toHaveFocus();
 
     const send = screen.getByRole("button", { name: /^send$/i });
@@ -142,7 +140,7 @@ describe("ConsoleView", () => {
     renderConsole();
 
     const input = await commandInput();
-    openQuickCommands();
+    await openQuickCommands();
     await userEvent.click(screen.getByTitle("ban"));
 
     expect(input).toHaveValue("ban ");
@@ -216,7 +214,9 @@ describe("ConsoleView", () => {
     );
     // The app's own lifecycle lines are translated and set apart.
     expect(
-      terminalLines.some((line) => line.includes("── Server has fully stopped ──")),
+      terminalLines.some((line) =>
+        line.includes("── Server has fully stopped ──"),
+      ),
     ).toBe(true);
   });
 });
@@ -266,7 +266,10 @@ describe("colorizeConsoleLine", () => {
       ),
     ).toBe("[Server thread/INFO]: <Alex> the ERROR/WARN joined the game");
     expect(
-      colorizeConsoleLine("info", "[Server thread/INFO]: [Not Secure] <Alex> hi"),
+      colorizeConsoleLine(
+        "info",
+        "[Server thread/INFO]: [Not Secure] <Alex> hi",
+      ),
     ).toBe("[Server thread/INFO]: [Not Secure] <Alex> hi");
     expect(colorizeConsoleLine("info", "plain text")).toBe("plain text");
   });

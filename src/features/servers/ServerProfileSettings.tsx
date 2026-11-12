@@ -3,14 +3,25 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
+import {
+  Alert,
+  Box,
+  Checkbox,
+  Group,
+  Paper,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { Save, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { PathField } from "../../components/ui/path-field";
 import { Select } from "../../components/ui/select";
+import { SettingRow, SettingSection } from "../../components/ui/setting-row";
 import { StickyActionBar } from "../../components/ui/sticky-action-bar";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommand } from "../../lib/desktop-runtime";
 import { queryKeys } from "../../lib/query-keys";
@@ -24,8 +35,10 @@ interface ServerProfileSettingsProps {
   server: ServerProfile;
 }
 
-/* Radix rejects an empty option value, so the two choices that are not a path
-   carry sentinels. They never reach the profile: both are translated back
+const FIELD_WIDTH = 240;
+
+/* The select treats an empty value as no selection, so the two choices that
+   are not a path carry sentinels. They never reach the profile: both are translated back
    before the form value changes. */
 const SYSTEM_JAVA = "__system__";
 const CUSTOM_JAVA = "__custom__";
@@ -247,70 +260,75 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
     },
   });
 
+  const errors = form.formState.errors;
+
   return (
-    <section
-      className="settings-panel"
+    <Stack
+      component="section"
+      gap="md"
       aria-labelledby="profile-settings-title"
     >
-      <div className="section-heading">
-        <h2 id="profile-settings-title">{t("profileSettings.title")}</h2>
-        <span>{t("profileSettings.description")}</span>
+      <div>
+        <Title order={2} size="h3" id="profile-settings-title">
+          {t("profileSettings.title")}
+        </Title>
+        <Text size="sm" c="dimmed" mt={4}>
+          {t("profileSettings.description")}
+        </Text>
       </div>
       {updateMutation.error ? (
-        <p className="danger-text" role="alert">
+        <Alert color="red" role="alert">
           {updateMutation.error.message}
-        </p>
+        </Alert>
       ) : null}
       {deleteMutation.error ? (
-        <p className="danger-text" role="alert">
+        <Alert color="red" role="alert">
           {deleteMutation.error.message}
-        </p>
+        </Alert>
       ) : null}
       {restartRequired ? (
-        <p className="settings-notice" role="status">
+        <Alert color="yellow" role="status">
           {t("profileSettings.restartRequired")}
-        </p>
+        </Alert>
       ) : null}
-      <form
+      <Stack
+        component="form"
+        gap="md"
         onSubmit={form.handleSubmit((input) => updateMutation.mutate(input))}
       >
-        {/* Twelve fields in one column made the operator scroll past the whole
-            form to reach the save bar. Grouped by what they govern, in as many
-            columns as the panel is wide enough for. */}
-        <div className="settings-group">
-          <h3>{t("profileSettings.group.identity")}</h3>
-          <div className="settings-grid">
-            <label>
-              {t("profileSettings.name")}
-              <TextField
-                aria-invalid={Boolean(form.formState.errors.name)}
-                {...form.register("name")}
-              />
-              {form.formState.errors.name ? (
-                <span className="danger-text">
-                  {validationMessage(form.formState.errors.name.message)}
-                </span>
-              ) : null}
-            </label>
-            <label>
-              {t("profileSettings.serverFolder")}
+        <SettingSection order={3} title={t("profileSettings.group.identity")}>
+          <SettingRow label={t("profileSettings.name")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.name")}
+              error={validationMessage(errors.name?.message)}
+              {...form.register("name")}
+            />
+          </SettingRow>
+          <SettingRow
+            label={t("profileSettings.serverFolder")}
+            description={
+              folderPickerError ? (
+                <Text span inherit c="red">
+                  {folderPickerError}
+                </Text>
+              ) : undefined
+            }
+          >
+            <Box w={360}>
               <PathField
+                aria-label={t("profileSettings.serverFolder")}
                 browseLabel={t("profileSettings.browse")}
                 readOnly
                 {...form.register("rootDir")}
                 onBrowse={pickServerFolder}
               />
-              {folderPickerError ? (
-                <span className="danger-text">{folderPickerError}</span>
-              ) : null}
-            </label>
-          </div>
-        </div>
-        <div className="settings-group">
-          <h3>{t("profileSettings.group.runtime")}</h3>
-          <div className="settings-grid">
-            <label>
-              {t("profileSettings.loader")}
+            </Box>
+          </SettingRow>
+        </SettingSection>
+        <SettingSection order={3} title={t("profileSettings.group.runtime")}>
+          <SettingRow label={t("profileSettings.loader")}>
+            <Box w={FIELD_WIDTH}>
               <Controller
                 control={form.control}
                 name="loaderType"
@@ -326,21 +344,28 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
                   />
                 )}
               />
-            </label>
-            <label>
-              {t("profileSettings.minecraftVersion")}
-              <TextField {...form.register("minecraftVersion")} />
-            </label>
-            <label>
-              {t("profileSettings.loaderVersion")}
-              <TextField {...form.register("loaderVersion")} />
-            </label>
-            {/* A bare text box asked the operator to know a path Windows hides
-                in three different places. The scan already found them, so this
-                offers what is installed and keeps typing for the case the scan
-                cannot reach. */}
-            <label>
-              {t("profileSettings.javaPath")}
+            </Box>
+          </SettingRow>
+          <SettingRow label={t("profileSettings.minecraftVersion")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.minecraftVersion")}
+              {...form.register("minecraftVersion")}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.loaderVersion")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.loaderVersion")}
+              {...form.register("loaderVersion")}
+            />
+          </SettingRow>
+          {/* A bare text box asked the operator to know a path Windows hides
+              in three different places. The scan already found them, so this
+              offers what is installed and keeps typing for the case the scan
+              cannot reach. */}
+          <SettingRow label={t("profileSettings.javaPath")}>
+            <Stack gap="xs" w={FIELD_WIDTH}>
               <Controller
                 control={form.control}
                 name="javaPath"
@@ -364,112 +389,116 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
                 )}
               />
               {customJavaPath ? (
-                <TextField
+                <TextInput
                   aria-label={t("profileSettings.javaCustom")}
                   placeholder={t("profileSettings.javaCustomPlaceholder")}
                   {...form.register("javaPath")}
                 />
               ) : null}
-            </label>
-            <label>
-              {t("profileSettings.port")}
-              <TextField
-                aria-invalid={Boolean(form.formState.errors.serverPort)}
-                min="1"
-                max="65535"
-                type="number"
-                {...form.register("serverPort")}
-              />
-              {form.formState.errors.serverPort ? (
-                <span className="danger-text">
-                  {validationMessage(form.formState.errors.serverPort.message)}
-                </span>
-              ) : null}
-            </label>
-          </div>
-        </div>
-        <div className="settings-group">
-          <h3>{t("profileSettings.group.lifecycle")}</h3>
-          <div className="settings-grid">
-            <label>
-              {t("profileSettings.minMemoryMb")}
-              <TextField
-                min="0"
-                type="number"
-                {...form.register("minMemoryMb")}
-              />
-            </label>
-            <label>
-              {t("profileSettings.maxMemoryMb")}
-              <TextField
-                aria-invalid={Boolean(form.formState.errors.maxMemoryMb)}
-                min="0"
-                type="number"
-                {...form.register("maxMemoryMb")}
-              />
-              {form.formState.errors.maxMemoryMb ? (
-                <span className="danger-text">
-                  {validationMessage(form.formState.errors.maxMemoryMb.message)}
-                </span>
-              ) : null}
-            </label>
-            <label>
-              {t("profileSettings.restartAttempts")}
-              <TextField
-                min="0"
-                type="number"
-                {...form.register("restartAttempts")}
-              />
-            </label>
-            <label>
-              {t("profileSettings.restartCooldownSeconds")}
-              <TextField
-                min="0"
-                type="number"
-                {...form.register("restartCooldown")}
-              />
-            </label>
-            <label className="checkbox-row">
-              <Controller
-                control={form.control}
-                name="autoStart"
-                render={({ field }) => (
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={(checked) =>
-                      field.onChange(checked === true)
-                    }
-                  />
-                )}
-              />
-              {t("profileSettings.autoStart")}
-            </label>
-            <label className="checkbox-row">
-              <Controller
-                control={form.control}
-                name="restartEnabled"
-                render={({ field }) => (
-                  <Checkbox
-                    checked={field.value}
-                    onCheckedChange={(checked) =>
-                      field.onChange(checked === true)
-                    }
-                  />
-                )}
-              />
-              {t("profileSettings.restartAfterCrashes")}
-            </label>
-          </div>
-        </div>
-        <StickyActionBar className="form-actions">
+            </Stack>
+          </SettingRow>
+          <SettingRow label={t("profileSettings.port")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.port")}
+              error={validationMessage(errors.serverPort?.message)}
+              min="1"
+              max="65535"
+              type="number"
+              {...form.register("serverPort")}
+            />
+          </SettingRow>
+        </SettingSection>
+        <SettingSection order={3} title={t("profileSettings.group.lifecycle")}>
+          <SettingRow label={t("profileSettings.minMemoryMb")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.minMemoryMb")}
+              min="0"
+              type="number"
+              {...form.register("minMemoryMb")}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.maxMemoryMb")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.maxMemoryMb")}
+              error={validationMessage(errors.maxMemoryMb?.message)}
+              min="0"
+              type="number"
+              {...form.register("maxMemoryMb")}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.autoStart")}>
+            <Controller
+              control={form.control}
+              name="autoStart"
+              render={({ field }) => (
+                <Switch
+                  aria-label={t("profileSettings.autoStart")}
+                  checked={field.value}
+                  onChange={(event) =>
+                    field.onChange(event.currentTarget.checked)
+                  }
+                />
+              )}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.restartAfterCrashes")}>
+            <Controller
+              control={form.control}
+              name="restartEnabled"
+              render={({ field }) => (
+                <Switch
+                  aria-label={t("profileSettings.restartAfterCrashes")}
+                  checked={field.value}
+                  onChange={(event) =>
+                    field.onChange(event.currentTarget.checked)
+                  }
+                />
+              )}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.restartAttempts")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.restartAttempts")}
+              min="0"
+              type="number"
+              {...form.register("restartAttempts")}
+            />
+          </SettingRow>
+          <SettingRow label={t("profileSettings.restartCooldownSeconds")}>
+            <TextInput
+              w={FIELD_WIDTH}
+              aria-label={t("profileSettings.restartCooldownSeconds")}
+              min="0"
+              type="number"
+              {...form.register("restartCooldown")}
+            />
+          </SettingRow>
+        </SettingSection>
+        <StickyActionBar>
           <Button
             disabled={updateMutation.isPending || !form.formState.isDirty}
             type="submit"
             variant="primary"
           >
-            <Save aria-hidden="true" size={15} />
+            <Save aria-hidden="true" size={16} />
             {t("profileSettings.save")}
           </Button>
+        </StickyActionBar>
+      </Stack>
+      {/* Kept apart from the form and its save bar so the destructive action
+          is never one stray click from the primary one. */}
+      <Paper
+        p="md"
+        style={{ border: "1px solid var(--mantine-color-red-outline)" }}
+      >
+        <Group justify="space-between" gap="md" wrap="nowrap">
+          <Text size="sm" c="dimmed">
+            {t("danger.profile.delete.description", { server: server.name })}
+          </Text>
           <Button
             disabled={deleteMutation.isPending}
             type="button"
@@ -480,11 +509,11 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
               setIsDeleteConfirmOpen(true);
             }}
           >
-            <Trash2 aria-hidden="true" size={15} />
+            <Trash2 aria-hidden="true" size={16} />
             {t("profileSettings.delete")}
           </Button>
-        </StickyActionBar>
-      </form>
+        </Group>
+      </Paper>
       <ConfirmDangerDialog
         confirmLabel={t(
           deleteFromDisk
@@ -508,20 +537,18 @@ export function ServerProfileSettings({ server }: ServerProfileSettingsProps) {
         }}
         onConfirm={() => deleteMutation.mutate()}
       >
-        <label className="confirm-danger-option">
-          <Checkbox
-            aria-label={t("danger.profile.delete.deleteFromDisk")}
-            checked={deleteFromDisk}
-            onCheckedChange={(checked) => setDeleteFromDisk(checked === true)}
-          />
-          <span>
-            <strong>{t("danger.profile.delete.deleteFromDisk")}</strong>
-            <span className="confirm-danger-option-detail">
+        <Checkbox
+          aria-label={t("danger.profile.delete.deleteFromDisk")}
+          checked={deleteFromDisk}
+          label={t("danger.profile.delete.deleteFromDisk")}
+          description={
+            <Text span inherit ff="monospace">
               {server.rootDir}
-            </span>
-          </span>
-        </label>
+            </Text>
+          }
+          onChange={(event) => setDeleteFromDisk(event.currentTarget.checked)}
+        />
       </ConfirmDangerDialog>
-    </section>
+    </Stack>
   );
 }

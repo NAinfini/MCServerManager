@@ -227,8 +227,8 @@ describe("AppShell", () => {
     expect(
       screen.queryByRole("button", { name: /^dashboard$/i }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^servers$/i })).toHaveClass(
-      "sidebar-brand",
+    expect(screen.getByRole("button", { name: /^servers$/i })).toHaveAttribute(
+      "data-sidebar-brand",
     );
   });
 
@@ -241,10 +241,12 @@ describe("AppShell", () => {
     expect((await screen.findAllByText("Survival SMP")).length).toBeGreaterThan(
       0,
     );
-    expect(container.querySelector(".dashboard-page-header")).not.toBeNull();
-    expect(container.querySelector(".dashboard-status-rail")).not.toBeNull();
-    expect(container.querySelector(".dashboard-servers")).not.toBeNull();
-    expect(container.querySelector(".server-card-grid")).not.toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Server status summary" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Server overview" }),
+    ).toBeInTheDocument();
     expect(container.querySelector(".summary-strip")).toBeNull();
     expect(container.querySelector(".server-view-toggle")).toBeNull();
     expect(container.querySelector(".batch-actions")).toBeNull();
@@ -429,7 +431,7 @@ describe("AppShell", () => {
     const main = screen.getByRole("main");
     await within(main).findByRole("heading", { name: "Create server" });
     const header = main.querySelector<HTMLElement>(
-      ".create-server-wizard-header",
+      "[data-create-server-header]",
     );
     const progress = within(main).getByRole("navigation", {
       name: "Wizard progress",
@@ -443,9 +445,10 @@ describe("AppShell", () => {
     expect(
       within(header!).getByRole("button", { name: "Close create server" }),
     ).toBeInTheDocument();
+    // The progress lives only in the header, never repeated inside the panel.
     expect(
-      main.querySelector(".create-server-panel .wizard-steps"),
-    ).not.toBeInTheDocument();
+      within(main).getAllByRole("navigation", { name: "Wizard progress" }),
+    ).toHaveLength(1);
   });
 
   it("hides the wizard header in marketplace details and restores it on return", async () => {
@@ -468,7 +471,7 @@ describe("AppShell", () => {
       name: /project details/i,
     });
     expect(
-      main.querySelector(".create-server-wizard-header"),
+      main.querySelector("[data-create-server-header]"),
     ).not.toBeInTheDocument();
     expect(
       within(main).queryByRole("navigation", { name: "Wizard progress" }),
@@ -479,7 +482,7 @@ describe("AppShell", () => {
     );
 
     expect(
-      main.querySelector(".create-server-wizard-header"),
+      main.querySelector("[data-create-server-header]"),
     ).toBeInTheDocument();
     expect(
       within(main).getByRole("navigation", { name: "Wizard progress" }),
@@ -522,7 +525,7 @@ describe("AppShell", () => {
     await screen.findByRole("heading", { name: "Create server" });
     await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
 
-    const confirmation = await screen.findByRole("alertdialog", {
+    const confirmation = await screen.findByRole("dialog", {
       name: "Discard server creation?",
     });
     await userEvent.click(
@@ -534,7 +537,7 @@ describe("AppShell", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
     await userEvent.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
+      within(await screen.findByRole("dialog")).getByRole("button", {
         name: "Discard creation",
       }),
     );
@@ -579,7 +582,7 @@ describe("AppShell", () => {
       await screen.findByRole("heading", { name: "Application Logger" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("alertdialog", { name: "Discard server creation?" }),
+      screen.queryByRole("dialog", { name: "Discard server creation?" }),
     ).not.toBeInTheDocument();
   });
 
@@ -631,7 +634,7 @@ describe("AppShell", () => {
     expect(
       within(themeChoices).getByRole("radio", { name: "Dark" }),
     ).toHaveAttribute("aria-checked", "true");
-    expect(languageSelect).toHaveTextContent("English");
+    expect(languageSelect).toHaveValue("English");
     expect(
       within(themeChoices).getByRole("radio", { name: "Light" }),
     ).toBeInTheDocument();

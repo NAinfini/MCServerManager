@@ -1,6 +1,22 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import {
+  Alert,
+  Badge,
+  Box,
+  Code,
+  Group,
+  Paper,
+  ScrollArea,
+  SegmentedControl,
+  SimpleGrid,
+  Stack,
+  Text,
+  ThemeIcon,
+  Title,
+  UnstyledButton,
+  VisuallyHidden,
+} from "@mantine/core";
 import {
   AlertCircle,
   AlertTriangle,
@@ -30,6 +46,13 @@ function LogLevelIcon({ level }: { level: string }) {
   }
   return <Info aria-hidden="true" size={14} />;
 }
+
+const levelColor: Record<string, string> = {
+  debug: "gray",
+  info: "azure",
+  warning: "yellow",
+  error: "red",
+};
 
 function levelLabel(entry: AppLogEntry) {
   return ["debug", "info", "warning", "error"].includes(entry.level)
@@ -88,18 +111,18 @@ export function AppLoggerView() {
     null;
 
   return (
-    <section className="logger-page" aria-labelledby="logger-title">
-      <div className="page-header">
-        <div>
-          <h1 id="logger-title">{t("logger.title")}</h1>
-        </div>
-        <div className="page-header-actions">
+    <Stack aria-labelledby="logger-title" component="section" gap="md" h="100%">
+      <Group justify="space-between">
+        <Title id="logger-title" order={1}>
+          {t("logger.title")}
+        </Title>
+        <Group gap="xs">
           <Button
             disabled={logsQuery.isFetching}
             variant="secondary"
             onClick={() => logsQuery.refetch()}
           >
-            <RefreshCw aria-hidden="true" size={15} />
+            <RefreshCw aria-hidden="true" size={16} />
             {t("common.refresh")}
           </Button>
           <Button
@@ -110,11 +133,11 @@ export function AppLoggerView() {
               setIsClearConfirmOpen(true);
             }}
           >
-            <Trash2 aria-hidden="true" size={15} />
+            <Trash2 aria-hidden="true" size={16} />
             {t("logger.clear")}
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Group>
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.clearLogs")}
         description={t("danger.logger.clear.description")}
@@ -126,156 +149,208 @@ export function AppLoggerView() {
         onConfirm={() => clearMutation.mutate()}
       />
 
-      <div className="logger-toolbar">
-        <span className="logger-count">
-          {t("logger.count", { count: logs.length })}
-        </span>
-      </div>
-
       {logsQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("logger.loadError")}</strong>
-          <span>{logsQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => logsQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert
+          color="red"
+          role="alert"
+          title={t("logger.loadError")}
+          variant="light"
+        >
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{logsQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => logsQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
 
       {!logsQuery.error && logsQuery.data ? (
-        <div
-          className={`app-log-workspace${
-            selectedGroup ? "" : " app-log-workspace-empty"
-          }`}
-        >
-          <aside className="logger-filter-rail">
-            <ToggleGroup.Root
-              className="severity-filter"
-              type="single"
-              value={level}
-              onValueChange={(value) => {
-                if (value) {
-                  setLevel(value as AppLogLevelFilter);
-                }
-              }}
+        <Group align="stretch" flex={1} gap="md" mih={0} wrap="nowrap">
+          <Stack component="aside" gap="xs" w={180} style={{ flexShrink: 0 }}>
+            <SegmentedControl
               aria-label={t("logger.filterLevel")}
-            >
-              <ToggleGroup.Item className="severity-filter-item" value="all">
-                {t("logger.level.all")}
-              </ToggleGroup.Item>
-              <ToggleGroup.Item className="severity-filter-item" value="info">
-                <Info aria-hidden="true" size={14} />
-                {t("logger.level.info")}
-              </ToggleGroup.Item>
-              <ToggleGroup.Item className="severity-filter-item" value="debug">
-                <Info aria-hidden="true" size={14} />
-                {t("logger.level.debug")}
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                className="severity-filter-item"
-                value="warning"
-              >
-                <AlertTriangle aria-hidden="true" size={14} />
-                {t("logger.level.warning")}
-              </ToggleGroup.Item>
-              <ToggleGroup.Item className="severity-filter-item" value="error">
-                <AlertCircle aria-hidden="true" size={14} />
-                {t("logger.level.error")}
-              </ToggleGroup.Item>
-            </ToggleGroup.Root>
-          </aside>
-          <div
-            aria-label={t("logger.list")}
-            className="app-log-list"
-            role="list"
-          >
-            {groupedLogs.length === 0 ? (
-              <EmptyState
-                illustration="/illustrations/no-events.png"
-                title={t("logger.empty.title")}
-                description={t("logger.empty.description")}
-              />
-            ) : null}
-            {groupedLogs.map((group) => {
-              const { entry } = group;
-              const normalizedLevel = levelLabel(group.entry);
-              const isSelected = group.key === selectedGroup?.key;
-              return (
-                <div key={group.key} role="listitem">
-                  <button
-                    aria-pressed={isSelected}
-                    className={`app-log-row app-log-row-${normalizedLevel}${
-                      isSelected ? " app-log-row-selected" : ""
-                    }`}
-                    type="button"
-                    onClick={() => setSelectedLogKey(group.key)}
-                  >
-                    <div
-                      className={`app-log-icon app-log-icon-${normalizedLevel}`}
-                    >
-                      <LogLevelIcon level={normalizedLevel} />
+              data={[
+                {
+                  value: "all",
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      {t("logger.level.all")}
+                    </Group>
+                  ),
+                },
+                {
+                  value: "info",
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <Info aria-hidden="true" size={14} />
+                      {t("logger.level.info")}
+                    </Group>
+                  ),
+                },
+                {
+                  value: "debug",
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <Info aria-hidden="true" size={14} />
+                      {t("logger.level.debug")}
+                    </Group>
+                  ),
+                },
+                {
+                  value: "warning",
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <AlertTriangle aria-hidden="true" size={14} />
+                      {t("logger.level.warning")}
+                    </Group>
+                  ),
+                },
+                {
+                  value: "error",
+                  label: (
+                    <Group gap={6} wrap="nowrap">
+                      <AlertCircle aria-hidden="true" size={14} />
+                      {t("logger.level.error")}
+                    </Group>
+                  ),
+                },
+              ]}
+              fullWidth
+              orientation="vertical"
+              value={level}
+              onChange={(value) => setLevel(value as AppLogLevelFilter)}
+            />
+            <Text c="dimmed" px={4} size="xs">
+              {t("logger.count", { count: logs.length })}
+            </Text>
+          </Stack>
+          <Paper flex={1} miw={0} p={4}>
+            <ScrollArea h="100%" type="auto">
+              <Stack aria-label={t("logger.list")} gap={2} role="list">
+                {groupedLogs.length === 0 ? (
+                  <EmptyState
+                    title={t("logger.empty.title")}
+                    description={t("logger.empty.description")}
+                  />
+                ) : null}
+                {groupedLogs.map((group) => {
+                  const { entry } = group;
+                  const normalizedLevel = levelLabel(group.entry);
+                  const isSelected = group.key === selectedGroup?.key;
+                  return (
+                    <div key={group.key} role="listitem">
+                      <UnstyledButton
+                        aria-pressed={isSelected}
+                        bg={
+                          isSelected
+                            ? "var(--mantine-primary-color-light)"
+                            : undefined
+                        }
+                        p="xs"
+                        style={{ borderRadius: "var(--mantine-radius-sm)" }}
+                        w="100%"
+                        onClick={() => setSelectedLogKey(group.key)}
+                      >
+                        <Group align="flex-start" gap="sm" wrap="nowrap">
+                          <ThemeIcon
+                            color={levelColor[normalizedLevel]}
+                            size="sm"
+                            variant="light"
+                          >
+                            <LogLevelIcon level={normalizedLevel} />
+                          </ThemeIcon>
+                          {/* The icon is decorative, so the level has to be
+                              spelled out for a screen reader. */}
+                          <VisuallyHidden>
+                            {t(`logger.severity.${normalizedLevel}`)}
+                          </VisuallyHidden>
+                          <Stack flex={1} gap={2} miw={0}>
+                            <Group gap="xs" wrap="nowrap">
+                              <Text fw={500} size="sm" truncate>
+                                {entry.message || t("logger.untitled")}
+                              </Text>
+                              {group.count > 1 ? (
+                                <Badge
+                                  color="gray"
+                                  size="xs"
+                                  style={{ flexShrink: 0 }}
+                                  variant="light"
+                                >
+                                  ×{group.count}
+                                </Badge>
+                              ) : null}
+                            </Group>
+                            <Group c="dimmed" fz="xs" gap="sm" wrap="nowrap">
+                              <Text ff="monospace" inherit truncate>
+                                {entry.source}
+                              </Text>
+                              <Text inherit style={{ whiteSpace: "nowrap" }}>
+                                {formatDateTime(entry.createdAt, language)}
+                              </Text>
+                            </Group>
+                          </Stack>
+                        </Group>
+                      </UnstyledButton>
                     </div>
-                    {/* The icon is decorative, so the level has to be spelled
-                        out for a screen reader. */}
-                    <span className="visually-hidden">
-                      {t(`logger.severity.${normalizedLevel}`)}
-                    </span>
-                    <div className="app-log-content">
-                      <div className="app-log-heading">
-                        <strong>{entry.message || t("logger.untitled")}</strong>
-                        {group.count > 1 ? (
-                          <span className="app-log-repeat-count">
-                            ×{group.count}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="app-log-meta">
-                        <span>{entry.source}</span>
-                        <span>{formatDateTime(entry.createdAt, language)}</span>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </Stack>
+            </ScrollArea>
+          </Paper>
           {selectedGroup ? (
-            <aside
+            <Paper
               aria-label={t("logger.details")}
-              className="app-log-detail-pane"
+              component="aside"
+              miw={0}
+              p="md"
+              w="40%"
             >
-              <div className="app-log-detail-heading">
-                <strong>{t("logger.details")}</strong>
-                <span
-                  className={`badge badge-${levelLabel(selectedGroup.entry)}`}
-                >
-                  {t(`logger.level.${levelLabel(selectedGroup.entry)}`)}
-                </span>
-              </div>
-              <dl className="app-log-detail-meta">
-                <div>
-                  <dt>{t("logger.source")}</dt>
-                  <dd>{selectedGroup.entry.source}</dd>
-                </div>
-                <div>
-                  <dt>{t("logger.time")}</dt>
-                  <dd>
-                    {formatDateTime(selectedGroup.entry.createdAt, language)}
-                  </dd>
-                </div>
-              </dl>
-              {selectedGroup.count > 1 ? (
-                <p className="app-log-repeat-summary">
-                  {t("logger.repeated", { count: selectedGroup.count })}
-                </p>
-              ) : null}
-              <pre className="app-log-details">
-                {selectedGroup.entry.details || t("logger.noDetails")}
-              </pre>
-            </aside>
+              <Stack gap="sm" h="100%">
+                <Group justify="space-between">
+                  <Text fw={600} size="sm">
+                    {t("logger.details")}
+                  </Text>
+                  <Badge
+                    color={levelColor[levelLabel(selectedGroup.entry)]}
+                    variant="light"
+                  >
+                    {t(`logger.level.${levelLabel(selectedGroup.entry)}`)}
+                  </Badge>
+                </Group>
+                <SimpleGrid cols={2} spacing="sm">
+                  <Box>
+                    <Text c="dimmed" size="xs">
+                      {t("logger.source")}
+                    </Text>
+                    <Text ff="monospace" size="sm">
+                      {selectedGroup.entry.source}
+                    </Text>
+                  </Box>
+                  <Box>
+                    <Text c="dimmed" size="xs">
+                      {t("logger.time")}
+                    </Text>
+                    <Text size="sm">
+                      {formatDateTime(selectedGroup.entry.createdAt, language)}
+                    </Text>
+                  </Box>
+                </SimpleGrid>
+                {selectedGroup.count > 1 ? (
+                  <Text c="dimmed" size="xs">
+                    {t("logger.repeated", { count: selectedGroup.count })}
+                  </Text>
+                ) : null}
+                <ScrollArea flex={1} type="auto">
+                  <Code block style={{ whiteSpace: "pre-wrap" }}>
+                    {selectedGroup.entry.details || t("logger.noDetails")}
+                  </Code>
+                </ScrollArea>
+              </Stack>
+            </Paper>
           ) : null}
-        </div>
+        </Group>
       ) : null}
-    </section>
+    </Stack>
   );
 }

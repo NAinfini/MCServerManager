@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { OctagonX, Play, RefreshCw, Square } from "lucide-react";
-import * as Tooltip from "@radix-ui/react-tooltip";
+import { OctagonX, Play, Square } from "lucide-react";
+import { Alert, Group, Text, Tooltip } from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { StatusBadge } from "../../components/ui/status-badge";
@@ -19,30 +19,7 @@ import { useServerRuntime } from "./ServerRuntimeContext";
 
 interface ServerActionsProps {
   server: ServerProfile;
-  compact?: boolean;
   processStatus?: ManagedProcessStatus;
-}
-
-function ActionTooltip({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactElement;
-}) {
-  return (
-    <Tooltip.Provider delayDuration={300}>
-      <Tooltip.Root>
-        <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
-        <Tooltip.Portal>
-          <Tooltip.Content className="tooltip-content" sideOffset={6}>
-            {label}
-            <Tooltip.Arrow className="tooltip-arrow" />
-          </Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-    </Tooltip.Provider>
-  );
 }
 
 type StartFailureGuide = {
@@ -73,11 +50,7 @@ function startFailureGuide(error: Error | null): StartFailureGuide | null {
   return null;
 }
 
-export function ServerActions({
-  server,
-  compact = false,
-  processStatus,
-}: ServerActionsProps) {
+export function ServerActions({ server, processStatus }: ServerActionsProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const runtime = useServerRuntime();
@@ -149,10 +122,10 @@ export function ServerActions({
   const startGuide = startFailureGuide(startMutation.error);
 
   return (
-    <div className={compact ? "row-actions" : "server-actions"}>
+    <Group gap="xs">
       {/* Restart only means something for a server that is up. */}
       {isRunning ? (
-        <ActionTooltip label={t("servers.actions.restart")}>
+        <Tooltip label={t("servers.actions.restart")}>
           <Button
             aria-label={t("servers.actions.restartAria", {
               server: server.name,
@@ -164,22 +137,17 @@ export function ServerActions({
               setPendingDangerAction("restart");
             }}
           >
-            {compact ? (
-              <RefreshCw aria-hidden="true" size={15} />
-            ) : (
-              t("servers.actions.restart")
-            )}
+            {t("servers.actions.restart")}
           </Button>
-        </ActionTooltip>
+        </Tooltip>
       ) : null}
       {/* One primary button: whatever the server can do next. */}
       {isStopping ? (
-        <ActionTooltip label={t("servers.actions.forceStop")}>
+        <Tooltip label={t("servers.actions.forceStop")}>
           <Button
             aria-label={t("servers.actions.forceStopAria", {
               server: server.name,
             })}
-            className="lifecycle-button"
             disabled={isPending}
             variant="danger"
             onClick={() => {
@@ -187,15 +155,14 @@ export function ServerActions({
               setPendingDangerAction("forceStop");
             }}
           >
-            <OctagonX aria-hidden="true" size={15} />
-            {compact ? null : t("servers.actions.forceStop")}
+            <OctagonX aria-hidden="true" size={16} />
+            {t("servers.actions.forceStop")}
           </Button>
-        </ActionTooltip>
+        </Tooltip>
       ) : isRunning || isExternalRunning ? (
-        <ActionTooltip label={t("servers.actions.stop")}>
+        <Tooltip label={t("servers.actions.stop")}>
           <Button
             aria-label={t("servers.actions.stopAria", { server: server.name })}
-            className="lifecycle-button"
             disabled={isExternalRunning || isPending || isProcessStatusLoading}
             variant="danger"
             onClick={() => {
@@ -203,15 +170,14 @@ export function ServerActions({
               setPendingDangerAction("stop");
             }}
           >
-            <Square aria-hidden="true" size={15} />
-            {compact ? null : t("servers.actions.stop")}
+            <Square aria-hidden="true" size={16} />
+            {t("servers.actions.stop")}
           </Button>
-        </ActionTooltip>
+        </Tooltip>
       ) : (
-        <ActionTooltip label={t("servers.actions.start")}>
+        <Tooltip label={t("servers.actions.start")}>
           <Button
             aria-label={t("servers.actions.startAria", { server: server.name })}
-            className="lifecycle-button"
             disabled={isPending || isProcessStatusLoading}
             variant="success"
             onClick={() => {
@@ -219,14 +185,14 @@ export function ServerActions({
               startMutation.mutate();
             }}
           >
-            <Play aria-hidden="true" size={15} />
-            {compact ? null : t("servers.actions.start")}
+            <Play aria-hidden="true" size={16} />
+            {t("servers.actions.start")}
           </Button>
-        </ActionTooltip>
+        </Tooltip>
       )}
       {/* A crashed server may have an auto-restart pending; stop cancels it. */}
       {isCrashed ? (
-        <ActionTooltip label={t("servers.actions.stop")}>
+        <Tooltip label={t("servers.actions.stop")}>
           <Button
             aria-label={t("servers.actions.stopAria", { server: server.name })}
             disabled={isPending || isProcessStatusLoading}
@@ -236,29 +202,31 @@ export function ServerActions({
               setPendingDangerAction("stop");
             }}
           >
-            {compact ? (
-              <Square aria-hidden="true" size={15} />
-            ) : (
-              t("servers.actions.stop")
-            )}
+            {t("servers.actions.stop")}
           </Button>
-        </ActionTooltip>
+        </Tooltip>
       ) : null}
       {processStatus === undefined && runtime.error ? (
-        <span className="inline-error">{runtime.error.message}</span>
+        <Text c="red" size="xs">
+          {runtime.error.message}
+        </Text>
       ) : null}
       {actionError ? (
-        <span className="inline-error">{actionError.message}</span>
+        <Text c="red" size="xs">
+          {actionError.message}
+        </Text>
       ) : null}
       {startGuide ? (
-        <div
+        <Alert
           aria-label={t("servers.startHelp.aria")}
-          className="server-action-guidance"
+          color="yellow"
+          p="xs"
           role="note"
+          title={t(startGuide.titleKey)}
+          w="100%"
         >
-          <strong>{t(startGuide.titleKey)}</strong>
-          <span>{t(startGuide.descriptionKey)}</span>
-        </div>
+          {t(startGuide.descriptionKey)}
+        </Alert>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={t(`servers.actions.${dangerKey}`)}
@@ -285,7 +253,7 @@ export function ServerActions({
           }
         }}
       />
-    </div>
+    </Group>
   );
 }
 
@@ -293,7 +261,11 @@ export function ServerProcessStatusBadge() {
   const runtime = useServerRuntime();
 
   if (runtime.error) {
-    return <span className="inline-error">{runtime.error.message}</span>;
+    return (
+      <Text c="red" component="span" size="xs">
+        {runtime.error.message}
+      </Text>
+    );
   }
 
   return <StatusBadge status={runtime.status} />;

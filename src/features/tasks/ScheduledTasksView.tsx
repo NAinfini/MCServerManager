@@ -1,9 +1,21 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, Plus, Power, Trash2, X } from "lucide-react";
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Box,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Title,
+  Tooltip,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
-import { EmptyState } from "../../components/ui/empty-state";
 import {
   DataTable,
   type DataTableColumn,
@@ -22,7 +34,6 @@ import {
   type ScheduledTaskKind,
   type TaskFormInput,
 } from "./TaskEditorDialog";
-import "../files/operations.css";
 
 interface ScheduledTask {
   id: string;
@@ -52,12 +63,10 @@ interface ScheduledTasksViewProps {
   server: ServerProfile;
 }
 
-function runStatusClass(status: string) {
-  if (status === "completed" || status === "success")
-    return "task-run-status task-run-status-completed";
-  if (status === "failed" || status === "error")
-    return "task-run-status task-run-status-failed";
-  return "task-run-status";
+function runStatusColor(status: string) {
+  if (status === "completed" || status === "success") return "green";
+  if (status === "failed" || status === "error") return "red";
+  return "gray";
 }
 
 function runStatusLabel(status: string, t: (key: string) => string) {
@@ -217,18 +226,22 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       rowHeader: true,
       sortValue: (task) => task.name,
       cell: (task) => (
-        <div className="task-table-name">
-          <strong>{task.name}</strong>
-          <span>{taskKindLabel(task.kind, t)}</span>
+        <Stack gap={0} miw={180}>
+          <Text fw={500} size="sm">
+            {task.name}
+          </Text>
+          <Text c="dimmed" size="xs">
+            {taskKindLabel(task.kind, t)}
+          </Text>
           {task.backupProfileId ? (
-            <small>
+            <Text c="dimmed" size="xs">
               {t("tasks.backup.profile", {
                 profile:
                   profileNames.get(task.backupProfileId) ?? t("common.unknown"),
               })}
-            </small>
+            </Text>
           ) : null}
-        </div>
+        </Stack>
       ),
     },
     {
@@ -247,81 +260,77 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
       header: t("tasks.table.status"),
       sortValue: (task) => task.enabled,
       cell: (task) => (
-        <span
-          className={
-            task.enabled
-              ? "operation-status-enabled"
-              : "operation-status-disabled"
-          }
-        >
+        <Badge color={task.enabled ? "green" : "gray"} variant="dot">
           {task.enabled
             ? t("tasks.status.enabled")
             : t("tasks.status.disabled")}
-        </span>
+        </Badge>
       ),
     },
     {
       id: "actions",
       header: t("tasks.table.actions"),
       cell: (task) => (
-        <div className="operation-table-actions">
-          <Button
-            aria-label={t("tasks.actions.editNamed", { name: task.name })}
-            className="icon-button"
-            disabled={isSaving}
-            title={t("tasks.actions.edit")}
-            variant="ghost"
-            onClick={() => {
-              updateMutation.reset();
-              setComposing(false);
-              setEditingTask(task);
-            }}
-          >
-            <Pencil aria-hidden="true" size={14} />
-          </Button>
-          <Button
-            aria-label={
-              task.enabled
-                ? t("tasks.actions.disableNamed", { name: task.name })
-                : t("tasks.actions.enableNamed", { name: task.name })
-            }
-            className="icon-button"
-            disabled={isSaving}
-            title={
+        <Group gap={2} justify="flex-end" wrap="nowrap">
+          <Tooltip label={t("tasks.actions.edit")}>
+            <ActionIcon
+              aria-label={t("tasks.actions.editNamed", { name: task.name })}
+              disabled={isSaving}
+              onClick={() => {
+                updateMutation.reset();
+                setComposing(false);
+                setEditingTask(task);
+              }}
+            >
+              <Pencil aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip
+            label={
               task.enabled
                 ? t("tasks.actions.disable")
                 : t("tasks.actions.enable")
             }
-            variant="ghost"
-            onClick={() => toggleTask(task)}
           >
-            <Power aria-hidden="true" size={14} />
-          </Button>
-          <Button
-            aria-label={t("tasks.actions.deleteNamed", { name: task.name })}
-            className="icon-button"
-            disabled={deleteMutation.isPending}
-            title={t("tasks.actions.delete")}
-            variant="danger"
-            onClick={() => {
-              deleteMutation.reset();
-              setDeleteTask(task);
-            }}
-          >
-            <Trash2 aria-hidden="true" size={14} />
-          </Button>
-        </div>
+            <ActionIcon
+              aria-label={
+                task.enabled
+                  ? t("tasks.actions.disableNamed", { name: task.name })
+                  : t("tasks.actions.enableNamed", { name: task.name })
+              }
+              disabled={isSaving}
+              onClick={() => toggleTask(task)}
+            >
+              <Power aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
+          <Tooltip label={t("tasks.actions.delete")}>
+            <ActionIcon
+              aria-label={t("tasks.actions.deleteNamed", { name: task.name })}
+              color="red"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                deleteMutation.reset();
+                setDeleteTask(task);
+              }}
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       ),
     },
   ];
 
   return (
-    <section className="settings-panel" aria-label={t("tasks.aria")}>
-      <div className="section-heading">
-        <div className="section-heading-copy">
-          <h2>{t("tasks.title")}</h2>
-          <span>{t("tasks.description")}</span>
-        </div>
+    <Stack aria-label={t("tasks.aria")} component="section" gap="md">
+      <Group justify="space-between" wrap="nowrap">
+        <Box>
+          <Title order={3}>{t("tasks.title")}</Title>
+          <Text c="dimmed" size="sm">
+            {t("tasks.description")}
+          </Text>
+        </Box>
         <Button
           disabled={isSaving}
           variant="primary"
@@ -331,119 +340,138 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
             setComposing(true);
           }}
         >
-          <Plus aria-hidden="true" size={15} />
+          <Plus aria-hidden="true" size={14} />
           {t("tasks.new")}
         </Button>
-      </div>
+      </Group>
       {/* The editor used to sit permanently above the list, so the schedule the
           user came to read started below the fold. It is a composer now, opened
           on demand and closed again once the task is saved. */}
       {editorOpen ? (
-        <div className="task-editor">
-          <div className="task-editor-head">
-            <strong>
-              {editingTask ? t("tasks.editTitle") : t("tasks.newTitle")}
-            </strong>
-            <Button
-              disabled={isSaving}
-              variant="ghost"
-              onClick={() => {
-                createMutation.reset();
-                updateMutation.reset();
-                setEditingTask(null);
-                setComposing(false);
-              }}
-            >
-              <X aria-hidden="true" size={15} />
-              {t("common.cancel")}
-            </Button>
-          </div>
-          <TaskEditorDialog
-            backupProfiles={profiles}
-            key={editingTask?.id ?? "create-task"}
-            initialTask={editingTask ?? undefined}
-            isSaving={isSaving}
-            submitLabel={editingTask ? t("tasks.save") : t("tasks.add")}
-            onCreate={handleTaskSubmit}
-          />
-          {profilesQuery.error ? (
-            <p className="danger-text" role="alert">
-              {t("backups.profiles.loadError")}: {profilesQuery.error.message}
-            </p>
-          ) : null}
-        </div>
+        <Paper p="md">
+          <Stack gap="md">
+            <Group justify="space-between">
+              <Title order={4}>
+                {editingTask ? t("tasks.editTitle") : t("tasks.newTitle")}
+              </Title>
+              <Button
+                disabled={isSaving}
+                variant="ghost"
+                onClick={() => {
+                  createMutation.reset();
+                  updateMutation.reset();
+                  setEditingTask(null);
+                  setComposing(false);
+                }}
+              >
+                <X aria-hidden="true" size={14} />
+                {t("common.cancel")}
+              </Button>
+            </Group>
+            <TaskEditorDialog
+              backupProfiles={profiles}
+              key={editingTask?.id ?? "create-task"}
+              initialTask={editingTask ?? undefined}
+              isSaving={isSaving}
+              submitLabel={editingTask ? t("tasks.save") : t("tasks.add")}
+              onCreate={handleTaskSubmit}
+            />
+            {profilesQuery.error ? (
+              <Alert color="red" py="xs">
+                {t("backups.profiles.loadError")}: {profilesQuery.error.message}
+              </Alert>
+            ) : null}
+          </Stack>
+        </Paper>
       ) : null}
-      {createMutation.error ? (
-        <p className="danger-text" role="alert">
-          {createMutation.error.message}
-        </p>
-      ) : null}
-      {updateMutation.error ? (
-        <p className="danger-text" role="alert">
-          {updateMutation.error.message}
-        </p>
-      ) : null}
-      {deleteMutation.error ? (
-        <p className="danger-text" role="alert">
-          {deleteMutation.error.message}
-        </p>
-      ) : null}
+      {[createMutation, updateMutation, deleteMutation].map(
+        (mutation, index) =>
+          mutation.error ? (
+            <Alert color="red" key={index} py="xs">
+              {mutation.error.message}
+            </Alert>
+          ) : null,
+      )}
       {tasksQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("tasks.loadError")}</strong>
-          <span>{tasksQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => tasksQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert color="red" title={t("tasks.loadError")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{tasksQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => tasksQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
 
       {!tasksQuery.error && tasks.length === 0 ? (
-        <EmptyState
-          illustration="/illustrations/no-tasks.png"
-          title={t("tasks.empty.title")}
-          description={t("tasks.empty.description")}
-        />
+        <Paper p="md">
+          <Text fw={600} size="sm">
+            {t("tasks.empty.title")}
+          </Text>
+          <Text c="dimmed" size="sm">
+            {t("tasks.empty.description")}
+          </Text>
+        </Paper>
       ) : (
-        <div className="operation-table-scroll tasks-table-scroll">
-          <DataTable
-            caption={t("tasks.title")}
-            className="operation-table tasks-table"
-            columns={columns}
-            getRowKey={(task) => task.id}
-            rows={tasks}
-          />
-        </div>
+        <Paper p={0}>
+          <Table.ScrollContainer minWidth={720}>
+            <DataTable
+              caption={t("tasks.title")}
+              columns={columns}
+              getRowKey={(task) => task.id}
+              rows={tasks}
+            />
+          </Table.ScrollContainer>
+        </Paper>
       )}
 
       {runsQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("tasks.runsLoadError")}</strong>
-          <span>{runsQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => runsQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert color="red" title={t("tasks.runsLoadError")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{runsQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => runsQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
       {!runsQuery.error && runs.length > 0 ? (
-        <div className="task-runs-section">
-          <p className="task-runs-heading">{t("tasks.recentRuns")}</p>
-          {runs.slice(0, 5).map((run) => (
-            <div className="task-run-item" key={run.id}>
-              <span className={runStatusClass(run.status)}>
-                {runStatusLabel(run.status, t)}
-              </span>
-              <strong className="task-run-name">
-                {tasks.find((task) => task.id === run.taskId)?.name ??
-                  t("common.unknown")}
-              </strong>
-              <span className="task-run-message">{run.message}</span>
-              <span className="task-run-time">
-                {formatDateTime(run.startedAt, language)}
-              </span>
-            </div>
-          ))}
-        </div>
+        <Stack gap="xs">
+          <Title order={4}>{t("tasks.recentRuns")}</Title>
+          <Paper p={0}>
+            <Table verticalSpacing="xs">
+              <Table.Tbody>
+                {runs.slice(0, 5).map((run) => (
+                  <Table.Tr key={run.id}>
+                    <Table.Td w={1}>
+                      <Badge color={runStatusColor(run.status)}>
+                        {runStatusLabel(run.status, t)}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fw={500} size="sm" truncate>
+                        {tasks.find((task) => task.id === run.taskId)?.name ??
+                          t("common.unknown")}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text c="dimmed" size="sm">
+                        {run.message}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td
+                      c="dimmed"
+                      fz="sm"
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      {formatDateTime(run.startedAt, language)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+        </Stack>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={t("danger.labels.deleteTask")}
@@ -461,6 +489,6 @@ export function ScheduledTasksView({ server }: ScheduledTasksViewProps) {
           }
         }}
       />
-    </section>
+    </Stack>
   );
 }

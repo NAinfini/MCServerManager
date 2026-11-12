@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
-import { Bell } from "lucide-react";
+import { Alert, Box, Group, Stack, Switch, Text } from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
-import { Switch } from "../../components/ui/switch";
+import { SettingRow, SettingSection } from "../../components/ui/setting-row";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
 import { notificationKeys } from "../notifications/api";
@@ -113,104 +113,109 @@ export function NotificationSettings() {
   }
 
   return (
-    <section
-      className="settings-panel"
+    <SettingSection
+      title={t("settings.notifications.title")}
       aria-label={t("settings.notifications.title")}
+      actions={
+        <Text size="sm" c="dimmed" aria-live="polite">
+          {saveMutation.isPending
+            ? t("settings.save.saving")
+            : saveMutation.isSuccess
+              ? t("settings.save.saved")
+              : ""}
+        </Text>
+      }
     >
-      <div className="section-heading">
-        <h2>{t("settings.notifications.title")}</h2>
-        <Bell aria-hidden="true" size={18} />
-      </div>
       {preferencesQuery.error ? (
-        <div
+        <Alert
           aria-label={t("settings.notifications.preferencesLoadError")}
-          className="list-state list-state-error"
+          color="red"
+          my="sm"
           role="alert"
+          title={t("settings.notifications.preferencesLoadError")}
         >
-          <strong>{t("settings.notifications.preferencesLoadError")}</strong>
-          <span>{preferencesQuery.error.message}</span>
-          <Button
-            disabled={preferencesQuery.isFetching}
-            variant="secondary"
-            onClick={() => preferencesQuery.refetch()}
-          >
-            {t("common.retry")}
-          </Button>
-        </div>
+          <Group justify="space-between" gap="sm">
+            <Text size="sm">{preferencesQuery.error.message}</Text>
+            <Button
+              disabled={preferencesQuery.isFetching}
+              variant="secondary"
+              onClick={() => preferencesQuery.refetch()}
+            >
+              {t("common.retry")}
+            </Button>
+          </Group>
+        </Alert>
       ) : null}
       {saveMutation.error ? (
-        <p className="danger-text" role="alert">
+        <Alert color="red" my="sm" role="alert">
           {saveMutation.error.message}
-        </p>
+        </Alert>
       ) : null}
-      <span className="settings-save-state" aria-live="polite">
-        {saveMutation.isPending
-          ? t("settings.save.saving")
-          : saveMutation.isSuccess
-            ? t("settings.save.saved")
-            : ""}
-      </span>
       {preferencesQuery.isLoading ? (
         <LoadingState
           message={t("settings.notifications.preferencesLoading")}
         />
-      ) : preferences ? (
-        <div className="settings-grid">
-          {notificationPreferenceRows.map((row) => (
-            <label className="switch-row" key={row.key}>
+      ) : null}
+      {preferences
+        ? notificationPreferenceRows.map((row) => (
+            <SettingRow key={row.key} label={t(row.labelKey)}>
               <Switch
                 checked={preferences[row.key]}
                 disabled={saveMutation.isPending}
                 aria-label={t(row.labelKey)}
-                onCheckedChange={(checked) =>
-                  updatePreference(row.key, checked)
+                onChange={(event) =>
+                  updatePreference(row.key, event.currentTarget.checked)
                 }
               />
-              {t(row.labelKey)}
-            </label>
-          ))}
-        </div>
-      ) : null}
-      {eventsQuery.isLoading ? (
-        <LoadingState message={t("settings.notifications.historyLoading")} />
-      ) : eventsQuery.error ? (
-        <div
-          aria-label={t("settings.notifications.historyLoadError")}
-          className="list-state list-state-error"
-          role="alert"
-        >
-          <strong>{t("settings.notifications.historyLoadError")}</strong>
-          <span>{eventsQuery.error.message}</span>
-          <Button
-            aria-label={t("settings.notifications.retryHistory")}
-            disabled={eventsQuery.isFetching}
-            variant="secondary"
-            onClick={() => eventsQuery.refetch()}
+            </SettingRow>
+          ))
+        : null}
+      <Box py="sm">
+        {eventsQuery.isLoading ? (
+          <LoadingState message={t("settings.notifications.historyLoading")} />
+        ) : eventsQuery.error ? (
+          <Alert
+            aria-label={t("settings.notifications.historyLoadError")}
+            color="red"
+            role="alert"
+            title={t("settings.notifications.historyLoadError")}
           >
-            {t("common.retry")}
-          </Button>
-        </div>
-      ) : eventsQuery.data?.length ? (
-        <div className="notification-history">
-          {eventsQuery.data.map((event) => (
-            <div key={event.id}>
-              <strong>{event.title}</strong>
-              <span>{event.message}</span>
-              <span>
-                {event.desktopDelivered
-                  ? t("settings.notifications.desktopSent")
-                  : t("settings.notifications.inlineOnly")}
-                {" - "}
-                {formatDateTime(event.createdAt, language)}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="list-state">
-          {t("settings.notifications.historyEmpty")}
-        </div>
-      )}
-    </section>
+            <Group justify="space-between" gap="sm">
+              <Text size="sm">{eventsQuery.error.message}</Text>
+              <Button
+                aria-label={t("settings.notifications.retryHistory")}
+                disabled={eventsQuery.isFetching}
+                variant="secondary"
+                onClick={() => eventsQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </Group>
+          </Alert>
+        ) : eventsQuery.data?.length ? (
+          <Stack gap="sm">
+            {eventsQuery.data.map((event) => (
+              <Box key={event.id}>
+                <Text size="sm" fw={500}>
+                  {event.title}
+                </Text>
+                <Text size="sm">{event.message}</Text>
+                <Text size="xs" c="dimmed">
+                  {event.desktopDelivered
+                    ? t("settings.notifications.desktopSent")
+                    : t("settings.notifications.inlineOnly")}
+                  {" - "}
+                  {formatDateTime(event.createdAt, language)}
+                </Text>
+              </Box>
+            ))}
+          </Stack>
+        ) : (
+          <Text size="sm" c="dimmed">
+            {t("settings.notifications.historyEmpty")}
+          </Text>
+        )}
+      </Box>
+    </SettingSection>
   );
 }

@@ -33,8 +33,11 @@ describe("NotificationCenter", () => {
 
     render(<NotificationCenter onOpenSettings={vi.fn()} />);
 
-    expect(screen.getByText("Could not update the mod.")).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Open notifications" }),
+    );
+    expect(screen.getByText("Could not update the mod.")).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Dismiss notification" }),
@@ -60,6 +63,9 @@ describe("NotificationCenter", () => {
 
     render(<NotificationCenter onOpenSettings={vi.fn()} />);
 
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open notifications" }),
+    );
     expect(await screen.findByText("Server crashed")).toBeInTheDocument();
     expect(screen.getByText("Exit code 1")).toBeInTheDocument();
   });

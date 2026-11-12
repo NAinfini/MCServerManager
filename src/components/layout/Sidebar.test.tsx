@@ -232,9 +232,7 @@ describe("Sidebar server organization", () => {
     });
 
     const group = await screen.findByRole("group", { name: /new group/i });
-    const trigger = group.querySelector<HTMLButtonElement>(
-      ".server-nav-group-header",
-    )!;
+    const trigger = within(group).getByRole("button", { name: /new group/i });
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");
     expect(trigger).toHaveAttribute("aria-expanded", "true");
 
@@ -304,7 +302,11 @@ describe("Sidebar status lines", () => {
     running: { en: "Running", zh: "运行中", tone: "running" },
     stopping: { en: "Stopping", zh: "正在停止", tone: "stopping" },
     stopped: { en: "Stopped", zh: "已停止", tone: "stopped" },
-    crashed: { en: "Crashed · see why", zh: "崩溃 · 查看原因", tone: "crashed" },
+    crashed: {
+      en: "Crashed · see why",
+      zh: "崩溃 · 查看原因",
+      tone: "crashed",
+    },
     externalRunning: {
       en: "Running externally",
       zh: "在外部运行",
@@ -318,15 +320,17 @@ describe("Sidebar status lines", () => {
 
     const crashedRow = screen.getByRole("button", { name: /modded forge/i });
     const crashedLine = within(crashedRow).getByText("Crashed · see why");
-    expect(crashedLine).toHaveClass("server-nav-status-crashed");
-    expect(crashedRow.querySelector(".status-dot")).toHaveClass(
-      "status-dot-crashed",
+    expect(crashedLine).toHaveAttribute("data-tone", "crashed");
+    expect(crashedRow.querySelector("[data-status]")).toHaveAttribute(
+      "data-status",
+      "crashed",
     );
 
     // Every row carries a line now, so calm ones must not read as alarms.
     const stoppedRow = screen.getByRole("button", { name: /survival smp/i });
-    expect(within(stoppedRow).getByText("Stopped")).not.toHaveClass(
-      "server-nav-status-crashed",
+    expect(within(stoppedRow).getByText("Stopped")).not.toHaveAttribute(
+      "data-tone",
+      "crashed",
     );
     expect(within(stoppedRow).queryByText(/crashed/i)).not.toBeInTheDocument();
   });
@@ -348,8 +352,9 @@ describe("Sidebar status lines", () => {
 
     renderSidebar({ survival: status });
     const row = screen.getByRole("button", { name: /survival smp/i });
-    expect(within(row).getByText(line.en)).toHaveClass(
-      `server-nav-status-${line.tone}`,
+    expect(within(row).getByText(line.en)).toHaveAttribute(
+      "data-tone",
+      line.tone,
     );
   });
 
@@ -359,8 +364,9 @@ describe("Sidebar status lines", () => {
 
     const crashedRow = screen.getByRole("button", { name: /modded forge/i });
     expect(within(crashedRow).queryByText(/crashed/i)).not.toBeInTheDocument();
-    expect(crashedRow.querySelector(".status-dot")).toHaveClass(
-      "status-dot-crashed",
+    expect(crashedRow.querySelector("[data-status]")).toHaveAttribute(
+      "data-status",
+      "crashed",
     );
   });
 });

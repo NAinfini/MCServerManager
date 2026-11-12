@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, RefreshCw } from "lucide-react";
+import {
+  Button as MantineButton,
+  Divider,
+  Group,
+  Paper,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { Switch } from "../../components/ui/switch";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../../domain/server";
 import {
@@ -49,142 +58,156 @@ export function PlayitSetupPanel({ server }: { server: ServerProfile }) {
   const error = saveShare.error ?? openSetup.error ?? saveSettings.error;
 
   return (
-    <section
-      className="tunnel-workbench-section playit-setup"
-      aria-labelledby="playit-setup-title"
-    >
-      <div className="section-heading">
-        <h2 id="playit-setup-title">{t("tunnels.playit.title")}</h2>
-        <span>{t("tunnels.playit.description")}</span>
-      </div>
+    <Paper aria-labelledby="playit-setup-title" component="section" p="md">
+      <Stack gap={2} mb="sm">
+        <Title id="playit-setup-title" order={3}>
+          {t("tunnels.playit.title")}
+        </Title>
+        <Text c="dimmed" size="sm">
+          {t("tunnels.playit.description")}
+        </Text>
+      </Stack>
 
-      <div className="playit-step">
-        <strong>{t("tunnels.playit.step.install")}</strong>
-        {status?.state === "not_installed" ? (
-          <>
-            <p>{t("tunnels.playit.notInstalled")}</p>
-            <div className="form-actions">
-              <a
-                className="button button-secondary"
-                href={status.downloadUrl}
-                rel="noreferrer"
-                target="_blank"
-              >
-                <ExternalLink aria-hidden="true" size={15} />
-                {t("tunnels.playit.download")}
-              </a>
+      <Stack gap="md">
+        <Stack gap={6}>
+          <Text fw={600} size="sm">
+            {t("tunnels.playit.step.install")}
+          </Text>
+          {status?.state === "not_installed" ? (
+            <>
+              <Text size="sm">{t("tunnels.playit.notInstalled")}</Text>
+              <Group gap="xs">
+                <MantineButton
+                  component="a"
+                  href={status.downloadUrl}
+                  leftSection={<ExternalLink aria-hidden="true" size={16} />}
+                  rel="noreferrer"
+                  target="_blank"
+                  variant="default"
+                >
+                  {t("tunnels.playit.download")}
+                </MantineButton>
+                <Button
+                  variant="secondary"
+                  onClick={() => statusQuery.refetch()}
+                >
+                  <RefreshCw aria-hidden="true" size={16} />
+                  {t("tunnels.playit.recheck")}
+                </Button>
+              </Group>
+            </>
+          ) : status?.state === "needs_setup" ? (
+            <>
+              <Text size="sm">{t("tunnels.playit.needsSetup")}</Text>
+              <Group gap="xs">
+                <Button
+                  disabled={openSetup.isPending}
+                  variant="primary"
+                  onClick={() => openSetup.mutate()}
+                >
+                  {t("tunnels.playit.openSetup")}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => statusQuery.refetch()}
+                >
+                  <RefreshCw aria-hidden="true" size={16} />
+                  {t("tunnels.playit.recheck")}
+                </Button>
+              </Group>
+            </>
+          ) : status ? (
+            <Text c="dimmed" ff="monospace" size="xs">
+              {t("tunnels.playit.found", { path: status.exePath })}
+            </Text>
+          ) : null}
+        </Stack>
+
+        <Divider />
+
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            setSaved(false);
+            saveShare.mutate(
+              { serverId: server.id, publicAddress: trimmed },
+              { onSuccess: () => setSaved(true) },
+            );
+          }}
+        >
+          <Stack gap={6}>
+            <Text component="label" fw={600} htmlFor="playit-address" size="sm">
+              {t("tunnels.playit.step.address")}
+            </Text>
+            <Group gap="xs" wrap="nowrap">
+              <TextInput
+                aria-label={t("tunnels.playit.addressLabel")}
+                ff="monospace"
+                flex={1}
+                id="playit-address"
+                placeholder={t("tunnels.playit.addressPlaceholder")}
+                value={address}
+                onChange={(event) => {
+                  setAddress(event.currentTarget.value);
+                  setSaved(false);
+                }}
+              />
               <Button
+                disabled={saveShare.isPending || unchanged}
+                style={{ flexShrink: 0 }}
+                type="submit"
                 variant="secondary"
-                onClick={() => statusQuery.refetch()}
               >
-                <RefreshCw aria-hidden="true" size={15} />
-                {t("tunnels.playit.recheck")}
+                {t("tunnels.playit.saveAddress")}
               </Button>
-            </div>
-          </>
-        ) : status?.state === "needs_setup" ? (
-          <>
-            <p>{t("tunnels.playit.needsSetup")}</p>
-            <div className="form-actions">
-              <Button
-                disabled={openSetup.isPending}
-                variant="primary"
-                onClick={() => openSetup.mutate()}
-              >
-                {t("tunnels.playit.openSetup")}
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => statusQuery.refetch()}
-              >
-                <RefreshCw aria-hidden="true" size={15} />
-                {t("tunnels.playit.recheck")}
-              </Button>
-            </div>
-          </>
-        ) : status ? (
-          <p>{t("tunnels.playit.found", { path: status.exePath })}</p>
-        ) : null}
-      </div>
+            </Group>
+            <Text c={saved ? "green" : "dimmed"} size="xs">
+              {saved
+                ? t("tunnels.playit.addressSaved")
+                : t("tunnels.playit.addressHelp")}
+            </Text>
+          </Stack>
+        </form>
 
-      <form
-        className="playit-step"
-        onSubmit={(event) => {
-          event.preventDefault();
-          setSaved(false);
-          saveShare.mutate(
-            { serverId: server.id, publicAddress: trimmed },
-            { onSuccess: () => setSaved(true) },
-          );
-        }}
-      >
-        <label htmlFor="playit-address">
-          <strong>{t("tunnels.playit.step.address")}</strong>
-        </label>
-        <div className="inline-field-row">
-          <TextField
-            id="playit-address"
-            aria-label={t("tunnels.playit.addressLabel")}
-            placeholder={t("tunnels.playit.addressPlaceholder")}
-            value={address}
-            onChange={(event) => {
-              setAddress(event.target.value);
-              setSaved(false);
-            }}
-          />
-          <Button
-            disabled={saveShare.isPending || unchanged}
-            type="submit"
-            variant="secondary"
-          >
-            {t("tunnels.playit.saveAddress")}
-          </Button>
-        </div>
-        <p className="playit-help">
-          {saved ? t("tunnels.playit.addressSaved") : t("tunnels.playit.addressHelp")}
-        </p>
-      </form>
+        <Divider />
 
-      <div className="playit-step">
-        <strong>{t("tunnels.playit.step.toggle")}</strong>
-        <label className="switch-row">
+        <Stack gap="xs">
+          <Text fw={600} size="sm">
+            {t("tunnels.playit.step.toggle")}
+          </Text>
           <Switch
-            aria-label={t("tunnels.playit.startWithServer")}
             checked={share?.startTunnelWithServer ?? false}
+            description={t("tunnels.playit.startWithServerHelp")}
             disabled={!installed || !share || saveShare.isPending}
-            onCheckedChange={(checked) =>
+            label={t("tunnels.playit.startWithServer")}
+            onChange={(event) =>
               saveShare.mutate({
                 serverId: server.id,
-                startTunnelWithServer: checked,
+                startTunnelWithServer: event.currentTarget.checked,
               })
             }
           />
-          {t("tunnels.playit.startWithServer")}
-        </label>
-        <p className="playit-help">{t("tunnels.playit.startWithServerHelp")}</p>
-        <label className="switch-row">
           <Switch
-            aria-label={t("tunnels.playit.stopWhenIdle")}
             checked={status?.stopWhenIdle ?? true}
             disabled={!status || saveSettings.isPending}
-            onCheckedChange={(checked) =>
-              saveSettings.mutate({ stopWhenIdle: checked })
+            label={t("tunnels.playit.stopWhenIdle")}
+            onChange={(event) =>
+              saveSettings.mutate({ stopWhenIdle: event.currentTarget.checked })
             }
           />
-          {t("tunnels.playit.stopWhenIdle")}
-        </label>
-        {status?.lastError ? (
-          <p className="playit-help">
-            {t("tunnels.playit.lastError", { error: status.lastError })}
-          </p>
-        ) : null}
-      </div>
+          {status?.lastError ? (
+            <Text c="dimmed" size="xs">
+              {t("tunnels.playit.lastError", { error: status.lastError })}
+            </Text>
+          ) : null}
+        </Stack>
 
-      {error ? (
-        <p className="danger-text" role="alert">
-          {error.message}
-        </p>
-      ) : null}
-    </section>
+        {error ? (
+          <Text c="red" role="alert" size="sm">
+            {error.message}
+          </Text>
+        ) : null}
+      </Stack>
+    </Paper>
   );
 }

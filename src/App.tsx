@@ -35,6 +35,11 @@ import {
 import { installRendererLogger } from "./lib/app-logger";
 import { useProcessSummaryPolling } from "./lib/polling";
 import { queryKeys } from "./lib/query-keys";
+import { MantineProvider } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
+import { theme } from "./theme";
+import "@mantine/core/styles.css";
+import "@mantine/notifications/styles.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import "./styles/command-studio.css";
@@ -109,15 +114,26 @@ class AppErrorBoundary extends Component<
   }
 }
 
+/* The light/dark choice lives in app settings; Mantine follows it. */
+function ThemedApp() {
+  const { resolvedTheme } = useAppSettings();
+  return (
+    <MantineProvider forceColorScheme={resolvedTheme} theme={theme}>
+      <Notifications position="bottom-right" />
+      <AppErrorBoundary>
+        <AppearanceProvider>
+          <AppRuntime />
+        </AppearanceProvider>
+      </AppErrorBoundary>
+    </MantineProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppSettingsProvider>
-        <AppErrorBoundary>
-          <AppearanceProvider>
-            <AppRuntime />
-          </AppearanceProvider>
-        </AppErrorBoundary>
+        <ThemedApp />
       </AppSettingsProvider>
     </QueryClientProvider>
   );

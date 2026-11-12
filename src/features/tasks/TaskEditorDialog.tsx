@@ -1,7 +1,15 @@
 import { FormEvent, useState } from "react";
+import {
+  Button as MantineButton,
+  Group,
+  NumberInput,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { Select } from "../../components/ui/select";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 
 export type ScheduledTaskKind =
@@ -121,105 +129,123 @@ export function TaskEditorDialog({
   }
 
   return (
-    <form className="create-server-form" onSubmit={handleSubmit}>
-      <label>
-        {t("tasks.form.name")}
-        <TextField
-          placeholder={t("tasks.form.name")}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <label>
-        {t("tasks.form.action")}
-        <Select
-          ariaLabel={t("tasks.form.action")}
-          options={taskKindOptions}
-          value={kind}
-          onValueChange={(value) => setKind(value as ScheduledTaskKind)}
-        />
-      </label>
-      <label>
-        {t("tasks.form.schedule")}
-        <Select
-          ariaLabel={t("tasks.form.schedule")}
-          options={scheduleKindOptions}
-          value={scheduleKind}
-          onValueChange={(value) => setScheduleKind(value as ScheduleKind)}
-        />
-      </label>
-      {scheduleKind === "interval" ? (
-        <label>
-          {t("tasks.form.everyMinutes")}
-          <TextField
+    <form onSubmit={handleSubmit}>
+      <Stack gap="md">
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+          <TextInput
+            autoComplete="off"
+            label={t("tasks.form.name")}
+            placeholder={t("tasks.form.name")}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Stack gap={4}>
+            <Text fw={500} size="sm">
+              {t("tasks.form.action")}
+            </Text>
+            <Select
+              ariaLabel={t("tasks.form.action")}
+              options={taskKindOptions}
+              value={kind}
+              onValueChange={(value) => setKind(value as ScheduledTaskKind)}
+            />
+          </Stack>
+          <Stack gap={4}>
+            <Text fw={500} size="sm">
+              {t("tasks.form.schedule")}
+            </Text>
+            <Select
+              ariaLabel={t("tasks.form.schedule")}
+              options={scheduleKindOptions}
+              value={scheduleKind}
+              onValueChange={(value) => setScheduleKind(value as ScheduleKind)}
+            />
+          </Stack>
+        </SimpleGrid>
+        {scheduleKind === "interval" ? (
+          <NumberInput
+            allowDecimal={false}
+            allowNegative={false}
+            label={t("tasks.form.everyMinutes")}
+            maw={220}
             min={1}
             required
-            type="number"
             value={intervalMinutes}
-            onChange={(event) => setIntervalMinutes(Number(event.target.value))}
+            withAsterisk={false}
+            onChange={(value) => setIntervalMinutes(Number(value))}
           />
-        </label>
-      ) : (
-        <>
-          <label>
-            {t("tasks.form.timeOfDay")}
-            <TextField
+        ) : (
+          <Group align="flex-end" gap="md">
+            <TextInput
+              label={t("tasks.form.timeOfDay")}
               required
               type="time"
               value={timeOfDay}
+              w={140}
+              withAsterisk={false}
               onChange={(event) => setTimeOfDay(event.target.value)}
             />
-          </label>
-          <fieldset className="task-weekdays">
-            <legend>{t("tasks.form.weekdays")}</legend>
-            <div role="group" aria-label={t("tasks.form.weekdays")}>
-              {[0, 1, 2, 3, 4, 5, 6].map((day) => {
-                const selected = weekdays.includes(day);
-                return (
-                  <Button
-                    aria-pressed={selected}
-                    key={day}
-                    variant={selected ? "primary" : "secondary"}
-                    onClick={() =>
-                      setWeekdays((current) =>
-                        selected
-                          ? current.filter((value) => value !== day)
-                          : [...current, day].sort(),
-                      )
-                    }
-                  >
-                    {t(`tasks.weekday.${day}`)}
-                  </Button>
-                );
-              })}
-            </div>
-          </fieldset>
-        </>
-      )}
-      {kind === "command" ? (
-        <label>
-          {t("tasks.form.command")}
-          <TextField
+            <Stack gap={4}>
+              <Text fw={500} size="sm">
+                {t("tasks.form.weekdays")}
+              </Text>
+              {/* Fixed-width toggles in one strip: selecting or hovering a day
+                  never shifts its neighbours. */}
+              <MantineButton.Group aria-label={t("tasks.form.weekdays")}>
+                {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                  const selected = weekdays.includes(day);
+                  return (
+                    <MantineButton
+                      aria-pressed={selected}
+                      key={day}
+                      px={0}
+                      variant={selected ? "filled" : "default"}
+                      w={52}
+                      onClick={() =>
+                        setWeekdays((current) =>
+                          selected
+                            ? current.filter((value) => value !== day)
+                            : [...current, day].sort(),
+                        )
+                      }
+                    >
+                      {t(`tasks.weekday.${day}`)}
+                    </MantineButton>
+                  );
+                })}
+              </MantineButton.Group>
+            </Stack>
+          </Group>
+        )}
+        {kind === "command" ? (
+          <TextInput
+            autoComplete="off"
+            ff="monospace"
+            label={t("tasks.form.command")}
             placeholder={t("tasks.kind.command")}
             value={command}
             onChange={(event) => setCommand(event.target.value)}
           />
-        </label>
-      ) : null}
-      {kind === "world_backup" ? (
-        <label>
-          {t("tasks.form.backupProfile")}
-          <Select
-            ariaLabel={t("tasks.form.backupProfile")}
-            options={backupProfileOptions}
-            value={backupProfileId}
-            onValueChange={setBackupProfileId}
-          />
-        </label>
-      ) : null}
-      <Button disabled={!canSubmit} type="submit" variant="primary">
-        {submitLabel ?? t("tasks.add")}
-      </Button>
+        ) : null}
+        {kind === "world_backup" ? (
+          <Stack gap={4} maw={320}>
+            <Text fw={500} size="sm">
+              {t("tasks.form.backupProfile")}
+            </Text>
+            <Select
+              ariaLabel={t("tasks.form.backupProfile")}
+              options={backupProfileOptions}
+              value={backupProfileId}
+              onValueChange={setBackupProfileId}
+            />
+          </Stack>
+        ) : null}
+        <Group justify="flex-end">
+          <Button disabled={!canSubmit} type="submit" variant="primary">
+            {submitLabel ?? t("tasks.add")}
+          </Button>
+        </Group>
+      </Stack>
     </form>
   );
 }

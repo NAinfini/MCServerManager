@@ -206,7 +206,7 @@ describe("ServerActions", () => {
     await userEvent.click(forceStop);
     expect(forceStopServer).not.toHaveBeenCalled();
 
-    const dialog = await screen.findByRole("alertdialog", {
+    const dialog = await screen.findByRole("dialog", {
       name: "Force stop the server?",
     });
     expect(dialog).toHaveTextContent(/survival may still be saving the world/i);
@@ -219,7 +219,7 @@ describe("ServerActions", () => {
     await userEvent.click(forceStop);
     await userEvent.click(
       within(
-        await screen.findByRole("alertdialog", {
+        await screen.findByRole("dialog", {
           name: "Force stop the server?",
         }),
       ).getByRole("button", { name: "Force stop" }),
@@ -227,7 +227,7 @@ describe("ServerActions", () => {
     expect(forceStopServer).toHaveBeenCalledWith("server-1");
     expect(stopServer).not.toHaveBeenCalled();
     await waitFor(() =>
-      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
   });
 

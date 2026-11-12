@@ -245,7 +245,10 @@ describe("ServerBackupsView", () => {
     renderBackups();
 
     const section = await screen.findByTestId("backups-settings");
-    expect(section).not.toHaveAttribute("open");
+    const toggle = within(section).getByRole("button", {
+      name: /Backup settings/,
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
     await waitFor(() =>
       expect(section).toHaveTextContent(
         "Every 6 h · keeps 8 recent, 5 daily, 2 weekly",
@@ -253,7 +256,7 @@ describe("ServerBackupsView", () => {
     );
 
     await user.click(within(section).getByText("Backup settings"));
-    expect(section).toHaveAttribute("open");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     await user.click(screen.getByRole("button", { name: "Save settings" }));
 
     await waitFor(() => {
@@ -290,7 +293,9 @@ describe("ServerBackupsView", () => {
 
     const section = await screen.findByTestId("backups-settings");
     await user.click(within(section).getByText("Backup settings"));
-    await user.click(screen.getByRole("button", { name: "Choose folder" }));
+    await user.click(
+      await screen.findByRole("button", { name: "Choose folder" }),
+    );
     expect(
       screen.getByRole("textbox", { name: "Backup location" }),
     ).toHaveValue("E:/mc-backups");
@@ -331,13 +336,16 @@ describe("ServerBackupsView", () => {
     const deleteButton = await screen.findByRole("button", {
       name: "Delete backup",
     });
-    expect(deleteButton).toHaveClass("icon-button");
     await user.click(deleteButton);
     expect(invoke).not.toHaveBeenCalledWith("delete_server_backup", {
       backupId: backup.id,
     });
 
-    await user.click(screen.getByRole("button", { name: "Delete backup" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete backup",
+      }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_server_backup", {
@@ -350,7 +358,9 @@ describe("ServerBackupsView", () => {
     const user = userEvent.setup();
     renderBackups();
 
-    await user.click(await screen.findByTitle("Restore backup"));
+    await user.click(
+      await screen.findByRole("button", { name: "Restore backup" }),
+    );
     await user.click(screen.getByRole("button", { name: "Preview restore" }));
     expect(invoke).not.toHaveBeenCalledWith("restore_world_backup", {
       input: {
@@ -371,7 +381,9 @@ describe("ServerBackupsView", () => {
     });
 
     await user.click(
-      await screen.findByRole("button", { name: "Restore backup" }),
+      within(await screen.findByRole("dialog")).getByRole("button", {
+        name: "Restore backup",
+      }),
     );
 
     await waitFor(() => {
@@ -397,9 +409,11 @@ describe("ServerBackupsView", () => {
 
     renderBackups();
 
-    expect(
-      await screen.findByTitle("Stop the server before restoring a backup"),
-    ).toBeDisabled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Restore backup" }),
+      ).toBeDisabled(),
+    );
   });
 
   it("previews and restores a full backup without a world target", async () => {
@@ -423,13 +437,19 @@ describe("ServerBackupsView", () => {
     });
 
     renderBackups();
-    await user.click(await screen.findByTitle("Restore backup"));
+    await user.click(
+      await screen.findByRole("button", { name: "Restore backup" }),
+    );
 
     expect(screen.queryByLabelText("Target directory")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Preview restore" }));
     expect(await screen.findByText("Full server restore")).toBeInTheDocument();
     expect(screen.getByText("server.properties")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Restore backup" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Restore backup",
+      }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("restore_world_backup", {
@@ -452,9 +472,11 @@ describe("ServerBackupsView", () => {
 
     renderBackups(queryClient);
 
-    expect(
-      await screen.findByTitle("Stop the server before restoring a backup"),
-    ).toBeDisabled();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Restore backup" }),
+      ).toBeDisabled(),
+    );
     expect(invoke).not.toHaveBeenCalledWith("get_server_process_status", {
       serverId: server.id,
     });

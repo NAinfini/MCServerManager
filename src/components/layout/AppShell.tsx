@@ -3,6 +3,7 @@ import {
   ChevronLeft,
   CircleAlert,
   Plus,
+  Search,
   Server as ServerIcon,
   X,
 } from "lucide-react";
@@ -10,8 +11,20 @@ import { useQuery } from "@tanstack/react-query";
 import { NotificationCenter } from "./NotificationCenter";
 import { Sidebar, type PrimaryPage } from "./Sidebar";
 import { WindowTitlebar } from "./WindowTitlebar";
+import {
+  ActionIcon,
+  Box,
+  Group,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+  Tooltip,
+  VisuallyHidden,
+} from "@mantine/core";
 import { Button } from "../ui/button";
-import { TextField } from "../ui/text-field";
 import { AttentionBar } from "../ui/attention-bar";
 import { ConfirmDangerDialog } from "../ui/ConfirmDangerDialog";
 import { listServerProfiles } from "../../features/servers/api";
@@ -232,39 +245,42 @@ export function AppShell({ processSummary }: AppShellProps) {
     return () => document.removeEventListener("click", openExternalLink, true);
   }, []);
 
-  const handleDropImport = useCallback((paths: string[]) => {
-    /* On a server's Mods tab a dropped jar is a mod for that server. */
-    if (
-      route.name === "server" &&
-      route.section === "content" &&
-      paths.length > 0 &&
-      paths.every((path) => /\.jar$/i.test(path))
-    ) {
-      const serverId = route.serverId;
-      void (async () => {
-        for (const path of paths) {
-          try {
-            await importLocalContent(serverId, path);
-          } catch (error) {
-            pushNotification({
-              severity: "error",
-              title: t("notifications.actionFailed"),
-              message: errorMessage(error),
-            });
+  const handleDropImport = useCallback(
+    (paths: string[]) => {
+      /* On a server's Mods tab a dropped jar is a mod for that server. */
+      if (
+        route.name === "server" &&
+        route.section === "content" &&
+        paths.length > 0 &&
+        paths.every((path) => /\.jar$/i.test(path))
+      ) {
+        const serverId = route.serverId;
+        void (async () => {
+          for (const path of paths) {
+            try {
+              await importLocalContent(serverId, path);
+            } catch (error) {
+              pushNotification({
+                severity: "error",
+                title: t("notifications.actionFailed"),
+                message: errorMessage(error),
+              });
+            }
           }
-        }
-        await queryClient.invalidateQueries({
-          queryKey: contentKeys.installed(serverId),
-        });
-      })();
-      return;
-    }
-    if (paths.length === 1 && isPackFilePath(paths[0])) {
-      setDroppedPackPath(paths[0]);
-    } else if (paths.length > 0) {
-      setDroppedImportPaths(paths);
-    }
-  }, [route, pushNotification, queryClient, t]);
+          await queryClient.invalidateQueries({
+            queryKey: contentKeys.installed(serverId),
+          });
+        })();
+        return;
+      }
+      if (paths.length === 1 && isPackFilePath(paths[0])) {
+        setDroppedPackPath(paths[0]);
+      } else if (paths.length > 0) {
+        setDroppedImportPaths(paths);
+      }
+    },
+    [route, pushNotification, queryClient, t],
+  );
 
   const openServersOverview = useCallback(() => {
     navigateTo({ name: "dashboard" });
@@ -478,7 +494,7 @@ export function AppShell({ processSummary }: AppShellProps) {
           }}
         />
         <main
-          className={isCreateServerActive ? "page page-create-server" : "page"}
+          className="page"
           aria-labelledby={
             isCreateServerActive
               ? "create-server-page-title"
@@ -492,35 +508,37 @@ export function AppShell({ processSummary }: AppShellProps) {
           }
         >
           {isCreateServerActive ? (
-            <section className="create-server-page">
+            <Stack component="section" gap={0} h="100%" mih={0}>
               {createServerHeaderHidden ? (
                 <>
-                  <h1 id="create-server-page-title" className="visually-hidden">
+                  <VisuallyHidden component="h1" id="create-server-page-title">
                     {t("servers.create.title")}
-                  </h1>
-                  <p className="visually-hidden">
+                  </VisuallyHidden>
+                  <VisuallyHidden component="p">
                     {t("servers.create.description")}
-                  </p>
+                  </VisuallyHidden>
                 </>
               ) : (
-                <header className="create-server-page-header create-server-wizard-header">
-                  <div className="create-server-page-title-row">
+                <Group
+                  component="header"
+                  data-create-server-header
+                  gap="md"
+                  px="lg"
+                  py="sm"
+                  wrap="nowrap"
+                >
+                  <Group gap="sm" w={220} wrap="nowrap">
                     {createServerHeaderBack ? (
-                      <Button
-                        className="create-server-header-back"
-                        type="button"
-                        variant="ghost"
-                        onClick={createServerHeaderBack}
-                      >
-                        <ChevronLeft aria-hidden="true" size={15} />
+                      <Button variant="ghost" onClick={createServerHeaderBack}>
+                        <ChevronLeft aria-hidden="true" size={16} />
                         {t("wizard.nav.back")}
                       </Button>
                     ) : null}
-                    <div>
-                      <h1 id="create-server-page-title">
+                    <Box miw={0}>
+                      <Title id="create-server-page-title" order={1} fz="lg">
                         {t("servers.create.title")}
-                      </h1>
-                      <p>
+                      </Title>
+                      <Text c="dimmed" size="sm" truncate>
                         {createServerProgress
                           ? [
                               t("wizard.progress.counter", {
@@ -536,24 +554,31 @@ export function AppShell({ processSummary }: AppShellProps) {
                               .filter(Boolean)
                               .join(" · ")
                           : t("servers.create.description")}
-                      </p>
-                    </div>
-                  </div>
-                  {createServerProgress ? (
-                    <WizardStepIndicator
-                      currentStep={createServerProgress.currentStep}
-                      steps={createServerProgress.steps}
-                    />
-                  ) : null}
-                  <Button
-                    aria-label={t("servers.create.close")}
-                    className="icon-button"
-                    variant="ghost"
-                    onClick={() => requestCreateServerExit(openServersOverview)}
-                  >
-                    <X aria-hidden="true" size={16} />
-                  </Button>
-                </header>
+                      </Text>
+                    </Box>
+                  </Group>
+                  <Box miw={0} style={{ flex: 1 }}>
+                    {createServerProgress ? (
+                      <WizardStepIndicator
+                        currentStep={createServerProgress.currentStep}
+                        steps={createServerProgress.steps}
+                      />
+                    ) : null}
+                  </Box>
+                  <Group justify="flex-end" w={220}>
+                    <Tooltip label={t("servers.create.close")}>
+                      <ActionIcon
+                        aria-label={t("servers.create.close")}
+                        size="lg"
+                        onClick={() =>
+                          requestCreateServerExit(openServersOverview)
+                        }
+                      >
+                        <X aria-hidden="true" size={16} />
+                      </ActionIcon>
+                    </Tooltip>
+                  </Group>
+                </Group>
               )}
               <CreateServerWizard
                 initialSourcePath={
@@ -594,7 +619,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                   void profilesQuery.refetch();
                 }}
               />
-            </section>
+            </Stack>
           ) : activePage === "java" ? (
             <JavaRuntimesView />
           ) : activePage === "settings" ? (
@@ -633,122 +658,129 @@ export function AppShell({ processSummary }: AppShellProps) {
               />
             </ServerRuntimeProvider>
           ) : (
-            <>
-              <section className="page-header dashboard-page-header">
-                <div className="page-header-heading">
-                  <h1 id="servers-title">{t("servers.page.title")}</h1>
-                </div>
-                <div className="page-header-actions">
-                  {servers.length > 1 ? (
-                    <TextField
-                      aria-label={t("servers.filter.label")}
-                      className="dashboard-filter"
-                      placeholder={t("servers.filter.placeholder")}
-                      type="search"
-                      value={serverFilter}
-                      onChange={(event) => setServerFilter(event.target.value)}
-                    />
-                  ) : null}
-                  <Button onClick={() => openCreateServer()} variant="primary">
-                    <Plus aria-hidden="true" size={15} />
-                    {t("servers.create.button")}
-                  </Button>
-                </div>
-              </section>
+            <ScrollArea h="100%">
+              <Stack gap="md" p="lg">
+                <Group justify="space-between" wrap="nowrap">
+                  <Title id="servers-title" order={1}>
+                    {t("servers.page.title")}
+                  </Title>
+                  <Group gap="sm" wrap="nowrap">
+                    {servers.length > 1 ? (
+                      <TextInput
+                        aria-label={t("servers.filter.label")}
+                        autoComplete="off"
+                        leftSection={<Search aria-hidden="true" size={14} />}
+                        placeholder={t("servers.filter.placeholder")}
+                        type="search"
+                        value={serverFilter}
+                        w={240}
+                        onChange={(event) =>
+                          setServerFilter(event.currentTarget.value)
+                        }
+                      />
+                    ) : null}
+                    <Button
+                      onClick={() => openCreateServer()}
+                      variant="primary"
+                    >
+                      <Plus aria-hidden="true" size={16} />
+                      {t("servers.create.button")}
+                    </Button>
+                  </Group>
+                </Group>
 
-              <section
-                className="dashboard-status-rail"
-                aria-label={t("servers.summary.aria")}
-              >
-                <div className="dashboard-status-item">
-                  <span
-                    aria-hidden="true"
-                    className="status-indicator status-indicator-running"
-                  />
-                  <span>{t("servers.summary.running")}</span>
-                  <strong>{runningCount ?? t("common.unknown")}</strong>
-                </div>
-                <div className="dashboard-status-item">
-                  <span
-                    aria-hidden="true"
-                    className="status-indicator status-indicator-stopped"
-                  />
-                  <span>{t("servers.summary.stopped")}</span>
-                  <strong>{stoppedCount}</strong>
-                </div>
-                <div className="dashboard-status-item">
-                  <span
-                    aria-hidden="true"
-                    className="status-indicator status-indicator-crashed"
-                  />
-                  <span>{t("servers.summary.crashed")}</span>
-                  <strong>{crashedCount ?? t("common.unknown")}</strong>
-                </div>
-                <div className="dashboard-status-item dashboard-status-total">
-                  <ServerIcon aria-hidden="true" size={13} />
-                  <span>{t("servers.summary.total")}</span>
-                  <strong>{servers.length}</strong>
-                </div>
-              </section>
-
-              {dashboardAttentionItems.length > 0 ? (
-                <AttentionBar
-                  aria-label={
-                    isCrashFallback
-                      ? t("servers.incident.aria")
-                      : t("attention.aria")
-                  }
-                  className="dashboard-attention"
-                  tone={
-                    dashboardAttentionItems.some(
-                      (item) => item.severity === "error",
-                    )
-                      ? "danger"
-                      : dashboardAttentionItems.some(
-                            (item) => item.severity === "warning",
-                          )
-                        ? "warning"
-                        : "info"
-                  }
+                <Paper
+                  aria-label={t("servers.summary.aria")}
+                  component="section"
+                  px="md"
+                  py="sm"
                 >
-                  <CircleAlert aria-hidden="true" size={17} />
-                  <div>
-                    <strong>
-                      {isCrashFallback
-                        ? t(
-                            dashboardAttentionItems.length === 1
-                              ? "servers.incident.titleOne"
-                              : "servers.incident.titleMany",
-                            { count: dashboardAttentionItems.length },
-                          )
-                        : t("attention.title", {
-                            count: dashboardAttentionItems.length,
-                          })}
-                    </strong>
-                    <span>
-                      {t(
-                        isCrashFallback
-                          ? "servers.incident.description"
-                          : "attention.description",
-                      )}
-                    </span>
-                  </div>
-                  <div className="dashboard-attention-actions">
-                    {dashboardAttentionItems.slice(0, 4).map((item) => (
-                      <Button
-                        key={item.id}
-                        variant="ghost"
-                        onClick={() => openAttentionItem(item)}
-                      >
-                        {item.serverName}
-                        <span>{t(`attention.kind.${item.kind}`)}</span>
-                      </Button>
-                    ))}
-                  </div>
-                </AttentionBar>
-              ) : null}
+                  <Group gap="xl">
+                    <SummaryItem
+                      color="green.6"
+                      label={t("servers.summary.running")}
+                      value={runningCount ?? t("common.unknown")}
+                    />
+                    <SummaryItem
+                      color="gray.6"
+                      label={t("servers.summary.stopped")}
+                      value={stoppedCount}
+                    />
+                    <SummaryItem
+                      color="red.6"
+                      label={t("servers.summary.crashed")}
+                      value={crashedCount ?? t("common.unknown")}
+                    />
+                    <Group gap={6} ml="auto" wrap="nowrap">
+                      <ServerIcon aria-hidden="true" size={14} />
+                      <Text c="dimmed" size="sm">
+                        {t("servers.summary.total")}
+                      </Text>
+                      <Text ff="monospace" fw={600} size="sm">
+                        {servers.length}
+                      </Text>
+                    </Group>
+                  </Group>
+                </Paper>
 
-              <div className="dashboard-servers">
+                {dashboardAttentionItems.length > 0 ? (
+                  <AttentionBar
+                    aria-label={
+                      isCrashFallback
+                        ? t("servers.incident.aria")
+                        : t("attention.aria")
+                    }
+                    tone={
+                      dashboardAttentionItems.some(
+                        (item) => item.severity === "error",
+                      )
+                        ? "danger"
+                        : dashboardAttentionItems.some(
+                              (item) => item.severity === "warning",
+                            )
+                          ? "warning"
+                          : "info"
+                    }
+                  >
+                    <CircleAlert aria-hidden="true" size={16} />
+                    <Stack gap={0} miw={180}>
+                      <Text fw={600} size="sm">
+                        {isCrashFallback
+                          ? t(
+                              dashboardAttentionItems.length === 1
+                                ? "servers.incident.titleOne"
+                                : "servers.incident.titleMany",
+                              { count: dashboardAttentionItems.length },
+                            )
+                          : t("attention.title", {
+                              count: dashboardAttentionItems.length,
+                            })}
+                      </Text>
+                      <Text c="dimmed" size="xs">
+                        {t(
+                          isCrashFallback
+                            ? "servers.incident.description"
+                            : "attention.description",
+                        )}
+                      </Text>
+                    </Stack>
+                    <Group gap={4} justify="flex-end" ml="auto">
+                      {dashboardAttentionItems.slice(0, 4).map((item) => (
+                        <Button
+                          key={item.id}
+                          variant="ghost"
+                          onClick={() => openAttentionItem(item)}
+                        >
+                          {item.serverName}
+                          <Text c="dimmed" component="span" size="xs">
+                            {t(`attention.kind.${item.kind}`)}
+                          </Text>
+                        </Button>
+                      ))}
+                    </Group>
+                  </AttentionBar>
+                ) : null}
+
                 <ServerList
                   error={profilesQuery.error}
                   filtered={normalizedServerFilter.length > 0}
@@ -768,11 +800,39 @@ export function AppShell({ processSummary }: AppShellProps) {
                     })
                   }
                 />
-              </div>
-            </>
+              </Stack>
+            </ScrollArea>
           )}
         </main>
       </div>
     </div>
+  );
+}
+
+function SummaryItem({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <Group gap={6} wrap="nowrap">
+      <Box
+        aria-hidden="true"
+        bg={color}
+        h={8}
+        style={{ borderRadius: "50%" }}
+        w={8}
+      />
+      <Text c="dimmed" size="sm">
+        {label}
+      </Text>
+      <Text ff="monospace" fw={600} size="sm">
+        {value}
+      </Text>
+    </Group>
   );
 }

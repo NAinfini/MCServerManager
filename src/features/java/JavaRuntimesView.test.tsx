@@ -260,9 +260,9 @@ describe("JavaRuntimesView", () => {
     // From the server's own row, not the general acquire panel — that is the
     // path a user actually takes, and the one that has to end with the server
     // pointed at what it downloaded.
-    const servers = await within(container).findByText("HeroPack");
+    await within(container).findByText("HeroPack");
     await userEvent.click(
-      within(servers.closest(".java-panel") as HTMLElement).getByRole(
+      within(screen.getByRole("region", { name: "Your servers" })).getByRole(
         "button",
         {
           name: "Get Java 8",
@@ -318,7 +318,7 @@ describe("JavaRuntimesView", () => {
 
     renderJavaView();
 
-    expect(await screen.findByText("托管")).toHaveClass("java-source-chip");
+    expect(await screen.findByText("托管")).toBeInTheDocument();
     expect(
       screen.queryByText("Managed by MC Server Manager"),
     ).not.toBeInTheDocument();
@@ -376,21 +376,16 @@ describe("JavaRuntimesView", () => {
     });
   });
 
-  it("groups the acquire controls inside a padded panel body", async () => {
+  it("groups the acquire controls inside their own panel", async () => {
     vi.mocked(invoke).mockResolvedValue({
       runtimes: [],
       failures: [],
       compatibility: [],
     });
 
-    const { container } = renderJavaView();
+    renderJavaView();
     await screen.findAllByRole("heading", { name: "Get Java" });
-    const body = container.querySelector(
-      ".java-panel-acquire .java-panel-body",
-    );
-
-    expect(body).not.toBeNull();
-    if (!body) throw new Error("Expected acquire panel body");
+    const body = screen.getByRole("region", { name: "Get Java" });
     expect(
       within(body as HTMLElement).getByText(
         /install Temurin inside its own data folder/i,
@@ -417,14 +412,22 @@ describe("JavaRuntimesView", () => {
     const { container } = renderJavaView();
     await within(container).findByText("Get Java");
 
-    expect(container.querySelector(".java-panel-servers")).not.toBeNull();
-    expect(container.querySelector(".java-panel-installed")).not.toBeNull();
-    expect(container.querySelector(".java-panel-acquire")).not.toBeNull();
-    expect(container.querySelector(".java-panel-failures")).not.toBeNull();
-    // Servers first: the page answers "can my server start?" before it lists
-    // what happens to be installed.
-    const panels = [...container.querySelectorAll(".java-panel")];
-    expect(panels[0]).toBe(container.querySelector(".java-panel-servers"));
+    const panels = within(container)
+      .getAllByRole("region")
+      .filter(
+        (region) =>
+          region.getAttribute("aria-labelledby") !== "java-runtimes-title",
+      );
+    expect(
+      panels.map((panel) => panel.getAttribute("aria-labelledby")),
+    ).toEqual([
+      // Servers first: the page answers "can my server start?" before it
+      // lists what happens to be installed.
+      "java-servers-title",
+      "java-installed-title",
+      "java-acquire-title",
+      "java-failures-title",
+    ]);
   });
 
   it("offers an explicit retry when runtime discovery fails", async () => {

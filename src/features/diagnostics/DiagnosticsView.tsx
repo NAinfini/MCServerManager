@@ -1,6 +1,16 @@
 ﻿import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { Activity, Stethoscope } from "lucide-react";
+import {
+  Alert,
+  Badge,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
 import { queryKeys } from "../../lib/query-keys";
@@ -25,6 +35,8 @@ interface DiagnosticRun {
 interface DiagnosticsViewProps {
   server: ServerProfile;
 }
+
+const statusColor = { pass: "green", warn: "yellow", fail: "red" } as const;
 
 function diagnosticStatusLabel(
   status: DiagnosticRun["status"] | DiagnosticCheck["status"],
@@ -63,83 +75,112 @@ export function DiagnosticsView({ server }: DiagnosticsViewProps) {
   const latest = runMutation.data ?? historyQuery.data?.[0] ?? null;
 
   return (
-    <section className="settings-panel" aria-label={t("diagnostics.aria")}>
-      <div className="section-heading">
-        <h2>{t("diagnostics.title")}</h2>
+    <Paper aria-label={t("diagnostics.aria")} component="section" p="md">
+      <Group justify="space-between" mb="sm">
+        <Title order={2} size="h4">
+          {t("diagnostics.title")}
+        </Title>
         <Button
           disabled={runMutation.isPending}
           variant="secondary"
           onClick={() => runMutation.mutate()}
         >
-          <Stethoscope aria-hidden="true" size={15} />
+          <Stethoscope aria-hidden="true" size={16} />
           {t("diagnostics.run")}
         </Button>
-      </div>
+      </Group>
       {historyQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("diagnostics.loadError")}</strong>
-          <span>{historyQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => historyQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert
+          color="red"
+          role="alert"
+          title={t("diagnostics.loadError")}
+          variant="light"
+        >
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{historyQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => historyQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
       {runMutation.error ? (
-        <p className="danger-text" role="alert">
+        <Text c="red" mb="sm" role="alert" size="sm">
           {runMutation.error.message}
-        </p>
+        </Text>
       ) : null}
       {!historyQuery.error && latest ? (
-        <>
-          <div className="update-status-grid">
-            <div>
-              <span>{t("diagnostics.status")}</span>
-              <strong
-                className={`diagnostic-status diagnostic-status-${latest.status}`}
-              >
+        <Stack gap="sm">
+          <SimpleGrid cols={2} spacing="sm">
+            <Stack gap={2}>
+              <Text c="dimmed" size="xs">
+                {t("diagnostics.status")}
+              </Text>
+              <Badge color={statusColor[latest.status]} variant="light">
                 {diagnosticStatusLabel(latest.status, t)}
-              </strong>
-            </div>
-            <div>
-              <span>{t("diagnostics.runAt")}</span>
-              <strong>{formatDateTime(latest.createdAt, language)}</strong>
-            </div>
-          </div>
-          <div className="compatibility-list">
+              </Badge>
+            </Stack>
+            <Stack gap={2}>
+              <Text c="dimmed" size="xs">
+                {t("diagnostics.runAt")}
+              </Text>
+              <Text fw={600} size="sm">
+                {formatDateTime(latest.createdAt, language)}
+              </Text>
+            </Stack>
+          </SimpleGrid>
+          <Stack gap={6}>
             {latest.results.map((result) => (
-              <div className="diagnostic-result" key={result.name}>
-                <strong
-                  className={`diagnostic-status diagnostic-status-${result.status}`}
+              <Group
+                align="flex-start"
+                gap="sm"
+                key={result.name}
+                wrap="nowrap"
+              >
+                <Badge
+                  color={statusColor[result.status]}
+                  miw={56}
+                  size="sm"
+                  style={{ flexShrink: 0 }}
+                  variant="light"
                 >
                   {diagnosticStatusLabel(result.status, t)}
-                </strong>
-                <span>{result.message}</span>
-              </div>
+                </Badge>
+                <Text size="sm">{result.message}</Text>
+              </Group>
             ))}
-          </div>
+          </Stack>
           {latest.status !== "pass" ? (
-            <Button
-              variant="secondary"
-              onClick={() =>
-                navigateTo({
-                  name: "server",
-                  serverId: server.id,
-                  section: "console",
-                  view: "logs",
-                })
-              }
-            >
-              {t("diagnostics.openLogs")}
-            </Button>
+            <Group>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  navigateTo({
+                    name: "server",
+                    serverId: server.id,
+                    section: "console",
+                    view: "logs",
+                  })
+                }
+              >
+                {t("diagnostics.openLogs")}
+              </Button>
+            </Group>
           ) : null}
-        </>
+        </Stack>
       ) : !historyQuery.error ? (
-        <div className="list-state">
-          <Activity aria-hidden="true" size={18} />
-          <strong>{t("diagnostics.empty.title")}</strong>
-          <span>{t("diagnostics.empty.description")}</span>
-        </div>
+        <Group gap="sm" wrap="nowrap">
+          <Activity aria-hidden="true" size={16} />
+          <Stack gap={0}>
+            <Text fw={600} size="sm">
+              {t("diagnostics.empty.title")}
+            </Text>
+            <Text c="dimmed" size="sm">
+              {t("diagnostics.empty.description")}
+            </Text>
+          </Stack>
+        </Group>
       ) : null}
-    </section>
+    </Paper>
   );
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { Group, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
 import { FolderOpen, Upload } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import {
   invokeDesktopCommandWithErrorHandling,
@@ -43,54 +43,67 @@ export function LocalImportDialog({
   };
 
   return (
-    <form
-      className="inline-dialog content-import-dialog"
+    <Paper
+      component="form"
+      p="md"
       onSubmit={(event) => {
         event.preventDefault();
         onImport(sourcePath);
       }}
     >
-      <div>
-        <h3>{t("content.import.local.title")}</h3>
-        <p>{t("content.import.local.description")}</p>
-      </div>
-      <label>
-        <span>{t("content.import.local.sourcePath")}</span>
-        <div className="field-with-action">
-          <TextField
+      <Stack gap="sm">
+        <Stack gap={2}>
+          <Title order={4}>{t("content.import.local.title")}</Title>
+          <Text c="dimmed" size="sm">
+            {t("content.import.local.description")}
+          </Text>
+        </Stack>
+        <Group align="flex-end" gap="xs" wrap="nowrap">
+          <TextInput
             autoFocus
             required
+            ff="monospace"
+            flex={1}
+            label={t("content.import.local.sourcePath")}
             placeholder={t("content.import.local.placeholder")}
             readOnly
             value={sourcePath}
             onClick={pickJar}
           />
           <Button disabled={isSubmitting} variant="secondary" onClick={pickJar}>
-            <FolderOpen aria-hidden="true" size={15} />
+            <FolderOpen aria-hidden="true" size={16} />
             {t("profileSettings.browse")}
           </Button>
-        </div>
-      </label>
-      {pickerError ? <p className="danger-text">{pickerError}</p> : null}
-      {error ? <p className="danger-text">{error}</p> : null}
-      <div className="dialog-actions">
-        <Button
-          disabled={isSubmitting}
-          type="button"
-          variant="secondary"
-          onClick={onCancel}
-        >
-          {t("common.cancel")}
-        </Button>
-        <Button
-          disabled={isSubmitting || sourcePath.trim() === ""}
-          type="submit"
-          variant="primary"
-        >
-          <Upload aria-hidden="true" size={15} />
-          {t("content.import.action")}
-        </Button>
-      </div>
-    </form>
+        </Group>
+        {pickerError ? (
+          <Text c="red" size="sm">
+            {pickerError}
+          </Text>
+        ) : null}
+        {error ? (
+          <Text c="red" size="sm">
+            {error}
+          </Text>
+        ) : null}
+        <Group gap="xs" justify="flex-end">
+          <Button
+            disabled={isSubmitting}
+            type="button"
+            variant="secondary"
+            onClick={onCancel}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={isSubmitting || sourcePath.trim() === ""}
+            type="submit"
+            variant="primary"
+          >
+            <Upload aria-hidden="true" size={16} />
+            {t("content.import.action")}
+          </Button>
+        </Group>
+      </Stack>
+    </Paper>
   );
 }

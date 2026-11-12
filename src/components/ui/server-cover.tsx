@@ -1,5 +1,5 @@
+import { Text, ThemeIcon } from "@mantine/core";
 import { getLoaderBranding } from "../../features/loaders/loaderBranding";
-import { cn } from "../../lib/cn";
 
 interface ServerCoverProps {
   loaderType?: string | null;
@@ -13,34 +13,33 @@ export function ServerCover({
   className,
 }: ServerCoverProps) {
   const branding = getLoaderBranding(loaderType);
-  const radius = size >= 40 ? 8 : 6;
 
   return (
-    <span
+    <ThemeIcon
       aria-hidden="true"
-      className={cn("server-cover", className)}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radius,
-        background: "var(--bg-elevated)",
-        border: "1px solid var(--border-subtle)",
-      }}
+      className={className}
+      color="gray"
+      radius={size >= 40 ? "md" : "sm"}
+      size={size}
+      variant="default"
     >
       {branding.iconSrc ? (
         <img
           alt=""
-          aria-hidden="true"
-          className="server-cover-glyph"
           src={branding.iconSrc}
           style={{
             width: Math.round(size * 0.58),
             height: Math.round(size * 0.58),
+            objectFit: "contain",
+            filter: "brightness(0) invert(1)",
+            opacity: 0.9,
           }}
         />
       ) : (
-        <span className="server-cover-fallback">{branding.shortLabel}</span>
+        <Text fw={700} fz={Math.round(size * 0.32)} tt="uppercase">
+          {branding.shortLabel}
+        </Text>
       )}
-    </span>
+    </ThemeIcon>
   );
 }

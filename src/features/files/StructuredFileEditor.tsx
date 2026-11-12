@@ -1,7 +1,15 @@
 import { Plus, Trash2 } from "lucide-react";
+import {
+  ActionIcon,
+  Checkbox,
+  Group,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
-import { TextField } from "../../components/ui/text-field";
 import {
   EditableTable,
   type EditableTableProps,
@@ -210,7 +218,7 @@ export function StructuredFileEditor({
         id: "key",
         header: t("files.structured.key"),
         cell: (row) => (
-          <TextField
+          <TextInput
             aria-label={`${row.key} ${t("files.structured.key").toLowerCase()}`}
             disabled={readOnly}
             value={row.key}
@@ -230,7 +238,7 @@ export function StructuredFileEditor({
         id: "value",
         header: t("files.structured.value"),
         cell: (row) => (
-          <TextField
+          <TextInput
             aria-label={`${row.key} ${t("files.structured.value").toLowerCase()}`}
             disabled={readOnly}
             value={row.value}
@@ -251,48 +259,53 @@ export function StructuredFileEditor({
         header: "",
         cellClassName: "structured-table-actions",
         cell: (row) => (
-          <Button
-            aria-label={t("files.structured.removeProperty", { key: row.key })}
-            className="icon-button"
-            disabled={readOnly}
-            title={t("files.structured.removeProperty", { key: row.key })}
-            variant="danger"
-            onClick={() => onChange(removeLine(content, row.lineIndex))}
+          <Tooltip
+            label={t("files.structured.removeProperty", { key: row.key })}
           >
-            <Trash2 aria-hidden="true" size={15} />
-          </Button>
+            <ActionIcon
+              aria-label={t("files.structured.removeProperty", {
+                key: row.key,
+              })}
+              color="red"
+              disabled={readOnly}
+              onClick={() => onChange(removeLine(content, row.lineIndex))}
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
         ),
       },
     ];
     return (
-      <div className="structured-file-editor">
-        <div className="structured-editor-toolbar">
-          <span>{t("files.structured.propertiesDescription")}</span>
+      <Stack flex={1} gap={0} mih={0}>
+        <Group justify="space-between" px="md" py="xs" wrap="nowrap">
+          <Text c="dimmed" size="sm">
+            {t("files.structured.propertiesDescription")}
+          </Text>
           <Button
             disabled={readOnly}
             variant="secondary"
             onClick={() => onChange(appendProperty(content))}
           >
-            <Plus aria-hidden="true" size={15} />
+            <Plus aria-hidden="true" size={14} />
             {t("files.structured.addProperty")}
           </Button>
-        </div>
+        </Group>
         {document.rows.length ? (
-          <div className="structured-table-scroll">
+          <ScrollArea flex={1} mih={0}>
             <EditableTable
               caption={t("files.structured.propertiesDescription")}
-              className="structured-table structured-properties-table"
               columns={columns}
               getRowKey={(row) => row.lineIndex}
               rows={document.rows}
             />
-          </div>
+          </ScrollArea>
         ) : (
-          <p className="structured-editor-empty">
+          <Text c="dimmed" px="md" py="sm" size="sm">
             {t("files.structured.emptyProperties")}
-          </p>
+          </Text>
         )}
-      </div>
+      </Stack>
     );
   }
 
@@ -311,10 +324,10 @@ export function StructuredFileEditor({
                 })}`}
                 checked={value === true}
                 disabled={readOnly}
-                onCheckedChange={(checked) => {
+                onChange={(event) => {
                   const next = document.value.map((entry, entryIndex) =>
                     entryIndex === rowIndex
-                      ? { ...entry, [column]: checked === true }
+                      ? { ...entry, [column]: event.currentTarget.checked }
                       : entry,
                   );
                   onChange(serializeJson(next));
@@ -323,7 +336,7 @@ export function StructuredFileEditor({
             );
           }
           return (
-            <TextField
+            <TextInput
               aria-label={`${column} ${t("files.structured.row", {
                 index: rowIndex + 1,
               })}`}
@@ -357,33 +370,37 @@ export function StructuredFileEditor({
         header: "",
         cellClassName: "structured-table-actions",
         cell: (_row, rowIndex) => (
-          <Button
-            aria-label={t("files.structured.removeRow", {
+          <Tooltip
+            label={t("files.structured.removeRow", {
               index: rowIndex + 1,
             })}
-            className="icon-button"
-            disabled={readOnly}
-            title={t("files.structured.removeRow", {
-              index: rowIndex + 1,
-            })}
-            variant="danger"
-            onClick={() =>
-              onChange(
-                serializeJson(
-                  document.value.filter((_, index) => index !== rowIndex),
-                ),
-              )
-            }
           >
-            <Trash2 aria-hidden="true" size={15} />
-          </Button>
+            <ActionIcon
+              aria-label={t("files.structured.removeRow", {
+                index: rowIndex + 1,
+              })}
+              color="red"
+              disabled={readOnly}
+              onClick={() =>
+                onChange(
+                  serializeJson(
+                    document.value.filter((_, index) => index !== rowIndex),
+                  ),
+                )
+              }
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
         ),
       },
     ];
     return (
-      <div className="structured-file-editor">
-        <div className="structured-editor-toolbar">
-          <span>{t("files.structured.recordsDescription")}</span>
+      <Stack flex={1} gap={0} mih={0}>
+        <Group justify="space-between" px="md" py="xs" wrap="nowrap">
+          <Text c="dimmed" size="sm">
+            {t("files.structured.recordsDescription")}
+          </Text>
           <Button
             disabled={readOnly}
             variant="secondary"
@@ -396,26 +413,25 @@ export function StructuredFileEditor({
               )
             }
           >
-            <Plus aria-hidden="true" size={15} />
+            <Plus aria-hidden="true" size={14} />
             {t("files.structured.addRecord")}
           </Button>
-        </div>
+        </Group>
         {document.value.length ? (
-          <div className="structured-table-scroll">
+          <ScrollArea flex={1} mih={0}>
             <EditableTable
               caption={t("files.structured.recordsDescription")}
-              className="structured-table structured-json-table"
               columns={columns}
               getRowKey={(_, index) => index}
               rows={document.value}
             />
-          </div>
+          </ScrollArea>
         ) : (
-          <p className="structured-editor-empty">
+          <Text c="dimmed" px="md" py="sm" size="sm">
             {t("files.structured.emptyRecords")}
-          </p>
+          </Text>
         )}
-      </div>
+      </Stack>
     );
   }
 
@@ -426,7 +442,7 @@ export function StructuredFileEditor({
         id: "key",
         header: t("files.structured.key"),
         cell: ([key, value], index) => (
-          <TextField
+          <TextInput
             aria-label={`${key} ${t("files.structured.key").toLowerCase()}`}
             disabled={readOnly}
             value={key}
@@ -447,17 +463,17 @@ export function StructuredFileEditor({
               aria-label={`${key} ${t("files.structured.value").toLowerCase()}`}
               checked={value}
               disabled={readOnly}
-              onCheckedChange={(checked) =>
+              onChange={(event) =>
                 onChange(
                   serializeJson({
                     ...document.value,
-                    [key]: checked === true,
+                    [key]: event.currentTarget.checked,
                   }),
                 )
               }
             />
           ) : (
-            <TextField
+            <TextInput
               aria-label={`${key} ${t("files.structured.value").toLowerCase()}`}
               disabled={readOnly}
               type={typeof value === "number" ? "number" : "text"}
@@ -478,31 +494,33 @@ export function StructuredFileEditor({
         header: "",
         cellClassName: "structured-table-actions",
         cell: ([key], index) => (
-          <Button
-            aria-label={t("files.structured.removeProperty", { key })}
-            className="icon-button"
-            disabled={readOnly}
-            title={t("files.structured.removeProperty", { key })}
-            variant="danger"
-            onClick={() =>
-              onChange(
-                serializeJson(
-                  Object.fromEntries(
-                    entries.filter((_, itemIndex) => itemIndex !== index),
+          <Tooltip label={t("files.structured.removeProperty", { key })}>
+            <ActionIcon
+              aria-label={t("files.structured.removeProperty", { key })}
+              color="red"
+              disabled={readOnly}
+              onClick={() =>
+                onChange(
+                  serializeJson(
+                    Object.fromEntries(
+                      entries.filter((_, itemIndex) => itemIndex !== index),
+                    ),
                   ),
-                ),
-              )
-            }
-          >
-            <Trash2 aria-hidden="true" size={15} />
-          </Button>
+                )
+              }
+            >
+              <Trash2 aria-hidden="true" size={14} />
+            </ActionIcon>
+          </Tooltip>
         ),
       },
     ];
     return (
-      <div className="structured-file-editor">
-        <div className="structured-editor-toolbar">
-          <span>{t("files.structured.objectDescription")}</span>
+      <Stack flex={1} gap={0} mih={0}>
+        <Group justify="space-between" px="md" py="xs" wrap="nowrap">
+          <Text c="dimmed" size="sm">
+            {t("files.structured.objectDescription")}
+          </Text>
           <Button
             disabled={readOnly}
             variant="secondary"
@@ -515,98 +533,104 @@ export function StructuredFileEditor({
               )
             }
           >
-            <Plus aria-hidden="true" size={15} />
+            <Plus aria-hidden="true" size={14} />
             {t("files.structured.addProperty")}
           </Button>
-        </div>
-        <div className="structured-table-scroll">
+        </Group>
+        <ScrollArea flex={1} mih={0}>
           <EditableTable
             caption={t("files.structured.propertiesDescription")}
-            className="structured-table structured-properties-table"
             columns={columns}
             getRowKey={(_, index) => index}
             rows={entries}
           />
-        </div>
-      </div>
+        </ScrollArea>
+      </Stack>
     );
   }
 
   return (
-    <div className="structured-file-editor">
-      <div className="structured-editor-toolbar">
-        <span>{t("files.structured.valuesDescription")}</span>
+    <Stack flex={1} gap={0} mih={0}>
+      <Group justify="space-between" px="md" py="xs" wrap="nowrap">
+        <Text c="dimmed" size="sm">
+          {t("files.structured.valuesDescription")}
+        </Text>
         <Button
           disabled={readOnly}
           variant="secondary"
           onClick={() => onChange(serializeJson([...document.value, ""]))}
         >
-          <Plus aria-hidden="true" size={15} />
+          <Plus aria-hidden="true" size={14} />
           {t("files.structured.addValue")}
         </Button>
-      </div>
+      </Group>
       {document.value.length ? (
-        <div className="structured-value-list">
-          {document.value.map((value, index) => (
-            <div className="structured-value-row" key={index}>
-              {typeof value === "boolean" ? (
-                <Checkbox
-                  aria-label={t("files.structured.valueRow", {
+        <ScrollArea flex={1} mih={0}>
+          <Stack gap="xs" px="md" pb="md">
+            {document.value.map((value, index) => (
+              <Group gap="xs" key={index} wrap="nowrap">
+                {typeof value === "boolean" ? (
+                  <Checkbox
+                    aria-label={t("files.structured.valueRow", {
+                      index: index + 1,
+                    })}
+                    checked={value}
+                    disabled={readOnly}
+                    onChange={(event) => {
+                      const next = [...document.value];
+                      next[index] = event.currentTarget.checked;
+                      onChange(serializeJson(next));
+                    }}
+                  />
+                ) : (
+                  <TextInput
+                    flex={1}
+                    aria-label={t("files.structured.valueRow", {
+                      index: index + 1,
+                    })}
+                    disabled={readOnly}
+                    type={typeof value === "number" ? "number" : "text"}
+                    value={valueForInput(value)}
+                    onChange={(event) => {
+                      const next = [...document.value];
+                      next[index] = nextScalarValue(value, event.target.value);
+                      onChange(serializeJson(next));
+                    }}
+                  />
+                )}
+                <Tooltip
+                  label={t("files.structured.removeRow", {
                     index: index + 1,
                   })}
-                  checked={value}
-                  disabled={readOnly}
-                  onCheckedChange={(checked) => {
-                    const next = [...document.value];
-                    next[index] = checked === true;
-                    onChange(serializeJson(next));
-                  }}
-                />
-              ) : (
-                <TextField
-                  aria-label={t("files.structured.valueRow", {
-                    index: index + 1,
-                  })}
-                  disabled={readOnly}
-                  type={typeof value === "number" ? "number" : "text"}
-                  value={valueForInput(value)}
-                  onChange={(event) => {
-                    const next = [...document.value];
-                    next[index] = nextScalarValue(value, event.target.value);
-                    onChange(serializeJson(next));
-                  }}
-                />
-              )}
-              <Button
-                aria-label={t("files.structured.removeRow", {
-                  index: index + 1,
-                })}
-                className="icon-button"
-                disabled={readOnly}
-                title={t("files.structured.removeRow", {
-                  index: index + 1,
-                })}
-                variant="danger"
-                onClick={() =>
-                  onChange(
-                    serializeJson(
-                      document.value.filter(
-                        (_, itemIndex) => itemIndex !== index,
-                      ),
-                    ),
-                  )
-                }
-              >
-                <Trash2 aria-hidden="true" size={15} />
-              </Button>
-            </div>
-          ))}
-        </div>
+                >
+                  <ActionIcon
+                    aria-label={t("files.structured.removeRow", {
+                      index: index + 1,
+                    })}
+                    color="red"
+                    disabled={readOnly}
+                    onClick={() =>
+                      onChange(
+                        serializeJson(
+                          document.value.filter(
+                            (_, itemIndex) => itemIndex !== index,
+                          ),
+                        ),
+                      )
+                    }
+                  >
+                    <Trash2 aria-hidden="true" size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              </Group>
+            ))}
+          </Stack>
+        </ScrollArea>
       ) : (
-        <p className="structured-editor-empty">
+        <Text c="dimmed" px="md" py="sm" size="sm">
           {t("files.structured.emptyValues")}
-        </p>
+        </Text>
       )}
-    </div>
+    </Stack>
   );
 }

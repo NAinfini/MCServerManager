@@ -45,141 +45,25 @@
 }
 
 /* The one committing action of a surface. */
-.button-primary,
-.button-success {
+.button-primary {
   border-color: transparent;
   background: var(--accent-solid);
   color: #ffffff;
 }
 
-.button-primary:hover:not(:disabled),
-.button-success:hover:not(:disabled) {
+.button-primary:hover:not(:disabled) {
   background: var(--accent-solid-hover);
-}
-
-.button-danger {
-  border-color: transparent;
-  background: var(--danger-solid);
-  color: #ffffff;
-}
-
-.button-danger:hover:not(:disabled) {
-  background: #c24f59;
 }
 
 /* Recoverable interruptions look like ordinary actions; the dialog they open
    carries the warning. */
-.button-secondary,
-.button-warning {
+.button-secondary {
   border-color: var(--border-strong);
   background: var(--bg-elevated);
   color: var(--text-main);
 }
 
-.button-ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.button-ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-main);
-}
-
-.button-small {
-  min-height: var(--button-height-sm);
-  padding: 0 10px;
-}
-
 /* Square, quiet, for a single icon. Colour comes on hover. */
-.icon-button.button {
-  width: var(--button-height-md);
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.icon-button.button:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text-main);
-}
 
 /* Inline text action. */
-.button-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--accent);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-}
 
-.button-link:hover {
-  text-decoration: underline;
-}
-
-/* Text fields and the select trigger --------------------------------------- */
-
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-select,
-textarea,
-.select-trigger {
-  min-height: var(--button-height-md);
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-inset);
-  color: var(--text-main);
-  font: inherit;
-  font-size: var(--text-sm);
-  transition:
-    border-color var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease;
-}
-
-textarea {
-  padding: 8px 10px;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: var(--text-subtle);
-}
-
-input:not([type="checkbox"]):not([type="radio"]):hover,
-textarea:hover,
-.select-trigger:hover {
-  border-color: color-mix(in srgb, var(--border-strong) 70%, var(--text-main));
-}
-
-input:not([type="checkbox"]):not([type="radio"]):focus-visible,
-textarea:focus-visible,
-.select-trigger:focus-visible {
-  border-color: var(--accent);
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
-[data-theme="light"] select,
-[data-theme="light"] textarea,
-[data-theme="light"] .select-trigger {
-  background: var(--bg-raised);
-}
-
-.select-trigger {
-  display: inline-flex;
-  width: 100%;
-  max-width: var(--control-width-select);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  cursor: pointer;
-}

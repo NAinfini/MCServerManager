@@ -1,12 +1,17 @@
-import {
-  Component,
-  useState,
-  type ErrorInfo,
-  type ReactNode,
-} from "react";
+import { Component, useState, type ErrorInfo, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { RefreshCw } from "lucide-react";
+import {
+  Alert,
+  Button as MantineButton,
+  Code,
+  Group,
+  Stack,
+  Text,
+  Title,
+  VisuallyHidden,
+} from "@mantine/core";
+import { Archive, RefreshCw } from "lucide-react";
 import type { ServerWorkspaceSection } from "../../app/router";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
@@ -78,20 +83,23 @@ class PanelErrorBoundary extends Component<
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="list-state list-state-error" role="alert">
-        <strong>{this.props.errorTitle}</strong>
-        <details>
-          <summary>{this.props.panelLabel}</summary>
-          <code>{this.state.error.message}</code>
-        </details>
-        <Button
-          variant="secondary"
-          onClick={() => this.setState({ error: null })}
-        >
-          <RefreshCw aria-hidden="true" size={15} />
-          {this.props.retryLabel}
-        </Button>
-      </div>
+      <Alert color="red" role="alert" title={this.props.errorTitle}>
+        <Stack align="flex-start" gap="sm">
+          <details>
+            <summary>{this.props.panelLabel}</summary>
+            <Code block mt="xs">
+              {this.state.error.message}
+            </Code>
+          </details>
+          <Button
+            variant="secondary"
+            onClick={() => this.setState({ error: null })}
+          >
+            <RefreshCw aria-hidden="true" size={16} />
+            {this.props.retryLabel}
+          </Button>
+        </Stack>
+      </Alert>
     );
   }
 }
@@ -129,50 +137,45 @@ export function ServerDetail({
   const loaderLabel = getLoaderBranding(server.loaderType).label;
 
   return (
-    <div className="server-workspace">
-      <header className="server-header">
+    <Stack gap={0} h="100%" mih={0}>
+      <Group component="header" gap="md" pb="sm" pt="md" px="lg" wrap="nowrap">
         <ServerCover loaderType={server.loaderType} size={48} />
-        <div className="server-header-identity">
-          <h1 id="servers-title">{server.name}</h1>
-          <p>
-            <span>{loaderLabel}</span>
-            {server.loaderVersion ? <span> {server.loaderVersion}</span> : null}
-            <span>
-              {" · "}
-              {t("server.meta.mc", {
-                version: server.minecraftVersion ?? "?",
-              })}
-            </span>
-            <span className="server-header-status">
-              <ServerProcessStatusBadge />
-            </span>
-          </p>
-        </div>
-        <div className="server-header-actions">
+        <Stack gap={4} miw={0} style={{ flex: 1 }}>
+          <Group gap="sm" wrap="nowrap">
+            <Title id="servers-title" order={1} fz="h2" lineClamp={1}>
+              {server.name}
+            </Title>
+            <ServerProcessStatusBadge />
+          </Group>
+          <Text c="dimmed" size="sm" truncate>
+            {loaderLabel}
+            {server.loaderVersion ? ` ${server.loaderVersion}` : ""}
+            {" · "}
+            {t("server.meta.mc", {
+              version: server.minecraftVersion ?? "?",
+            })}
+          </Text>
+        </Stack>
+        <Group gap="xs" wrap="nowrap">
           <Button variant="ghost" onClick={() => setUpgradeOpen(true)}>
             {t("server.upgrade.open")}
           </Button>
           <Button
             disabled={backupMutation.isPending}
-            type="button"
             variant="secondary"
             onClick={() => backupMutation.mutate()}
           >
+            <Archive aria-hidden="true" size={16} />
             {t("servers.actions.backup")}
           </Button>
           <ServerActions server={server} />
-        </div>
-      </header>
+        </Group>
+      </Group>
 
       <DialogSurface
-        className="server-upgrade-dialog"
         description={t("server.upgrade.description")}
         footer={
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setUpgradeOpen(false)}
-          >
+          <Button variant="secondary" onClick={() => setUpgradeOpen(false)}>
             {t("common.close")}
           </Button>
         }
@@ -184,14 +187,14 @@ export function ServerDetail({
       </DialogSurface>
 
       {backupMutation.error ? (
-        <p className="server-header-error" role="alert">
+        <Text c="red" pb="xs" px="lg" role="alert" size="sm">
           {backupMutation.error.message}
-        </p>
+        </Text>
       ) : null}
       {backupMutation.isSuccess ? (
-        <p className="visually-hidden" role="status">
+        <VisuallyHidden role="status">
           {t("server.backup.completed")}
-        </p>
+        </VisuallyHidden>
       ) : null}
 
       <CrashBanner serverId={server.id} />
@@ -206,43 +209,55 @@ export function ServerDetail({
         onNavigate={onNavigate}
       />
 
-      <section
+      <Stack
         aria-label={t(definition.labelKey)}
-        className="server-workspace-main"
+        component="section"
+        gap={0}
+        mih={0}
+        style={{ flex: 1, overflow: "hidden" }}
       >
         {definition.views ? (
-          <nav
+          <Group
             aria-label={t("server.workspace.views")}
-            className="workspace-view-switcher"
+            component="nav"
+            gap={4}
+            pt="sm"
+            px="lg"
           >
             {definition.views.map((item) => {
               const count = playerViewCounts?.[item.id];
+              const active = activeView === item.id;
               return (
-                <button
-                  aria-current={activeView === item.id ? "page" : undefined}
-                  className={
-                    activeView === item.id
-                      ? "workspace-view-option workspace-view-option-active"
-                      : "workspace-view-option"
-                  }
+                <MantineButton
+                  aria-current={active ? "page" : undefined}
+                  color={active ? "azure" : "gray"}
                   key={item.id}
-                  type="button"
+                  /* Decorative: the panel below announces the same totals,
+                     and a changing accessible name would be unstable. */
+                  rightSection={
+                    count === undefined ? undefined : (
+                      <Text
+                        aria-hidden="true"
+                        c="dimmed"
+                        component="span"
+                        size="xs"
+                      >
+                        {count}
+                      </Text>
+                    )
+                  }
+                  size="xs"
+                  variant={active ? "light" : "subtle"}
                   onClick={() => onNavigate(section, item.id)}
                 >
                   {t(item.labelKey)}
-                  {/* Decorative: the panel below announces the same totals,
-                      and a changing accessible name would be unstable. */}
-                  {count === undefined ? null : (
-                    <span aria-hidden="true" className="workspace-view-count">
-                      {count}
-                    </span>
-                  )}
-                </button>
+                </MantineButton>
               );
             })}
-          </nav>
+          </Group>
         ) : null}
 
+        {/* The class marks the panel scroller that workspace panels size to. */}
         <motion.div
           animate={{ opacity: 1 }}
           className="server-workspace-content"
@@ -266,7 +281,7 @@ export function ServerDetail({
             />
           </PanelErrorBoundary>
         </motion.div>
-      </section>
-    </div>
+      </Stack>
+    </Stack>
   );
 }

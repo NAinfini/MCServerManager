@@ -169,7 +169,7 @@ describe("InstalledContentView", () => {
       ),
     ).toBeInTheDocument();
     await user.click(
-      within(await screen.findByRole("alertdialog")).getByRole("button", {
+      within(await screen.findByRole("dialog")).getByRole("button", {
         name: "Update selected (1)",
       }),
     );

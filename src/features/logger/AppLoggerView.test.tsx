@@ -76,7 +76,7 @@ describe("AppLoggerView", () => {
       undefined,
     );
 
-    const dialog = await screen.findByRole("alertdialog");
+    const dialog = await screen.findByRole("dialog");
     await userEvent.click(
       within(dialog).getByRole("button", { name: /clear logs/i }),
     );
@@ -120,26 +120,29 @@ describe("AppLoggerView", () => {
       },
     ]);
 
-    const { container } = renderLogger();
+    renderLogger();
     await screen.findByText("Layout failure");
 
-    expect(container.querySelector(".logger-filter-rail")).not.toBeNull();
-    expect(container.querySelector(".app-log-list")).not.toBeNull();
-    expect(container.querySelector(".app-log-detail-pane")).not.toBeNull();
+    expect(screen.getByLabelText("Filter log level")).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Application logs" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Log details")).toBeInTheDocument();
   });
 
   it("keeps filters and the list pane visible when there are no logs", async () => {
     vi.mocked(invokeDesktopCommand).mockResolvedValue([]);
 
-    const { container } = renderLogger();
+    renderLogger();
 
     expect(
       await screen.findByRole("heading", { name: "No app logs yet" }),
     ).toBeInTheDocument();
-    expect(container.querySelector(".logger-filter-rail")).not.toBeNull();
-    expect(container.querySelector(".app-log-list")).not.toBeNull();
-    expect(container.querySelector(".app-log-workspace-empty")).not.toBeNull();
-    expect(container.querySelector(".app-log-detail-pane")).toBeNull();
+    expect(screen.getByLabelText("Filter log level")).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Application logs" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Log details")).toBeNull();
   });
 
   it("groups repeated entries without hiding their occurrence count", async () => {

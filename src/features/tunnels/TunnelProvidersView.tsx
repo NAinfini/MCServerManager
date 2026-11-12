@@ -13,11 +13,24 @@ import {
   SquareTerminal,
   Trash2,
 } from "lucide-react";
+import {
+  Alert,
+  Badge,
+  Card,
+  Group,
+  Input,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { Select } from "../../components/ui/select";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../../domain/server";
 import { PlayitSetupPanel } from "./PlayitSetupPanel";
@@ -78,9 +91,39 @@ function tunnelProviderDescription(
 function TunnelProviderKindIcon({ kind }: { kind: TunnelProvider["kind"] }) {
   const Icon = kind === "application" ? AppWindow : SquareTerminal;
   return (
-    <span className="provider-row-icon">
+    <ThemeIcon color="gray" size="lg" variant="light">
       <Icon aria-hidden="true" size={18} />
-    </span>
+    </ThemeIcon>
+  );
+}
+
+function LoadError({
+  title,
+  message,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  onRetry: () => void;
+}) {
+  const { t } = useAppSettings();
+  return (
+    <Alert color="red" role="alert" title={title} variant="light">
+      <Stack align="flex-start" gap="xs">
+        <Text size="sm">{message}</Text>
+        <Button variant="secondary" onClick={onRetry}>
+          {t("common.retry")}
+        </Button>
+      </Stack>
+    </Alert>
+  );
+}
+
+function ErrorText({ children }: { children: string | undefined }) {
+  return (
+    <Text c="red" role="alert" size="sm">
+      {children}
+    </Text>
   );
 }
 
@@ -249,266 +292,254 @@ export function TunnelProvidersView({
   }
 
   return (
-    <section
-      className={embedded ? "tunnel-settings-section" : "settings-page"}
-      aria-labelledby="tunnels-title"
-    >
-      {embedded ? (
-        <div className="section-heading tunnel-settings-heading">
-          <div>
-            <h2 id="tunnels-title">{t("tunnels.settingsTitle")}</h2>
-            <span>{t("tunnels.settingsDescription")}</span>
-          </div>
-          <Button
-            disabled={providersQuery.isFetching}
-            variant="secondary"
-            onClick={() => providersQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("tunnels.refresh")}
-          </Button>
-        </div>
-      ) : (
-        <div className="page-header">
-          <div>
-            <p className="eyebrow">{t("tunnels.eyebrow")}</p>
-            <h1 id="tunnels-title">{t("tunnels.title")}</h1>
-          </div>
-          <Button
-            disabled={providersQuery.isFetching}
-            variant="secondary"
-            onClick={() => providersQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("tunnels.refresh")}
-          </Button>
-        </div>
-      )}
+    <Stack aria-labelledby="tunnels-title" component="section" gap="md">
+      <Group align="flex-start" justify="space-between" wrap="nowrap">
+        {embedded ? (
+          <Stack gap={2}>
+            <Title id="tunnels-title" order={2}>
+              {t("tunnels.settingsTitle")}
+            </Title>
+            <Text c="dimmed" size="sm">
+              {t("tunnels.settingsDescription")}
+            </Text>
+          </Stack>
+        ) : (
+          <Stack gap={2}>
+            <Text c="dimmed" size="xs">
+              {t("tunnels.eyebrow")}
+            </Text>
+            <Title id="tunnels-title" order={1}>
+              {t("tunnels.title")}
+            </Title>
+          </Stack>
+        )}
+        <Button
+          disabled={providersQuery.isFetching}
+          variant="secondary"
+          onClick={() => providersQuery.refetch()}
+        >
+          <RefreshCw aria-hidden="true" size={16} />
+          {t("tunnels.refresh")}
+        </Button>
+      </Group>
 
       {currentServer ? <PlayitSetupPanel server={currentServer} /> : null}
-      <div className="tunnel-workbench">
-        <section
-          className="tunnel-workbench-section"
-          aria-labelledby="tunnel-create-title"
-        >
-          <div className="section-heading">
-            <h2 id="tunnel-create-title">
+      <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <Paper aria-labelledby="tunnel-create-title" component="section" p="md">
+          <Stack gap={2} mb="sm">
+            <Title id="tunnel-create-title" order={3}>
               {editingProviderId
                 ? t("tunnels.edit.title")
                 : t("tunnels.add.title")}
-            </h2>
-            <span>{t("tunnels.form.description")}</span>
-          </div>
-          <form className="create-server-form" onSubmit={handleSubmit}>
-            <label>
-              {t("tunnels.form.name")}
-              <TextField
+            </Title>
+            <Text c="dimmed" size="sm">
+              {t("tunnels.form.description")}
+            </Text>
+          </Stack>
+          <form onSubmit={handleSubmit}>
+            <Stack gap="sm">
+              <TextInput
+                label={t("tunnels.form.name")}
                 value={name}
-                onChange={(event) => setName(event.target.value)}
+                onChange={(event) => setName(event.currentTarget.value)}
               />
-            </label>
-            <label>
-              {t("tunnels.form.type")}
-              <Select
-                ariaLabel={t("tunnels.form.type")}
-                options={tunnelKindOptions}
-                value={kind}
-                onValueChange={(value) =>
-                  setKind(value as CreateTunnelProviderInput["kind"])
-                }
-              />
-            </label>
-            {kind === "custom" ? (
-              <label>
-                {t("tunnels.form.command")}
-                <TextField
-                  value={command}
-                  onChange={(event) => setCommand(event.target.value)}
+              <Input.Wrapper label={t("tunnels.form.type")}>
+                <Select
+                  ariaLabel={t("tunnels.form.type")}
+                  options={tunnelKindOptions}
+                  value={kind}
+                  onValueChange={(value) =>
+                    setKind(value as CreateTunnelProviderInput["kind"])
+                  }
                 />
-              </label>
-            ) : null}
-            {kind === "application" ? (
-              <label>
-                {t("tunnels.form.application")}
-                <span className="inline-field-row">
-                  <TextField
+              </Input.Wrapper>
+              {kind === "custom" ? (
+                <TextInput
+                  label={t("tunnels.form.command")}
+                  styles={{
+                    input: {
+                      fontFamily: "var(--mantine-font-family-monospace)",
+                    },
+                  }}
+                  value={command}
+                  onChange={(event) => setCommand(event.currentTarget.value)}
+                />
+              ) : null}
+              {kind === "application" ? (
+                <Group align="flex-end" gap="xs" wrap="nowrap">
+                  <TextInput
+                    flex={1}
+                    label={t("tunnels.form.application")}
+                    styles={{
+                      input: {
+                        fontFamily: "var(--mantine-font-family-monospace)",
+                      },
+                    }}
                     value={command}
-                    onChange={(event) => setCommand(event.target.value)}
+                    onChange={(event) => setCommand(event.currentTarget.value)}
                   />
                   <Button
+                    style={{ flexShrink: 0 }}
                     type="button"
                     variant="secondary"
                     onClick={handleBrowseApplication}
                   >
-                    <FolderOpen aria-hidden="true" size={15} />
+                    <FolderOpen aria-hidden="true" size={16} />
                     {t("tunnels.form.browse")}
                   </Button>
-                </span>
-              </label>
-            ) : null}
-            {pickerError ? (
-              <p className="danger-text" role="alert">
-                {pickerError}
-              </p>
-            ) : null}
-            {createMutation.error || updateMutation.error ? (
-              <p className="danger-text" role="alert">
-                {(createMutation.error || updateMutation.error)?.message}
-              </p>
-            ) : null}
-            <div className="form-actions">
-              <Button
-                disabled={createMutation.isPending || updateMutation.isPending}
-                type="submit"
-                variant="primary"
-              >
-                <Plus aria-hidden="true" size={15} />
-                {editingProviderId
-                  ? t("tunnels.form.save")
-                  : t("tunnels.form.add")}
-              </Button>
-              {editingProviderId ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={clearProviderForm}
-                >
-                  {t("common.cancel")}
-                </Button>
+                </Group>
               ) : null}
-            </div>
+              {pickerError ? <ErrorText>{pickerError}</ErrorText> : null}
+              {createMutation.error || updateMutation.error ? (
+                <ErrorText>
+                  {(createMutation.error || updateMutation.error)?.message}
+                </ErrorText>
+              ) : null}
+              <Group gap="xs">
+                <Button
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
+                  type="submit"
+                  variant="primary"
+                >
+                  <Plus aria-hidden="true" size={16} />
+                  {editingProviderId
+                    ? t("tunnels.form.save")
+                    : t("tunnels.form.add")}
+                </Button>
+                {editingProviderId ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={clearProviderForm}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                ) : null}
+              </Group>
+            </Stack>
           </form>
-        </section>
+        </Paper>
 
-        <section
-          className="tunnel-workbench-section"
+        <Stack
           aria-labelledby="tunnel-provider-list-title"
+          component="section"
+          gap="sm"
         >
-          <div className="section-heading">
-            <h2 id="tunnel-provider-list-title">
+          <Group align="baseline" justify="space-between">
+            <Title id="tunnel-provider-list-title" order={3}>
               {t("tunnels.providers.title")}
-            </h2>
-            <span>
+            </Title>
+            <Text c="dimmed" size="xs">
               {t("tunnels.providers.configured", { count: providers.length })}
-            </span>
-          </div>
+            </Text>
+          </Group>
           {providersQuery.error ? (
-            <div className="list-state list-state-error" role="alert">
-              <strong>{t("tunnels.providers.loadError.title")}</strong>
-              <span>{providersQuery.error.message}</span>
-              <Button
-                variant="secondary"
-                onClick={() => providersQuery.refetch()}
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+            <LoadError
+              message={providersQuery.error.message}
+              title={t("tunnels.providers.loadError.title")}
+              onRetry={() => providersQuery.refetch()}
+            />
           ) : null}
           {statusesQuery.error ? (
-            <div className="list-state list-state-error" role="alert">
-              <strong>{t("tunnels.statuses.loadError")}</strong>
-              <span>{statusesQuery.error.message}</span>
-              <Button
-                variant="secondary"
-                onClick={() => statusesQuery.refetch()}
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+            <LoadError
+              message={statusesQuery.error.message}
+              title={t("tunnels.statuses.loadError")}
+              onRetry={() => statusesQuery.refetch()}
+            />
           ) : null}
           {!providersQuery.error ? (
             providers.length === 0 ? (
               <EmptyState
-                illustration="/illustrations/no-tunnels.png"
                 title={t("tunnels.empty.title")}
                 description={t("tunnels.empty.description")}
               />
             ) : (
-              <div className="provider-list">
-                {providers.map((provider) => (
-                  <div className="provider-row" key={provider.id}>
-                    <TunnelProviderKindIcon kind={provider.kind} />
-                    <div className="provider-row-main">
-                      <strong>
-                        {provider.name}
-                        <span
-                          className={
-                            provider.enabled
-                              ? "provider-status-pill provider-status-pill-enabled"
-                              : "provider-status-pill"
-                          }
-                        >
-                          {provider.enabled
-                            ? t("tunnels.status.enabled")
-                            : t("tunnels.status.disabled")}
-                        </span>
-                      </strong>
-                      <span>{tunnelProviderDescription(provider, t)}</span>
-                      {!statusesQuery.error ? (
-                        <small>
-                          {statusesByProvider.get(provider.id)?.status ??
-                            (provider.enabled
+              providers.map((provider) => {
+                const status = statusesByProvider.get(provider.id);
+                const bound = bindingsForCurrentServer.has(provider.id);
+                return (
+                  <Card key={provider.id}>
+                    <Group align="flex-start" gap="sm" wrap="nowrap">
+                      <TunnelProviderKindIcon kind={provider.kind} />
+                      <Stack flex={1} gap={4} miw={0}>
+                        <Group gap="xs">
+                          <Text fw={600} size="sm">
+                            {provider.name}
+                          </Text>
+                          <Badge
+                            color={provider.enabled ? "green" : "gray"}
+                            size="sm"
+                            variant="light"
+                          >
+                            {provider.enabled
                               ? t("tunnels.status.enabled")
-                              : t("tunnels.status.disabled"))}
-                          {statusesByProvider.get(provider.id)?.refCount
-                            ? ` / ${t("tunnels.status.refs", {
-                                count: statusesByProvider.get(provider.id)
-                                  ?.refCount,
-                              })}`
-                            : ""}
-                        </small>
-                      ) : null}
-                      {statusesByProvider.get(provider.id)?.lastError ? (
-                        <small className="danger-text">
-                          {statusesByProvider.get(provider.id)?.lastError}
-                        </small>
-                      ) : null}
-                      {currentServer ? (
-                        <div className="provider-server-binding">
-                          <span>
-                            {bindingsForCurrentServer.has(provider.id)
-                              ? t("tunnels.currentBinding.connected", {
-                                  server: currentServer.name,
-                                })
-                              : t("tunnels.currentBinding.disconnected", {
-                                  server: currentServer.name,
-                                })}
-                          </span>
-                          <Button
-                            disabled={
-                              bindMutation.isPending || unbindMutation.isPending
-                            }
-                            type="button"
-                            variant={
-                              bindingsForCurrentServer.has(provider.id)
-                                ? "secondary"
-                                : "primary"
-                            }
-                            onClick={() => {
-                              const binding = bindingsForCurrentServer.get(
-                                provider.id,
-                              );
-                              if (binding) {
-                                unbindMutation.mutate({
+                              : t("tunnels.status.disabled")}
+                          </Badge>
+                        </Group>
+                        <Text c="dimmed" ff="monospace" size="xs" truncate>
+                          {tunnelProviderDescription(provider, t)}
+                        </Text>
+                        {!statusesQuery.error ? (
+                          <Text c="dimmed" size="xs">
+                            {status?.status ??
+                              (provider.enabled
+                                ? t("tunnels.status.enabled")
+                                : t("tunnels.status.disabled"))}
+                            {status?.refCount
+                              ? ` / ${t("tunnels.status.refs", {
+                                  count: status.refCount,
+                                })}`
+                              : ""}
+                          </Text>
+                        ) : null}
+                        {status?.lastError ? (
+                          <Text c="red" size="xs">
+                            {status.lastError}
+                          </Text>
+                        ) : null}
+                        {currentServer ? (
+                          <Group gap="xs" mt={4}>
+                            <Text size="xs">
+                              {bound
+                                ? t("tunnels.currentBinding.connected", {
+                                    server: currentServer.name,
+                                  })
+                                : t("tunnels.currentBinding.disconnected", {
+                                    server: currentServer.name,
+                                  })}
+                            </Text>
+                            <Button
+                              disabled={
+                                bindMutation.isPending ||
+                                unbindMutation.isPending
+                              }
+                              type="button"
+                              variant={bound ? "secondary" : "primary"}
+                              onClick={() => {
+                                if (bound) {
+                                  unbindMutation.mutate({
+                                    providerId: provider.id,
+                                    serverId: currentServer.id,
+                                  });
+                                  return;
+                                }
+                                bindMutation.mutate({
                                   providerId: provider.id,
                                   serverId: currentServer.id,
                                 });
-                                return;
-                              }
-                              bindMutation.mutate({
-                                providerId: provider.id,
-                                serverId: currentServer.id,
-                              });
-                            }}
-                          >
-                            {bindingsForCurrentServer.has(provider.id)
-                              ? t("tunnels.currentBinding.disconnect")
-                              : t("tunnels.currentBinding.connect")}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="provider-row-actions">
+                              }}
+                            >
+                              {bound
+                                ? t("tunnels.currentBinding.disconnect")
+                                : t("tunnels.currentBinding.connect")}
+                            </Button>
+                          </Group>
+                        ) : null}
+                      </Stack>
+                    </Group>
+                    <Group gap="xs" justify="flex-end" mt="sm">
                       {provider.kind === "application" ? (
                         <Button
                           disabled={openApplicationMutation.isPending}
@@ -518,29 +549,29 @@ export function TunnelProvidersView({
                             openApplicationMutation.mutate(provider.id)
                           }
                         >
-                          <Play aria-hidden="true" size={15} />
+                          <Play aria-hidden="true" size={16} />
                           {t("tunnels.actions.open")}
                         </Button>
                       ) : null}
                       <Button
                         disabled={updateMutation.isPending}
                         type="button"
-                        variant="secondary"
+                        variant="ghost"
                         onClick={() => editProvider(provider)}
                       >
-                        <Pencil aria-hidden="true" size={15} />
+                        <Pencil aria-hidden="true" size={16} />
                         {t("tunnels.actions.edit")}
                       </Button>
                       <Button
                         disabled={updateMutation.isPending}
                         type="button"
-                        variant="secondary"
+                        variant="ghost"
                         onClick={() => toggleProvider(provider)}
                       >
                         {provider.enabled ? (
-                          <PowerOff aria-hidden="true" size={15} />
+                          <PowerOff aria-hidden="true" size={16} />
                         ) : (
-                          <Power aria-hidden="true" size={15} />
+                          <Power aria-hidden="true" size={16} />
                         )}
                         {provider.enabled
                           ? t("tunnels.actions.disable")
@@ -555,50 +586,48 @@ export function TunnelProvidersView({
                           setDangerAction({ kind: "delete", provider });
                         }}
                       >
-                        <Trash2 aria-hidden="true" size={15} />
+                        <Trash2 aria-hidden="true" size={16} />
                         {t("tunnels.actions.delete")}
                       </Button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                    </Group>
+                  </Card>
+                );
+              })
             )
           ) : null}
-        </section>
-        {openApplicationMutation.error || deleteMutation.error ? (
-          <p className="danger-text" role="alert">
-            {(openApplicationMutation.error || deleteMutation.error)?.message}
-          </p>
-        ) : null}
+        </Stack>
+      </SimpleGrid>
+      {openApplicationMutation.error || deleteMutation.error ? (
+        <ErrorText>
+          {(openApplicationMutation.error || deleteMutation.error)?.message}
+        </ErrorText>
+      ) : null}
 
-        {!embedded && bindingsQuery.error ? (
-          <div className="list-state list-state-error" role="alert">
-            <strong>{t("tunnels.bindings.loadError")}</strong>
-            <span>{bindingsQuery.error.message}</span>
-            <Button variant="secondary" onClick={() => bindingsQuery.refetch()}>
-              {t("common.retry")}
-            </Button>
-          </div>
-        ) : !embedded ? (
-          <TunnelBindingEditor
-            bindings={bindings}
-            providers={providers}
-            servers={servers}
-            isSaving={bindMutation.isPending || unbindMutation.isPending}
-            onBind={(providerId, serverId) =>
-              bindMutation.mutate({ providerId, serverId })
-            }
-            onUnbind={(providerId, serverId) =>
-              unbindMutation.mutate({ providerId, serverId })
-            }
-          />
-        ) : null}
-        {bindMutation.error || unbindMutation.error ? (
-          <p className="danger-text" role="alert">
-            {(bindMutation.error || unbindMutation.error)?.message}
-          </p>
-        ) : null}
-      </div>
+      {!embedded && bindingsQuery.error ? (
+        <LoadError
+          message={bindingsQuery.error.message}
+          title={t("tunnels.bindings.loadError")}
+          onRetry={() => bindingsQuery.refetch()}
+        />
+      ) : !embedded ? (
+        <TunnelBindingEditor
+          bindings={bindings}
+          providers={providers}
+          servers={servers}
+          isSaving={bindMutation.isPending || unbindMutation.isPending}
+          onBind={(providerId, serverId) =>
+            bindMutation.mutate({ providerId, serverId })
+          }
+          onUnbind={(providerId, serverId) =>
+            unbindMutation.mutate({ providerId, serverId })
+          }
+        />
+      ) : null}
+      {bindMutation.error || unbindMutation.error ? (
+        <ErrorText>
+          {(bindMutation.error || unbindMutation.error)?.message}
+        </ErrorText>
+      ) : null}
       <ConfirmDangerDialog
         confirmLabel={
           dangerAction?.kind === "delete"
@@ -644,6 +673,6 @@ export function TunnelProvidersView({
           });
         }}
       />
-    </section>
+    </Stack>
   );
 }

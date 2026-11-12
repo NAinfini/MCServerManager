@@ -1,3 +1,12 @@
+import {
+  ActionIcon,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  Text,
+  ThemeIcon,
+} from "@mantine/core";
 import { Archive, FileArchive, FileCode2, FolderOpen, X } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
@@ -45,7 +54,6 @@ export function DropImportReviewDialog({
   return (
     <DialogSurface
       open={open}
-      className="drop-import-review-dialog"
       description={t("dropImport.review.description")}
       footer={
         <>
@@ -68,48 +76,60 @@ export function DropImportReviewDialog({
       title={t("dropImport.review.title")}
       onOpenChange={onOpenChange}
       header={({ description, title }) => (
-        <div className="create-server-dialog-header">
+        <Group align="flex-start" justify="space-between" wrap="nowrap">
           <div>
             {title}
             {description}
           </div>
-          <Button
+          <ActionIcon
             aria-label={t("dropImport.review.close")}
-            className="icon-button"
-            variant="ghost"
             onClick={() => onOpenChange(false)}
           >
             <X aria-hidden="true" size={16} />
-          </Button>
-        </div>
+          </ActionIcon>
+        </Group>
       )}
     >
-      <div className="drop-import-review-body">
-        <div className="drop-import-detected">
-          <span className="drop-import-detected-icon">
-            <Icon aria-hidden="true" size={24} />
-          </span>
+      <Stack gap="md" mt="md">
+        <Paper bg="var(--mantine-color-default-hover)" p="md">
+          <Group gap="sm" wrap="nowrap">
+            <ThemeIcon size="xl" variant="light">
+              <Icon aria-hidden="true" size={22} />
+            </ThemeIcon>
+            <div style={{ minWidth: 0 }}>
+              <Text fw={600} truncate>
+                {basename(primaryPath)}
+              </Text>
+              <Text c="dimmed" size="sm">
+                {t(`dropImport.kind.${kind}`)}
+              </Text>
+            </div>
+          </Group>
+        </Paper>
+        <SimpleGrid cols={2} spacing="md">
           <div>
-            <strong>{basename(primaryPath)}</strong>
-            <span>{t(`dropImport.kind.${kind}`)}</span>
-          </div>
-        </div>
-        <div className="drop-import-review-grid">
-          <div>
-            <span>{t("dropImport.review.confidence")}</span>
-            <strong>{t("dropImport.review.confidenceValue")}</strong>
+            <Text c="dimmed" size="xs">
+              {t("dropImport.review.confidence")}
+            </Text>
+            <Text fw={600} size="sm">
+              {t("dropImport.review.confidenceValue")}
+            </Text>
           </div>
           <div>
-            <span>{t("dropImport.review.action")}</span>
-            <strong>{t(`dropImport.action.${kind}`)}</strong>
+            <Text c="dimmed" size="xs">
+              {t("dropImport.review.action")}
+            </Text>
+            <Text fw={600} size="sm">
+              {t(`dropImport.action.${kind}`)}
+            </Text>
           </div>
-        </div>
-        <p className="drop-import-review-note">
+        </SimpleGrid>
+        <Text c="dimmed" size="sm">
           {paths.length > 1
             ? t("provisioning.wizard.dropSingle")
             : t("dropImport.review.note")}
-        </p>
-      </div>
+        </Text>
+      </Stack>
     </DialogSurface>
   );
 }

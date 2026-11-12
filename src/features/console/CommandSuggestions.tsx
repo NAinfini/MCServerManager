@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Code, Group, Kbd, Paper, Text, UnstyledButton } from "@mantine/core";
 import { useAppSettings } from "../../i18n";
 import {
   MC_COMMANDS,
@@ -133,39 +134,69 @@ export function CommandSuggestions({
   }
 
   return (
-    <div className="cmd-suggest-list" role="listbox">
-      <div className="cmd-suggest-header">
-        <span>{t("console.suggestions.source")}</span>
-        <span aria-hidden="true">
-          <kbd>↑↓</kbd> {t("console.suggestions.select")} ·{" "}
-          <kbd>{t("console.suggestions.tab")}</kbd>{" "}
+    <Paper
+      bottom="100%"
+      left={0}
+      mah={260}
+      mb={4}
+      p={4}
+      pos="absolute"
+      right={0}
+      role="listbox"
+      shadow="md"
+      style={{ overflowY: "auto", zIndex: 10 }}
+      withBorder
+    >
+      <Group justify="space-between" px="xs" py={4} wrap="nowrap">
+        <Text c="dimmed" size="xs">
+          {t("console.suggestions.source")}
+        </Text>
+        <Text aria-hidden="true" c="dimmed" size="xs">
+          <Kbd size="xs">↑↓</Kbd> {t("console.suggestions.select")} ·{" "}
+          <Kbd size="xs">{t("console.suggestions.tab")}</Kbd>{" "}
           {t("console.suggestions.fill")}
-        </span>
-      </div>
+        </Text>
+      </Group>
       {suggestions.map((suggestion, index) => (
-        <button
-          className={
-            index === highlightedIndex
-              ? "cmd-suggest-item cmd-suggest-item-active"
-              : "cmd-suggest-item"
-          }
-          key={suggestion.value}
-          role="option"
+        <UnstyledButton
           aria-selected={index === highlightedIndex}
-          type="button"
+          bg={
+            index === highlightedIndex
+              ? "var(--mantine-color-default-hover)"
+              : undefined
+          }
+          display="flex"
+          key={suggestion.value}
+          px="xs"
+          py={6}
+          role="option"
+          style={{ alignItems: "baseline", borderRadius: 6, gap: 12 }}
+          w="100%"
           onMouseDown={(event) => {
             event.preventDefault();
             onSelect(suggestion.value);
           }}
           onMouseEnter={() => setHighlightedIndex(index)}
         >
-          <strong>{suggestion.label}</strong>
-          <span className="cmd-suggest-copy">
-            <span>{suggestion.description}</span>
-            {suggestion.usage ? <code>{suggestion.usage}</code> : null}
-          </span>
-        </button>
+          <Text
+            ff="monospace"
+            fw={600}
+            size="sm"
+            style={{ whiteSpace: "nowrap" }}
+          >
+            {suggestion.label}
+          </Text>
+          <Text c="dimmed" size="xs" truncate>
+            {suggestion.description}
+            {suggestion.usage ? (
+              <>
+                {" "}
+                <Code>{suggestion.usage}</Code>
+              </>
+            ) : null}
+          </Text>
+        </UnstyledButton>
       ))}
-    </div>
+    </Paper>
   );
 }

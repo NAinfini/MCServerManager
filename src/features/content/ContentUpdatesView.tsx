@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Alert,
+  Badge,
+  Checkbox,
+  Divider,
+  Group,
+  List,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from "@mantine/core";
 import { Download, History, RefreshCw, RotateCcw } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
-import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import type { ServerProfile } from "../../domain/server";
 import { useAppSettings } from "../../i18n";
@@ -20,7 +31,6 @@ import {
   type InstalledContentUpdateResult,
 } from "./contentApi";
 import { contentKeys } from "./queries";
-import "./content.css";
 
 interface ContentUpdatesViewProps {
   server: ServerProfile;
@@ -34,10 +44,10 @@ interface UpdateOutcome {
 
 export function ContentUpdatesView({ server }: ContentUpdatesViewProps) {
   return (
-    <div className="content-updates-workspace">
+    <Stack gap="md">
       <AvailableUpdatesPanel server={server} />
       <ContentUpdatePolicyView server={server} />
-    </div>
+    </Stack>
   );
 }
 
@@ -129,30 +139,33 @@ function AvailableUpdatesPanel({ server }: ContentUpdatesViewProps) {
 
   if (checkQuery.isLoading) {
     return (
-      <section
-        className="settings-panel content-updates"
+      <Paper
         aria-label={t("server.workspace.content.updates")}
+        component="section"
+        p="md"
       >
         <LoadingState message={t("content.updates.checking")} />
-      </section>
+      </Paper>
     );
   }
 
   if (checkQuery.error) {
     return (
-      <section
-        className="settings-panel content-updates"
+      <Paper
         aria-label={t("server.workspace.content.updates")}
+        component="section"
+        p="md"
       >
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("content.updates.checkFailed")}</strong>
-          <span>{checkQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => checkQuery.refetch()}>
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("common.retry")}
-          </Button>
-        </div>
-      </section>
+        <Alert color="red" title={t("content.updates.checkFailed")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{checkQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => checkQuery.refetch()}>
+              <RefreshCw aria-hidden="true" size={16} />
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
+      </Paper>
     );
   }
 
@@ -160,201 +173,244 @@ function AvailableUpdatesPanel({ server }: ContentUpdatesViewProps) {
   const history = historyQuery.data ?? [];
 
   return (
-    <section
-      className="settings-panel content-updates"
+    <Paper
       aria-label={t("server.workspace.content.updates")}
+      component="section"
+      p="md"
     >
-      <div className="section-heading">
-        <div className="section-heading-copy">
-          <h2>{t("content.updates.title")}</h2>
-          <p>{t("content.updates.description")}</p>
-        </div>
-        <div className="content-toolbar-actions">
-          <Button
-            disabled={busy || checkQuery.isFetching}
-            variant="secondary"
-            onClick={() => checkQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("content.installed.checkUpdates")}
-          </Button>
-          <Button
-            disabled={busy || selectedIds.size === 0}
-            variant="primary"
-            onClick={() => setConfirmSelectedUpdates(true)}
-          >
-            <Download aria-hidden="true" size={15} />
-            {t("content.updates.updateSelected", { count: selectedIds.size })}
-          </Button>
-        </div>
-      </div>
-
-      {actionError ? (
-        <div className="inline-error" role="alert">
-          <strong>{t("content.updates.actionFailed")}</strong>
-          <span>{actionError.message}</span>
-          <span>{t("content.updates.recovery")}</span>
-        </div>
-      ) : null}
-      {outcome ? (
-        <div
-          className="content-operation-result"
-          role="status"
-          aria-live="polite"
-        >
-          <strong>
-            {outcome.count === 0
-              ? t("content.history.rollbackComplete")
-              : t("content.updates.updated", { count: outcome.count })}
-          </strong>
-          {outcome.count > 0 ? (
-            <span>{t("content.updates.restartRequired")}</span>
-          ) : null}
-          {outcome.backupPaths.length > 0 ? (
-            <span>
-              {t("content.updates.backupsCreated", {
-                count: outcome.backupPaths.length,
-              })}
-            </span>
-          ) : null}
-          {outcome.warnings.map((warning) => (
-            <span key={warning}>{warning}</span>
-          ))}
-        </div>
-      ) : null}
-
-      {updates.length === 0 ? (
-        <EmptyState
-          illustration="/illustrations/no-content.png"
-          title={t("content.updates.emptyTitle")}
-          description={t("content.updates.emptyDescription")}
-        />
-      ) : (
-        <div className="content-update-table">
-          <label className="content-select-all">
-            <Checkbox
-              checked={
-                allSelected
-                  ? true
-                  : selectedIds.size > 0
-                    ? "indeterminate"
-                    : false
-              }
-              onCheckedChange={(checked) =>
-                setSelectedIds(
-                  checked === true
-                    ? new Set(
-                        updates.map((update) => update.installedContentId),
-                      )
-                    : new Set(),
-                )
-              }
-            />
-            <span>{t("content.selection.all", { count: updates.length })}</span>
-          </label>
-          <ul className="content-update-list">
-            {updates.map((update) => (
-              <li key={update.installedContentId}>
-                <Checkbox
-                  aria-label={t("content.selection.item", {
-                    name: update.name,
-                  })}
-                  checked={selectedIds.has(update.installedContentId)}
-                  onCheckedChange={(checked) =>
-                    setSelectedIds((current) => {
-                      const next = new Set(current);
-                      if (checked === true) next.add(update.installedContentId);
-                      else next.delete(update.installedContentId);
-                      return next;
-                    })
-                  }
-                />
-                <span className="content-update-identity">
-                  <strong>{update.name}</strong>
-                  <small>
-                    {update.currentVersion ?? t("common.unknown")} {" -> "}
-                    {update.latestVersion} / {update.provider}
-                  </small>
-                  {update.warnings.length > 0 ? (
-                    <small className="danger-text">
-                      {update.warnings.join(" ")}
-                    </small>
-                  ) : null}
-                </span>
-                <Button
-                  aria-label={t("content.installed.updateOneAria", {
-                    content: update.name,
-                  })}
-                  disabled={busy}
-                  variant="secondary"
-                  onClick={() => installOne.mutate(update.installedContentId)}
-                >
-                  {t("content.installed.update")}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {warnings.length > 0 ? (
-        <div className="content-update-warnings" role="status">
-          <strong>{t("content.updates.unresolved")}</strong>
-          <ul>
-            {warnings.map((warning) => (
-              <li key={warning}>{warning}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      <div className="content-history">
-        <div className="content-history-heading">
-          <span>
-            <History aria-hidden="true" size={15} />
-            <strong>{t("content.history.title")}</strong>
-          </span>
-          <small>{t("content.history.description")}</small>
-        </div>
-        {historyQuery.isLoading ? (
-          <LoadingState message={t("content.history.loading")} />
-        ) : historyQuery.error ? (
-          <div className="inline-error" role="alert">
-            <span>{historyQuery.error.message}</span>
-            <Button variant="secondary" onClick={() => historyQuery.refetch()}>
-              {t("common.retry")}
+      <Stack gap="md">
+        <Group align="flex-start" justify="space-between">
+          <Stack gap={2}>
+            <Title order={3}>{t("content.updates.title")}</Title>
+            <Text c="dimmed" size="sm">
+              {t("content.updates.description")}
+            </Text>
+          </Stack>
+          <Group gap="xs">
+            <Button
+              disabled={busy || checkQuery.isFetching}
+              variant="secondary"
+              onClick={() => checkQuery.refetch()}
+            >
+              <RefreshCw aria-hidden="true" size={16} />
+              {t("content.installed.checkUpdates")}
             </Button>
-          </div>
-        ) : history.length === 0 ? (
-          <p className="settings-notice">{t("content.history.empty")}</p>
-        ) : (
-          <ul>
-            {history.map((entry) => (
-              <li key={entry.id}>
-                <span>
-                  <strong>{entry.name}</strong>
-                  <small>
-                    {entry.fromVersion ?? t("common.unknown")} {" -> "}{" "}
-                    {entry.toVersion} /{" "}
-                    {formatDateTime(entry.createdAt, language)}
-                  </small>
-                </span>
-                <span className="content-history-state">
-                  <span>{t(`content.history.status.${entry.status}`)}</span>
-                  <Button
-                    disabled={busy || !entry.rollbackAvailable}
-                    variant="secondary"
-                    onClick={() => setHistoryToRollback(entry)}
-                  >
-                    <RotateCcw aria-hidden="true" size={14} />
-                    {t("content.history.rollback")}
-                  </Button>
-                </span>
-              </li>
+            <Button
+              disabled={busy || selectedIds.size === 0}
+              variant="primary"
+              onClick={() => setConfirmSelectedUpdates(true)}
+            >
+              <Download aria-hidden="true" size={16} />
+              {t("content.updates.updateSelected", { count: selectedIds.size })}
+            </Button>
+          </Group>
+        </Group>
+
+        {actionError ? (
+          <Alert color="red" title={t("content.updates.actionFailed")}>
+            <Text size="sm">{actionError.message}</Text>
+            <Text size="sm">{t("content.updates.recovery")}</Text>
+          </Alert>
+        ) : null}
+        {outcome ? (
+          <Alert
+            aria-live="polite"
+            role="status"
+            title={
+              outcome.count === 0
+                ? t("content.history.rollbackComplete")
+                : t("content.updates.updated", { count: outcome.count })
+            }
+          >
+            {outcome.count > 0 ? (
+              <Text size="sm">{t("content.updates.restartRequired")}</Text>
+            ) : null}
+            {outcome.backupPaths.length > 0 ? (
+              <Text size="sm">
+                {t("content.updates.backupsCreated", {
+                  count: outcome.backupPaths.length,
+                })}
+              </Text>
+            ) : null}
+            {outcome.warnings.map((warning) => (
+              <Text key={warning} size="sm">
+                {warning}
+              </Text>
             ))}
-          </ul>
+          </Alert>
+        ) : null}
+
+        {updates.length === 0 ? (
+          <Stack gap={2}>
+            <Text fw={600} size="sm">
+              {t("content.updates.emptyTitle")}
+            </Text>
+            <Text c="dimmed" size="sm">
+              {t("content.updates.emptyDescription")}
+            </Text>
+          </Stack>
+        ) : (
+          <Table.ScrollContainer minWidth={520}>
+            <Table highlightOnHover verticalSpacing="xs">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th colSpan={3}>
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={!allSelected && selectedIds.size > 0}
+                      label={t("content.selection.all", {
+                        count: updates.length,
+                      })}
+                      onChange={(event) =>
+                        setSelectedIds(
+                          event.currentTarget.checked
+                            ? new Set(
+                                updates.map(
+                                  (update) => update.installedContentId,
+                                ),
+                              )
+                            : new Set(),
+                        )
+                      }
+                    />
+                  </Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {updates.map((update) => (
+                  <Table.Tr key={update.installedContentId}>
+                    <Table.Td w={36}>
+                      <Checkbox
+                        aria-label={t("content.selection.item", {
+                          name: update.name,
+                        })}
+                        checked={selectedIds.has(update.installedContentId)}
+                        onChange={(event) => {
+                          const checked = event.currentTarget.checked;
+                          setSelectedIds((current) => {
+                            const next = new Set(current);
+                            if (checked) next.add(update.installedContentId);
+                            else next.delete(update.installedContentId);
+                            return next;
+                          });
+                        }}
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fw={500} size="sm">
+                        {update.name}
+                      </Text>
+                      <Text c="dimmed" ff="monospace" size="xs">
+                        {update.currentVersion ?? t("common.unknown")} {" -> "}
+                        {update.latestVersion} / {update.provider}
+                      </Text>
+                      {update.warnings.length > 0 ? (
+                        <Text c="red" size="xs">
+                          {update.warnings.join(" ")}
+                        </Text>
+                      ) : null}
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Button
+                        aria-label={t("content.installed.updateOneAria", {
+                          content: update.name,
+                        })}
+                        disabled={busy}
+                        variant="secondary"
+                        onClick={() =>
+                          installOne.mutate(update.installedContentId)
+                        }
+                      >
+                        {t("content.installed.update")}
+                      </Button>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
         )}
-      </div>
+
+        {warnings.length > 0 ? (
+          <Alert
+            color="yellow"
+            role="status"
+            title={t("content.updates.unresolved")}
+          >
+            <List size="sm">
+              {warnings.map((warning) => (
+                <List.Item key={warning}>{warning}</List.Item>
+              ))}
+            </List>
+          </Alert>
+        ) : null}
+
+        <Divider />
+        <Stack gap="xs">
+          <Group gap={6}>
+            <History aria-hidden="true" size={16} />
+            <Title order={4}>{t("content.history.title")}</Title>
+          </Group>
+          <Text c="dimmed" size="xs">
+            {t("content.history.description")}
+          </Text>
+          {historyQuery.isLoading ? (
+            <LoadingState message={t("content.history.loading")} />
+          ) : historyQuery.error ? (
+            <Alert color="red">
+              <Stack align="flex-start" gap="xs">
+                <Text size="sm">{historyQuery.error.message}</Text>
+                <Button
+                  variant="secondary"
+                  onClick={() => historyQuery.refetch()}
+                >
+                  {t("common.retry")}
+                </Button>
+              </Stack>
+            </Alert>
+          ) : history.length === 0 ? (
+            <Text c="dimmed" size="sm">
+              {t("content.history.empty")}
+            </Text>
+          ) : (
+            <Table.ScrollContainer minWidth={520}>
+              <Table highlightOnHover verticalSpacing="xs">
+                <Table.Tbody>
+                  {history.map((entry) => (
+                    <Table.Tr key={entry.id}>
+                      <Table.Td>
+                        <Text fw={500} size="sm">
+                          {entry.name}
+                        </Text>
+                        <Text c="dimmed" ff="monospace" size="xs">
+                          {entry.fromVersion ?? t("common.unknown")} {" -> "}{" "}
+                          {entry.toVersion} /{" "}
+                          {formatDateTime(entry.createdAt, language)}
+                        </Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Badge color="gray" size="sm" tt="none" variant="light">
+                          {t(`content.history.status.${entry.status}`)}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td ta="right">
+                        <Button
+                          disabled={busy || !entry.rollbackAvailable}
+                          variant="secondary"
+                          onClick={() => setHistoryToRollback(entry)}
+                        >
+                          <RotateCcw aria-hidden="true" size={14} />
+                          {t("content.history.rollback")}
+                        </Button>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </Stack>
+      </Stack>
 
       <ConfirmDangerDialog
         confirmLabel={t("content.updates.updateSelected", {
@@ -392,6 +448,6 @@ function AvailableUpdatesPanel({ server }: ContentUpdatesViewProps) {
           if (historyToRollback) rollback.mutate(historyToRollback.id);
         }}
       />
-    </section>
+    </Paper>
   );
 }

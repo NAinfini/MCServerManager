@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Overlay, Paper, Stack, Text, ThemeIcon, Title } from "@mantine/core";
 import { FolderDown } from "lucide-react";
 import { useAppSettings } from "../../i18n";
 import { droppedFilePath } from "../../lib/dropped-files";
@@ -72,12 +73,25 @@ export function DropImportOverlay({ onDrop }: DropImportOverlayProps) {
   if (!isDragging) return null;
 
   return (
-    <div className="drop-import-overlay drop-import-overlay-active">
-      <div className="drop-import-zone">
-        <FolderDown aria-hidden="true" size={40} color="var(--accent)" />
-        <h2>{t("servers.dropImport.title")}</h2>
-        <p>{t("servers.dropImport.description")}</p>
-      </div>
-    </div>
+    <Overlay backgroundOpacity={0.6} blur={3} center fixed zIndex={400}>
+      <Paper
+        p="xl"
+        shadow="xl"
+        style={{ border: "2px dashed var(--mantine-color-azure-6)" }}
+        w={420}
+      >
+        <Stack align="center" gap="xs" ta="center">
+          <ThemeIcon radius="xl" size={56} variant="light">
+            <FolderDown aria-hidden="true" size={28} />
+          </ThemeIcon>
+          <Title order={2} fz="lg">
+            {t("servers.dropImport.title")}
+          </Title>
+          <Text c="dimmed" size="sm">
+            {t("servers.dropImport.description")}
+          </Text>
+        </Stack>
+      </Paper>
+    </Overlay>
   );
 }

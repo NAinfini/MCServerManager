@@ -4,6 +4,8 @@ import {
   type ReactNode,
   type TableHTMLAttributes,
 } from "react";
+import { Group, Table, UnstyledButton } from "@mantine/core";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 
 export interface DataTableColumn<T> {
   id: string;
@@ -62,58 +64,64 @@ export function DataTable<T>({
   }, [columns, rows, sort]);
 
   return (
-    <table {...tableProps}>
+    <Table highlightOnHover verticalSpacing="xs" {...tableProps}>
       <caption className="visually-hidden">{caption}</caption>
-      <thead>
-        <tr>
-          {columns.map((column) => (
-            <th
-              aria-sort={
-                sort?.columnId === column.id ? sort.direction : undefined
-              }
-              className={column.headerClassName}
-              key={column.id}
-              scope="col"
-            >
-              {column.sortValue ? (
-                <button
-                  className="data-table-sort"
-                  type="button"
-                  onClick={() =>
-                    setSort((current) => ({
-                      columnId: column.id,
-                      direction:
-                        current?.columnId === column.id &&
-                        current.direction === "ascending"
-                          ? "descending"
-                          : "ascending",
-                    }))
-                  }
-                >
-                  {column.header}
-                  <span aria-hidden="true">
-                    {sort?.columnId === column.id
-                      ? sort.direction === "ascending"
-                        ? " ↑"
-                        : " ↓"
-                      : " ↕"}
-                  </span>
-                </button>
-              ) : (
-                column.header
-              )}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
+      <Table.Thead>
+        <Table.Tr>
+          {columns.map((column) => {
+            const sorted = sort?.columnId === column.id ? sort.direction : null;
+            const SortIcon =
+              sorted === "ascending"
+                ? ArrowUp
+                : sorted === "descending"
+                  ? ArrowDown
+                  : ArrowUpDown;
+            return (
+              <Table.Th
+                aria-sort={sorted ?? undefined}
+                className={column.headerClassName}
+                key={column.id}
+                scope="col"
+              >
+                {column.sortValue ? (
+                  <UnstyledButton
+                    fw="inherit"
+                    fz="inherit"
+                    onClick={() =>
+                      setSort((current) => ({
+                        columnId: column.id,
+                        direction:
+                          current?.columnId === column.id &&
+                          current.direction === "ascending"
+                            ? "descending"
+                            : "ascending",
+                      }))
+                    }
+                  >
+                    <Group gap={4} wrap="nowrap">
+                      {column.header}
+                      <SortIcon
+                        aria-hidden="true"
+                        opacity={sorted ? 1 : 0.4}
+                        size={14}
+                      />
+                    </Group>
+                  </UnstyledButton>
+                ) : (
+                  column.header
+                )}
+              </Table.Th>
+            );
+          })}
+        </Table.Tr>
+      </Table.Thead>
+      <Table.Tbody>
         {visibleRows.map((row, index) => (
-          <tr
+          <Table.Tr
             className={getRowClassName?.(row, index)}
             key={getRowKey(row, index)}
+            style={onRowActivate ? { cursor: "pointer" } : undefined}
             tabIndex={onRowActivate ? 0 : undefined}
-            /* An activatable row was keyboard-only: there was no click handler
-               at all, and Space did nothing. */
             onClick={
               onRowActivate ? () => onRowActivate(row, index) : undefined
             }
@@ -134,7 +142,7 @@ export function DataTable<T>({
                 typeof column.cellClassName === "function"
                   ? column.cellClassName(row, index)
                   : column.cellClassName;
-              const Cell = column.rowHeader ? "th" : "td";
+              const Cell = column.rowHeader ? Table.Th : Table.Td;
               return (
                 <Cell
                   className={className}
@@ -145,9 +153,9 @@ export function DataTable<T>({
                 </Cell>
               );
             })}
-          </tr>
+          </Table.Tr>
         ))}
-      </tbody>
-    </table>
+      </Table.Tbody>
+    </Table>
   );
 }

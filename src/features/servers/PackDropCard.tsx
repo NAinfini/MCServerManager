@@ -1,6 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  Alert,
+  Anchor,
+  Checkbox,
+  Group,
+  List,
+  Loader,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+} from "@mantine/core";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { ServerCover } from "../../components/ui/server-cover";
@@ -33,11 +46,7 @@ import {
 } from "./provisioningApi";
 import { ProvisioningProgress } from "./ProvisioningProgress";
 import { serverKeys } from "./queries";
-import type {
-  GuidedServerConfiguration,
-  ValidatedJavaRuntime,
-} from "./types";
-import "../../styles/pack-drop.css";
+import type { GuidedServerConfiguration, ValidatedJavaRuntime } from "./types";
 
 const MINECRAFT_EULA_URL = "https://aka.ms/MinecraftEULA";
 
@@ -253,8 +262,7 @@ export function PackDropCard({
           ? "packDrop.blocked.clientPack"
           : null;
   const loaderType = (plan?.loaderType ?? detection?.loader?.type) as
-    | LoaderType
-    | undefined;
+    LoaderType | undefined;
   const canConfirm =
     phase === "review" &&
     !busy &&
@@ -288,11 +296,7 @@ export function PackDropCard({
       const gb = Number(value);
       const totalMb = detection?.memory?.totalMb ?? null;
       const mb = Math.round(gb * 1024);
-      if (
-        !Number.isFinite(gb) ||
-        mb < 1024 ||
-        mb > (totalMb ?? 131072)
-      ) {
+      if (!Number.isFinite(gb) || mb < 1024 || mb > (totalMb ?? 131072)) {
         setDraftError(
           t("packDrop.invalid.memory", {
             max: formatMemory(totalMb ?? 131072),
@@ -312,7 +316,9 @@ export function PackDropCard({
       setPortChosen(true);
     } else if (field === "minecraft" || field === "loader") {
       const pattern =
-        field === "minecraft" ? MINECRAFT_VERSION_PATTERN : LOADER_VERSION_PATTERN;
+        field === "minecraft"
+          ? MINECRAFT_VERSION_PATTERN
+          : LOADER_VERSION_PATTERN;
       if (!pattern.test(value)) {
         setDraftError(
           t(
@@ -529,13 +535,13 @@ export function PackDropCard({
   };
 
   const header = (title: ReactNode, description: ReactNode) => (
-    <header className="pack-drop-header">
+    <Group gap="md" wrap="nowrap">
       <ServerCover loaderType={loaderType} size={56} />
-      <div>
+      <div style={{ minWidth: 0 }}>
         {title}
         {description}
       </div>
-    </header>
+    </Group>
   );
 
   const sizeLabel = formatBytes(detection?.sizeBytes ?? 0);
@@ -555,53 +561,53 @@ export function PackDropCard({
     value: ReactNode,
     options: { changeable?: boolean; onChange?: () => void } = {},
   ) => (
-    <div className="pack-drop-row" key={field}>
-      <dt>{label}</dt>
-      <dd>
+    <Table.Tr key={field}>
+      <Table.Th c="dimmed" fw={500} w={120}>
+        {label}
+      </Table.Th>
+      <Table.Td>
         {editing === field ? (
-          <span className="pack-drop-editor">{editorFor(field as EditableField)}</span>
+          editorFor(field as EditableField)
         ) : (
-          <>
-            <span className="pack-drop-value">{value}</span>
+          <Group gap="sm" justify="space-between" wrap="nowrap">
+            <Text size="sm">{value}</Text>
             {options.changeable ? (
-              <button
+              <Anchor
                 aria-label={`${t("packDrop.change")}: ${label}`}
-                className="pack-drop-change"
-                ref={(node) => {
+                component="button"
+                ref={(node: HTMLButtonElement | null) => {
                   if (node && field !== "mods" && field !== "java") {
                     changeButtons.current[field] = node;
                   }
                 }}
+                size="sm"
                 type="button"
                 onClick={options.onChange}
               >
                 {t("packDrop.change")}
-              </button>
+              </Anchor>
             ) : null}
-          </>
+          </Group>
         )}
-      </dd>
-    </div>
+      </Table.Td>
+    </Table.Tr>
   );
 
   const editorFor = (field: EditableField) => {
     if (field === "automation") {
       return (
-        <>
-          <label className="checkbox-row pack-drop-check">
-            <input
-              autoFocus
-              checked={restartOnCrash}
-              type="checkbox"
-              onChange={(event) => setRestartOnCrash(event.target.checked)}
-              onKeyDown={editorKeys(field)}
-            />
-            <span>{t("packDrop.automation.restartOn")}</span>
-          </label>
+        <Group gap="sm" wrap="nowrap">
+          <Checkbox
+            autoFocus
+            checked={restartOnCrash}
+            label={t("packDrop.automation.restartOn")}
+            onChange={(event) => setRestartOnCrash(event.currentTarget.checked)}
+            onKeyDown={editorKeys(field)}
+          />
           <Button variant="secondary" onClick={() => stopEdit(field)}>
             {t("packDrop.done")}
           </Button>
-        </>
+        </Group>
       );
     }
     const labelKey = {
@@ -611,38 +617,43 @@ export function PackDropCard({
       port: "packDrop.row.port",
     }[field];
     return (
-      <>
-        <input
-          aria-describedby={draftError ? "pack-drop-draft-error" : undefined}
-          aria-invalid={draftError ? true : undefined}
-          aria-label={t(labelKey)}
-          autoFocus
-          className="pack-drop-input"
-          inputMode={field === "memory" || field === "port" ? "decimal" : "text"}
-          spellCheck={false}
-          value={draft}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            setDraftError(null);
-          }}
-          onKeyDown={editorKeys(field)}
-        />
-        <Button
-          disabled={busy}
-          variant="secondary"
-          onClick={() => void applyEdit(field)}
-        >
-          {t("packDrop.apply")}
-        </Button>
-        <Button variant="ghost" onClick={() => stopEdit(field)}>
-          {t("common.cancel")}
-        </Button>
+      <Stack gap={4}>
+        <Group gap="xs" wrap="nowrap">
+          <TextInput
+            aria-describedby={draftError ? "pack-drop-draft-error" : undefined}
+            aria-label={t(labelKey)}
+            autoFocus
+            error={Boolean(draftError)}
+            ff="monospace"
+            flex={1}
+            inputMode={
+              field === "memory" || field === "port" ? "decimal" : "text"
+            }
+            spellCheck={false}
+            value={draft}
+            onChange={(event) => {
+              setDraft(event.currentTarget.value);
+              setDraftError(null);
+            }}
+            onKeyDown={editorKeys(field)}
+          />
+          <Button
+            disabled={busy}
+            variant="secondary"
+            onClick={() => void applyEdit(field)}
+          >
+            {t("packDrop.apply")}
+          </Button>
+          <Button variant="ghost" onClick={() => stopEdit(field)}>
+            {t("common.cancel")}
+          </Button>
+        </Group>
         {draftError ? (
-          <span className="pack-drop-field-error" id="pack-drop-draft-error" role="alert">
+          <Text c="red" id="pack-drop-draft-error" role="alert" size="xs">
             {draftError}
-          </span>
+          </Text>
         ) : null}
-      </>
+      </Stack>
     );
   };
 
@@ -700,128 +711,173 @@ export function PackDropCard({
           : t("packDrop.port.free", { port });
 
   const evidence = detection?.evidence ?? [];
-  const clientOnlyNames = detection?.clientOnlyMods.map((mod) => mod.name) ?? [];
+  const clientOnlyNames =
+    detection?.clientOnlyMods.map((mod) => mod.name) ?? [];
+
+  const dangerNotice = (children: ReactNode, title?: ReactNode) => (
+    <Alert
+      color="red"
+      icon={<AlertTriangle aria-hidden="true" size={16} />}
+      title={title}
+      variant="light"
+    >
+      {children}
+    </Alert>
+  );
 
   const body = (
-    <div className="pack-drop-body">
+    <Stack gap="md" mt="md">
       {phase === "reading" ? (
-        <p className="pack-drop-status" role="status">
-          {t("packDrop.reading")}
-        </p>
+        <Group gap="sm" role="status">
+          <Loader size="xs" />
+          <Text c="dimmed" size="sm">
+            {t("packDrop.reading")}
+          </Text>
+        </Group>
       ) : null}
-      {phase === "failed" ? (
-        <div className="pack-drop-notice pack-drop-notice-danger" role="alert">
-          <strong>{t("packDrop.readFailed")}</strong>
-          <span>{error}</span>
-          <span>{t("packDrop.readFailedNext")}</span>
-        </div>
-      ) : null}
+      {phase === "failed"
+        ? dangerNotice(
+            <Stack gap={4}>
+              <Text size="sm">{error}</Text>
+              <Text size="sm">{t("packDrop.readFailedNext")}</Text>
+            </Stack>,
+            t("packDrop.readFailed"),
+          )
+        : null}
       {phase === "review" && detection ? (
         <>
-          <dl className="pack-drop-list">
-            {row("minecraft", t("packDrop.row.minecraft"), (
-              <span className="pack-drop-mono">
-                {minecraftVersion || t("packDrop.unknown")}
-              </span>
-            ), {
-              changeable: kind !== "bareJar",
-              onChange: () => startEdit("minecraft"),
-            })}
-            {row("loader", t("packDrop.row.loader"), (
-              <span className="pack-drop-mono">
-                {loaderType
-                  ? [loaderLabel(loaderType), loaderVersion].filter(Boolean).join(" ")
-                  : t("packDrop.unknown")}
-              </span>
-            ), {
-              changeable: Boolean(loaderType) && kind !== "bareJar",
-              onChange: () => startEdit("loader"),
-            })}
-            {row("mods", t("packDrop.row.mods"), modsValue)}
-            {row("java", t("packDrop.row.java"), javaValue, {
-              changeable: Boolean(path),
-              onChange: () => path && onOpenWizard(path),
-            })}
-            {row("memory", t("packDrop.row.memory"), memoryValue, {
-              changeable: memoryMb !== null,
-              onChange: () => startEdit("memory"),
-            })}
-            {row("port", t("packDrop.row.port"), portValue, {
-              changeable: port !== null,
-              onChange: () => startEdit("port"),
-            })}
-            {row(
-              "automation",
-              t("packDrop.row.automation"),
-              restartOnCrash
-                ? t("packDrop.automation.restartOn")
-                : t("packDrop.automation.restartOff"),
-              { changeable: true, onChange: () => startEdit("automation") },
-            )}
-          </dl>
+          <Table verticalSpacing={6} withRowBorders={false}>
+            <Table.Tbody>
+              {row(
+                "minecraft",
+                t("packDrop.row.minecraft"),
+                <Text component="span" ff="monospace" inherit>
+                  {minecraftVersion || t("packDrop.unknown")}
+                </Text>,
+                {
+                  changeable: kind !== "bareJar",
+                  onChange: () => startEdit("minecraft"),
+                },
+              )}
+              {row(
+                "loader",
+                t("packDrop.row.loader"),
+                <Text component="span" ff="monospace" inherit>
+                  {loaderType
+                    ? [loaderLabel(loaderType), loaderVersion]
+                        .filter(Boolean)
+                        .join(" ")
+                    : t("packDrop.unknown")}
+                </Text>,
+                {
+                  changeable: Boolean(loaderType) && kind !== "bareJar",
+                  onChange: () => startEdit("loader"),
+                },
+              )}
+              {row("mods", t("packDrop.row.mods"), modsValue)}
+              {row("java", t("packDrop.row.java"), javaValue, {
+                changeable: Boolean(path),
+                onChange: () => path && onOpenWizard(path),
+              })}
+              {row("memory", t("packDrop.row.memory"), memoryValue, {
+                changeable: memoryMb !== null,
+                onChange: () => startEdit("memory"),
+              })}
+              {row("port", t("packDrop.row.port"), portValue, {
+                changeable: port !== null,
+                onChange: () => startEdit("port"),
+              })}
+              {row(
+                "automation",
+                t("packDrop.row.automation"),
+                restartOnCrash
+                  ? t("packDrop.automation.restartOn")
+                  : t("packDrop.automation.restartOff"),
+                { changeable: true, onChange: () => startEdit("automation") },
+              )}
+            </Table.Tbody>
+          </Table>
 
           {evidence.length > 0 ? (
-            <div className="pack-drop-evidence">
-              <button
+            <div>
+              <Anchor
                 aria-expanded={showEvidence}
-                className="pack-drop-change"
+                component="button"
+                size="sm"
                 type="button"
                 onClick={() => setShowEvidence((current) => !current)}
               >
                 {t("packDrop.evidence.toggle", { count: evidence.length })}
-              </button>
+              </Anchor>
               {showEvidence ? (
-                <ul>
+                <List mt="xs" size="xs" spacing={4}>
                   {evidence.map((item, index) => (
-                    <li key={`${item.field}-${item.source}-${index}`}>
-                      <span>{t(`packDrop.evidence.field.${item.field}`)}</span>
-                      <span className="pack-drop-mono">{item.value}</span>
-                      <span>
-                        {item.source}
-                        {item.detail ? ` (${item.detail})` : ""}
-                      </span>
-                    </li>
+                    <List.Item key={`${item.field}-${item.source}-${index}`}>
+                      <Group gap="xs">
+                        <Text c="dimmed" inherit>
+                          {t(`packDrop.evidence.field.${item.field}`)}
+                        </Text>
+                        <Text ff="monospace" inherit>
+                          {item.value}
+                        </Text>
+                        <Text c="dimmed" inherit>
+                          {item.source}
+                          {item.detail ? ` (${item.detail})` : ""}
+                        </Text>
+                      </Group>
+                    </List.Item>
                   ))}
-                </ul>
+                </List>
               ) : null}
             </div>
           ) : null}
 
-          {blockedReason ? (
-            <div className="pack-drop-notice pack-drop-notice-danger" role="alert">
-              <span>{t(blockedReason)}</span>
-              {detection.unfetchable.length > 0 ? (
-                <ul className="pack-drop-missing">
-                  {detection.unfetchable.slice(0, 8).map((mod) => (
-                    <li key={`${mod.projectId}-${mod.fileId}`}>
-                      {t("packDrop.unfetchable.item", {
-                        project: mod.projectId,
-                        file: mod.fileId,
-                      })}
-                    </li>
-                  ))}
-                  {detection.unfetchable.length > 8 ? (
-                    <li>
-                      {t("packDrop.unfetchable.more", {
-                        count: detection.unfetchable.length - 8,
-                      })}
-                    </li>
+          {blockedReason
+            ? dangerNotice(
+                <>
+                  <Text size="sm">{t(blockedReason)}</Text>
+                  {detection.unfetchable.length > 0 ? (
+                    <List mt="xs" size="sm" spacing={2}>
+                      {detection.unfetchable.slice(0, 8).map((mod) => (
+                        <List.Item key={`${mod.projectId}-${mod.fileId}`}>
+                          {t("packDrop.unfetchable.item", {
+                            project: mod.projectId,
+                            file: mod.fileId,
+                          })}
+                        </List.Item>
+                      ))}
+                      {detection.unfetchable.length > 8 ? (
+                        <List.Item>
+                          {t("packDrop.unfetchable.more", {
+                            count: detection.unfetchable.length - 8,
+                          })}
+                        </List.Item>
+                      ) : null}
+                    </List>
                   ) : null}
-                </ul>
-              ) : null}
-            </div>
-          ) : null}
+                </>,
+              )
+            : null}
 
           {warnings
-            .filter((warning) => !(blockedReason && warning.code === "PACK_BARE_JAR"))
+            .filter(
+              (warning) => !(blockedReason && warning.code === "PACK_BARE_JAR"),
+            )
             .map((warning) => (
-              <div className="pack-drop-notice pack-drop-notice-warning" key={warning.code}>
-                <div>
-                  <span>{warningText(warning)}</span>
-                  {warning.code === "PACK_CLIENT_ONLY_MODS" ? (
-                    <button
+              <Alert
+                color="yellow"
+                icon={<AlertTriangle aria-hidden="true" size={16} />}
+                key={warning.code}
+                role="note"
+                variant="light"
+              >
+                <Text size="sm">{warningText(warning)}</Text>
+                {warning.code === "PACK_CLIENT_ONLY_MODS" ? (
+                  <>
+                    <Anchor
                       aria-expanded={expandedWarning === warning.code}
-                      className="pack-drop-change"
+                      component="button"
+                      size="sm"
                       type="button"
                       onClick={() =>
                         setExpandedWarning((current) =>
@@ -830,18 +886,17 @@ export function PackDropCard({
                       }
                     >
                       {t("packDrop.warning.view")}
-                    </button>
-                  ) : null}
-                </div>
-                {warning.code === "PACK_CLIENT_ONLY_MODS" &&
-                expandedWarning === warning.code ? (
-                  <ul className="pack-drop-missing">
-                    {clientOnlyNames.map((name) => (
-                      <li key={name}>{name}</li>
-                    ))}
-                  </ul>
+                    </Anchor>
+                    {expandedWarning === warning.code ? (
+                      <List mt="xs" size="sm" spacing={2}>
+                        {clientOnlyNames.map((name) => (
+                          <List.Item key={name}>{name}</List.Item>
+                        ))}
+                      </List>
+                    ) : null}
+                  </>
                 ) : null}
-              </div>
+              </Alert>
             ))}
         </>
       ) : null}
@@ -849,11 +904,14 @@ export function PackDropCard({
       {installing ? (
         <>
           {javaDownloading ? (
-            <p className="pack-drop-status" role="status">
-              {t("packDrop.javaDownloading", {
-                major: javaPlan?.majorVersion ?? "",
-              })}
-            </p>
+            <Group gap="sm" role="status">
+              <Loader size="xs" />
+              <Text c="dimmed" size="sm">
+                {t("packDrop.javaDownloading", {
+                  major: javaPlan?.majorVersion ?? "",
+                })}
+              </Text>
+            </Group>
           ) : null}
           {job ? (
             <ProvisioningProgress
@@ -864,45 +922,44 @@ export function PackDropCard({
             />
           ) : null}
           {job?.stage === "failed" ? (
-            <p className="pack-drop-status">{t("packDrop.failedNext")}</p>
+            <Text c="dimmed" size="sm">
+              {t("packDrop.failedNext")}
+            </Text>
           ) : null}
         </>
       ) : null}
 
-      {error && phase === "review" ? (
-        <div className="pack-drop-notice pack-drop-notice-danger" role="alert">
-          {error}
-        </div>
-      ) : null}
-      {error && installing ? (
-        <div className="pack-drop-notice pack-drop-notice-danger" role="alert">
-          {error}
-        </div>
-      ) : null}
-    </div>
+      {error && (phase === "review" || installing)
+        ? dangerNotice(<Text size="sm">{error}</Text>)
+        : null}
+    </Stack>
   );
 
   const showConsent = phase === "review" && !blockedReason;
+  /* DialogSurface lays the footer out as a plain Mantine Group of our Button,
+     with no wrapper class, so nothing in it changes size on hover. */
   const footer = (
     <>
-      {showConsent ? (
-        <span className="pack-drop-eula">
-          {packEula ? (
-            t("packDrop.eula.fromPack")
-          ) : (
-            <>
-              {t("packDrop.eula.before")}{" "}
-              <a href={MINECRAFT_EULA_URL}>{t("packDrop.eula.link")}</a>
-              {t("packDrop.eula.after")}
-            </>
-          )}
-          {javaPlan?.action === "install" && !javaRuntime
-            ? ` ${t("packDrop.eula.javaNote", { major: javaPlan.majorVersion })}`
-            : ""}
-        </span>
-      ) : (
-        <span className="pack-drop-eula" />
-      )}
+      <Text c="dimmed" flex={1} size="xs">
+        {showConsent ? (
+          <>
+            {packEula ? (
+              t("packDrop.eula.fromPack")
+            ) : (
+              <>
+                {t("packDrop.eula.before")}{" "}
+                <Anchor href={MINECRAFT_EULA_URL} inherit>
+                  {t("packDrop.eula.link")}
+                </Anchor>
+                {t("packDrop.eula.after")}
+              </>
+            )}
+            {javaPlan?.action === "install" && !javaRuntime
+              ? ` ${t("packDrop.eula.javaNote", { major: javaPlan.majorVersion })}`
+              : ""}
+          </>
+        ) : null}
+      </Text>
       {installing && job?.stage !== "failed" ? null : (
         <Button variant="secondary" onClick={onClose}>
           {installing ? t("common.close") : t("common.cancel")}
@@ -915,7 +972,6 @@ export function PackDropCard({
       ) : null}
       {showConsent ? (
         <Button
-          className="pack-drop-confirm"
           disabled={!canConfirm}
           variant="primary"
           onClick={() => void agreeAndStart()}
@@ -928,10 +984,8 @@ export function PackDropCard({
 
   return (
     <DialogSurface
-      className="pack-drop-dialog"
       description={subtitle}
       footer={footer}
-      footerClassName="pack-drop-footer"
       header={({ title, description }) => header(title, description)}
       open={open}
       title={detection?.name || (path ? basename(path) : "")}

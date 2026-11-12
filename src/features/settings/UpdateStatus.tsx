@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Alert, Badge, Group, Stack, Text } from "@mantine/core";
 import { Download, RefreshCw } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
+import { SettingRow, SettingSection } from "../../components/ui/setting-row";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { formatDateTime } from "../../lib/date-format";
@@ -65,101 +67,113 @@ export function UpdateStatus() {
     installMutation.isPending;
 
   return (
-    <section className="settings-panel">
-      <div className="section-heading">
-        <h2>{t("settings.updates.title")}</h2>
+    <SettingSection
+      title={t("settings.updates.title")}
+      actions={
         <Button
           disabled={updateQuery.isFetching}
           variant="secondary"
           onClick={() => updateQuery.refetch()}
         >
-          <RefreshCw aria-hidden="true" size={15} />
+          <RefreshCw aria-hidden="true" size={16} />
           {t("settings.updates.check")}
         </Button>
-      </div>
-
+      }
+    >
       {updateQuery.error ? (
-        <div
+        <Alert
           aria-label={t("settings.updates.error.title")}
-          className="list-state list-state-error"
+          color="red"
+          my="sm"
           role="alert"
+          title={t("settings.updates.error.title")}
         >
-          <strong>{t("settings.updates.error.title")}</strong>
-          <span>{updateQuery.error.message}</span>
-          <Button
-            disabled={updateQuery.isFetching}
-            variant="secondary"
-            onClick={() => updateQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("common.retry")}
-          </Button>
-        </div>
+          <Group justify="space-between" gap="sm">
+            <Text size="sm">{updateQuery.error.message}</Text>
+            <Button
+              disabled={updateQuery.isFetching}
+              variant="secondary"
+              onClick={() => updateQuery.refetch()}
+            >
+              <RefreshCw aria-hidden="true" size={16} />
+              {t("common.retry")}
+            </Button>
+          </Group>
+        </Alert>
       ) : null}
-
       {status ? (
-        <div className="update-status-grid">
-          <div>
-            <span>{t("settings.updates.currentVersion")}</span>
-            <strong>{status.currentVersion}</strong>
-          </div>
-          <div>
-            <span>{t("settings.updates.channel")}</span>
-            <strong>
-              {channelLabel(
-                status.channel,
-                t("settings.updates.channel.stable"),
-              )}
-            </strong>
-          </div>
-          <div>
-            <span>{t("settings.updates.lastCheck")}</span>
-            <strong>
-              {formatCheckedAt(
-                status.checkedAt,
-                t("settings.updates.notChecked"),
-                language,
-              )}
-            </strong>
-          </div>
-          <div>
-            <span>{t("settings.updates.status")}</span>
-            <strong>
-              {status.updateAvailable
-                ? t("settings.updates.available")
-                : t("settings.updates.current")}
-            </strong>
-          </div>
-          {status.latestVersion ? (
-            <div>
-              <span>{t("settings.updates.latestVersion")}</span>
-              <strong>{status.latestVersion}</strong>
-            </div>
+        <SettingRow label={t("settings.updates.currentVersion")}>
+          <Text size="sm" ff="monospace">
+            {status.currentVersion}
+          </Text>
+        </SettingRow>
+      ) : null}
+      {status ? (
+        <SettingRow label={t("settings.updates.channel")}>
+          <Text size="sm">
+            {channelLabel(status.channel, t("settings.updates.channel.stable"))}
+          </Text>
+        </SettingRow>
+      ) : null}
+      {status ? (
+        <SettingRow label={t("settings.updates.lastCheck")}>
+          <Text size="sm">
+            {formatCheckedAt(
+              status.checkedAt,
+              t("settings.updates.notChecked"),
+              language,
+            )}
+          </Text>
+        </SettingRow>
+      ) : null}
+      {status ? (
+        <SettingRow label={t("settings.updates.status")}>
+          <Badge
+            variant="light"
+            color={status.updateAvailable ? "azure" : "gray"}
+          >
+            {status.updateAvailable
+              ? t("settings.updates.available")
+              : t("settings.updates.current")}
+          </Badge>
+        </SettingRow>
+      ) : null}
+      {status?.latestVersion ? (
+        <SettingRow label={t("settings.updates.latestVersion")}>
+          <Text size="sm" ff="monospace">
+            {status.latestVersion}
+          </Text>
+        </SettingRow>
+      ) : null}
+      {status?.releaseDate ? (
+        <SettingRow label={t("settings.updates.published")}>
+          <Text size="sm">
+            {formatCheckedAt(
+              status.releaseDate,
+              t("settings.updates.notChecked"),
+              language,
+            )}
+          </Text>
+        </SettingRow>
+      ) : null}
+      {status ? (
+        <Stack gap="sm" py="sm" align="flex-start">
+          {status.releaseNotes ? (
+            <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
+              {status.releaseNotes}
+            </Text>
           ) : null}
-          {status.releaseDate ? (
-            <div>
-              <span>{t("settings.updates.published")}</span>
-              <strong>
-                {formatCheckedAt(
-                  status.releaseDate,
-                  t("settings.updates.notChecked"),
-                  language,
-                )}
-              </strong>
-            </div>
-          ) : null}
-          {status.releaseNotes ? <p>{status.releaseNotes}</p> : null}
           {status.installBlockedByRunningServers ? (
-            <p className="danger-text">
+            <Alert color="yellow" role="note" w="100%">
               {t("settings.updates.blockedRunningServers", {
                 count: status.runningServerCount ?? 0,
               })}
-            </p>
+            </Alert>
           ) : null}
           {installMutation.error ? (
-            <p className="danger-text" role="alert">
+            <Alert color="red" role="alert" w="100%">
               {installMutation.error.message}
-            </p>
+            </Alert>
           ) : null}
           <Button
             disabled={installDisabled}
@@ -169,7 +183,7 @@ export function UpdateStatus() {
               setIsInstallConfirmOpen(true);
             }}
           >
-            <Download aria-hidden="true" size={15} />
+            <Download aria-hidden="true" size={16} />
             {t("settings.updates.install")}
           </Button>
           <ConfirmDangerDialog
@@ -182,8 +196,8 @@ export function UpdateStatus() {
             onCancel={() => setIsInstallConfirmOpen(false)}
             onConfirm={() => installMutation.mutate()}
           />
-        </div>
+        </Stack>
       ) : null}
-    </section>
+    </SettingSection>
   );
 }

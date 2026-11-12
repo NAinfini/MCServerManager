@@ -1,35 +1,5 @@
+import { Badge, Image } from "@mantine/core";
 import { getLoaderBranding } from "./loaderBranding";
-
-interface LoaderIconProps {
-  className?: string;
-  loaderType?: string | null;
-}
-
-export function LoaderIcon({
-  className = "loader-icon",
-  loaderType,
-}: LoaderIconProps) {
-  const branding = getLoaderBranding(loaderType);
-
-  if (branding.iconSrc) {
-    return (
-      <img
-        alt=""
-        aria-hidden="true"
-        className={className}
-        height="18"
-        src={branding.iconSrc}
-        width="18"
-      />
-    );
-  }
-
-  return (
-    <span aria-hidden="true" className={`${className} loader-icon-fallback`}>
-      {branding.shortLabel}
-    </span>
-  );
-}
 
 interface LoaderPillProps {
   loaderType?: string | null;
@@ -41,9 +11,26 @@ export function LoaderPill({ loaderType, minecraftVersion }: LoaderPillProps) {
   const label = [branding.label, minecraftVersion].filter(Boolean).join(" ");
 
   return (
-    <span className="loader-pill">
-      <LoaderIcon loaderType={loaderType} />
-      <span>{label}</span>
-    </span>
+    <Badge
+      color="gray"
+      leftSection={
+        branding.iconSrc ? (
+          <Image
+            alt=""
+            aria-hidden="true"
+            h={14}
+            src={branding.iconSrc}
+            w={14}
+          />
+        ) : (
+          <span aria-hidden="true">{branding.shortLabel}</span>
+        )
+      }
+      radius="sm"
+      tt="none"
+      variant="light"
+    >
+      {label}
+    </Badge>
   );
 }

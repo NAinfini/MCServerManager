@@ -1,5 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import {
+  Alert,
+  Box,
+  Group,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  Title,
+  VisuallyHidden,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
@@ -10,6 +21,12 @@ import { formatProcessEventMessage } from "../process/eventMessage";
 import { processKeys } from "../process/queries";
 
 const knownLevels = ["debug", "info", "warning", "error"];
+const levelColor: Record<string, string> = {
+  debug: "var(--mantine-color-dimmed)",
+  info: "var(--mantine-color-azure-5)",
+  warning: "var(--mantine-color-yellow-5)",
+  error: "var(--mantine-color-red-6)",
+};
 
 // The dot is decorative, so severity has to reach a screen reader as words.
 function severityLabel(level: string) {
@@ -29,64 +46,88 @@ export function ServerEventsView({ serverId }: { serverId: string }) {
      server the timeline vanished heading and all. Now only the body swaps and
      the panel keeps its identity beside the other overview cards. */
   return (
-    <section
-      aria-label={t("server.events.title")}
-      className="workspace-event-log"
-    >
-      <header className="workspace-section-heading">
-        <div>
-          <h2>{t("server.events.title")}</h2>
-          <p>{t("server.events.description")}</p>
-        </div>
+    <Paper aria-label={t("server.events.title")} component="section" p="md">
+      <Group align="flex-start" justify="space-between" mb="sm" wrap="nowrap">
+        <Stack gap={2}>
+          <Title order={2} size="h4">
+            {t("server.events.title")}
+          </Title>
+          <Text c="dimmed" size="sm">
+            {t("server.events.description")}
+          </Text>
+        </Stack>
         <Button
           disabled={eventsQuery.isFetching}
           variant="secondary"
           onClick={() => void eventsQuery.refetch()}
         >
-          <RefreshCw aria-hidden="true" size={15} />
+          <RefreshCw aria-hidden="true" size={16} />
           {t("common.refresh")}
         </Button>
-      </header>
+      </Group>
       {eventsQuery.isLoading ? (
         <LoadingState message={t("common.loadingPanel")} />
       ) : eventsQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("activity.loadError")}</strong>
-          <span>{eventsQuery.error.message}</span>
-          <Button
-            disabled={eventsQuery.isFetching}
-            variant="secondary"
-            onClick={() => void eventsQuery.refetch()}
-          >
-            <RefreshCw aria-hidden="true" size={15} />
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert
+          color="red"
+          role="alert"
+          title={t("activity.loadError")}
+          variant="light"
+        >
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{eventsQuery.error.message}</Text>
+            <Button
+              disabled={eventsQuery.isFetching}
+              variant="secondary"
+              onClick={() => void eventsQuery.refetch()}
+            >
+              <RefreshCw aria-hidden="true" size={16} />
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : events.length === 0 ? (
         <EmptyState
           description={t("activity.noEventsDescription")}
-          illustration="/illustrations/no-events.png"
           title={t("activity.noEvents")}
         />
       ) : (
-        <div className="workspace-event-list">
-          {events.map((event) => (
-            <article className="workspace-event-row" key={event.id}>
-              <span
-                aria-hidden="true"
-                className={`activity-event-dot activity-event-dot-${event.level}`}
-              />
-              <span className="visually-hidden">
-                {t(severityLabel(event.level))}
-              </span>
-              <time dateTime={event.createdAt}>
-                {formatDateTime(event.createdAt, language)}
-              </time>
-              <span>{formatProcessEventMessage(event.message, t)}</span>
-            </article>
-          ))}
-        </div>
+        <ScrollArea.Autosize mah={420} type="auto">
+          <Stack gap={4}>
+            {events.map((event) => (
+              <Group
+                align="baseline"
+                component="article"
+                gap="sm"
+                key={event.id}
+                wrap="nowrap"
+              >
+                <Box
+                  aria-hidden="true"
+                  bg={levelColor[event.level] ?? levelColor.info}
+                  h={8}
+                  style={{ borderRadius: "50%", flexShrink: 0 }}
+                  w={8}
+                />
+                <VisuallyHidden>{t(severityLabel(event.level))}</VisuallyHidden>
+                <Text
+                  c="dimmed"
+                  component="time"
+                  dateTime={event.createdAt}
+                  ff="monospace"
+                  size="xs"
+                  style={{ whiteSpace: "nowrap" }}
+                >
+                  {formatDateTime(event.createdAt, language)}
+                </Text>
+                <Text size="sm" style={{ wordBreak: "break-word" }}>
+                  {formatProcessEventMessage(event.message, t)}
+                </Text>
+              </Group>
+            ))}
+          </Stack>
+        </ScrollArea.Autosize>
       )}
-    </section>
+    </Paper>
   );
 }

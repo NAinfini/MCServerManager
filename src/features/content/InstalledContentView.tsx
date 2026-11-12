@@ -1,5 +1,24 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Box,
+  Checkbox,
+  Divider,
+  Grid,
+  Group,
+  Menu,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  TextInput,
+  ThemeIcon,
+  Title,
+  UnstyledButton,
+} from "@mantine/core";
 import {
   AlertTriangle,
   ChevronDown,
@@ -12,9 +31,7 @@ import {
   Search,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
-import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
@@ -36,7 +53,6 @@ import {
 import { contentKeys } from "./queries";
 import { listServerFiles } from "../files/fileApi";
 import { useNotificationStore } from "../notifications/notificationStore";
-import "./content.css";
 
 interface InstalledContentViewProps {
   server: ServerProfile;
@@ -81,12 +97,6 @@ export function InstalledContentView({
       message: error.message,
     });
   const [showImport, setShowImport] = useState(false);
-  const addMenuRef = useRef<HTMLDetailsElement>(null);
-  const closeAddMenu = () => {
-    if (addMenuRef.current) {
-      addMenuRef.current.open = false;
-    }
-  };
   const [dangerAction, setDangerAction] = useState<{
     kind: "disable" | "uninstall";
     item: InstalledContent;
@@ -290,25 +300,32 @@ export function InstalledContentView({
       : { key: "enabled", label: t("content.state.enabled") };
   };
 
+  const statusColor: Record<string, string> = {
+    update: "azure",
+    warning: "yellow",
+  };
+  const configFiles = focused
+    ? configFilesFor(focused, configEntriesQuery.data ?? [])
+    : [];
+
   return (
-    <section className="mods-page" aria-label={t("content.installed.aria")}>
-      <div className="mods-toolbar">
-        <label className="mods-search">
-          <Search aria-hidden="true" size={15} />
-          <input
-            aria-label={t("content.search.label")}
-            placeholder={t("content.search.placeholder", {
-              count: content.length,
-            })}
-            type="search"
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-        </label>
+    <Stack component="section" gap="sm" aria-label={t("content.installed.aria")}>
+      <Group gap="sm" wrap="nowrap">
+        <TextInput
+          aria-label={t("content.search.label")}
+          flex={1}
+          leftSection={<Search aria-hidden="true" size={16} />}
+          placeholder={t("content.search.placeholder", {
+            count: content.length,
+          })}
+          type="search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.currentTarget.value)}
+        />
         {availableUpdates > 0 ? (
           <Button
             aria-pressed={onlyUpdates}
-            variant="secondary"
+            variant={onlyUpdates ? "primary" : "secondary"}
             onClick={() => setOnlyUpdates((current) => !current)}
           >
             {t("content.updates.available", { count: availableUpdates })}
@@ -319,120 +336,112 @@ export function InstalledContentView({
             variant="secondary"
             onClick={() => checkUpdatesMutation.mutate()}
           >
-            <RefreshCw aria-hidden="true" size={15} />
+            <RefreshCw aria-hidden="true" size={16} />
             {t("content.installed.checkUpdates")}
           </Button>
         )}
-        <details ref={addMenuRef} className="dropdown content-add-menu">
-          <summary className="button button-secondary">
-            <PackagePlus aria-hidden="true" size={15} />
-            {t("content.installed.addContent")}
-            <ChevronDown aria-hidden="true" size={14} />
-          </summary>
-          <div className="dropdown-menu" role="menu">
-            <button
-              role="menuitem"
-              type="button"
-              onClick={() => {
-                closeAddMenu();
-                onBrowse?.();
-              }}
+        <Menu position="bottom-end">
+          <Menu.Target>
+            <Button variant="secondary">
+              <PackagePlus aria-hidden="true" size={16} />
+              {t("content.installed.addContent")}
+              <ChevronDown aria-hidden="true" size={14} />
+            </Button>
+          </Menu.Target>
+          <Menu.Dropdown>
+            <Menu.Item
+              leftSection={<Compass aria-hidden="true" size={14} />}
+              onClick={() => onBrowse?.()}
             >
-              <Compass aria-hidden="true" size={15} />
               {t("content.installed.browseOnline")}
-            </button>
-            <button
-              role="menuitem"
-              type="button"
-              onClick={() => {
-                closeAddMenu();
-                setShowImport(true);
-              }}
+            </Menu.Item>
+            <Menu.Item
+              leftSection={<FolderOpen aria-hidden="true" size={14} />}
+              onClick={() => setShowImport(true)}
             >
-              <FolderOpen aria-hidden="true" size={15} />
               {t("content.installed.importFile")}
-            </button>
-          </div>
-        </details>
-      </div>
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Group>
 
       {selectedIds.size > 0 ? (
-        <div
-          className="content-selection-toolbar"
-          role="toolbar"
+        <Paper
           aria-label={t("content.selection.actions")}
+          p="xs"
+          role="toolbar"
         >
-          <strong>
-            {t("content.selection.count", { count: selectedIds.size })}
-          </strong>
-          {selectedUpdateIds.length > 0 ? (
+          <Group gap="xs">
+            <Text fw={600} mr="auto" px="xs" size="sm">
+              {t("content.selection.count", { count: selectedIds.size })}
+            </Text>
+            {selectedUpdateIds.length > 0 ? (
+              <Button
+                disabled={installAllUpdatesMutation.isPending}
+                variant="primary"
+                onClick={() => setConfirmUpdateAll(true)}
+              >
+                <Download aria-hidden="true" size={16} />
+                {t("content.updates.updateSelected", {
+                  count: selectedUpdateIds.length,
+                })}
+              </Button>
+            ) : null}
             <Button
-              disabled={installAllUpdatesMutation.isPending}
-              variant="primary"
-              onClick={() => setConfirmUpdateAll(true)}
+              disabled={batchMutation.isPending}
+              variant="secondary"
+              onClick={() =>
+                batchMutation.mutate({ action: "enable", ids: [...selectedIds] })
+              }
             >
-              <Download aria-hidden="true" size={15} />
-              {t("content.updates.updateSelected", {
-                count: selectedUpdateIds.length,
-              })}
+              {t("content.selection.enable")}
             </Button>
-          ) : null}
-          <Button
-            disabled={batchMutation.isPending}
-            variant="secondary"
-            onClick={() =>
-              batchMutation.mutate({ action: "enable", ids: [...selectedIds] })
-            }
-          >
-            {t("content.selection.enable")}
-          </Button>
-          <Button
-            disabled={batchMutation.isPending}
-            variant="secondary"
-            onClick={() => setBatchAction("disable")}
-          >
-            {t("content.selection.disable")}
-          </Button>
-          <Button
-            disabled={batchMutation.isPending}
-            variant="ghost"
-            onClick={() => setBatchAction("uninstall")}
-          >
-            {t("content.selection.uninstall")}
-          </Button>
-          <Button variant="ghost" onClick={() => setSelectedIds(new Set())}>
-            {t("content.selection.clear")}
-          </Button>
-        </div>
+            <Button
+              disabled={batchMutation.isPending}
+              variant="secondary"
+              onClick={() => setBatchAction("disable")}
+            >
+              {t("content.selection.disable")}
+            </Button>
+            <Button
+              disabled={batchMutation.isPending}
+              variant="ghost"
+              onClick={() => setBatchAction("uninstall")}
+            >
+              {t("content.selection.uninstall")}
+            </Button>
+            <Button variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              {t("content.selection.clear")}
+            </Button>
+          </Group>
+        </Paper>
       ) : null}
 
       {operationResult ? (
-        <div
-          className="content-operation-result"
-          role="status"
+        <Alert
           aria-live="polite"
+          role="status"
+          title={t("content.operation.complete", {
+            count: operationResult.count,
+          })}
         >
-          <strong>
-            {t("content.operation.complete", { count: operationResult.count })}
-          </strong>
           {operationResult.restartRequired ? (
-            <span>{t("content.updates.restartRequired")}</span>
+            <Text size="sm">{t("content.updates.restartRequired")}</Text>
           ) : null}
           {operationResult.backups > 0 ? (
-            <span>
+            <Text size="sm">
               {t("content.updates.backupsCreated", {
                 count: operationResult.backups,
               })}
-            </span>
+            </Text>
           ) : null}
-        </div>
+        </Alert>
       ) : null}
       {batchMutation.error ? (
-        <div className="inline-error" role="alert">
-          <strong>{t("content.operation.failed")}</strong>
-          <span>{batchMutation.error.message}</span>
-          <span>{t("content.operation.recovery")}</span>
-        </div>
+        <Alert color="red" title={t("content.operation.failed")}>
+          <Text size="sm">{batchMutation.error.message}</Text>
+          <Text size="sm">{t("content.operation.recovery")}</Text>
+        </Alert>
       ) : null}
 
       {showImport ? (
@@ -448,20 +457,23 @@ export function InstalledContentView({
       ) : null}
 
       {contentQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("content.installed.loadError.title")}</strong>
-          <span>{contentQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => contentQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
+        <Alert color="red" title={t("content.installed.loadError.title")}>
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{contentQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => contentQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
       ) : null}
       {updateCheck?.warnings.length ? (
-        <div className="list-state list-state-warning">
+        <Alert color="yellow" role="status">
           {updateCheck.warnings.map((warning) => (
-            <span key={warning}>{warning}</span>
+            <Text key={warning} size="sm">
+              {warning}
+            </Text>
           ))}
-        </div>
+        </Alert>
       ) : null}
 
       {contentQuery.isLoading ? (
@@ -471,217 +483,276 @@ export function InstalledContentView({
       {!contentQuery.isLoading &&
       !contentQuery.error &&
       content.length === 0 ? (
-        <div className="content-empty-compact">
-          <EmptyState
-            title={t("content.installed.empty.title")}
-            description={t("content.installed.empty.description")}
-          >
+        <Paper p="md">
+          <Stack align="flex-start" gap="xs">
+            <Title order={4}>{t("content.installed.empty.title")}</Title>
+            <Text c="dimmed" size="sm">
+              {t("content.installed.empty.description")}
+            </Text>
             <Button variant="primary" onClick={() => onBrowse?.()}>
-              <Compass aria-hidden="true" size={15} />
+              <Compass aria-hidden="true" size={16} />
               {t("content.installed.browseContent")}
             </Button>
-          </EmptyState>
-        </div>
+          </Stack>
+        </Paper>
       ) : null}
 
       {content.length > 0 ? (
-        <div className="mods-layout">
-          <div className="mods-list-panel">
-            <div className="mods-list-head">
-              <Checkbox
-                aria-label={t("content.selection.all", {
-                  count: visibleContent.length,
-                })}
-                checked={
-                  allSelected ? true : someSelected ? "indeterminate" : false
-                }
-                onCheckedChange={(checked) =>
-                  setSelectedIds(
-                    checked === true
-                      ? new Set(visibleContent.map((item) => item.id))
-                      : new Set(),
-                  )
-                }
-              />
-              <span>
-                {t("content.list.count", { count: visibleContent.length })}
-              </span>
-            </div>
-            {visibleContent.length === 0 ? (
-              <p className="mods-no-match">{t("content.search.empty")}</p>
-            ) : (
-              <ul
-                aria-label={t("content.installed.title")}
-                className="mods-list"
-              >
-                {visibleContent.map((item) => {
-                  const status = rowStatus(item);
-                  return (
-                    <li
-                      key={item.id}
-                      className={[
-                        "mods-row",
-                        item.id === focused?.id ? "is-focused" : "",
-                        isDisabled(item) ? "is-disabled" : "",
-                      ].join(" ")}
-                    >
-                      <Checkbox
-                        aria-label={t("content.selection.item", {
-                          name: item.name,
-                        })}
-                        checked={selectedIds.has(item.id)}
-                        onCheckedChange={(checked) =>
-                          setSelectedIds((current) => {
-                            const next = new Set(current);
-                            if (checked === true) next.add(item.id);
-                            else next.delete(item.id);
-                            return next;
-                          })
-                        }
-                      />
-                      <button
-                        aria-current={
-                          item.id === focused?.id ? "true" : undefined
-                        }
-                        className="mods-row-main"
-                        type="button"
-                        onClick={() => setFocusedId(item.id)}
-                      >
-                        <span className="mods-row-icon">
-                          <Package aria-hidden="true" size={16} />
-                        </span>
-                        <span className="mods-row-name">{item.name}</span>
-                        <span className="mods-row-version">
-                          {item.version ?? t("common.unknown")}
-                        </span>
-                        <span className="mods-row-source">
-                          {item.provider ?? t("content.source.local")}
-                        </span>
-                        <span className={`mods-row-status is-${status.key}`}>
-                          {status.label}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          {focused ? (
-            <aside aria-label={focused.name} className="mods-detail">
-              <span className="mods-detail-icon">
-                <Package aria-hidden="true" size={26} />
-              </span>
-              <h3>{focused.name}</h3>
-              <p className="mods-detail-source">
-                {t("content.detail.source", {
-                  version: focused.version ?? t("common.unknown"),
-                  source: focused.provider ?? t("content.source.local"),
-                })}
-              </p>
-              {focused.warnings.length > 0 ? (
-                <p className="mods-detail-warning">
-                  <AlertTriangle aria-hidden="true" size={14} />
-                  {focused.warnings.join("; ")}
-                </p>
-              ) : null}
-              <dl className="mods-detail-facts">
-                <div>
-                  <dt>{t("content.detail.modId")}</dt>
-                  <dd>
-                    {focused.modId ??
-                      focused.contentId ??
-                      t("content.installed.unknownId")}
-                  </dd>
-                </div>
-                <div>
-                  <dt>{t("content.table.loader")}</dt>
-                  <dd>
-                    <LoaderPill loaderType={focused.loader} />
-                  </dd>
-                </div>
-                {focusedUpdate ? (
-                  <div>
-                    <dt>{t("content.detail.latest")}</dt>
-                    <dd>{focusedUpdate.latestVersion}</dd>
-                  </div>
-                ) : null}
-                <div>
-                  <dt>{t("content.table.installed")}</dt>
-                  <dd>{formatDateTime(focused.installedAt, language)}</dd>
-                </div>
-              </dl>
-              {onOpenFile ? (
-                <div className="mods-detail-config">
-                  <strong>{t("content.detail.settings")}</strong>
-                  {configFilesFor(focused, configEntriesQuery.data ?? []).map(
-                    (entry) => (
-                      <button
-                        key={entry.relativePath}
-                        type="button"
-                        onClick={() => onOpenFile(entry.relativePath)}
-                      >
-                        {entry.relativePath}
-                      </button>
-                    ),
-                  )}
-                  {configFilesFor(focused, configEntriesQuery.data ?? [])
-                    .length === 0 ? (
-                    <p>{t("content.detail.settingsNone")}</p>
-                  ) : null}
-                  <button type="button" onClick={() => onOpenFile("config/")}>
-                    {t("content.detail.openConfigFolder")}
-                  </button>
-                </div>
-              ) : null}
-              <div className="mods-detail-actions">
-                {focusedUpdate ? (
-                  <Button
-                    aria-label={t("content.installed.updateOneAria", {
-                      content: focused.name,
+        <Grid gap="md">
+          <Grid.Col span={{ base: 12, md: 7, xl: 8 }}>
+            <Paper p={0}>
+              <Group gap="sm" px="md" py="xs">
+                <Checkbox
+                  aria-label={t("content.selection.all", {
+                    count: visibleContent.length,
+                  })}
+                  checked={allSelected}
+                  indeterminate={!allSelected && someSelected}
+                  onChange={(event) =>
+                    setSelectedIds(
+                      event.currentTarget.checked
+                        ? new Set(visibleContent.map((item) => item.id))
+                        : new Set(),
+                    )
+                  }
+                />
+                <Text c="dimmed" size="xs">
+                  {t("content.list.count", { count: visibleContent.length })}
+                </Text>
+              </Group>
+              <Divider />
+              {visibleContent.length === 0 ? (
+                <Text c="dimmed" p="md" size="sm">
+                  {t("content.search.empty")}
+                </Text>
+              ) : (
+                <ScrollArea.Autosize mah={560} type="auto">
+                  <Box
+                    aria-label={t("content.installed.title")}
+                    component="ul"
+                    m={0}
+                    p={4}
+                    style={{ listStyle: "none" }}
+                  >
+                    {visibleContent.map((item) => {
+                      const status = rowStatus(item);
+                      const isFocused = item.id === focused?.id;
+                      return (
+                        <Group
+                          key={item.id}
+                          bg={
+                            isFocused
+                              ? "var(--mantine-color-default-hover)"
+                              : undefined
+                          }
+                          component="li"
+                          gap="sm"
+                          opacity={isDisabled(item) ? 0.55 : 1}
+                          pl="sm"
+                          style={{ borderRadius: "var(--mantine-radius-sm)" }}
+                          wrap="nowrap"
+                        >
+                          <Checkbox
+                            aria-label={t("content.selection.item", {
+                              name: item.name,
+                            })}
+                            checked={selectedIds.has(item.id)}
+                            onChange={(event) => {
+                              const checked = event.currentTarget.checked;
+                              setSelectedIds((current) => {
+                                const next = new Set(current);
+                                if (checked) next.add(item.id);
+                                else next.delete(item.id);
+                                return next;
+                              });
+                            }}
+                          />
+                          <UnstyledButton
+                            aria-current={isFocused ? "true" : undefined}
+                            flex={1}
+                            miw={0}
+                            py={6}
+                            pr="sm"
+                            onClick={() => setFocusedId(item.id)}
+                          >
+                            <Group gap="sm" wrap="nowrap">
+                              <ThemeIcon color="gray" size="md" variant="light">
+                                <Package aria-hidden="true" size={14} />
+                              </ThemeIcon>
+                              <Text flex={1} fw={500} size="sm" truncate>
+                                {item.name}
+                              </Text>
+                              <Text c="dimmed" ff="monospace" size="xs">
+                                {item.version ?? t("common.unknown")}
+                              </Text>
+                              <Text c="dimmed" size="xs" visibleFrom="sm">
+                                {item.provider ?? t("content.source.local")}
+                              </Text>
+                              <Badge
+                                color={statusColor[status.key] ?? "gray"}
+                                size="sm"
+                                tt="none"
+                                variant={
+                                  status.key === "disabled" ? "outline" : "light"
+                                }
+                              >
+                                {status.label}
+                              </Badge>
+                            </Group>
+                          </UnstyledButton>
+                        </Group>
+                      );
                     })}
-                    disabled={installUpdateMutation.isPending}
-                    variant="primary"
-                    onClick={() => installUpdateMutation.mutate(focused.id)}
-                  >
-                    <Download aria-hidden="true" size={14} />
-                    {t("content.installed.update")}
-                  </Button>
-                ) : null}
-                {isDisabled(focused) ? (
-                  <Button
-                    disabled={enableMutation.isPending}
-                    variant="secondary"
-                    onClick={() => enableMutation.mutate(focused.id)}
-                  >
-                    {t("tunnels.actions.enable")}
-                  </Button>
-                ) : (
-                  <Button
-                    disabled={disableMutation.isPending}
-                    variant="secondary"
-                    onClick={() => {
-                      disableMutation.reset();
-                      setDangerAction({ kind: "disable", item: focused });
-                    }}
-                  >
-                    {t("tunnels.actions.disable")}
-                  </Button>
-                )}
-                <Button
-                  disabled={uninstallMutation.isPending}
-                  variant="ghost"
-                  onClick={() => {
-                    uninstallMutation.reset();
-                    setDangerAction({ kind: "uninstall", item: focused });
-                  }}
-                >
-                  {t("content.installed.uninstall")}
-                </Button>
-              </div>
-            </aside>
+                  </Box>
+                </ScrollArea.Autosize>
+              )}
+            </Paper>
+          </Grid.Col>
+          {focused ? (
+            <Grid.Col span={{ base: 12, md: 5, xl: 4 }}>
+              <Paper aria-label={focused.name} component="aside" p="md">
+                <Stack gap="md">
+                  <Group gap="sm" wrap="nowrap">
+                    <ThemeIcon color="gray" size={44} variant="light">
+                      <Package aria-hidden="true" size={24} />
+                    </ThemeIcon>
+                    <Stack gap={2} miw={0}>
+                      <Title order={3}>{focused.name}</Title>
+                      <Text c="dimmed" size="xs">
+                        {t("content.detail.source", {
+                          version: focused.version ?? t("common.unknown"),
+                          source: focused.provider ?? t("content.source.local"),
+                        })}
+                      </Text>
+                    </Stack>
+                  </Group>
+                  {focused.warnings.length > 0 ? (
+                    <Alert
+                      color="yellow"
+                      icon={<AlertTriangle aria-hidden="true" size={16} />}
+                      role="status"
+                    >
+                      {focused.warnings.join("; ")}
+                    </Alert>
+                  ) : null}
+                  <Stack gap={6}>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text c="dimmed" size="xs">
+                        {t("content.detail.modId")}
+                      </Text>
+                      <Text ff="monospace" size="xs" truncate>
+                        {focused.modId ??
+                          focused.contentId ??
+                          t("content.installed.unknownId")}
+                      </Text>
+                    </Group>
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text c="dimmed" size="xs">
+                        {t("content.table.loader")}
+                      </Text>
+                      <LoaderPill loaderType={focused.loader} />
+                    </Group>
+                    {focusedUpdate ? (
+                      <Group justify="space-between" wrap="nowrap">
+                        <Text c="dimmed" size="xs">
+                          {t("content.detail.latest")}
+                        </Text>
+                        <Text ff="monospace" size="xs">
+                          {focusedUpdate.latestVersion}
+                        </Text>
+                      </Group>
+                    ) : null}
+                    <Group justify="space-between" wrap="nowrap">
+                      <Text c="dimmed" size="xs">
+                        {t("content.table.installed")}
+                      </Text>
+                      <Text size="xs">
+                        {formatDateTime(focused.installedAt, language)}
+                      </Text>
+                    </Group>
+                  </Stack>
+                  {onOpenFile ? (
+                    <Stack align="flex-start" gap={4}>
+                      <Text fw={600} size="sm">
+                        {t("content.detail.settings")}
+                      </Text>
+                      {configFiles.map((entry) => (
+                        <Anchor
+                          key={entry.relativePath}
+                          component="button"
+                          ff="monospace"
+                          size="xs"
+                          type="button"
+                          onClick={() => onOpenFile(entry.relativePath)}
+                        >
+                          {entry.relativePath}
+                        </Anchor>
+                      ))}
+                      {configFiles.length === 0 ? (
+                        <Text c="dimmed" size="xs">
+                          {t("content.detail.settingsNone")}
+                        </Text>
+                      ) : null}
+                      <Anchor
+                        component="button"
+                        size="xs"
+                        type="button"
+                        onClick={() => onOpenFile("config/")}
+                      >
+                        {t("content.detail.openConfigFolder")}
+                      </Anchor>
+                    </Stack>
+                  ) : null}
+                  <Group gap="xs">
+                    {focusedUpdate ? (
+                      <Button
+                        aria-label={t("content.installed.updateOneAria", {
+                          content: focused.name,
+                        })}
+                        disabled={installUpdateMutation.isPending}
+                        variant="primary"
+                        onClick={() => installUpdateMutation.mutate(focused.id)}
+                      >
+                        <Download aria-hidden="true" size={14} />
+                        {t("content.installed.update")}
+                      </Button>
+                    ) : null}
+                    {isDisabled(focused) ? (
+                      <Button
+                        disabled={enableMutation.isPending}
+                        variant="secondary"
+                        onClick={() => enableMutation.mutate(focused.id)}
+                      >
+                        {t("tunnels.actions.enable")}
+                      </Button>
+                    ) : (
+                      <Button
+                        disabled={disableMutation.isPending}
+                        variant="secondary"
+                        onClick={() => {
+                          disableMutation.reset();
+                          setDangerAction({ kind: "disable", item: focused });
+                        }}
+                      >
+                        {t("tunnels.actions.disable")}
+                      </Button>
+                    )}
+                    <Button
+                      disabled={uninstallMutation.isPending}
+                      variant="ghost"
+                      onClick={() => {
+                        uninstallMutation.reset();
+                        setDangerAction({ kind: "uninstall", item: focused });
+                      }}
+                    >
+                      {t("content.installed.uninstall")}
+                    </Button>
+                  </Group>
+                </Stack>
+              </Paper>
+            </Grid.Col>
           ) : null}
-        </div>
+        </Grid>
       ) : null}
       <ConfirmDangerDialog
         confirmLabel={
@@ -778,6 +849,6 @@ export function InstalledContentView({
           })
         }
       />
-    </section>
+    </Stack>
   );
 }

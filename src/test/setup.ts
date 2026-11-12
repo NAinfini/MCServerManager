@@ -21,6 +21,19 @@ class TestResizeObserver {
 
 globalThis.ResizeObserver ??= TestResizeObserver as typeof ResizeObserver;
 
+// Mantine reads the colour scheme and reduced-motion media queries.
+window.matchMedia ??= (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener() {},
+    removeEventListener() {},
+    addListener() {},
+    removeListener() {},
+    dispatchEvent: () => false,
+  }) as MediaQueryList;
+
 Element.prototype.hasPointerCapture ??= () => false;
 Element.prototype.setPointerCapture ??= () => {};
 Element.prototype.releasePointerCapture ??= () => {};

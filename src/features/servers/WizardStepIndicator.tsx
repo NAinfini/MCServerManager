@@ -1,3 +1,4 @@
+import { Divider, Group, Text, ThemeIcon, UnstyledButton } from "@mantine/core";
 import { Check } from "lucide-react";
 import { useAppSettings } from "../../i18n";
 
@@ -15,65 +16,65 @@ export function WizardStepIndicator({
   const { t } = useAppSettings();
 
   return (
-    <nav className="wizard-progress" aria-label={t("wizard.progress")}>
-      <ol className="wizard-steps">
+    <nav aria-label={t("wizard.progress")}>
+      <Group component="ol" gap="xs" m={0} p={0} wrap="nowrap">
         {steps.map((step, index) => {
           const isCompleted = index < currentStep;
           const isActive = index === currentStep;
           const isClickable = Boolean(isCompleted && onStepClick);
           const content = (
-            <>
-              <div
-                className={`wizard-step-circle${
-                  isActive ? " wizard-step-circle-active" : ""
-                }${isCompleted ? " wizard-step-circle-completed" : ""}`}
+            <Group gap={6} wrap="nowrap">
+              <ThemeIcon
+                color={isActive || isCompleted ? "azure" : "gray"}
+                radius="xl"
+                size={20}
+                variant={isActive ? "filled" : "light"}
               >
                 {isCompleted ? (
-                  <Check aria-hidden="true" size={14} strokeWidth={3} />
+                  <Check aria-hidden="true" size={12} strokeWidth={3} />
                 ) : (
-                  <span>{index + 1}</span>
+                  <Text fw={600} fz={11} inherit>
+                    {index + 1}
+                  </Text>
                 )}
-              </div>
-              <span
-                className={`wizard-step-label${
-                  isActive ? " wizard-step-label-active" : ""
-                }${isCompleted ? " wizard-step-label-completed" : ""}`}
+              </ThemeIcon>
+              <Text
+                c={isActive ? undefined : "dimmed"}
+                fw={isActive ? 600 : 500}
+                size="sm"
               >
                 {step.label}
-              </span>
-            </>
+              </Text>
+            </Group>
           );
 
           return (
-            <li key={step.label} className="wizard-step-item-wrapper">
+            <Group
+              aria-current={isActive ? "step" : undefined}
+              component="li"
+              gap="xs"
+              key={step.label}
+              style={{ listStyle: "none" }}
+              wrap="nowrap"
+            >
               {index > 0 ? (
-                <div
+                <Divider
                   aria-hidden="true"
-                  className={`wizard-step-connector${
-                    index <= currentStep ? " wizard-step-connector-active" : ""
-                  }`}
+                  color={index <= currentStep ? "azure" : undefined}
+                  w={20}
                 />
               ) : null}
               {isClickable ? (
-                <button
-                  type="button"
-                  className="wizard-step-item"
-                  onClick={() => onStepClick?.(index)}
-                >
+                <UnstyledButton onClick={() => onStepClick?.(index)}>
                   {content}
-                </button>
+                </UnstyledButton>
               ) : (
-                <div
-                  className="wizard-step-item"
-                  aria-current={isActive ? "step" : undefined}
-                >
-                  {content}
-                </div>
+                content
               )}
-            </li>
+            </Group>
           );
         })}
-      </ol>
+      </Group>
     </nav>
   );
 }

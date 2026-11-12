@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { Group } from "@mantine/core";
 import { cn } from "../../lib/cn";
 
 interface StickyActionBarProps extends HTMLAttributes<HTMLDivElement> {
@@ -11,8 +12,18 @@ export function StickyActionBar({
   ...props
 }: StickyActionBarProps) {
   return (
-    <div className={cn("sticky-action-bar", className)} {...props}>
+    <Group
+      bg="var(--mantine-color-body)"
+      bottom={0}
+      className={cn("sticky-action-bar", className)}
+      gap="sm"
+      justify="flex-end"
+      pos="sticky"
+      py="sm"
+      style={{ zIndex: 1 }}
+      {...props}
+    >
       {children}
-    </div>
+    </Group>
   );
 }

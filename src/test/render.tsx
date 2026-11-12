@@ -4,7 +4,9 @@ import {
   render as testingLibraryRender,
   type RenderOptions,
 } from "@testing-library/react";
+import { MantineProvider } from "@mantine/core";
 import { AppSettingsProvider } from "../i18n";
+import { theme } from "../theme";
 
 export * from "@testing-library/react";
 
@@ -25,7 +27,11 @@ export function render(ui: ReactElement, options: AppRenderOptions = {}) {
   const { queryClient = createTestQueryClient(), ...renderOptions } = options;
   const wrap = (content: ReactElement) => (
     <QueryClientProvider client={queryClient}>
-      <AppSettingsProvider>{content}</AppSettingsProvider>
+      <AppSettingsProvider>
+        <MantineProvider env="test" theme={theme}>
+          {content}
+        </MantineProvider>
+      </AppSettingsProvider>
     </QueryClientProvider>
   );
   const result = testingLibraryRender(wrap(ui), renderOptions);

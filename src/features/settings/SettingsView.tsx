@@ -1,4 +1,18 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Divider,
+  Flex,
+  Group,
+  NavLink,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Cog,
@@ -12,11 +26,10 @@ import {
   ShoppingBag,
 } from "lucide-react";
 import { useAppSettings } from "../../i18n";
-import { Switch } from "../../components/ui/switch";
 import { Select } from "../../components/ui/select";
 import { Button } from "../../components/ui/button";
 import { LoadingState } from "../../components/ui/loading-state";
-import { TextField } from "../../components/ui/text-field";
+import { SettingRow, SettingSection } from "../../components/ui/setting-row";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { ThemeSettings } from "./ThemeSettings";
 import { LocalizationSettings } from "./LocalizationSettings";
@@ -98,27 +111,22 @@ function GeneralSection({
   const { t } = useAppSettings();
 
   return (
-    <div>
-      <h2 className="settings-section-title">{t("settings.nav.general")}</h2>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.general.launchAtLogin")}</strong>
-          <span>{t("settings.general.launchAtLoginNote")}</span>
-        </div>
+    <SettingSection title={t("settings.nav.general")}>
+      <SettingRow
+        label={t("settings.general.launchAtLogin")}
+        description={t("settings.general.launchAtLoginNote")}
+      >
         <Switch
           checked={preferences.launchAtLogin}
           aria-label={t("settings.general.launchAtLogin")}
-          onCheckedChange={(checked) => {
-            void onUpdate({ launchAtLogin: checked }).catch((error: unknown) =>
-              onError(errorMessage(error)),
-            );
+          onChange={(event) => {
+            void onUpdate({
+              launchAtLogin: event.currentTarget.checked,
+            }).catch((error: unknown) => onError(errorMessage(error)));
           }}
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.general.closeBehavior")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.general.closeBehavior")}>
         <Select
           ariaLabel={t("settings.general.closeBehavior")}
           value={preferences.closeBehavior}
@@ -132,8 +140,16 @@ function GeneralSection({
             );
           }}
         />
-      </div>
-    </div>
+      </SettingRow>
+    </SettingSection>
+  );
+}
+
+function PathText({ children }: { children: string }) {
+  return (
+    <Text span inherit ff="monospace">
+      {children}
+    </Text>
   );
 }
 
@@ -167,9 +183,9 @@ function SettingsNumberField({
   }, [editing, value]);
 
   return (
-    <TextField
+    <TextInput
       aria-label={ariaLabel}
-      className="settings-number-input"
+      w={110}
       min={min}
       type="number"
       value={draft}
@@ -201,31 +217,25 @@ function AppearanceSection({
   const appearance = preferences.appearance;
 
   return (
-    <div>
+    <Stack gap="md">
       <ThemeSettings />
       <LocalizationSettings />
-      <div className="settings-plain-section">
-        <h2 className="settings-section-title">
-          {t("settings.appearance.behavior")}
-        </h2>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <strong>{t("settings.appearance.compactMode")}</strong>
-          </div>
+      <SettingSection title={t("settings.appearance.behavior")}>
+        <SettingRow label={t("settings.appearance.compactMode")}>
           <Switch
             checked={appearance.compactMode}
             aria-label={t("settings.appearance.compactMode")}
-            onCheckedChange={(checked) =>
+            onChange={(event) =>
               void onUpdate({
-                appearance: { ...appearance, compactMode: checked },
+                appearance: {
+                  ...appearance,
+                  compactMode: event.currentTarget.checked,
+                },
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
           />
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <strong>{t("settings.appearance.motion")}</strong>
-          </div>
+        </SettingRow>
+        <SettingRow label={t("settings.appearance.motion")}>
           <Select
             ariaLabel={t("settings.appearance.motion")}
             value={appearance.motion}
@@ -243,11 +253,8 @@ function AppearanceSection({
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
           />
-        </div>
-        <div className="settings-row">
-          <div className="settings-row-label">
-            <strong>{t("settings.appearance.fontSize")}</strong>
-          </div>
+        </SettingRow>
+        <SettingRow label={t("settings.appearance.fontSize")}>
           <Select
             ariaLabel={t("settings.appearance.fontSize")}
             value={appearance.fontSize}
@@ -262,9 +269,9 @@ function AppearanceSection({
               }).catch((error: unknown) => onError(errorMessage(error)))
             }
           />
-        </div>
-      </div>
-    </div>
+        </SettingRow>
+      </SettingSection>
+    </Stack>
   );
 }
 
@@ -297,15 +304,11 @@ function LoggingSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">{t("settings.logging.title")}</h2>
-      <p className="settings-section-description">
-        {t("settings.logging.description")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.logging.level")}</strong>
-        </div>
+    <SettingSection
+      title={t("settings.logging.title")}
+      description={t("settings.logging.description")}
+    >
+      <SettingRow label={t("settings.logging.level")}>
         <Select
           ariaLabel={t("settings.logging.level")}
           value={logging.level}
@@ -321,11 +324,8 @@ function LoggingSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.logging.retentionDays")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.logging.retentionDays")}>
         <SettingsNumberField
           ariaLabel={t("settings.logging.retentionDays")}
           min={1}
@@ -339,11 +339,8 @@ function LoggingSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.logging.maxSizeMb")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.logging.maxSizeMb")}>
         <SettingsNumberField
           ariaLabel={t("settings.logging.maxSizeMb")}
           min={1}
@@ -357,31 +354,28 @@ function LoggingSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.logging.logsFolder")}</strong>
-          {diagnosticsExported ? (
-            <span>{t("settings.logging.exported")}</span>
-          ) : null}
-        </div>
-        <div className="settings-action-group">
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void invokeDesktopCommand("open_app_logs_folder").catch(
-                (error: unknown) => onError(errorMessage(error)),
-              )
-            }
-          >
-            {t("settings.logging.openLogFolder")}
-          </Button>
-          <Button variant="secondary" onClick={() => void exportDiagnostics()}>
-            {t("settings.logging.exportDiagnostics")}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.logging.logsFolder")}
+        description={
+          diagnosticsExported ? t("settings.logging.exported") : undefined
+        }
+      >
+        <Button
+          variant="secondary"
+          onClick={() =>
+            void invokeDesktopCommand("open_app_logs_folder").catch(
+              (error: unknown) => onError(errorMessage(error)),
+            )
+          }
+        >
+          {t("settings.logging.openLogFolder")}
+        </Button>
+        <Button variant="secondary" onClick={() => void exportDiagnostics()}>
+          {t("settings.logging.exportDiagnostics")}
+        </Button>
+      </SettingRow>
+    </SettingSection>
   );
 }
 
@@ -408,28 +402,19 @@ function ServerDefaultsSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">
-        {t("settings.serverDefaults.title")}
-      </h2>
-      <p className="settings-section-description">
-        {t("settings.serverDefaults.description")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.serverDefault")}</strong>
-          <span className="settings-path-value">
-            {preferences.defaultServerDir}
-          </span>
-        </div>
+    <SettingSection
+      title={t("settings.serverDefaults.title")}
+      description={t("settings.serverDefaults.description")}
+    >
+      <SettingRow
+        label={t("settings.paths.serverDefault")}
+        description={<PathText>{preferences.defaultServerDir}</PathText>}
+      >
         <Button variant="secondary" onClick={() => void pickServerFolder()}>
           {t("profileSettings.browse")}
         </Button>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.serverDefaults.javaStrategy")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.serverDefaults.javaStrategy")}>
         <Select
           ariaLabel={t("settings.serverDefaults.javaStrategy")}
           value={defaults.javaStrategy}
@@ -450,42 +435,39 @@ function ServerDefaultsSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.serverDefaults.memoryRange")}</strong>
-          <span>{t("settings.serverDefaults.memoryRangeNote")}</span>
-        </div>
-        <div className="settings-inline-fields">
-          <SettingsNumberField
-            ariaLabel={t("settings.serverDefaults.minMemory")}
-            min={512}
-            value={numberValue(defaults.minMemoryMb, 1024)}
-            onCommit={(value) =>
-              void onUpdate({
-                serverDefaults: {
-                  ...defaults,
-                  minMemoryMb: toPositiveInt(value, 1024),
-                },
-              }).catch((error: unknown) => onError(errorMessage(error)))
-            }
-          />
-          <SettingsNumberField
-            ariaLabel={t("settings.serverDefaults.maxMemory")}
-            min={512}
-            value={numberValue(defaults.maxMemoryMb, 4096)}
-            onCommit={(value) =>
-              void onUpdate({
-                serverDefaults: {
-                  ...defaults,
-                  maxMemoryMb: toPositiveInt(value, 4096),
-                },
-              }).catch((error: unknown) => onError(errorMessage(error)))
-            }
-          />
-        </div>
-      </div>
-    </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.serverDefaults.memoryRange")}
+        description={t("settings.serverDefaults.memoryRangeNote")}
+      >
+        <SettingsNumberField
+          ariaLabel={t("settings.serverDefaults.minMemory")}
+          min={512}
+          value={numberValue(defaults.minMemoryMb, 1024)}
+          onCommit={(value) =>
+            void onUpdate({
+              serverDefaults: {
+                ...defaults,
+                minMemoryMb: toPositiveInt(value, 1024),
+              },
+            }).catch((error: unknown) => onError(errorMessage(error)))
+          }
+        />
+        <SettingsNumberField
+          ariaLabel={t("settings.serverDefaults.maxMemory")}
+          min={512}
+          value={numberValue(defaults.maxMemoryMb, 4096)}
+          onCommit={(value) =>
+            void onUpdate({
+              serverDefaults: {
+                ...defaults,
+                maxMemoryMb: toPositiveInt(value, 4096),
+              },
+            }).catch((error: unknown) => onError(errorMessage(error)))
+          }
+        />
+      </SettingRow>
+    </SettingSection>
   );
 }
 
@@ -512,28 +494,19 @@ function BackupDefaultsSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">
-        {t("settings.backupDefaults.title")}
-      </h2>
-      <p className="settings-section-description">
-        {t("settings.backupDefaults.description")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.backupDefault")}</strong>
-          <span className="settings-path-value">
-            {preferences.defaultBackupDir}
-          </span>
-        </div>
+    <SettingSection
+      title={t("settings.backupDefaults.title")}
+      description={t("settings.backupDefaults.description")}
+    >
+      <SettingRow
+        label={t("settings.paths.backupDefault")}
+        description={<PathText>{preferences.defaultBackupDir}</PathText>}
+      >
         <Button variant="secondary" onClick={() => void pickBackupFolder()}>
           {t("profileSettings.browse")}
         </Button>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.backupDefaults.compression")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.backupDefaults.compression")}>
         <Select
           ariaLabel={t("settings.backupDefaults.compression")}
           value={defaults.compression}
@@ -550,11 +523,8 @@ function BackupDefaultsSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.backupDefaults.frequency")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.backupDefaults.frequency")}>
         <Select
           ariaLabel={t("settings.backupDefaults.frequency")}
           value={defaults.frequency}
@@ -581,11 +551,8 @@ function BackupDefaultsSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.backupDefaults.retentionDays")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.backupDefaults.retentionDays")}>
         <SettingsNumberField
           ariaLabel={t("settings.backupDefaults.retentionDays")}
           min={1}
@@ -599,8 +566,8 @@ function BackupDefaultsSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-    </div>
+      </SettingRow>
+    </SettingSection>
   );
 }
 
@@ -623,17 +590,11 @@ function MarketplaceSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">
-        {t("settings.marketplace.title")}
-      </h2>
-      <p className="settings-section-description">
-        {t("settings.marketplace.description")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.marketplace.defaultProvider")}</strong>
-        </div>
+    <SettingSection
+      title={t("settings.marketplace.title")}
+      description={t("settings.marketplace.description")}
+    >
+      <SettingRow label={t("settings.marketplace.defaultProvider")}>
         <Select
           ariaLabel={t("settings.marketplace.defaultProvider")}
           value={marketplace.defaultProvider}
@@ -651,62 +612,53 @@ function MarketplaceSection({
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.marketplace.showIncompatible")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.marketplace.showIncompatible")}>
         <Switch
           checked={marketplace.showIncompatible}
           aria-label={t("settings.marketplace.showIncompatible")}
-          onCheckedChange={(checked) =>
+          onChange={({ currentTarget: { checked } }) =>
             void onUpdate({
               marketplace: { ...marketplace, showIncompatible: checked },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.marketplace.autoInstallDependencies")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.marketplace.autoInstallDependencies")}>
         <Switch
           checked={marketplace.autoInstallDependencies}
           aria-label={t("settings.marketplace.autoInstallDependencies")}
-          onCheckedChange={(checked) =>
+          onChange={({ currentTarget: { checked } }) =>
             void onUpdate({
               marketplace: { ...marketplace, autoInstallDependencies: checked },
             }).catch((error: unknown) => onError(errorMessage(error)))
           }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.marketplace.cacheSizeMb")}</strong>
-          {cacheCleared ? (
-            <span>{t("settings.paths.cacheCleared")}</span>
-          ) : null}
-        </div>
-        <div className="settings-action-group">
-          <SettingsNumberField
-            ariaLabel={t("settings.marketplace.cacheSizeMb")}
-            min={1}
-            value={numberValue(marketplace.cacheSizeMb, 1024)}
-            onCommit={(value) =>
-              void onUpdate({
-                marketplace: {
-                  ...marketplace,
-                  cacheSizeMb: toPositiveInt(value, 1024),
-                },
-              }).catch((error: unknown) => onError(errorMessage(error)))
-            }
-          />
-          <Button variant="secondary" onClick={() => void clearCache()}>
-            {t("settings.paths.clearCache")}
-          </Button>
-        </div>
-      </div>
-    </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.marketplace.cacheSizeMb")}
+        description={
+          cacheCleared ? t("settings.paths.cacheCleared") : undefined
+        }
+      >
+        <SettingsNumberField
+          ariaLabel={t("settings.marketplace.cacheSizeMb")}
+          min={1}
+          value={numberValue(marketplace.cacheSizeMb, 1024)}
+          onCommit={(value) =>
+            void onUpdate({
+              marketplace: {
+                ...marketplace,
+                cacheSizeMb: toPositiveInt(value, 1024),
+              },
+            }).catch((error: unknown) => onError(errorMessage(error)))
+          }
+        />
+        <Button variant="secondary" onClick={() => void clearCache()}>
+          {t("settings.paths.clearCache")}
+        </Button>
+      </SettingRow>
+    </SettingSection>
   );
 }
 
@@ -729,49 +681,33 @@ function ProvidersSection({
     }).catch((error: unknown) => onError(errorMessage(error)));
 
   return (
-    <div>
-      <h2 className="settings-section-title">
-        {t("settings.providers.title")}
-      </h2>
-      <p className="settings-section-description">
-        {t("settings.providers.title")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.providers.modrinth")}</strong>
-          <span>{t("settings.providers.alwaysEnabled")}</span>
-        </div>
-        <span className="settings-static-state">
-          {t("settings.providers.alwaysEnabled")}
-        </span>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.providers.hangar")}</strong>
-        </div>
+    <SettingSection title={t("settings.providers.title")}>
+      <SettingRow label={t("settings.providers.modrinth")}>
+        <Badge variant="light">{t("settings.providers.alwaysEnabled")}</Badge>
+      </SettingRow>
+      <SettingRow label={t("settings.providers.hangar")}>
         <Switch
           checked={providers.hangar}
           aria-label={t("settings.providers.hangar")}
-          onCheckedChange={(checked) => void updateProvider("hangar", checked)}
+          onChange={(event) =>
+            void updateProvider("hangar", event.currentTarget.checked)
+          }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.providers.bbsmc")}</strong>
-        </div>
+      </SettingRow>
+      <SettingRow label={t("settings.providers.bbsmc")}>
         <Switch
           checked={providers.bbsmc}
           aria-label={t("settings.providers.bbsmc")}
-          onCheckedChange={(checked) => void updateProvider("bbsmc", checked)}
+          onChange={(event) =>
+            void updateProvider("bbsmc", event.currentTarget.checked)
+          }
         />
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.providers.curseforge")}</strong>
-          <span>{t("settings.providers.manualImportOnly")}</span>
-        </div>
-      </div>
-    </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.providers.curseforge")}
+        description={t("settings.providers.manualImportOnly")}
+      />
+    </SettingSection>
   );
 }
 
@@ -807,55 +743,51 @@ function PathsSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">{t("settings.nav.paths")}</h2>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.appData")}</strong>
-          <span className="settings-path-value">{preferences.appDataDir}</span>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.serverDefault")}</strong>
-          <span className="settings-path-value">
-            {preferences.defaultServerDir}
-          </span>
-        </div>
+    <SettingSection title={t("settings.nav.paths")}>
+      <SettingRow
+        label={t("settings.paths.appData")}
+        description={<PathText>{preferences.appDataDir}</PathText>}
+      />
+      <SettingRow
+        label={t("settings.paths.serverDefault")}
+        description={<PathText>{preferences.defaultServerDir}</PathText>}
+      >
         <Button
           variant="secondary"
           onClick={() => void pickFolder("defaultServerDir")}
         >
           {t("profileSettings.browse")}
         </Button>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.backupDefault")}</strong>
-          <span className="settings-path-value">
-            {preferences.defaultBackupDir}
-          </span>
-        </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.paths.backupDefault")}
+        description={<PathText>{preferences.defaultBackupDir}</PathText>}
+      >
         <Button
           variant="secondary"
           onClick={() => void pickFolder("defaultBackupDir")}
         >
           {t("profileSettings.browse")}
         </Button>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.cache")}</strong>
-          <span className="settings-path-value">{preferences.cacheDir}</span>
-          {cacheCleared ? (
-            <span>{t("settings.paths.cacheCleared")}</span>
-          ) : null}
-        </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.paths.cache")}
+        description={
+          <>
+            <PathText>{preferences.cacheDir}</PathText>
+            {cacheCleared ? (
+              <Text span inherit display="block">
+                {t("settings.paths.cacheCleared")}
+              </Text>
+            ) : null}
+          </>
+        }
+      >
         <Button variant="secondary" onClick={() => void clearCache()}>
           {t("settings.paths.clearCache")}
         </Button>
-      </div>
-    </div>
+      </SettingRow>
+    </SettingSection>
   );
 }
 
@@ -934,29 +866,22 @@ function DataManagementSection({
   };
 
   return (
-    <div>
-      <h2 className="settings-section-title">{t("settings.data.title")}</h2>
-      <p className="settings-section-description">
-        {t("settings.data.description")}
-      </p>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.data.settingsFile")}</strong>
-          {status ? <span>{status}</span> : null}
-        </div>
-        <div className="settings-action-group">
-          <Button variant="secondary" onClick={() => void exportSettings()}>
-            {t("settings.data.export")}
-          </Button>
-          <Button variant="secondary" onClick={() => void importSettings()}>
-            {t("settings.data.import")}
-          </Button>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.paths.appData")}</strong>
-        </div>
+    <SettingSection
+      title={t("settings.data.title")}
+      description={t("settings.data.description")}
+    >
+      <SettingRow
+        label={t("settings.data.settingsFile")}
+        description={status ?? undefined}
+      >
+        <Button variant="secondary" onClick={() => void exportSettings()}>
+          {t("settings.data.export")}
+        </Button>
+        <Button variant="secondary" onClick={() => void importSettings()}>
+          {t("settings.data.import")}
+        </Button>
+      </SettingRow>
+      <SettingRow label={t("settings.paths.appData")}>
         <Button
           variant="secondary"
           onClick={() =>
@@ -967,16 +892,15 @@ function DataManagementSection({
         >
           {t("settings.data.openAppData")}
         </Button>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.data.reset")}</strong>
-          <span>{t("settings.data.resetNote")}</span>
-        </div>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.data.reset")}
+        description={t("settings.data.resetNote")}
+      >
         <Button variant="danger" onClick={() => setResetOpen(true)}>
           {t("settings.data.reset")}
         </Button>
-      </div>
+      </SettingRow>
       <ConfirmDangerDialog
         isOpen={resetOpen}
         title={t("settings.data.reset")}
@@ -999,7 +923,7 @@ function DataManagementSection({
           }
         }}
       />
-    </div>
+    </SettingSection>
   );
 }
 
@@ -1007,61 +931,48 @@ function AboutSection() {
   const { t } = useAppSettings();
 
   return (
-    <div>
-      <h2 className="settings-section-title">{t("settings.about.title")}</h2>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.version")}</strong>
-        </div>
-        <span>{__APP_VERSION__}</span>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.license")}</strong>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.noTelemetry")}</strong>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.github")}</strong>
-        </div>
-        <a
-          className="settings-link"
+    <SettingSection title={t("settings.about.title")}>
+      <SettingRow label={t("settings.about.version")}>
+        <Text size="sm" ff="monospace">
+          {__APP_VERSION__}
+        </Text>
+      </SettingRow>
+      <SettingRow label={t("settings.about.license")} />
+      <SettingRow label={t("settings.about.noTelemetry")} />
+      <SettingRow label={t("settings.about.github")}>
+        <Anchor
           href="https://github.com/NAinfini/MCServerManager"
           target="_blank"
           rel="noopener noreferrer"
+          size="sm"
         >
-          <ExternalLink aria-hidden="true" size={14} />
-          GitHub
-        </a>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.disclaimerTitle")}</strong>
-          <span>{t("settings.about.disclaimer")}</span>
-        </div>
-      </div>
-      <div className="settings-row">
-        <div className="settings-row-label">
-          <strong>{t("settings.about.system")}</strong>
-        </div>
-      </div>
-      <div className="settings-about-system">
-        <span>
-          {t("settings.about.electron")}:{" "}
-          {window.navigator.userAgent.match(/Electron\/([\d.]+)/)?.[1] ??
-            t("common.notAvailable")}
-        </span>
-        <span>
-          {t("settings.about.platform")}:{" "}
-          {window.navigator.platform || t("common.notAvailable")}
-        </span>
-      </div>
-    </div>
+          <Group gap={4} component="span">
+            <ExternalLink aria-hidden="true" size={14} />
+            GitHub
+          </Group>
+        </Anchor>
+      </SettingRow>
+      <SettingRow
+        label={t("settings.about.disclaimerTitle")}
+        description={t("settings.about.disclaimer")}
+      />
+      <SettingRow
+        label={t("settings.about.system")}
+        description={
+          <Stack gap={2} component="span" ff="monospace">
+            <span>
+              {t("settings.about.electron")}:{" "}
+              {window.navigator.userAgent.match(/Electron\/([\d.]+)/)?.[1] ??
+                t("common.notAvailable")}
+            </span>
+            <span>
+              {t("settings.about.platform")}:{" "}
+              {window.navigator.platform || t("common.notAvailable")}
+            </span>
+          </Stack>
+        }
+      />
+    </SettingSection>
   );
 }
 
@@ -1107,7 +1018,7 @@ export function SettingsView({
   );
   const saveSequence = useRef(0);
   const queryClient = useQueryClient();
-  const navRef = useRef<HTMLElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
   const preferencesQuery = useQuery({
     queryKey: settingsKeys.preferences,
     queryFn: async () => {
@@ -1159,94 +1070,90 @@ export function SettingsView({
   };
 
   return (
-    <section aria-labelledby="settings-title" className="settings-page">
-      <div className="page-header">
-        <div>
-          <h1 id="settings-title" tabIndex={-1}>
-            {t("settings.page.title")}
-          </h1>
-        </div>
-        <span className="settings-save-state" aria-live="polite">
+    <Stack component="section" aria-labelledby="settings-title" gap="md">
+      <Group justify="space-between" align="center">
+        <Title order={1} id="settings-title" tabIndex={-1}>
+          {t("settings.page.title")}
+        </Title>
+        <Text size="sm" c="dimmed" aria-live="polite">
           {saveState === "saving"
             ? t("settings.save.saving")
             : saveState === "saved"
               ? t("settings.save.saved")
               : ""}
-        </span>
-      </div>
-      <div className="settings-layout">
-        <div className="settings-nav-shell">
-          <nav
-            ref={navRef}
-            className="settings-nav"
-            aria-label={t("settings.page.title")}
-            onKeyDown={(event) => {
-              if (
-                !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(
-                  event.key,
-                )
+        </Text>
+      </Group>
+      <Flex gap="lg" align="flex-start">
+        <Stack
+          component="nav"
+          ref={navRef}
+          aria-label={t("settings.page.title")}
+          gap={2}
+          w={200}
+          pos="sticky"
+          top={0}
+          style={{ flexShrink: 0 }}
+          onKeyDown={(event) => {
+            if (
+              !["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight"].includes(
+                event.key,
               )
-                return;
-              const items = Array.from(
-                event.currentTarget.querySelectorAll<HTMLButtonElement>(
-                  ".settings-nav-item",
-                ),
-              );
-              const currentIndex = items.indexOf(
-                document.activeElement as HTMLButtonElement,
-              );
-              if (currentIndex < 0) return;
-              const direction =
-                event.key === "ArrowDown" || event.key === "ArrowRight"
-                  ? 1
-                  : -1;
-              event.preventDefault();
-              items[
-                (currentIndex + direction + items.length) % items.length
-              ]?.focus();
-            }}
-          >
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeSection === item.key;
-              return (
-                <button
-                  key={item.key}
+            )
+              return;
+            const items = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>(
+                "[data-settings-section]",
+              ),
+            );
+            const currentIndex = items.indexOf(
+              document.activeElement as HTMLButtonElement,
+            );
+            if (currentIndex < 0) return;
+            const direction =
+              event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+            event.preventDefault();
+            items[
+              (currentIndex + direction + items.length) % items.length
+            ]?.focus();
+          }}
+        >
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeSection === item.key;
+            return (
+              <Fragment key={item.key}>
+                {item.groupStart ? <Divider my={6} /> : null}
+                <NavLink
+                  component="button"
                   type="button"
-                  className={
-                    isActive
-                      ? "settings-nav-item settings-nav-item-active"
-                      : "settings-nav-item"
-                  }
+                  active={isActive}
                   aria-current={isActive ? "true" : undefined}
                   data-nav-group-start={item.groupStart ? "true" : undefined}
                   data-settings-section={item.key}
+                  label={t(item.labelKey)}
+                  leftSection={<Icon aria-hidden="true" size={16} />}
                   onClick={() => setActiveSection(item.key)}
-                >
-                  <Icon aria-hidden="true" size={14} />
-                  {t(item.labelKey)}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-        <div className="settings-content">
+                />
+              </Fragment>
+            );
+          })}
+        </Stack>
+        <Stack gap="md" miw={0} maw={820} style={{ flex: 1 }}>
           {visibleError ? (
-            <div className="settings-error" role="alert">
-              <div>
-                <strong>{t("settings.error.title")}</strong>
-                <span>{visibleError}</span>
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setSettingsError(null);
-                  void preferencesQuery.refetch();
-                }}
-              >
-                {t("common.retry")}
-              </Button>
-            </div>
+            <Alert color="red" role="alert" title={t("settings.error.title")}>
+              <Group justify="space-between" gap="sm">
+                <Text size="sm">{visibleError}</Text>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setSettingsError(null);
+                    void preferencesQuery.refetch();
+                  }}
+                >
+                  {t("common.retry")}
+                </Button>
+              </Group>
+            </Alert>
           ) : null}
           {preferencesQuery.isLoading ? (
             <LoadingState message={t("settings.loading")} />
@@ -1268,7 +1175,7 @@ export function SettingsView({
                 />
               ) : null}
               {activeSection === "defaults" ? (
-                <div className="settings-section-stack">
+                <Stack gap="md">
                   <ServerDefaultsSection
                     preferences={preferences}
                     onUpdate={updatePreferences}
@@ -1279,10 +1186,10 @@ export function SettingsView({
                     onUpdate={updatePreferences}
                     onError={setSettingsError}
                   />
-                </div>
+                </Stack>
               ) : null}
               {activeSection === "marketplace" ? (
-                <div className="settings-section-stack">
+                <Stack gap="md">
                   <MarketplaceSection
                     preferences={preferences}
                     onUpdate={updatePreferences}
@@ -1293,13 +1200,13 @@ export function SettingsView({
                     onUpdate={updatePreferences}
                     onError={setSettingsError}
                   />
-                </div>
+                </Stack>
               ) : null}
               {activeSection === "notifications" ? (
                 <NotificationSettings />
               ) : null}
               {activeSection === "storage" ? (
-                <div className="settings-section-stack">
+                <Stack gap="md">
                   <PathsSection
                     preferences={preferences}
                     onUpdate={updatePreferences}
@@ -1314,14 +1221,14 @@ export function SettingsView({
                     onReplace={replacePreferences}
                     onError={setSettingsError}
                   />
-                </div>
+                </Stack>
               ) : null}
               {activeSection === "updates" ? <UpdateStatus /> : null}
               {activeSection === "about" ? <AboutSection /> : null}
             </>
           ) : null}
-        </div>
-      </div>
-    </section>
+        </Stack>
+      </Flex>
+    </Stack>
   );
 }

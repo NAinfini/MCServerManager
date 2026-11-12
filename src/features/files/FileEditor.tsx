@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import Editor from "@monaco-editor/react";
 import { Braces, Code2, FileLock2, RefreshCw, Save } from "lucide-react";
+import {
+  Alert,
+  Box,
+  Button as MantineButton,
+  Group,
+  Loader,
+  Stack,
+  Text,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { EmptyState } from "../../components/ui/empty-state";
 import { useAppSettings } from "../../i18n";
 import type { ServerFileEntry, ServerTextFile } from "./fileApi";
 import { useUnsavedGuard } from "../../lib/use-unsaved-guard";
@@ -95,36 +103,51 @@ export function FileEditor({
 
   if (isLoading) {
     return (
-      <div className="files-editor-empty">{t("files.editor.loading")}</div>
+      <Group gap="xs" justify="center" p="xl">
+        <Loader size="xs" />
+        <Text c="dimmed" size="sm">
+          {t("files.editor.loading")}
+        </Text>
+      </Group>
     );
   }
 
   if (!file) {
     if (selectedEntry?.kind === "file" && !selectedEntry.editable) {
       return (
-        <section className="files-editor files-binary-preview">
-          <div className="files-editor-toolbar">
-            <div>
-              <strong>{selectedEntry.relativePath}</strong>
-              <span>{t("files.editor.readOnly")}</span>
-            </div>
-          </div>
-          <div className="files-binary-message">
+        <Stack component="section" gap={0} h="100%">
+          <Box px="md" py="xs">
+            <Text ff="monospace" fw={600} size="sm" truncate>
+              {selectedEntry.relativePath}
+            </Text>
+            <Text c="dimmed" size="xs">
+              {t("files.editor.readOnly")}
+            </Text>
+          </Box>
+          <Stack align="center" gap="xs" m="auto" maw="52ch" p="xl" ta="center">
             <FileLock2 aria-hidden="true" size={28} />
-            <strong>{t("files.editor.binary.title")}</strong>
-            <span>{t("files.editor.binary.description")}</span>
-          </div>
-        </section>
+            <Text fw={600}>{t("files.editor.binary.title")}</Text>
+            <Text c="dimmed" size="sm">
+              {t("files.editor.binary.description")}
+            </Text>
+          </Stack>
+        </Stack>
       );
     }
     return (
-      <div className="files-editor-empty">
-        <EmptyState
-          illustration="/illustrations/no-file-selected.png"
-          title={t("files.editor.empty.title")}
-          description={t("files.editor.empty.description")}
-        />
-      </div>
+      <Stack
+        align="center"
+        gap={4}
+        justify="center"
+        h="100%"
+        p="xl"
+        ta="center"
+      >
+        <Text fw={600}>{t("files.editor.empty.title")}</Text>
+        <Text c="dimmed" size="sm">
+          {t("files.editor.empty.description")}
+        </Text>
+      </Stack>
     );
   }
 
@@ -137,23 +160,27 @@ export function FileEditor({
     structuredAvailable && editorMode === "structured";
 
   return (
-    <section className="files-editor" aria-label={t("files.editor.aria")}>
-      <div className="files-editor-toolbar">
-        <div>
-          <strong>{file.relativePath}</strong>
-          <span>
+    <Stack
+      aria-label={t("files.editor.aria")}
+      component="section"
+      gap={0}
+      h="100%"
+      mih={0}
+    >
+      <Group justify="space-between" px="md" py="xs" wrap="nowrap">
+        <Box miw={0}>
+          <Text ff="monospace" fw={600} size="sm" truncate>
+            {file.relativePath}
+          </Text>
+          <Text c="dimmed" size="xs">
             {file.readOnly
               ? t("files.editor.readOnly")
               : t("files.editor.bytes", { count: file.sizeBytes })}
-          </span>
-        </div>
-        <div className="files-editor-toolbar-actions">
+          </Text>
+        </Box>
+        <Group gap="xs" wrap="nowrap">
           {structuredAvailable ? (
-            <div
-              aria-label={t("files.editor.mode")}
-              className="editor-mode-toggle"
-              role="group"
-            >
+            <MantineButton.Group aria-label={t("files.editor.mode")}>
               <Button
                 aria-pressed={showStructuredEditor}
                 variant={showStructuredEditor ? "secondary" : "ghost"}
@@ -170,41 +197,52 @@ export function FileEditor({
                 <Code2 aria-hidden="true" size={14} />
                 {t("files.editor.source")}
               </Button>
-            </div>
+            </MantineButton.Group>
           ) : null}
           <Button
             disabled={!canSave}
             variant="primary"
             onClick={() => onSave(content)}
           >
-            <Save aria-hidden="true" size={15} />
+            <Save aria-hidden="true" size={14} />
             {t("files.editor.save")}
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Group>
 
       {file.warning ? (
-        <div className="inline-error files-editor-warning">{file.warning}</div>
+        <Alert color="yellow" mx="md" mb="xs" py="xs">
+          {file.warning}
+        </Alert>
       ) : null}
       {error ? (
-        <div className="inline-error files-editor-warning" role="alert">
-          <strong>{t("files.editor.saveFailed")}</strong>
-          <span>{error}</span>
-          <span>{t("files.editor.draftPreserved")}</span>
-          {onReload ? (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                loadedPathRef.current = null;
-                setContent(file.content);
-                onReload();
-              }}
-            >
-              <RefreshCw aria-hidden="true" size={14} />
-              {t("files.editor.reloadDisk")}
-            </Button>
-          ) : null}
-        </div>
+        <Alert
+          color="red"
+          mx="md"
+          mb="xs"
+          role="alert"
+          title={t("files.editor.saveFailed")}
+        >
+          <Stack align="flex-start" gap={4}>
+            <Text size="sm">{error}</Text>
+            <Text c="dimmed" size="sm">
+              {t("files.editor.draftPreserved")}
+            </Text>
+            {onReload ? (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  loadedPathRef.current = null;
+                  setContent(file.content);
+                  onReload();
+                }}
+              >
+                <RefreshCw aria-hidden="true" size={14} />
+                {t("files.editor.reloadDisk")}
+              </Button>
+            ) : null}
+          </Stack>
+        </Alert>
       ) : null}
 
       {showStructuredEditor ? (
@@ -215,7 +253,7 @@ export function FileEditor({
           onChange={setContent}
         />
       ) : (
-        <div className="monaco-host">
+        <Box className="monaco-host" flex={1} mih={0}>
           <Editor
             height="100%"
             language={languageForPath(file.relativePath)}
@@ -229,8 +267,8 @@ export function FileEditor({
             value={content}
             onChange={(value) => setContent(value ?? "")}
           />
-        </div>
+        </Box>
       )}
-    </section>
+    </Stack>
   );
 }

@@ -8,10 +8,18 @@ import {
   RefreshCw,
   Upload,
 } from "lucide-react";
+import {
+  Alert,
+  Button as MantineButton,
+  Group,
+  Paper,
+  SimpleGrid,
+  Stack,
+  TextInput,
+} from "@mantine/core";
 import type { ServerProfile } from "../../domain/server";
 import { Button } from "../../components/ui/button";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
-import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 import { queryKeys } from "../../lib/query-keys";
@@ -26,7 +34,6 @@ import {
   type ServerFileMutation,
   writeServerTextFile,
 } from "./fileApi";
-import "./operations.css";
 
 interface ServerFilesViewProps {
   server: ServerProfile;
@@ -254,36 +261,42 @@ export function ServerFilesView({
   }
 
   return (
-    <section className="files-panel" aria-label={t("files.aria")}>
-      <div className="files-toolbar">
-        <nav
-          className="files-breadcrumb"
+    <Stack
+      aria-label={t("files.aria")}
+      component="section"
+      gap="sm"
+      h="100%"
+      mih={0}
+    >
+      <Group justify="space-between" wrap="nowrap">
+        <Group
           aria-label={t("files.breadcrumb.aria")}
+          component="nav"
+          gap={2}
+          miw={0}
         >
           {breadcrumbs.map((crumb, index) => (
-            <span className="files-breadcrumb-item" key={crumb.path || "root"}>
-              {index > 0 ? (
-                <ChevronRight
-                  aria-hidden="true"
-                  className="files-breadcrumb-sep"
-                  size={13}
-                />
-              ) : null}
+            <Group gap={2} key={crumb.path || "root"} wrap="nowrap">
+              {index > 0 ? <ChevronRight aria-hidden="true" size={14} /> : null}
               {/* The current crumb used to be marked with `disabled`, which
                   dropped the one item saying where you are out of the tab
                   order and told a screen reader nothing. */}
-              <button
+              <MantineButton
                 aria-current={crumb.path === currentPath ? "page" : undefined}
-                className="files-breadcrumb-link"
-                type="button"
+                color={crumb.path === currentPath ? undefined : "gray"}
+                ff="monospace"
+                maw={220}
+                px={6}
+                size="compact-sm"
+                variant={crumb.path === currentPath ? "light" : "subtle"}
                 onClick={() => openDirectory(crumb.path)}
               >
                 {crumb.label}
-              </button>
-            </span>
+              </MantineButton>
+            </Group>
           ))}
-        </nav>
-        <div className="files-toolbar-actions">
+        </Group>
+        <Group gap="xs" wrap="nowrap">
           <Button
             disabled={fileMutation.isPending}
             variant="secondary"
@@ -317,7 +330,7 @@ export function ServerFilesView({
           <Button
             disabled={filesQuery.isFetching}
             title={t("files.refresh")}
-            variant="secondary"
+            variant="ghost"
             onClick={() => filesQuery.refetch()}
           >
             <RefreshCw aria-hidden="true" size={14} />
@@ -325,124 +338,130 @@ export function ServerFilesView({
           </Button>
           <Button
             disabled={openFolderMutation.isPending}
-            variant="secondary"
+            variant="ghost"
             onClick={() => openFolderMutation.mutate()}
           >
             <FolderOpen aria-hidden="true" size={14} />
             {t("files.openFolder")}
           </Button>
-        </div>
-      </div>
+        </Group>
+      </Group>
 
       {openFolderMutation.error ? (
-        <div className="inline-error files-panel-error" role="alert">
+        <Alert color="red" py="xs" role="alert">
           {openFolderMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
 
       {operationDraft ? (
-        <form
-          className="files-operation-bar"
-          onSubmit={(event) => {
-            event.preventDefault();
-            submitOperation();
-          }}
-        >
-          <label>
-            <span>
-              {t(`files.operation.${operationDraft.operation}.label`)}
-            </span>
-            <TextField
-              autoFocus
-              required
-              aria-invalid={!validOperationValue(operationDraft)}
-              value={operationDraft.value}
-              onChange={(event) =>
-                setOperationDraft({
-                  ...operationDraft,
-                  value: event.target.value,
-                })
-              }
-            />
-          </label>
-          <Button
-            disabled={
-              fileMutation.isPending || !validOperationValue(operationDraft)
-            }
-            type="submit"
-            variant="primary"
+        <Paper className="files-operation-bar" p="sm">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitOperation();
+            }}
           >
-            {t("common.save")}
-          </Button>
-          <Button
-            disabled={fileMutation.isPending}
-            variant="ghost"
-            onClick={() => setOperationDraft(null)}
-          >
-            {t("common.cancel")}
-          </Button>
-        </form>
+            <Group align="flex-end" gap="xs" wrap="nowrap">
+              <TextInput
+                autoFocus
+                required
+                aria-invalid={!validOperationValue(operationDraft)}
+                autoComplete="off"
+                flex={1}
+                label={t(`files.operation.${operationDraft.operation}.label`)}
+                value={operationDraft.value}
+                withAsterisk={false}
+                onChange={(event) =>
+                  setOperationDraft({
+                    ...operationDraft,
+                    value: event.target.value,
+                  })
+                }
+              />
+              <Button
+                disabled={
+                  fileMutation.isPending || !validOperationValue(operationDraft)
+                }
+                type="submit"
+                variant="primary"
+              >
+                {t("common.save")}
+              </Button>
+              <Button
+                disabled={fileMutation.isPending}
+                variant="ghost"
+                onClick={() => setOperationDraft(null)}
+              >
+                {t("common.cancel")}
+              </Button>
+            </Group>
+          </form>
+        </Paper>
       ) : null}
 
       {fileMutation.error || pickerError ? (
-        <div className="inline-error files-panel-error" role="alert">
+        <Alert color="red" py="xs" role="alert">
           {fileMutation.error?.message ?? pickerError}
-        </div>
+        </Alert>
       ) : null}
 
       {fileQuery.error ? (
-        <div className="inline-error files-panel-error" role="alert">
+        <Alert color="red" py="xs" role="alert">
           {fileQuery.error.message}
-        </div>
+        </Alert>
       ) : null}
 
-      <div className="files-body">
-        <FileBrowser
-          entries={filesQuery.data ?? []}
-          error={filesQuery.error}
-          isLoading={filesQuery.isLoading}
-          selectedPath={selectedPath}
-          onOpenDirectory={openDirectory}
-          onOpenFile={(path) => {
-            setSelectedPath(path);
-            onPathChange?.(path);
-            saveMutation.reset();
-          }}
-          onDelete={(entry) => {
-            fileMutation.reset();
-            setDeleteEntry(entry);
-          }}
-          onMove={(entry) => {
-            fileMutation.reset();
-            setOperationDraft({
-              operation: "move",
-              entry,
-              value: entry.relativePath,
-            });
-          }}
-          onRename={(entry) => {
-            fileMutation.reset();
-            setOperationDraft({
-              operation: "rename",
-              entry,
-              value: entry.name,
-            });
-          }}
-          onRetry={() => filesQuery.refetch()}
-        />
-        <FileEditor
-          error={saveMutation.error?.message ?? null}
-          file={fileQuery.data ?? null}
-          isLoading={fileQuery.isLoading}
-          isSaving={saveMutation.isPending}
-          selectedEntry={selectedEntry}
-          onReload={() => {
-            saveMutation.reset();
-            fileQuery.refetch();
-          }}
-          onSave={(content) => saveMutation.mutate(content)}
-        />
-      </div>
+      <SimpleGrid cols={{ base: 1, md: 2 }} flex={1} mih={0} spacing="sm">
+        <Paper mih={260} style={{ overflow: "hidden" }}>
+          <FileBrowser
+            entries={filesQuery.data ?? []}
+            error={filesQuery.error}
+            isLoading={filesQuery.isLoading}
+            selectedPath={selectedPath}
+            onOpenDirectory={openDirectory}
+            onOpenFile={(path) => {
+              setSelectedPath(path);
+              onPathChange?.(path);
+              saveMutation.reset();
+            }}
+            onDelete={(entry) => {
+              fileMutation.reset();
+              setDeleteEntry(entry);
+            }}
+            onMove={(entry) => {
+              fileMutation.reset();
+              setOperationDraft({
+                operation: "move",
+                entry,
+                value: entry.relativePath,
+              });
+            }}
+            onRename={(entry) => {
+              fileMutation.reset();
+              setOperationDraft({
+                operation: "rename",
+                entry,
+                value: entry.name,
+              });
+            }}
+            onRetry={() => filesQuery.refetch()}
+          />
+        </Paper>
+        <Paper mih={260} style={{ overflow: "hidden" }}>
+          <FileEditor
+            error={saveMutation.error?.message ?? null}
+            file={fileQuery.data ?? null}
+            isLoading={fileQuery.isLoading}
+            isSaving={saveMutation.isPending}
+            selectedEntry={selectedEntry}
+            onReload={() => {
+              saveMutation.reset();
+              fileQuery.refetch();
+            }}
+            onSave={(content) => saveMutation.mutate(content)}
+          />
+        </Paper>
+      </SimpleGrid>
       <ConfirmDangerDialog
         confirmLabel={t("files.actions.delete")}
         description={t("files.delete.description", {
@@ -463,6 +482,6 @@ export function ServerFilesView({
           }
         }}
       />
-    </section>
+    </Stack>
   );
 }

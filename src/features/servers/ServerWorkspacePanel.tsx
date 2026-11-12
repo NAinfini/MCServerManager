@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { Box, Group } from "@mantine/core";
 import type { ServerWorkspaceSection } from "../../app/router";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
@@ -77,10 +78,12 @@ export function ServerWorkspacePanel({
         ) : view === "health" ? (
           <ServerOverviewWorkspace server={server} onOpenJava={onOpenJava} />
         ) : (
-          <div className="console-layout">
-            <ConsoleView serverId={server.id} />
+          <Group align="stretch" gap="md" h="100%" wrap="nowrap">
+            <Box miw={0} style={{ flex: 1 }}>
+              <ConsoleView serverId={server.id} />
+            </Box>
             <ServerLiveRail server={server} />
-          </div>
+          </Group>
         );
       break;
     case "players":
@@ -120,17 +123,15 @@ export function ServerWorkspacePanel({
       break;
     case "settings": {
       panel = (
-        <div className="server-settings settings-sections">
-          <section className="settings-section settings-section-active">
-            {view === "properties" ? (
-              <ServerPropertiesEditor server={server} />
-            ) : view === "network" ? (
-              <TunnelProvidersView embedded servers={[server]} />
-            ) : (
-              <ServerProfileSettings server={server} />
-            )}
-          </section>
-        </div>
+        <Box maw={960}>
+          {view === "properties" ? (
+            <ServerPropertiesEditor server={server} />
+          ) : view === "network" ? (
+            <TunnelProvidersView embedded servers={[server]} />
+          ) : (
+            <ServerProfileSettings server={server} />
+          )}
+        </Box>
       );
       break;
     }

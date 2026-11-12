@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Group, Paper, Stack, Text, Title } from "@mantine/core";
 import { PlayerHead } from "../../components/ui/player-head";
 import { useAppSettings } from "../../i18n";
 import {
@@ -53,42 +54,74 @@ export function ServerLiveRail({ server }: { server: ServerProfile }) {
   ];
 
   return (
-    <aside className="server-live-rail">
-      <dl
+    <Stack component="aside" gap="sm" miw={0} w={216} style={{ flex: "none" }}>
+      <Paper
         aria-label={t("server.context.telemetry")}
-        className="server-live-stats"
+        component="dl"
+        m={0}
+        p="sm"
       >
-        {stats.map((stat) => (
-          <div key={stat.label}>
-            <dt>{stat.label}</dt>
-            <dd>{stat.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <section
+        <Stack gap="xs">
+          {stats.map((stat) => (
+            <Group justify="space-between" key={stat.label} wrap="nowrap">
+              <Text c="dimmed" component="dt" size="xs">
+                {stat.label}
+              </Text>
+              <Text component="dd" ff="monospace" fw={600} m={0} size="sm">
+                {stat.value}
+              </Text>
+            </Group>
+          ))}
+        </Stack>
+      </Paper>
+      <Paper
         aria-label={t("server.overview.online.title")}
-        className="server-live-players"
+        component="section"
+        mih={0}
+        p="sm"
+        style={{ flex: 1, overflow: "auto" }}
       >
-        <h3>
+        <Title mb="xs" order={3} fz="sm">
           {t("server.rail.online", {
             count: playersQuery.data ? online.length : "—",
           })}
-        </h3>
+        </Title>
         {playersQuery.data?.unavailableReason ? (
-          <p>{playersQuery.data.unavailableReason}</p>
+          <Text c="dimmed" size="xs">
+            {playersQuery.data.unavailableReason}
+          </Text>
         ) : online.length === 0 ? (
-          <p>{t("server.rail.onlineEmpty")}</p>
+          <Text c="dimmed" size="xs">
+            {t("server.rail.onlineEmpty")}
+          </Text>
         ) : (
-          <ul>
+          <Stack
+            component="ul"
+            gap={6}
+            m={0}
+            p={0}
+            style={{ listStyle: "none" }}
+          >
             {online.slice(0, 12).map((player) => (
-              <li key={player.uuid ?? player.username}>
-                <PlayerHead username={player.username} size={18} />
-                <span>{player.username}</span>
-              </li>
+              <Group
+                component="li"
+                gap="xs"
+                key={player.uuid ?? player.username}
+                wrap="nowrap"
+              >
+                <PlayerHead
+                  size={18}
+                  username={player.username}
+                  uuid={player.uuid}
+                />
+                <Text size="sm" truncate>
+                  {player.username}
+                </Text>
+              </Group>
             ))}
-          </ul>
+          </Stack>
         )}
-      </section>
-    </aside>
+      </Paper>
+    </Stack>
   );
 }

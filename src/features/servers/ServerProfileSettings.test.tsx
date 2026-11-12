@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "../../test/render";
+import { cleanup, render, screen, waitFor, within } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -62,7 +62,11 @@ describe("ServerProfileSettings", () => {
       id: server.id,
     });
 
-    await user.click(screen.getByRole("button", { name: "Delete profile" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Delete profile",
+      }),
+    );
 
     await waitFor(() => {
       expect(invoke).toHaveBeenCalledWith("delete_server_profile", {

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { Alert, Anchor, Checkbox, Table } from "@mantine/core";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { LoadingState } from "../../components/ui/loading-state";
 import { useAppSettings } from "../../i18n";
@@ -123,7 +123,6 @@ export function useJavaProvisioning({
      for now happens without one. */
   const dialog = (
     <DialogSurface
-      className="java-install-dialog"
       description={t("java.install.description")}
       open={target !== null}
       title={t("java.install.title", { version: target?.majorVersion ?? "" })}
@@ -167,55 +166,59 @@ export function useJavaProvisioning({
       ) : null}
 
       {planMutation.error ? (
-        <div className="inline-error" role="alert">
+        <Alert color="red" role="alert" variant="light">
           {planMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
 
       {plan ? (
         <>
-          <dl className="java-install-summary">
-            <div>
-              <dt>{t("java.install.build")}</dt>
-              <dd>
-                {plan.vendor} {plan.version}
-              </dd>
-            </div>
-            <div>
-              <dt>{t("java.install.destination")}</dt>
-              <dd>{t("java.install.destinationValue")}</dd>
-            </div>
-            {appliesTo ? (
-              <div>
-                <dt>{t("java.install.appliesTo")}</dt>
-                <dd>{appliesTo}</dd>
-              </div>
-            ) : null}
-          </dl>
-          <label className="java-managed-consent">
-            <Checkbox
-              aria-label={t("java.managed.consent")}
-              checked={consent}
-              onCheckedChange={(checked) => setConsent(checked === true)}
-            />
-            <span>
-              {t("java.managed.consent")}{" "}
-              <a
-                href={plan.licenseUrl}
-                rel="noreferrer noopener"
-                target="_blank"
-              >
-                {t("java.managed.license")}
-              </a>
-            </span>
-          </label>
+          <Table variant="vertical" verticalSpacing="xs" withTableBorder>
+            <Table.Tbody>
+              <Table.Tr>
+                <Table.Th w={140}>{t("java.install.build")}</Table.Th>
+                <Table.Td>
+                  {plan.vendor} {plan.version}
+                </Table.Td>
+              </Table.Tr>
+              <Table.Tr>
+                <Table.Th>{t("java.install.destination")}</Table.Th>
+                <Table.Td>{t("java.install.destinationValue")}</Table.Td>
+              </Table.Tr>
+              {appliesTo ? (
+                <Table.Tr>
+                  <Table.Th>{t("java.install.appliesTo")}</Table.Th>
+                  <Table.Td>{appliesTo}</Table.Td>
+                </Table.Tr>
+              ) : null}
+            </Table.Tbody>
+          </Table>
+          <Checkbox
+            aria-label={t("java.managed.consent")}
+            checked={consent}
+            label={
+              <>
+                {t("java.managed.consent")}{" "}
+                <Anchor
+                  href={plan.licenseUrl}
+                  inherit
+                  rel="noreferrer noopener"
+                  target="_blank"
+                >
+                  {t("java.managed.license")}
+                </Anchor>
+              </>
+            }
+            mt="md"
+            onChange={(event) => setConsent(event.currentTarget.checked)}
+          />
         </>
       ) : null}
 
       {installMutation.error ? (
-        <div className="inline-error" role="alert">
+        <Alert color="red" mt="sm" role="alert" variant="light">
           {installMutation.error.message}
-        </div>
+        </Alert>
       ) : null}
     </DialogSurface>
   );

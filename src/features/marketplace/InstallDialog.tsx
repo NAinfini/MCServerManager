@@ -1,7 +1,7 @@
 import { useQueries } from "@tanstack/react-query";
+import { Alert, Badge, Checkbox, Stack, Table, Text } from "@mantine/core";
 import { Download } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { Checkbox } from "../../components/ui/checkbox";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
 import {
@@ -82,7 +82,6 @@ export function InstallDialog({
   return (
     <DialogSurface
       open
-      className="marketplace-install-dialog"
       title={t("marketplace.install.title", { title: project.title })}
       description={t("marketplace.install.description", {
         version: version.versionNumber,
@@ -103,7 +102,7 @@ export function InstallDialog({
             variant="primary"
             onClick={onInstall}
           >
-            <Download aria-hidden="true" size={15} />
+            <Download aria-hidden="true" size={16} />
             {isInstalling
               ? t("marketplace.install.installing")
               : error
@@ -113,60 +112,81 @@ export function InstallDialog({
         </>
       }
     >
-      {version.dependencies.length > 0 ? (
-        <div className="marketplace-install-note">
-          <strong>{t("marketplace.install.dependencies")}</strong>
-          <span>{t("marketplace.install.dependenciesDescription")}</span>
-          <ul className="marketplace-dependency-list">
-            {version.dependencies.map((dependency, index) => (
-              <li
-                key={`${dependency.projectId ?? dependency.versionId ?? "dependency"}-${index}`}
-              >
-                <span className="marketplace-dependency-identity">
-                  <strong>
-                    {dependency.projectId
-                      ? (dependencyQueryByProjectId.get(dependency.projectId)
-                          ?.data?.title ??
-                        (dependencyQueryByProjectId.get(dependency.projectId)
-                          ?.isLoading
-                          ? t("marketplace.dependency.resolving")
-                          : t("marketplace.dependency.unresolved")))
-                      : t("marketplace.dependency.unresolved")}
-                  </strong>
-                  <small>
-                    {[dependency.projectId, dependency.versionId]
-                      .filter(Boolean)
-                      .join(" / ") || t("common.unknown")}
-                  </small>
-                </span>
-                <span>{dependencyLabel(dependency.dependencyType)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {requiresInstallAnyway ? (
-        <label className="marketplace-install-confirm">
+      <Stack gap="sm" mt="md">
+        {version.dependencies.length > 0 ? (
+          <Stack gap={4}>
+            <Text fw={600} size="sm">
+              {t("marketplace.install.dependencies")}
+            </Text>
+            <Text c="dimmed" size="xs">
+              {t("marketplace.install.dependenciesDescription")}
+            </Text>
+            <Table verticalSpacing={6}>
+              <Table.Tbody>
+                {version.dependencies.map((dependency, index) => (
+                  <Table.Tr
+                    key={`${dependency.projectId ?? dependency.versionId ?? "dependency"}-${index}`}
+                  >
+                    <Table.Td>
+                      <Text fw={500} size="sm">
+                        {dependency.projectId
+                          ? (dependencyQueryByProjectId.get(
+                              dependency.projectId,
+                            )?.data?.title ??
+                            (dependencyQueryByProjectId.get(dependency.projectId)
+                              ?.isLoading
+                              ? t("marketplace.dependency.resolving")
+                              : t("marketplace.dependency.unresolved")))
+                          : t("marketplace.dependency.unresolved")}
+                      </Text>
+                      <Text c="dimmed" ff="monospace" size="xs">
+                        {[dependency.projectId, dependency.versionId]
+                          .filter(Boolean)
+                          .join(" / ") || t("common.unknown")}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Badge
+                        color={
+                          dependency.dependencyType === "incompatible"
+                            ? "red"
+                            : "gray"
+                        }
+                        size="sm"
+                        tt="none"
+                        variant="light"
+                      >
+                        {dependencyLabel(dependency.dependencyType)}
+                      </Badge>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Stack>
+        ) : null}
+        {requiresInstallAnyway ? (
           <Checkbox
             checked={installAnyway}
             disabled={isInstalling}
-            onCheckedChange={(checked) =>
-              onInstallAnywayChange(checked === true)
+            label={t("marketplace.install.reviewWarnings")}
+            onChange={(event) =>
+              onInstallAnywayChange(event.currentTarget.checked)
             }
           />
-          <span>{t("marketplace.install.reviewWarnings")}</span>
-        </label>
-      ) : null}
-      {version.warnings.length > 0 ? (
-        <p className="danger-text">{version.warnings.join("; ")}</p>
-      ) : null}
-      {error ? (
-        <div className="inline-error" role="alert">
-          <strong>{t("marketplace.install.failed")}</strong>
-          <span>{error}</span>
-          <span>{t("marketplace.install.recovery")}</span>
-        </div>
-      ) : null}
+        ) : null}
+        {version.warnings.length > 0 ? (
+          <Text c="red" size="sm">
+            {version.warnings.join("; ")}
+          </Text>
+        ) : null}
+        {error ? (
+          <Alert color="red" title={t("marketplace.install.failed")}>
+            <Text size="sm">{error}</Text>
+            <Text size="sm">{t("marketplace.install.recovery")}</Text>
+          </Alert>
+        ) : null}
+      </Stack>
     </DialogSurface>
   );
 }

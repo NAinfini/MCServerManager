@@ -1,4 +1,5 @@
 import { useEffect, type KeyboardEvent } from "react";
+import { Button, Group } from "@mantine/core";
 import type { ServerWorkspaceSection } from "../../app/router";
 import { useAppSettings } from "../../i18n";
 import { serverWorkspaceDefinitions } from "./serverWorkspace";
@@ -62,22 +63,40 @@ export function ServerWorkspaceNav({
   }, [onNavigate]);
 
   return (
-    <nav
+    <Group
       aria-label={t("server.workspace.aria", { server: serverName })}
-      className="workspace-tabs"
+      component="nav"
+      gap={2}
+      px="lg"
+      style={{
+        borderBottom: "1px solid var(--mantine-color-default-border)",
+        flex: "none",
+      }}
+      wrap="nowrap"
       onKeyDown={moveFocus}
     >
-      {serverWorkspaceDefinitions.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          aria-current={section === item.id ? "page" : undefined}
-          onClick={() => onNavigate(item.id, item.defaultView)}
-        >
-          <item.icon aria-hidden="true" size={16} />
-          <span>{t(item.labelKey)}</span>
-        </button>
-      ))}
-    </nav>
+      {serverWorkspaceDefinitions.map((item) => {
+        const active = section === item.id;
+        return (
+          <Button
+            aria-current={active ? "page" : undefined}
+            c={active ? undefined : "dimmed"}
+            color={active ? "azure" : "gray"}
+            fw={active ? 600 : 500}
+            key={item.id}
+            leftSection={<item.icon aria-hidden="true" size={16} />}
+            radius={0}
+            style={{
+              borderBottom: `2px solid ${active ? "var(--mantine-color-azure-6)" : "transparent"}`,
+              marginBottom: -1,
+            }}
+            variant="subtle"
+            onClick={() => onNavigate(item.id, item.defaultView)}
+          >
+            {t(item.labelKey)}
+          </Button>
+        );
+      })}
+    </Group>
   );
 }

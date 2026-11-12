@@ -3,10 +3,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { Alert, Box, Group, Stack, Text, TextInput } from "@mantine/core";
 import { Save, Search } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Select, type SelectOption } from "../../components/ui/select";
-import { TextField } from "../../components/ui/text-field";
+import { SettingRow, SettingSection } from "../../components/ui/setting-row";
 import type { ServerProfile } from "../../domain/server";
 import { useAppSettings } from "../../i18n";
 import { queryKeys } from "../../lib/query-keys";
@@ -318,29 +319,55 @@ export function ServerPropertiesEditor({
   };
 
   return (
-    <section className="settings-panel" aria-label={t("properties.aria")}>
-      <div className="section-heading">
-        <h2>{t("properties.title")}</h2>
-        <span>{t("properties.description")}</span>
-      </div>
-      {propertiesQuery.error ? (
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("properties.loadError.title")}</strong>
-          <span>{propertiesQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => propertiesQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
-      ) : null}
-      {propertiesQuery.data && !hasPropertiesFile ? (
-        <div className="list-state" role="status">
-          <strong>{t("properties.empty.title")}</strong>
-          <span>{t("properties.empty.description")}</span>
-        </div>
-      ) : null}
+    <Stack component="section" gap="md" aria-label={t("properties.aria")}>
+      <SettingSection
+        title={t("properties.title")}
+        description={t("properties.description")}
+      >
+        {propertiesQuery.error ? (
+          <Alert
+            color="red"
+            my="sm"
+            role="alert"
+            title={t("properties.loadError.title")}
+          >
+            <Group justify="space-between" gap="sm">
+              <Text size="sm">{propertiesQuery.error.message}</Text>
+              <Button
+                variant="secondary"
+                onClick={() => propertiesQuery.refetch()}
+              >
+                {t("common.retry")}
+              </Button>
+            </Group>
+          </Alert>
+        ) : null}
+        {propertiesQuery.data && !hasPropertiesFile ? (
+          <Stack gap={2} py="sm" role="status">
+            <Text size="sm" fw={600}>
+              {t("properties.empty.title")}
+            </Text>
+            <Text size="sm" c="dimmed">
+              {t("properties.empty.description")}
+            </Text>
+          </Stack>
+        ) : null}
+        {propertiesQuery.data && hasPropertiesFile ? (
+          <TextInput
+            py="sm"
+            maw={360}
+            label={t("properties.search")}
+            leftSection={<Search aria-hidden="true" size={16} />}
+            placeholder={t("properties.searchPlaceholder")}
+            value={search}
+            onChange={(event) => setSearch(event.currentTarget.value)}
+          />
+        ) : null}
+      </SettingSection>
       {propertiesQuery.data && hasPropertiesFile ? (
-        <form
-          className="create-server-form"
+        <Stack
+          component="form"
+          gap="md"
           onSubmit={form.handleSubmit((values) => {
             const baseline =
               baselineRef.current ?? serverPropertiesDefaultValues([]);
@@ -351,38 +378,47 @@ export function ServerPropertiesEditor({
             );
           })}
         >
-          <label>
-            {t("properties.search")}
-            <span className="field-with-icon">
-              <Search aria-hidden="true" size={15} />
-              <TextField
-                placeholder={t("properties.searchPlaceholder")}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
-            </span>
-          </label>
           {groupedDefinitions.map(({ group, definitions }) => (
-            <fieldset className="settings-section" key={group}>
-              <legend>{t(`properties.group.${group}`)}</legend>
-              <div className="settings-grid property-grid">
-                {definitions.map((definition) => {
-                  const error = form.formState.errors[definition.key]?.message;
-                  const options = selectOptions(definition.kind);
-                  const label = t(propertyLabelKey(definition.key));
-                  /* The hint is the part that explains the consequence, and it
-                     reached nobody using a screen reader until it was bound to
-                     the control. */
-                  const hintId = `property-hint-${definition.key}`;
-                  return (
-                    <label className="property-field" key={definition.key}>
-                      {/* The label says what the setting does; the raw key stays
-                          beside it because that is what every wiki, tutorial and
-                          the file itself calls it. */}
-                      <span className="property-field-name">
-                        {label}
-                        <code>{definition.key}</code>
-                      </span>
+            <SettingSection
+              key={group}
+              order={3}
+              title={t(`properties.group.${group}`)}
+            >
+              {definitions.map((definition) => {
+                const error = form.formState.errors[definition.key]?.message;
+                const options = selectOptions(definition.kind);
+                const label = t(propertyLabelKey(definition.key));
+                /* The hint is the part that explains the consequence, and it
+                   reached nobody using a screen reader until it was bound to
+                   the control. */
+                const hintId = `property-hint-${definition.key}`;
+                return (
+                  <SettingRow
+                    key={definition.key}
+                    /* The label says what the setting does; the raw key stays
+                       beside it because that is what every wiki, tutorial and
+                       the file itself calls it. */
+                    label={
+                      <>
+                        {label}{" "}
+                        <Text span ff="monospace" fz="xs" c="dimmed" fw={400}>
+                          {definition.key}
+                        </Text>
+                      </>
+                    }
+                    description={
+                      error ? (
+                        <Text span inherit c="red" role="alert">
+                          {error}
+                        </Text>
+                      ) : (
+                        <span id={hintId}>
+                          {t(propertyHintKey(definition.key))}
+                        </span>
+                      )
+                    }
+                  >
+                    <Box w={220}>
                       {options ? (
                         <Select
                           ariaLabel={label}
@@ -398,54 +434,52 @@ export function ServerPropertiesEditor({
                           }
                         />
                       ) : (
-                        <TextField
+                        <TextInput
                           aria-describedby={error ? undefined : hintId}
-                          aria-invalid={Boolean(error)}
                           aria-label={label}
+                          error={Boolean(error)}
                           value={values[definition.key]}
                           onChange={(event) =>
-                            updateValue(definition.key, event.target.value)
+                            updateValue(
+                              definition.key,
+                              event.currentTarget.value,
+                            )
                           }
                         />
                       )}
-                      {error ? (
-                        <small className="danger-text" role="alert">
-                          {error}
-                        </small>
-                      ) : (
-                        <small className="property-field-hint" id={hintId}>
-                          {t(propertyHintKey(definition.key))}
-                        </small>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
+                    </Box>
+                  </SettingRow>
+                );
+              })}
+            </SettingSection>
           ))}
           {groupedDefinitions.length === 0 ? (
-            <p className="settings-notice">{t("properties.searchEmpty")}</p>
+            <Text size="sm" c="dimmed">
+              {t("properties.searchEmpty")}
+            </Text>
           ) : null}
           {saveMutation.error ? (
-            <p className="danger-text" role="alert">
+            <Alert color="red" role="alert">
               {saveMutation.error.message}
-            </p>
+            </Alert>
           ) : null}
           {restartRequired ? (
-            <p className="settings-notice" role="status">
+            <Alert color="yellow" role="status">
               {t("properties.restartRequired")}
-            </p>
+            </Alert>
           ) : null}
-          <Button
-            disabled={saveMutation.isPending || !form.formState.isDirty}
-            type="submit"
-            variant="primary"
-          >
-            <Save aria-hidden="true" size={15} />
-            {t("properties.save")}
-          </Button>
-        </form>
+          <Group>
+            <Button
+              disabled={saveMutation.isPending || !form.formState.isDirty}
+              type="submit"
+              variant="primary"
+            >
+              <Save aria-hidden="true" size={16} />
+              {t("properties.save")}
+            </Button>
+          </Group>
+        </Stack>
       ) : null}
-    </section>
+    </Stack>
   );
 }

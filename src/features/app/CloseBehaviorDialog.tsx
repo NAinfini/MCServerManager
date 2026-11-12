@@ -1,3 +1,4 @@
+import { Stack, Text } from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import { useAppSettings } from "../../i18n";
@@ -27,7 +28,6 @@ export function CloseBehaviorDialog({
   return (
     <DialogSurface
       open={isOpen}
-      className="close-dialog"
       description={t("close.description")}
       footer={
         <>
@@ -42,21 +42,22 @@ export function CloseBehaviorDialog({
           </Button>
         </>
       }
-      footerClassName="close-dialog-actions"
       title={t("close.title")}
       onOpenChange={(open) => !open && onCancel()}
       header={({ description, title }) => (
-        <div className="close-dialog-copy">
-          <p className="eyebrow">{t("close.eyebrow")}</p>
+        <Stack gap={4}>
+          <Text c="dimmed" fw={600} size="xs">
+            {t("close.eyebrow")}
+          </Text>
           {title}
           {description}
           {hasUnknownRuntimeStatus ? (
-            <p className="close-dialog-runtime-note">
+            <Text c="dimmed" mt="xs" size="sm">
               {t("close.unknownRuntime")}
-            </p>
+            </Text>
           ) : null}
           {hasRunningServers ? (
-            <p className="close-dialog-warning" role="alert">
+            <Text c="yellow" mt="xs" role="alert" size="sm">
               {t(
                 runningServerCount === 1
                   ? "close.runningWarning.one"
@@ -65,14 +66,14 @@ export function CloseBehaviorDialog({
                   count: runningServerCount ?? 0,
                 },
               )}
-            </p>
+            </Text>
           ) : null}
           {operationError ? (
-            <p className="close-dialog-error" role="alert">
+            <Text c="red" mt="xs" role="alert" size="sm">
               {operationError}
-            </p>
+            </Text>
           ) : null}
-        </div>
+        </Stack>
       )}
     />
   );

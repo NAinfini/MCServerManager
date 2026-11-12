@@ -1,4 +1,16 @@
 import { type FormEvent, type ReactNode, useEffect, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Box,
+  ButtonGroup,
+  Card,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -7,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Download,
   FolderOpen,
   Package,
   Plug,
@@ -15,10 +28,8 @@ import {
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
-import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
 import { Select, type SelectOption } from "../../components/ui/select";
-import { TextField } from "../../components/ui/text-field";
 import type { ServerProfile } from "../../domain/server";
 import { useAppSettings } from "../../i18n";
 import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
@@ -27,9 +38,10 @@ import {
   type InstalledContent,
 } from "../content/contentApi";
 import { contentKeys } from "../content/queries";
+import { LoaderPill } from "../loaders/LoaderIdentity";
 import type { LoaderType } from "../servers/types";
 import { InstallDialog } from "./InstallDialog";
-import { ProjectDetails } from "./ProjectDetails";
+import { ProjectDetails, ProjectIcon } from "./ProjectDetails";
 import {
   getBbsmcProject,
   getHangarProject,
@@ -52,13 +64,12 @@ import {
   type ProjectVersion,
 } from "./marketplaceApi";
 import {
-  getMarketplaceProviderBranding,
   marketplaceDiscoveryQueries,
+  marketplaceProviderOption,
   type MarketplaceProvider,
   type ServerPackMarketplaceProvider,
 } from "./providerBranding";
 import { marketplaceKeys } from "./queries";
-import "./marketplace.css";
 
 export interface MarketplaceCreateSelection {
   provider: ServerPackMarketplaceProvider;
@@ -178,44 +189,6 @@ function installedForProject(
     }
     return false;
   });
-}
-
-function MarketplaceResultIcon({
-  fallback,
-  iconUrl,
-  provider,
-}: {
-  fallback: string;
-  iconUrl?: string | null;
-  provider: MarketplaceProvider;
-}) {
-  const [failed, setFailed] = useState(false);
-  const branding = getMarketplaceProviderBranding(provider);
-  return (
-    <span className="marketplace-result-icon">
-      {iconUrl && !failed ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          height="44"
-          referrerPolicy="no-referrer"
-          src={iconUrl}
-          width="44"
-          onError={() => setFailed(true)}
-        />
-      ) : branding?.iconSrc ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          height="44"
-          src={branding.iconSrc}
-          width="44"
-        />
-      ) : (
-        <span>{fallback.slice(0, 1).toUpperCase()}</span>
-      )}
-    </span>
-  );
 }
 
 export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
@@ -427,7 +400,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
         : hangarQuery;
   const results = activeSearch.data ?? [];
   const sourceOptions: SelectOption[] = sourcesForContentType(contentType).map(
-    (value) => ({ value, label: value }),
+    (value) => ({ ...marketplaceProviderOption(value), iconAlt: undefined }),
   );
   const loaderFilterOptions: SelectOption[] = [
     { value: "any", label: t("marketplace.loader.any") },
@@ -478,28 +451,22 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
   };
 
   return (
-    <section
-      className="marketplace-panel"
+    <Stack
       aria-label={t("marketplace.server.aria")}
+      className="marketplace-panel"
+      component="section"
+      gap="sm"
     >
       {!selectedProject && !isCreateMode ? (
-        <div className="marketplace-toolbar-row">
-          <div
-            className="marketplace-content-switch"
-            aria-label={t("marketplace.contentType.aria")}
-          >
+        <Group gap="sm" justify="space-between">
+          <ButtonGroup aria-label={t("marketplace.contentType.aria")}>
             {(["mods", "plugins", "modpacks"] as const).map((value) => {
               const Icon = contentTypeIcons[value];
               return (
-                <button
+                <Button
                   aria-pressed={contentType === value}
-                  className={
-                    contentType === value
-                      ? "marketplace-content-option marketplace-content-option-active"
-                      : "marketplace-content-option"
-                  }
                   key={value}
-                  type="button"
+                  variant={contentType === value ? "primary" : "secondary"}
                   onClick={() => {
                     setContentType(value);
                     setSource(sourcesForContentType(value)[0]);
@@ -508,311 +475,346 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                     resetSearchContext();
                   }}
                 >
-                  <Icon aria-hidden="true" size={15} />
+                  <Icon aria-hidden="true" size={16} />
                   {t(`marketplace.contentType.${value}`)}
-                </button>
+                </Button>
               );
             })}
-          </div>
-          <div
-            className="marketplace-server-filter"
-            aria-label={t("marketplace.compatibility.active")}
-          >
-            <span>
-              {t("marketplace.compatibility.minecraft", {
-                version: server?.minecraftVersion,
-              })}
-            </span>
-            <span>{server?.loaderType}</span>
-          </div>
-          {contentType !== "plugins" ? (
-            <Button
-              disabled={importFileMutation.isPending}
-              variant="secondary"
-              onClick={() => importFileMutation.mutate()}
-            >
-              <FolderOpen aria-hidden="true" size={15} />
-              {t("marketplace.manual.importFile")}
-            </Button>
-          ) : null}
-        </div>
+          </ButtonGroup>
+          <Group gap="xs">
+            <Group aria-label={t("marketplace.compatibility.active")} gap={4}>
+              <Badge color="gray" tt="none" variant="light">
+                {t("marketplace.compatibility.minecraft", {
+                  version: server?.minecraftVersion,
+                })}
+              </Badge>
+              {server ? <LoaderPill loaderType={server.loaderType} /> : null}
+            </Group>
+            {contentType !== "plugins" ? (
+              <Button
+                disabled={importFileMutation.isPending}
+                variant="secondary"
+                onClick={() => importFileMutation.mutate()}
+              >
+                <FolderOpen aria-hidden="true" size={16} />
+                {t("marketplace.manual.importFile")}
+              </Button>
+            ) : null}
+          </Group>
+        </Group>
       ) : null}
 
       {!selectedProject ? (
-        <form className="marketplace-search-row" onSubmit={handleSubmit}>
-          <Select
-            ariaLabel={t("marketplace.source")}
-            name="marketplace-source"
-            options={sourceOptions}
-            value={source}
-            onValueChange={(value) => {
-              const nextSource = value as MarketplaceProvider;
-              setSource(nextSource);
-              setPage(0);
-              if (
-                isCreateMode &&
-                query.trim() === "" &&
-                nextSource !== "Hangar"
-              ) {
-                setSubmittedQuery(
-                  marketplaceDiscoveryQueries[
-                    nextSource as ServerPackMarketplaceProvider
-                  ],
-                );
-              }
-            }}
-          />
-          <TextField
+        <Group component="form" gap="xs" onSubmit={handleSubmit}>
+          <Box w={150}>
+            <Select
+              ariaLabel={t("marketplace.source")}
+              name="marketplace-source"
+              options={sourceOptions}
+              value={source}
+              onValueChange={(value) => {
+                const nextSource = value as MarketplaceProvider;
+                setSource(nextSource);
+                setPage(0);
+                if (
+                  isCreateMode &&
+                  query.trim() === "" &&
+                  nextSource !== "Hangar"
+                ) {
+                  setSubmittedQuery(
+                    marketplaceDiscoveryQueries[
+                      nextSource as ServerPackMarketplaceProvider
+                    ],
+                  );
+                }
+              }}
+            />
+          </Box>
+          <TextInput
             aria-label={t("marketplace.search.aria")}
+            flex={1}
+            leftSection={<Search aria-hidden="true" size={16} />}
+            miw={220}
             name="marketplace-query"
             placeholder={searchPlaceholder}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => setQuery(event.currentTarget.value)}
           />
-          <Select
-            ariaLabel={t("marketplace.loaderFilter")}
-            name="marketplace-loader"
-            options={loaderFilterOptions}
-            value={loaderFilter}
-            onValueChange={(value) => {
-              setLoaderFilter(value as MarketplaceLoaderFilter);
-              setPage(0);
-            }}
-          />
-          <Select
-            ariaLabel={t("marketplace.sortOrder")}
-            name="marketplace-sort"
-            options={sortOrderOptions}
-            value={sortOrder}
-            onValueChange={(value) => {
-              setSortOrder(value as MarketplaceSortOrder);
-              setPage(0);
-            }}
-          />
+          <Box w={140}>
+            <Select
+              ariaLabel={t("marketplace.loaderFilter")}
+              name="marketplace-loader"
+              options={loaderFilterOptions}
+              value={loaderFilter}
+              onValueChange={(value) => {
+                setLoaderFilter(value as MarketplaceLoaderFilter);
+                setPage(0);
+              }}
+            />
+          </Box>
+          <Box w={150}>
+            <Select
+              ariaLabel={t("marketplace.sortOrder")}
+              name="marketplace-sort"
+              options={sortOrderOptions}
+              value={sortOrder}
+              onValueChange={(value) => {
+                setSortOrder(value as MarketplaceSortOrder);
+                setPage(0);
+              }}
+            />
+          </Box>
           <Button
             disabled={query.trim() === "" || activeSearch.isFetching}
             type="submit"
             variant="primary"
           >
-            <Search aria-hidden="true" size={15} />
+            <Search aria-hidden="true" size={16} />
             {t("marketplace.search.button")}
           </Button>
-        </form>
+        </Group>
       ) : null}
 
       {importFileMutation.error ? (
-        <div className="inline-error" role="alert">
-          {importFileMutation.error.message}
-        </div>
+        <Alert color="red">{importFileMutation.error.message}</Alert>
       ) : null}
 
       {!selectedProject ? (
-        <div className="marketplace-layout">
-          <section
-            className="marketplace-results"
-            aria-label={t("marketplace.results.aria")}
-          >
+        <Stack gap="sm">
+          <Box aria-label={t("marketplace.results.aria")} component="section">
             {activeSearch.isFetching ? (
               <LoadingState
                 message={t("marketplace.searching", { provider: source })}
               />
             ) : activeSearch.error ? (
-              <div
-                aria-label={t("marketplace.search.loadError")}
-                className="list-state list-state-error"
-                role="alert"
-              >
-                <strong>{t("marketplace.search.loadError")}</strong>
-                <span>{activeSearch.error.message}</span>
-                <Button
-                  variant="secondary"
-                  onClick={() => activeSearch.refetch()}
-                >
-                  <RefreshCw aria-hidden="true" size={15} />
-                  {t("common.retry")}
-                </Button>
-              </div>
-            ) : !searchEnabled ? (
-              <EmptyState
-                illustration="/illustrations/no-results.png"
-                title={t("marketplace.empty.search.title")}
-                description={emptyDescription}
-              />
-            ) : results.length === 0 ? (
-              <EmptyState
-                illustration="/illustrations/no-results.png"
-                title={t("marketplace.empty.results.title")}
-                description={emptyDescription}
-              />
-            ) : (
-              results.map((project) => {
-                const installed = installedForProject(
-                  installedQuery.data ?? [],
-                  project,
-                  source,
-                );
-                return (
-                  <button
-                    className="marketplace-result"
-                    key={`${source}-${project.id}`}
-                    type="button"
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setSelectedProvider(source);
-                      setSelectedVersionId(null);
-                      setInstalledResult(null);
-                      setInstallAnyway(false);
-                      installMutation.reset();
-                    }}
+              <Alert color="red" title={t("marketplace.search.loadError")}>
+                <Stack align="flex-start" gap="xs">
+                  <Text size="sm">{activeSearch.error.message}</Text>
+                  <Button
+                    variant="secondary"
+                    onClick={() => activeSearch.refetch()}
                   >
-                    <MarketplaceResultIcon
-                      fallback={project.title}
-                      iconUrl={project.iconUrl}
-                      provider={source}
-                    />
-                    <span className="marketplace-result-body">
-                      <strong>{project.title}</strong>
-                      <span>{project.description}</span>
-                      <span className="marketplace-result-meta">
-                        <span>{source}</span>
-                        {typeof project.downloads === "number" ? (
-                          <span>
-                            {t("marketplace.downloads", {
-                              count: formatCompactNumber(project.downloads),
-                            })}
-                          </span>
-                        ) : null}
-                        {project.gameVersions[0] ? (
-                          <span>{project.gameVersions[0]}</span>
-                        ) : null}
-                        {project.loaders[0] ? (
-                          <span>{project.loaders[0]}</span>
-                        ) : null}
-                      </span>
-                    </span>
-                    <span className="marketplace-result-status">
-                      {!isCreateMode ? (
-                        <span className="marketplace-compatible-mark">
-                          <CheckCircle2 aria-hidden="true" size={14} />
-                          {t("marketplace.compatibility.match")}
-                        </span>
-                      ) : null}
-                      {installed.length === 1 ? (
-                        <span>{t("marketplace.installed")}</span>
-                      ) : installed.length > 1 ? (
-                        <span className="marketplace-duplicate-mark">
-                          <CircleAlert aria-hidden="true" size={14} />
-                          {t("marketplace.duplicate", {
-                            count: installed.length,
-                          })}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                );
-              })
+                    <RefreshCw aria-hidden="true" size={16} />
+                    {t("common.retry")}
+                  </Button>
+                </Stack>
+              </Alert>
+            ) : !searchEnabled || results.length === 0 ? (
+              <Stack gap={2} p="md">
+                <Text fw={600} size="sm">
+                  {!searchEnabled
+                    ? t("marketplace.empty.search.title")
+                    : t("marketplace.empty.results.title")}
+                </Text>
+                <Text c="dimmed" size="sm">
+                  {emptyDescription}
+                </Text>
+              </Stack>
+            ) : (
+              <SimpleGrid cols={{ base: 1, xl: 2 }} spacing="xs">
+                {results.map((project) => {
+                  const installed = installedForProject(
+                    installedQuery.data ?? [],
+                    project,
+                    source,
+                  );
+                  return (
+                    <Card
+                      component="button"
+                      key={`${source}-${project.id}`}
+                      padding="sm"
+                      style={{ cursor: "pointer", textAlign: "left" }}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProject(project);
+                        setSelectedProvider(source);
+                        setSelectedVersionId(null);
+                        setInstalledResult(null);
+                        setInstallAnyway(false);
+                        installMutation.reset();
+                      }}
+                    >
+                      <Group align="flex-start" gap="sm" wrap="nowrap">
+                        <ProjectIcon
+                          iconUrl={project.iconUrl}
+                          provider={source}
+                          size={44}
+                          title={project.title}
+                        />
+                        <Stack flex={1} gap={2} miw={0}>
+                          <Group gap="xs" justify="space-between" wrap="nowrap">
+                            <Text fw={600} size="sm" truncate>
+                              {project.title}
+                            </Text>
+                            <Group gap={4} wrap="nowrap">
+                              {!isCreateMode ? (
+                                <Badge
+                                  color="gray"
+                                  leftSection={
+                                    <CheckCircle2 aria-hidden="true" size={12} />
+                                  }
+                                  size="sm"
+                                  tt="none"
+                                  variant="light"
+                                >
+                                  {t("marketplace.compatibility.match")}
+                                </Badge>
+                              ) : null}
+                              {installed.length === 1 ? (
+                                <Badge size="sm" tt="none" variant="light">
+                                  {t("marketplace.installed")}
+                                </Badge>
+                              ) : installed.length > 1 ? (
+                                <Badge
+                                  color="yellow"
+                                  leftSection={
+                                    <CircleAlert aria-hidden="true" size={12} />
+                                  }
+                                  size="sm"
+                                  tt="none"
+                                  variant="light"
+                                >
+                                  {t("marketplace.duplicate", {
+                                    count: installed.length,
+                                  })}
+                                </Badge>
+                              ) : null}
+                            </Group>
+                          </Group>
+                          <Text c="dimmed" lineClamp={2} size="xs">
+                            {project.description}
+                          </Text>
+                          <Group c="dimmed" fz="xs" gap="sm" mt={2}>
+                            <span>{source}</span>
+                            {typeof project.downloads === "number" ? (
+                              <Group gap={4} wrap="nowrap">
+                                <Download aria-hidden="true" size={12} />
+                                {t("marketplace.downloads", {
+                                  count: formatCompactNumber(project.downloads),
+                                })}
+                              </Group>
+                            ) : null}
+                            {project.gameVersions[0] ? (
+                              <Badge
+                                color="gray"
+                                size="xs"
+                                tt="none"
+                                variant="outline"
+                              >
+                                {project.gameVersions[0]}
+                              </Badge>
+                            ) : null}
+                            {project.loaders[0] ? (
+                              <Badge
+                                color="gray"
+                                size="xs"
+                                tt="none"
+                                variant="outline"
+                              >
+                                {project.loaders[0]}
+                              </Badge>
+                            ) : null}
+                          </Group>
+                        </Stack>
+                      </Group>
+                    </Card>
+                  );
+                })}
+              </SimpleGrid>
             )}
-          </section>
+          </Box>
           {searchEnabled &&
           !activeSearch.error &&
           !activeSearch.isFetching &&
           results.length > 0 ? (
-            <nav
-              className="marketplace-pagination"
+            <Group
               aria-label={t("marketplace.pagination.aria")}
+              component="nav"
+              gap="sm"
+              justify="center"
             >
               <Button
                 disabled={page === 0}
                 variant="secondary"
                 onClick={() => setPage((value) => value - 1)}
               >
-                <ChevronLeft aria-hidden="true" size={15} />
+                <ChevronLeft aria-hidden="true" size={16} />
                 {t("common.previous")}
               </Button>
-              <span>
+              <Text c="dimmed" size="sm">
                 {t("marketplace.pagination.page", { page: page + 1 })}
-              </span>
+              </Text>
               <Button
                 disabled={results.length < PAGE_SIZE}
                 variant="secondary"
                 onClick={() => setPage((value) => value + 1)}
               >
                 {t("common.next")}
-                <ChevronRight aria-hidden="true" size={15} />
+                <ChevronRight aria-hidden="true" size={16} />
               </Button>
-            </nav>
+            </Group>
           ) : null}
-        </div>
+        </Stack>
       ) : (
-        <div className="marketplace-layout marketplace-layout-has-selection marketplace-layout-detail-mode">
-          <div className="marketplace-detail-pane">
-            <div className="marketplace-detail-bar">
-              <Button
-                className="marketplace-details-back"
-                type="button"
-                variant="ghost"
-                onClick={resetSelection}
-              >
-                <ArrowLeft aria-hidden="true" size={15} />
+        <Box className="marketplace-layout marketplace-layout-has-selection marketplace-layout-detail-mode">
+          <Stack className="marketplace-detail-pane" gap="sm">
+            <Group gap="sm">
+              <Button variant="ghost" onClick={resetSelection}>
+                <ArrowLeft aria-hidden="true" size={16} />
                 {t("marketplace.backToResults")}
               </Button>
-              <span className="marketplace-detail-bar-source">
+              <Badge color="gray" tt="none" variant="light">
                 {selectedProvider}
-              </span>
+              </Badge>
               {!isCreateMode && server ? (
-                <span className="marketplace-detail-compatibility">
+                <Text c="dimmed" ff="monospace" size="xs">
                   {server.minecraftVersion} / {server.loaderType}
-                </span>
+                </Text>
               ) : null}
               {isCreateMode && props.detailAction ? (
-                <span className="marketplace-detail-bar-action">
-                  {props.detailAction}
-                </span>
+                <Box ml="auto">{props.detailAction}</Box>
               ) : null}
-            </div>
+            </Group>
 
             {selectedInstalled.length > 0 ? (
-              <div className="marketplace-installed-note" role="status">
-                <CheckCircle2 aria-hidden="true" size={16} />
-                <span>
-                  {selectedInstalled.length === 1
-                    ? t("marketplace.installed.detail", {
-                        version:
-                          selectedInstalled[0].version ?? t("common.unknown"),
-                      })
-                    : t("marketplace.duplicate.detail", {
-                        count: selectedInstalled.length,
-                      })}
-                </span>
-              </div>
+              <Alert
+                icon={<CheckCircle2 aria-hidden="true" size={16} />}
+                role="status"
+              >
+                {selectedInstalled.length === 1
+                  ? t("marketplace.installed.detail", {
+                      version:
+                        selectedInstalled[0].version ?? t("common.unknown"),
+                    })
+                  : t("marketplace.duplicate.detail", {
+                      count: selectedInstalled.length,
+                    })}
+              </Alert>
             ) : null}
             {installedResult ? (
-              <div
-                className="marketplace-install-result"
-                role="status"
+              <Alert
                 aria-live="polite"
+                icon={<CheckCircle2 aria-hidden="true" size={16} />}
+                role="status"
+                title={t("marketplace.install.success", {
+                  name: installedResult.name,
+                })}
               >
-                <CheckCircle2 aria-hidden="true" size={16} />
-                <span>
-                  <strong>
-                    {t("marketplace.install.success", {
-                      name: installedResult.name,
-                    })}
-                  </strong>
-                  {t("marketplace.install.restartRequired")}
-                </span>
-              </div>
+                {t("marketplace.install.restartRequired")}
+              </Alert>
             ) : null}
             {projectQuery.error ? (
-              <div className="inline-error" role="alert">
-                <span>{projectQuery.error.message}</span>
-                <Button
-                  variant="secondary"
-                  onClick={() => projectQuery.refetch()}
-                >
-                  {t("common.retry")}
-                </Button>
-              </div>
+              <Alert color="red">
+                <Stack align="flex-start" gap="xs">
+                  <Text size="sm">{projectQuery.error.message}</Text>
+                  <Button
+                    variant="secondary"
+                    onClick={() => projectQuery.refetch()}
+                  >
+                    {t("common.retry")}
+                  </Button>
+                </Stack>
+              </Alert>
             ) : null}
 
             <ProjectDetails
@@ -823,22 +825,24 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
               versions={versions}
               versionsError={
                 versionsQuery.error ? (
-                  <div className="list-state list-state-error" role="alert">
-                    <strong>{t("marketplace.versions.loadError")}</strong>
-                    <span>{versionsQuery.error.message}</span>
-                    <Button
-                      variant="secondary"
-                      onClick={() => versionsQuery.refetch()}
-                    >
-                      {t("common.retry")}
-                    </Button>
-                  </div>
+                  <Alert color="red" title={t("marketplace.versions.loadError")}>
+                    <Stack align="flex-start" gap="xs">
+                      <Text size="sm">{versionsQuery.error.message}</Text>
+                      <Button
+                        variant="secondary"
+                        onClick={() => versionsQuery.refetch()}
+                      >
+                        {t("common.retry")}
+                      </Button>
+                    </Stack>
+                  </Alert>
                 ) : undefined
               }
               versionAction={
                 selectedVersion ? (
                   isCreateMode ? (
                     <Button
+                      style={{ width: "100%" }}
                       variant="primary"
                       onClick={() => {
                         const selection: MarketplaceCreateSelection = {
@@ -864,6 +868,7 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                       disabled={
                         selectedVersionInstalled || installMutation.isPending
                       }
+                      style={{ width: "100%" }}
                       variant="primary"
                       onClick={() => {
                         setInstalledResult(null);
@@ -876,9 +881,9 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                     </Button>
                   )
                 ) : (
-                  <p className="marketplace-version-hint">
+                  <Text c="dimmed" size="xs">
                     {t("marketplace.selectVersionHint")}
-                  </p>
+                  </Text>
                 )
               }
               onSelectVersion={(versionId) => {
@@ -904,13 +909,12 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
                 onInstall={() => installMutation.mutate(selectedVersion)}
               />
             ) : null}
-          </div>
-        </div>
+          </Stack>
+        </Box>
       )}
 
       <DialogSurface
         open={pendingCreateSelection !== null}
-        className="confirm-danger-dialog"
         description={t("marketplace.unverifiedDialog.description")}
         footer={
           <>
@@ -938,6 +942,6 @@ export function MarketplaceBrowser(props: MarketplaceBrowserProps) {
           if (!open) setPendingCreateSelection(null);
         }}
       />
-    </section>
+    </Stack>
   );
 }

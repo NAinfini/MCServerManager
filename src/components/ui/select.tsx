@@ -1,6 +1,4 @@
-import * as SelectPrimitive from "@radix-ui/react-select";
-import { Check, ChevronDown } from "lucide-react";
-import { useId } from "react";
+import { Select as MantineSelect } from "@mantine/core";
 import { useAppSettings } from "../../i18n";
 
 export interface SelectOption {
@@ -22,6 +20,29 @@ interface SelectProps {
   onValueChange: (value: string) => void;
 }
 
+function OptionIcon({ option }: { option: SelectOption | undefined }) {
+  if (option?.iconSrc) {
+    return (
+      <img
+        alt={option.iconAlt ?? ""}
+        aria-hidden={option.iconAlt ? undefined : "true"}
+        className="select-option-icon"
+        height="18"
+        src={option.iconSrc}
+        width="18"
+      />
+    );
+  }
+  if (option?.iconText) {
+    return (
+      <span className="select-option-icon select-option-fallback" aria-hidden>
+        {option.iconText}
+      </span>
+    );
+  }
+  return null;
+}
+
 export function Select({
   ariaLabel,
   describedBy,
@@ -33,86 +54,34 @@ export function Select({
   value,
 }: SelectProps) {
   const { t } = useAppSettings();
-  const generatedName = useId();
-  const selectedOption = options.find((option) => option.value === value);
-  const resolvedPlaceholder = placeholder ?? t("common.select");
-
-  const renderOptionIcon = (
-    option: SelectOption | undefined,
-    className: string,
-  ) => {
-    if (!option) {
-      return null;
-    }
-
-    if (option.iconSrc) {
-      return (
-        <img
-          alt={option.iconAlt ?? ""}
-          aria-hidden={option.iconAlt ? undefined : "true"}
-          className={className}
-          height="18"
-          src={option.iconSrc}
-          width="18"
-        />
-      );
-    }
-
-    if (option.iconText) {
-      return (
-        <span className={`${className} select-option-fallback`} aria-hidden>
-          {option.iconText}
-        </span>
-      );
-    }
-
-    return null;
-  };
+  const byValue = new Map(options.map((option) => [option.value, option]));
+  const selected = byValue.get(value);
+  const hasIcons = options.some((option) => option.iconSrc || option.iconText);
 
   return (
-    <SelectPrimitive.Root
+    <MantineSelect
+      aria-describedby={describedBy}
+      aria-label={ariaLabel}
+      comboboxProps={{ withinPortal: true }}
+      data={options.map(({ label, value }) => ({ label, value }))}
       disabled={disabled}
-      name={name ?? generatedName}
-      value={value}
-      onValueChange={onValueChange}
-    >
-      <SelectPrimitive.Trigger
-        aria-describedby={describedBy}
-        aria-label={ariaLabel}
-        className="select-trigger motion-control motion-press"
-      >
-        <span className="select-trigger-value">
-          {renderOptionIcon(selectedOption, "select-option-icon")}
-          <SelectPrimitive.Value placeholder={resolvedPlaceholder} />
-        </span>
-        <SelectPrimitive.Icon asChild>
-          <ChevronDown aria-hidden="true" size={15} />
-        </SelectPrimitive.Icon>
-      </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal>
-        <SelectPrimitive.Content
-          className="select-content motion-popover"
-          position="popper"
-        >
-          <SelectPrimitive.Viewport className="select-viewport">
-            {options.map((option) => (
-              <SelectPrimitive.Item
-                className="select-item motion-option"
-                key={option.value}
-                value={option.value}
-              >
-                {renderOptionIcon(option, "select-option-icon")}
-                <SelectPrimitive.ItemText>
-                  {option.label}
-                </SelectPrimitive.ItemText>
-                <SelectPrimitive.ItemIndicator className="select-indicator">
-                  <Check aria-hidden="true" size={13} />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Viewport>
-        </SelectPrimitive.Content>
-      </SelectPrimitive.Portal>
-    </SelectPrimitive.Root>
+      leftSection={hasIcons ? <OptionIcon option={selected} /> : undefined}
+      name={name}
+      placeholder={placeholder ?? t("common.select")}
+      renderOption={
+        hasIcons
+          ? ({ option }) => (
+              <span className="select-option-row">
+                <OptionIcon option={byValue.get(option.value)} />
+                {option.label}
+              </span>
+            )
+          : undefined
+      }
+      value={value || null}
+      onChange={(next) => {
+        if (next !== null) onValueChange(next);
+      }}
+    />
   );
 }

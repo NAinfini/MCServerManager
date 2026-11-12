@@ -1,22 +1,32 @@
 ﻿import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ListPlus,
+  ListX,
   Shield,
-  ShieldCheck,
   ShieldOff,
   Plus,
   UserMinus,
   UserX,
   X,
 } from "lucide-react";
-import { AttentionBar } from "../../components/ui/attention-bar";
+import {
+  Alert,
+  Button as MantineButton,
+  Checkbox,
+  Group,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Tooltip,
+} from "@mantine/core";
 import { Button } from "../../components/ui/button";
 import { EmptyState } from "../../components/ui/empty-state";
 import { PlayerHead } from "../../components/ui/player-head";
 import { navigateTo } from "../../app/router";
 import { LoadingState } from "../../components/ui/loading-state";
-import { TextField } from "../../components/ui/text-field";
-import { Checkbox } from "../../components/ui/checkbox";
 import { DialogSurface } from "../../components/ui/dialog-surface";
 import {
   DataTable,
@@ -65,12 +75,12 @@ const playerActionDefinitions: Record<
   whitelistAdd: {
     action: "whitelistAdd",
     labelKey: "players.action.whitelistAdd",
-    icon: ShieldCheck,
+    icon: ListPlus,
   },
   whitelistRemove: {
     action: "whitelistRemove",
     labelKey: "players.action.whitelistRemove",
-    icon: ShieldOff,
+    icon: ListX,
   },
   banIp: { action: "banIp", labelKey: "players.action.banIp", icon: UserX },
   pardonIp: {
@@ -179,15 +189,21 @@ export function PlayersView({ server, view }: PlayersViewProps) {
 
   if (playersQuery.error) {
     return (
-      <section className="players-panel" aria-label={t("server.tabs.players")}>
-        <div className="list-state list-state-error" role="alert">
-          <strong>{t("players.loadError.title")}</strong>
-          <span>{playersQuery.error.message}</span>
-          <Button variant="secondary" onClick={() => playersQuery.refetch()}>
-            {t("common.retry")}
-          </Button>
-        </div>
-      </section>
+      <Stack aria-label={t("server.tabs.players")} component="section">
+        <Alert
+          color="red"
+          role="alert"
+          title={t("players.loadError.title")}
+          variant="light"
+        >
+          <Stack align="flex-start" gap="xs">
+            <Text size="sm">{playersQuery.error.message}</Text>
+            <Button variant="secondary" onClick={() => playersQuery.refetch()}>
+              {t("common.retry")}
+            </Button>
+          </Stack>
+        </Alert>
+      </Stack>
     );
   }
 
@@ -244,9 +260,11 @@ export function PlayersView({ server, view }: PlayersViewProps) {
             selectablePlayers.length > 0 &&
             selectedPlayers.length === selectablePlayers.length
           }
-          onCheckedChange={(checked) =>
+          onChange={(event) =>
             setSelectedNames(
-              checked ? selectablePlayers.map((player) => player.username) : [],
+              event.currentTarget.checked
+                ? selectablePlayers.map((player) => player.username)
+                : [],
             )
           }
         />
@@ -257,7 +275,8 @@ export function PlayersView({ server, view }: PlayersViewProps) {
             aria-label={t("players.batch.select", { player: player.username })}
             disabled={!canApplyActions || batchMutation.isPending}
             checked={selectedNames.includes(player.username)}
-            onCheckedChange={(checked) =>
+            onChange={(event) => {
+              const checked = event.currentTarget.checked;
               setSelectedNames((names) =>
                 checked
                   ? [
@@ -265,8 +284,8 @@ export function PlayersView({ server, view }: PlayersViewProps) {
                       player.username,
                     ]
                   : names.filter((name) => name !== player.username),
-              )
-            }
+              );
+            }}
           />
         ),
     },
@@ -274,33 +293,39 @@ export function PlayersView({ server, view }: PlayersViewProps) {
       id: "player",
       header: t("players.table.player"),
       rowHeader: true,
-      cellClassName: "player-identity-cell",
       cell: (player) =>
         player.kind === "ip" ? (
-          player.username
-        ) : (
-          <span className="player-identity">
-            <PlayerHead username={player.username} uuid={player.uuid} />
+          <Text ff="monospace" size="sm">
             {player.username}
-          </span>
+          </Text>
+        ) : (
+          <Group gap="xs" wrap="nowrap">
+            <PlayerHead username={player.username} uuid={player.uuid} />
+            <Text fw={500} size="sm">
+              {player.username}
+            </Text>
+          </Group>
         ),
     },
     {
       id: "uuid",
       header: t("players.table.uuid"),
-      cell: (player) => player.uuid ?? t("players.state.unknown"),
+      cell: (player) => (
+        <Text c="dimmed" ff="monospace" size="xs">
+          {player.uuid ?? t("players.state.unknown")}
+        </Text>
+      ),
     },
     {
       id: "state",
       header: t("players.table.state"),
-      cell: (player) => statusText(player, t),
+      cell: (player) => <Text size="sm">{statusText(player, t)}</Text>,
     },
     {
       id: "actions",
       header: t("players.table.actions"),
-      headerClassName: "data-table-header-end",
       cell: (player) => (
-        <div className="player-actions">
+        <Group gap={4} justify="flex-end" wrap="nowrap">
           {actionsFor(player).map((action) => {
             const { labelKey, icon: Icon } = playerActionDefinitions[action];
             const label = t(labelKey);
@@ -309,72 +334,78 @@ export function PlayersView({ server, view }: PlayersViewProps) {
               batchMutation.isPending ||
               actionMutation.isPending ||
               (action === "kick" && processStatus !== "running");
+            const dangerous =
+              action === "ban" || action === "banIp" || action === "kick";
             return (
-              <Button
+              <Tooltip
+                disabled={!disabled}
                 key={action}
-                aria-label={`${label} ${player.username}`}
-                disabled={disabled}
-                title={disabled ? t("players.action.disabledTitle") : label}
-                variant={
-                  action === "ban" || action === "banIp" || action === "kick"
-                    ? "danger"
-                    : "ghost"
-                }
-                onClick={() => {
-                  actionMutation.reset();
-                  setPendingAction({ player, action });
-                }}
+                label={t("players.action.disabledTitle")}
               >
-                <Icon aria-hidden="true" size={14} />
-                {/* Deop and Unwhitelist share an icon, so the glyph alone was
-                    not enough to tell the two buttons apart. */}
-                <span>{label}</span>
-              </Button>
+                {/* A visible label, not an icon alone: a row offers up to four
+                    actions and the glyphs are too alike to tell apart. */}
+                <MantineButton
+                  aria-label={`${label} ${player.username}`}
+                  color={dangerous ? "red" : "gray"}
+                  disabled={disabled}
+                  leftSection={<Icon aria-hidden="true" size={14} />}
+                  size="compact-sm"
+                  variant={dangerous ? "light" : "subtle"}
+                  onClick={() => {
+                    actionMutation.reset();
+                    setPendingAction({ player, action });
+                  }}
+                >
+                  {label}
+                </MantineButton>
+              </Tooltip>
             );
           })}
-        </div>
+        </Group>
       ),
     },
   ];
 
   return (
-    <section className="players-panel" aria-label={t("server.tabs.players")}>
-      <div className="players-toolbar">
-        <div>
-          <strong>{t("players.knownCount", { count: players.length })}</strong>
-          <span>
+    <Stack aria-label={t("server.tabs.players")} component="section" gap="sm">
+      <Group align="center" justify="space-between" wrap="nowrap">
+        <Stack gap={2} miw={0}>
+          <Text fw={600} size="sm">
+            {t("players.knownCount", { count: players.length })}
+          </Text>
+          <Text c="dimmed" size="xs">
             {processStatus === "running"
               ? t("players.actionsThroughStdin")
               : t("players.offlineChange")}
-          </span>
-        </div>
-        <div className="players-toolbar-actions">
-          {view && view !== "online" ? (
-            <form
-              className="players-add-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const player = newPlayer.trim();
-                if (!player) return;
-                setPendingAction({
-                  player: {
-                    username: player,
-                    kind: addAction === "banIp" ? "ip" : "player",
-                    online: false,
-                    operator: false,
-                    whitelisted: false,
-                    banned: false,
-                  },
-                  action: addAction,
-                });
-                setNewPlayer("");
-              }}
-            >
-              <TextField
+          </Text>
+        </Stack>
+        {view && view !== "online" ? (
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              const player = newPlayer.trim();
+              if (!player) return;
+              setPendingAction({
+                player: {
+                  username: player,
+                  kind: addAction === "banIp" ? "ip" : "player",
+                  online: false,
+                  operator: false,
+                  whitelisted: false,
+                  banned: false,
+                },
+                action: addAction,
+              });
+              setNewPlayer("");
+            }}
+          >
+            <Group gap="xs" wrap="nowrap">
+              <TextInput
                 aria-label={t("players.add.placeholder")}
                 placeholder={t("players.add.placeholder")}
                 value={newPlayer}
-                onChange={(event) => setNewPlayer(event.target.value)}
+                w={220}
+                onChange={(event) => setNewPlayer(event.currentTarget.value)}
               />
               <Button
                 disabled={
@@ -383,66 +414,73 @@ export function PlayersView({ server, view }: PlayersViewProps) {
                   actionMutation.isPending ||
                   batchMutation.isPending
                 }
+                style={{ flexShrink: 0, whiteSpace: "nowrap" }}
                 type="submit"
                 variant="secondary"
               >
                 <Plus aria-hidden="true" size={14} />
                 {t("players.add.submit")}
               </Button>
-            </form>
-          ) : null}
-        </div>
-      </div>
+            </Group>
+          </form>
+        ) : null}
+      </Group>
 
       {selectedPlayers.length > 0 ? (
-        <div
-          className="players-batch-toolbar"
-          role="group"
+        <Paper
           aria-label={t("players.batch.title")}
+          bg="var(--mantine-color-default-hover)"
+          p="xs"
+          role="group"
         >
-          <strong>
-            {t("players.batch.selected", { count: selectedPlayers.length })}
-          </strong>
-          {availableBatchActions.map((action) => (
+          <Group gap="xs">
+            <Text fw={600} mr="xs" size="sm">
+              {t("players.batch.selected", { count: selectedPlayers.length })}
+            </Text>
+            {availableBatchActions.map((action) => (
+              <Button
+                key={action}
+                variant="secondary"
+                disabled={
+                  !canApplyActions ||
+                  batchMutation.isPending ||
+                  actionMutation.isPending
+                }
+                onClick={() => {
+                  batchMutation.reset();
+                  setBatch({ action, players: selectedPlayers });
+                }}
+              >
+                {t(playerActionDefinitions[action].labelKey)}
+              </Button>
+            ))}
             <Button
-              key={action}
-              variant="secondary"
-              disabled={
-                !canApplyActions ||
-                batchMutation.isPending ||
-                actionMutation.isPending
-              }
-              onClick={() => {
-                batchMutation.reset();
-                setBatch({ action, players: selectedPlayers });
-              }}
+              variant="ghost"
+              disabled={batchMutation.isPending}
+              onClick={() => setSelectedNames([])}
             >
-              {t(playerActionDefinitions[action].labelKey)}
+              {t("players.batch.clear")}
             </Button>
-          ))}
-          <Button
-            variant="ghost"
-            disabled={batchMutation.isPending}
-            onClick={() => setSelectedNames([])}
-          >
-            {t("players.batch.clear")}
-          </Button>
-        </div>
+          </Group>
+        </Paper>
       ) : null}
       {batchMutation.data ? (
-        <div
-          className="players-batch-result"
+        <Alert
+          color={batchMutation.data.failures.length ? "red" : "green"}
           role={batchMutation.data.failures.length ? "alert" : "status"}
+          variant="light"
         >
-          {t("players.batch.completed", {
-            count: batchMutation.data.completed,
-          })}
+          <Text size="sm">
+            {t("players.batch.completed", {
+              count: batchMutation.data.completed,
+            })}
+          </Text>
           {batchMutation.data.failures.map((failure) => (
-            <p key={failure.name}>
+            <Text key={failure.name} size="sm">
               {failure.name}: {failure.message}
-            </p>
+            </Text>
           ))}
-        </div>
+        </Alert>
       ) : null}
       {batch ? (
         <DialogSurface
@@ -474,30 +512,36 @@ export function PlayersView({ server, view }: PlayersViewProps) {
             </>
           }
         >
-          <p>{batch.players.map((player) => player.username).join(", ")}</p>
+          <Text size="sm">
+            {batch.players.map((player) => player.username).join(", ")}
+          </Text>
         </DialogSurface>
       ) : null}
 
       {view === "whitelist" && !whitelistEnabled ? (
-        <AttentionBar className="players-whitelist-notice" tone="info">
-          <div>
-            <strong>{t("players.whitelistOff.title")}</strong>
-            <span>{t("players.whitelistOff.description")}</span>
-          </div>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              navigateTo({
-                name: "server",
-                serverId: server.id,
-                section: "settings",
-                view: "properties",
-              })
-            }
-          >
-            {t("players.whitelistOff.action")}
-          </Button>
-        </AttentionBar>
+        <Alert
+          color="azure"
+          role="status"
+          title={t("players.whitelistOff.title")}
+          variant="light"
+        >
+          <Group justify="space-between" wrap="nowrap">
+            <Text size="sm">{t("players.whitelistOff.description")}</Text>
+            <Button
+              variant="secondary"
+              onClick={() =>
+                navigateTo({
+                  name: "server",
+                  serverId: server.id,
+                  section: "settings",
+                  view: "properties",
+                })
+              }
+            >
+              {t("players.whitelistOff.action")}
+            </Button>
+          </Group>
+        </Alert>
       ) : null}
 
       {pendingAction ? (
@@ -517,7 +561,6 @@ export function PlayersView({ server, view }: PlayersViewProps) {
 
       {players.length === 0 ? (
         <EmptyState
-          illustration="/illustrations/no-players.png"
           title={
             view === "online"
               ? t("players.onlineEmpty.title")
@@ -536,16 +579,15 @@ export function PlayersView({ server, view }: PlayersViewProps) {
           }
         />
       ) : (
-        <div className="players-table-scroll">
+        <Table.ScrollContainer minWidth={720}>
           <DataTable
             caption={t("players.title")}
-            className="players-table"
             columns={columns}
             getRowKey={(player) => player.uuid ?? player.username}
             rows={players}
           />
-        </div>
+        </Table.ScrollContainer>
       )}
-    </section>
+    </Stack>
   );
 }

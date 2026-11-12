@@ -30,7 +30,7 @@ describe("single design system", () => {
     expect(
       app.indexOf('import "./styles/command-studio.css";'),
     ).toBeGreaterThan(appImport);
-    expect(app).not.toContain("styles.css");
+    expect(app).not.toContain('"./styles.css"');
     expect(app).not.toContain("styles/preview");
   });
 

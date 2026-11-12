@@ -1,60 +1,61 @@
 /*
-Game-platform desktop app: calm dark surfaces, one green accent. See DESIGN.md.
+Calm ink-blue surfaces, one azure accent; green, red and amber only mark
+server state. Mirrors src/theme.ts for the parts still styled with plain CSS.
 */
 
 :root {
   color-scheme: dark;
 
-  --bg-app: #16181d;
-  --bg-sidebar: #111317;
-  --bg-raised: #1d2026;
-  --bg-panel: #1d2026;
-  --bg-panel-muted: #191b21;
-  --bg-elevated: #262a32;
-  --bg-hover: #2b2f38;
-  --bg-inset: #0e1014;
-  --bg-titlebar: #111317;
+  --bg-app: #151922;
+  --bg-sidebar: #0f121a;
+  --bg-raised: #1c212c;
+  --bg-panel: #1c212c;
+  --bg-panel-muted: #181c26;
+  --bg-elevated: #262c39;
+  --bg-hover: #2d3443;
+  --bg-inset: #0f121a;
+  --bg-titlebar: #0f121a;
   --surface-canvas: var(--bg-app);
   --surface-sidebar: var(--bg-sidebar);
   --surface-panel: var(--bg-panel);
   --surface-raised: var(--bg-elevated);
 
-  --text-main: #e7e9ee;
-  --text-muted: #a4aab6;
-  --text-subtle: #8f95a2;
+  --text-main: #e8ebf2;
+  --text-muted: #a3abbd;
+  --text-subtle: #8a93a7;
   --text-inverse: #ffffff;
 
-  --border-subtle: #2a2d35;
-  --border-strong: #3f4450;
+  --border-subtle: #2a303d;
+  --border-strong: #3a4253;
   --border-panel: var(--border-subtle);
 
-  --accent: #5fce80;
-  --accent-hover: #7ddb98;
+  --accent: #5b95ff;
+  --accent-hover: #7aaaff;
   /* Text accents and white-text button fills need separate contrast pairs. */
-  --accent-solid: #23854c;
-  --accent-solid-hover: #2a9658;
-  --accent-soft: #1d3327;
-  --accent-muted: rgba(95, 206, 128, 0.12);
-  --focus-ring: #7db8ff;
+  --accent-solid: #1f63e6;
+  --accent-solid-hover: #2a71ff;
+  --accent-soft: #1a2742;
+  --accent-muted: rgba(91, 149, 255, 0.12);
+  --focus-ring: #7aaaff;
 
-  --running: #5fce80;
+  --running: #46c97a;
   --success: var(--running);
-  --starting: #e5bd5a;
-  --stopped: #7f8592;
-  --crashed: #f07178;
+  --starting: #e8b54d;
+  --stopped: #7c8598;
+  --crashed: #f06b75;
   --warning: var(--starting);
-  --info: #7db8ff;
+  --info: #5b95ff;
   --danger: var(--crashed);
-  --danger-hover: #f58a90;
-  --danger-solid: #b5444e;
-  --danger-soft: #352026;
+  --danger-hover: #f58a92;
+  --danger-solid: #c7414d;
+  --danger-soft: #3a2129;
 
-  --console-bg: #0e1014;
-  --console-text: #dfe3ea;
-  --console-muted: #7a808d;
-  --console-success: #5fce80;
+  --console-bg: #0f121a;
+  --console-text: #dde2ec;
+  --console-muted: #7c8598;
+  --console-success: #46c97a;
   --console-warning: #e8a64a;
-  --console-error: #f07178;
+  --console-error: #f06b75;
 
   /* Both stacks name a CJK face explicitly. Segoe UI and Cascadia Code carry no
      Chinese glyphs, so without this every Chinese run fell through to whatever
@@ -151,38 +152,38 @@ Game-platform desktop app: calm dark surfaces, one green accent. See DESIGN.md.
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg-app: #f4f5f6;
-  --bg-sidebar: #e9ebee;
+  --bg-app: #f3f5f9;
+  --bg-sidebar: #e9edf3;
   --bg-raised: #ffffff;
   --bg-panel: #ffffff;
-  --bg-panel-muted: #eef0f2;
-  --bg-elevated: #e4e6ea;
-  --bg-hover: #dcdfe4;
+  --bg-panel-muted: #eef1f6;
+  --bg-elevated: #e7ebf2;
+  --bg-hover: #dde3ec;
   --bg-inset: #ffffff;
-  --bg-titlebar: #e9ebee;
+  --bg-titlebar: #e9edf3;
 
-  --text-main: #22252b;
-  --text-muted: #555b66;
-  --text-subtle: #626874;
+  --text-main: #1d2330;
+  --text-muted: #4f5869;
+  --text-subtle: #5e6779;
   --text-inverse: #ffffff;
 
-  --border-subtle: #d9dce1;
-  --border-strong: #adb2bb;
-  --accent: #17723f;
-  --accent-hover: #1a7f46;
+  --border-subtle: #dbe1ea;
+  --border-strong: #b3bccb;
+  --accent: #1f5fd6;
+  --accent-hover: #1a52bb;
   /* Light theme's accent is already dark enough to carry white text. */
   --accent-solid: var(--accent);
   --accent-solid-hover: var(--accent-hover);
-  --accent-soft: #d9efe0;
-  --accent-muted: rgba(23, 114, 63, 0.1);
-  --focus-ring: #2568dc;
+  --accent-soft: #dfe9fb;
+  --accent-muted: rgba(31, 95, 214, 0.1);
+  --focus-ring: #1f5fd6;
 
   --running: #176b3a;
   --starting: #805200;
   --stopped: #5b687a;
   --crashed: #a52936;
   --warning: var(--starting);
-  --info: #2568dc;
+  --info: #1f5fd6;
   --danger: var(--crashed);
   --danger-hover: #a9323c;
   --danger-solid: #a52936;

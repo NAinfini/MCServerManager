@@ -64,7 +64,7 @@ test.describe("server workbench", () => {
     await command.blur();
 
     await page.getByRole("button", { name: "Stop Fabric Workshop" }).click();
-    const confirm = page.getByRole("alertdialog");
+    const confirm = page.getByRole("dialog");
     await expect(confirm).toBeVisible();
     await page.keyboard.press("2");
     await expect(confirm).toBeVisible();
@@ -127,8 +127,8 @@ test.describe("server workbench", () => {
           .getByRole("button", { name: "Live output", exact: true })
           .click();
         // A quick command has to land in the input, not just be listed.
-        await page.locator(".console-quick-menu summary").click();
-        await page.getByRole("button", { name: "Set to day" }).click();
+        await page.getByRole("button", { name: "Quick commands" }).click();
+        await page.getByRole("menuitem", { name: "Set to day" }).click();
         await expect(
           commandInput(page),
         ).toHaveValue("time set day");
@@ -166,7 +166,7 @@ test.describe("server workbench", () => {
 
     await page.getByRole("button", { name: "Stop Fabric Workshop" }).click();
     await page
-      .getByRole("alertdialog")
+      .getByRole("dialog")
       .getByRole("button", { name: "Stop", exact: true })
       .click();
     await expect
@@ -212,10 +212,17 @@ test.describe("server workbench", () => {
     fakeDesktop.processStatus = "stopping";
     await openServer(page);
 
-    const start = page.getByRole("button", { name: "Start Fabric Workshop" });
-    const stop = page.getByRole("button", { name: "Stop Fabric Workshop" });
+    const start = page.getByRole("button", {
+      name: "Start Fabric Workshop",
+      exact: true,
+    });
+    const stop = page.getByRole("button", {
+      name: "Stop Fabric Workshop",
+      exact: true,
+    });
     const restart = page.getByRole("button", {
       name: "Restart Fabric Workshop",
+      exact: true,
     });
     await page
       .getByRole("button", { name: "Force stop Fabric Workshop" })
@@ -228,7 +235,7 @@ test.describe("server workbench", () => {
     ).toBe(false);
 
     await page
-      .getByRole("alertdialog", { name: "Force stop the server?" })
+      .getByRole("dialog", { name: "Force stop the server?" })
       .getByRole("button", { name: "Force stop", exact: true })
       .click();
     await expect
@@ -281,7 +288,7 @@ test.describe("server workbench", () => {
 
     await page.getByRole("button", { name: "Delete backup" }).first().click();
     await page
-      .getByRole("alertdialog")
+      .getByRole("dialog")
       .getByRole("button", { name: "Delete backup" })
       .click();
     await expect.poll(() => fakeDesktop.backups.length).toBe(1);
@@ -326,7 +333,7 @@ test.describe("server workbench", () => {
       .click();
     expect(fakeDesktop.files).toHaveProperty(["readme.txt"]);
     await page
-      .getByRole("alertdialog")
+      .getByRole("dialog")
       .getByRole("button", { name: "Delete", exact: true })
       .click();
     await expect(
@@ -351,7 +358,7 @@ test.describe("server workbench", () => {
     await page
       .getByRole("button", { name: "Preview restore", exact: true })
       .click();
-    const review = page.getByRole("alertdialog");
+    const review = page.getByRole("dialog");
     await expect(review).toContainText("world/level.dat");
     expect(
       fakeDesktop.calls.some((call) => call.command === "restore_world_backup"),

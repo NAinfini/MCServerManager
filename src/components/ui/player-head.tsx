@@ -1,6 +1,5 @@
 import { User } from "lucide-react";
-import { useState } from "react";
-import { cn } from "../../lib/cn";
+import { Avatar } from "@mantine/core";
 
 interface PlayerHeadProps {
   username: string;
@@ -32,35 +31,17 @@ export function PlayerHead({
   size = 24,
   className,
 }: PlayerHeadProps) {
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const source = playerHeadUrl(username, uuid, size * 2);
-
   return (
-    <span
+    <Avatar
+      alt=""
       aria-hidden="true"
-      className={cn("player-head", className)}
-      style={{ width: size, height: size }}
+      className={className}
+      radius="xs"
+      size={size}
+      src={playerHeadUrl(username, uuid, size * 2)}
+      styles={{ image: { imageRendering: "pixelated" } }}
     >
-      <User
-        className="player-head-generated"
-        size={Math.round(size * 0.7)}
-        strokeWidth={2}
-      />
-      {source && failedSrc !== source ? (
-        <img
-          alt=""
-          className={cn(
-            "player-head-skin",
-            loadedSrc === source && "player-head-skin-loaded",
-          )}
-          height={size}
-          src={source}
-          width={size}
-          onError={() => setFailedSrc(source)}
-          onLoad={() => setLoadedSrc(source)}
-        />
-      ) : null}
-    </span>
+      <User size={Math.round(size * 0.7)} strokeWidth={2} />
+    </Avatar>
   );
 }

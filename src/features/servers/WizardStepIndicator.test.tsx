@@ -38,9 +38,7 @@ describe("WizardStepIndicator", () => {
       "Compatibility",
     ]);
 
-    const activeStep = within(list)
-      .getByText("Java")
-      .closest(".wizard-step-item");
+    const activeStep = within(list).getByText("Java").closest("li");
     expect(activeStep).toHaveAttribute("aria-current", "step");
 
     await userEvent.click(buttons[0]);

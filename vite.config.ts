@@ -106,8 +106,8 @@ export default defineConfig(async () => ({
           if (id.includes("@monaco-editor") || id.includes("monaco-editor")) {
             return "monaco";
           }
-          if (id.includes("@radix-ui")) {
-            return "radix";
+          if (id.includes("@mantine")) {
+            return "mantine";
           }
           if (id.includes("@tanstack")) {
             return "tanstack";

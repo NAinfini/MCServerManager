@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "../../test/render";
+import { cleanup, render, screen, within } from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppSettingsProvider } from "../../i18n";
@@ -52,9 +52,9 @@ describe("ProvisioningProgress", () => {
       </AppSettingsProvider>,
     );
 
-    const states = Array.from(
-      document.querySelectorAll(".provisioning-stage-item"),
-    ).map((item) => item.getAttribute("data-state"));
+    const states = within(screen.getByRole("list"))
+      .getAllByRole("listitem")
+      .map((item) => item.getAttribute("data-state"));
 
     // downloading, verifying, extracting completed; installingRuntime precedes
     // the current stage so index ordering marks it done too.

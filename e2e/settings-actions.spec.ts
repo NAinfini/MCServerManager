@@ -9,7 +9,9 @@ test.describe("settings actions", () => {
     await page.getByRole("button", { name: "Appearance" }).click();
     await page.getByRole("radio", { name: "Light" }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-    await page.getByRole("switch", { name: "Compact mode" }).click();
+    // Mantine draws the track over the native input; toggle it from the keyboard.
+    await page.getByRole("switch", { name: "Compact mode" }).focus();
+    await page.keyboard.press("Space");
 
     await expect
       .poll(() =>

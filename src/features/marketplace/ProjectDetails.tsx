@@ -1,4 +1,19 @@
-import { useState } from "react";
+import {
+  Anchor,
+  Avatar,
+  Badge,
+  Box,
+  Grid,
+  Group,
+  Image,
+  Loader,
+  Paper,
+  ScrollArea,
+  Stack,
+  Text,
+  Title,
+  UnstyledButton,
+} from "@mantine/core";
 import { ExternalLink } from "lucide-react";
 import type { ReactNode } from "react";
 import type {
@@ -38,43 +53,40 @@ function stripDuplicateTitleHeading(body: string, title: string) {
   );
 }
 
-function ProjectDetailIcon({
-  project,
+/* The project's own icon, then the provider's logo when that fails to load,
+   then the first letter of the title. */
+export function ProjectIcon({
+  iconUrl,
   provider,
+  size,
+  title,
 }: {
-  project: ProjectDetailsData;
+  iconUrl?: string | null;
   provider?: string;
+  size: number;
+  title: string;
 }) {
-  const [failed, setFailed] = useState(false);
-  const providerBranding = provider
-    ? getMarketplaceProviderBranding(provider)
-    : null;
-  const fallback = project.title.slice(0, 1).toUpperCase();
+  const brandingSrc = provider
+    ? getMarketplaceProviderBranding(provider)?.iconSrc
+    : undefined;
 
   return (
-    <span className="marketplace-detail-icon">
-      {project.iconUrl && !failed ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          height="64"
-          referrerPolicy="no-referrer"
-          src={project.iconUrl}
-          width="64"
-          onError={() => setFailed(true)}
-        />
-      ) : providerBranding?.iconSrc ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          height="64"
-          src={providerBranding.iconSrc}
-          width="64"
-        />
+    <Avatar
+      alt=""
+      aria-hidden="true"
+      color="gray"
+      imageProps={{ referrerPolicy: "no-referrer" }}
+      radius="md"
+      size={size}
+      src={iconUrl || brandingSrc}
+      variant="light"
+    >
+      {iconUrl && brandingSrc ? (
+        <Image alt="" h="100%" src={brandingSrc} w="100%" />
       ) : (
-        <span>{fallback}</span>
+        title.slice(0, 1).toUpperCase()
       )}
-    </span>
+    </Avatar>
   );
 }
 
@@ -95,15 +107,24 @@ export function ProjectDetails({
       : warning;
 
   if (isLoading) {
-    return <div className="list-state">{t("marketplace.details.loading")}</div>;
+    return (
+      <Group gap="xs" p="md">
+        <Loader size="xs" />
+        <Text c="dimmed" size="sm">
+          {t("marketplace.details.loading")}
+        </Text>
+      </Group>
+    );
   }
 
   if (!project) {
     return (
-      <div className="empty-state">
-        <h2>{t("marketplace.details.empty.title")}</h2>
-        <p>{t("marketplace.details.empty.description")}</p>
-      </div>
+      <Stack gap={2} p="md">
+        <Title order={4}>{t("marketplace.details.empty.title")}</Title>
+        <Text c="dimmed" size="sm">
+          {t("marketplace.details.empty.description")}
+        </Text>
+      </Stack>
     );
   }
 
@@ -148,144 +169,178 @@ export function ProjectDetails({
   const tags = [...project.loaders, ...project.gameVersions].slice(0, 5);
 
   return (
-    <section
-      className="marketplace-details"
+    <Stack
       aria-label={t("marketplace.details.aria")}
+      className="marketplace-details"
+      component="section"
+      gap="md"
     >
-      <header className="marketplace-details-hero">
-        <ProjectDetailIcon project={project} provider={provider} />
-        <div className="marketplace-details-headline">
-          <h2>{project.title}</h2>
-          <p>{project.description}</p>
+      <Group align="flex-start" gap="md" wrap="nowrap">
+        <ProjectIcon
+          iconUrl={project.iconUrl}
+          provider={provider}
+          size={64}
+          title={project.title}
+        />
+        <Stack flex={1} gap={6} miw={0}>
+          <Title order={2}>{project.title}</Title>
+          <Text c="dimmed" size="sm">
+            {project.description}
+          </Text>
           {stats.length > 0 ? (
-            <dl
+            <Group
               aria-label={t("marketplace.projectStats")}
-              className="marketplace-details-stats"
+              component="dl"
+              gap="lg"
+              m={0}
             >
               {stats.map((stat) => (
-                <div key={stat.key}>
-                  <dd>{stat.value}</dd>
-                  <dt>{stat.label}</dt>
-                </div>
+                <Stack gap={0} key={stat.key}>
+                  <Text component="dd" ff="monospace" fw={600} m={0} size="sm">
+                    {stat.value}
+                  </Text>
+                  <Text c="dimmed" component="dt" size="xs">
+                    {stat.label}
+                  </Text>
+                </Stack>
               ))}
-            </dl>
+            </Group>
           ) : null}
-        </div>
-        <div className="marketplace-details-hero-aside">
+        </Stack>
+        <Stack align="flex-end" gap="xs">
           {project.websiteUrl ? (
-            <a className="marketplace-site-link" href={project.websiteUrl}>
+            <Anchor
+              href={project.websiteUrl}
+              size="sm"
+              style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+            >
               <ExternalLink aria-hidden="true" size={14} />
               {t("marketplace.openProviderPage", {
                 provider: provider || t("marketplace.provider"),
               })}
-            </a>
+            </Anchor>
           ) : null}
           {tags.length > 0 ? (
-            <span className="marketplace-details-tags">
+            <Group gap={4} justify="flex-end">
               {tags.map((tag) => (
-                <span className="meta-badge" key={tag}>
+                <Badge color="gray" key={tag} size="sm" tt="none" variant="light">
                   {tag}
-                </span>
+                </Badge>
               ))}
-            </span>
+            </Group>
           ) : null}
-        </div>
-      </header>
+        </Stack>
+      </Group>
 
-      <div className="marketplace-details-split">
-        <div className="marketplace-details-body">
-          {body ? <MarketplaceMarkdown source={body} /> : null}
-        </div>
+      <Grid gap="md">
+        <Grid.Col order={{ base: 2, lg: 1 }} span={{ base: 12, lg: 8 }}>
+          {body ? (
+            <Paper p="md">
+              <MarketplaceMarkdown source={body} />
+            </Paper>
+          ) : null}
+        </Grid.Col>
 
-        <aside className="marketplace-version-panel">
-          {versionsError ? (
-            versionsError
-          ) : versions.length === 0 ? (
-            <p className="danger-text">
-              {t("marketplace.details.noCompatible")}
-            </p>
-          ) : (
-            <>
-              <div className="marketplace-version-heading">
-                <h3>{t("marketplace.details.versions")}</h3>
-                <span>
-                  {t("marketplace.details.versionCount", {
-                    count: versions.length,
-                  })}
-                </span>
-              </div>
-              <div className="marketplace-version-list">
-                {versions.map((version, index) => {
-                  const showVersionNumber =
-                    version.versionNumber &&
-                    version.versionNumber !== version.id &&
-                    version.versionNumber !== version.name;
-                  const chips = [
-                    ...version.gameVersions.slice(0, 2),
-                    ...version.loaders.slice(0, 1),
-                  ];
-                  return (
-                    <button
-                      className={
-                        version.id === selectedVersionId
-                          ? "marketplace-version-row marketplace-version-row-selected"
-                          : "marketplace-version-row"
-                      }
-                      key={version.id}
-                      type="button"
-                      onClick={() => onSelectVersion(version.id)}
-                    >
-                      <span className="marketplace-version-summary">
-                        <strong>{version.name}</strong>
-                        {showVersionNumber ? (
-                          <small>{version.versionNumber}</small>
-                        ) : null}
-                      </span>
-                      <span className="marketplace-version-badges">
-                        {index === 0 ? (
-                          <span className="meta-badge meta-badge-latest">
-                            {t("marketplace.details.latest")}
-                          </span>
-                        ) : null}
-                        {chips.map((chip) => (
-                          <span className="meta-badge" key={chip}>
-                            {chip}
-                          </span>
-                        ))}
-                        {isVerifiedServerPack(version) ? (
-                          <span className="meta-badge meta-badge-verified">
-                            {t("marketplace.serverPackBadge")}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="marketplace-version-notes">
-                        {version.dependencies.some(
-                          (dependency) =>
-                            dependency.dependencyType === "required",
-                        ) ? (
-                          <small>
-                            {t("marketplace.details.requiresDependencies")}
-                          </small>
-                        ) : null}
-                        {version.warnings.length > 0 ? (
-                          <small className="danger-text">
-                            {version.warnings.map(warningLabel).join("; ")}
-                          </small>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              {versionAction ? (
-                <div className="marketplace-version-footer">
-                  {versionAction}
-                </div>
-              ) : null}
-            </>
-          )}
-        </aside>
-      </div>
-    </section>
+        <Grid.Col order={{ base: 1, lg: 2 }} span={{ base: 12, lg: 4 }}>
+          <Paper component="aside" p="md">
+            {versionsError ? (
+              versionsError
+            ) : versions.length === 0 ? (
+              <Text c="red" size="sm">
+                {t("marketplace.details.noCompatible")}
+              </Text>
+            ) : (
+              <Stack gap="sm">
+                <Group justify="space-between">
+                  <Title order={4}>{t("marketplace.details.versions")}</Title>
+                  <Text c="dimmed" size="xs">
+                    {t("marketplace.details.versionCount", {
+                      count: versions.length,
+                    })}
+                  </Text>
+                </Group>
+                <ScrollArea.Autosize mah={420} type="auto">
+                  <Stack gap={2}>
+                    {versions.map((version, index) => {
+                      const showVersionNumber =
+                        version.versionNumber &&
+                        version.versionNumber !== version.id &&
+                        version.versionNumber !== version.name;
+                      const chips = [
+                        ...version.gameVersions.slice(0, 2),
+                        ...version.loaders.slice(0, 1),
+                      ];
+                      const selected = version.id === selectedVersionId;
+                      return (
+                        <UnstyledButton
+                          bg={
+                            selected
+                              ? "var(--mantine-primary-color-light)"
+                              : undefined
+                          }
+                          key={version.id}
+                          px="sm"
+                          py={6}
+                          style={{ borderRadius: "var(--mantine-radius-sm)" }}
+                          onClick={() => onSelectVersion(version.id)}
+                        >
+                          <Group gap="xs" justify="space-between" wrap="nowrap">
+                            <Text fw={600} size="sm" truncate>
+                              {version.name}
+                            </Text>
+                            {showVersionNumber ? (
+                              <Text c="dimmed" ff="monospace" size="xs" truncate>
+                                {version.versionNumber}
+                              </Text>
+                            ) : null}
+                          </Group>
+                          <Group gap={4} mt={4}>
+                            {index === 0 ? (
+                              <Badge size="xs" tt="none" variant="light">
+                                {t("marketplace.details.latest")}
+                              </Badge>
+                            ) : null}
+                            {chips.map((chip) => (
+                              <Badge
+                                color="gray"
+                                key={chip}
+                                size="xs"
+                                tt="none"
+                                variant="light"
+                              >
+                                {chip}
+                              </Badge>
+                            ))}
+                            {isVerifiedServerPack(version) ? (
+                              <Badge size="xs" tt="none" variant="outline">
+                                {t("marketplace.serverPackBadge")}
+                              </Badge>
+                            ) : null}
+                          </Group>
+                          {version.dependencies.some(
+                            (dependency) =>
+                              dependency.dependencyType === "required",
+                          ) ? (
+                            <Text c="dimmed" mt={2} size="xs">
+                              {t("marketplace.details.requiresDependencies")}
+                            </Text>
+                          ) : null}
+                          {version.warnings.length > 0 ? (
+                            <Text c="red" mt={2} size="xs">
+                              {version.warnings.map(warningLabel).join("; ")}
+                            </Text>
+                          ) : null}
+                        </UnstyledButton>
+                      );
+                    })}
+                  </Stack>
+                </ScrollArea.Autosize>
+                {versionAction ? <Box>{versionAction}</Box> : null}
+              </Stack>
+            )}
+          </Paper>
+        </Grid.Col>
+      </Grid>
+    </Stack>
   );
 }

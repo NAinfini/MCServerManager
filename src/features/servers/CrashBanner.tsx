@@ -1,8 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Alert, Code, Group, Stack, Text } from "@mantine/core";
 import { AlertTriangle } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
-import { disableCrashedMod, getCrashExplanation, startServer } from "../process/api";
+import {
+  disableCrashedMod,
+  getCrashExplanation,
+  startServer,
+} from "../process/api";
 import { processKeys } from "../process/queries";
 import { useServerRuntime } from "./ServerRuntimeContext";
 
@@ -35,28 +40,45 @@ export function CrashBanner({ serverId }: { serverId: string }) {
   const mod = explanation.modName ?? explanation.modFile ?? "";
 
   return (
-    <div className="crash-banner" role="alert">
-      <AlertTriangle aria-hidden="true" size={16} />
-      <div className="crash-banner-body">
-        <strong>{t(`crash.${explanation.kind}.title`, { mod })}</strong>
-        <p>{t(`crash.${explanation.kind}.description`, { mod })}</p>
-        {explanation.detail ? <pre>{explanation.detail}</pre> : null}
+    <Alert
+      color="red"
+      icon={<AlertTriangle aria-hidden="true" size={16} />}
+      mb="sm"
+      mx="lg"
+      role="alert"
+      title={t(`crash.${explanation.kind}.title`, { mod })}
+    >
+      <Stack gap="xs">
+        <Text size="sm">
+          {t(`crash.${explanation.kind}.description`, { mod })}
+        </Text>
+        {explanation.detail ? (
+          <Code block mah={160} style={{ overflow: "auto" }}>
+            {explanation.detail}
+          </Code>
+        ) : null}
         {explanation.reportFile ? (
-          <small>{t("crash.report", { file: explanation.reportFile })}</small>
+          <Text c="dimmed" size="xs">
+            {t("crash.report", { file: explanation.reportFile })}
+          </Text>
         ) : null}
         {fixMutation.error ? (
-          <small className="inline-error">{fixMutation.error.message}</small>
+          <Text c="red" size="xs">
+            {fixMutation.error.message}
+          </Text>
         ) : null}
-      </div>
-      {explanation.kind === "clientOnlyMod" && explanation.modFile ? (
-        <Button
-          disabled={fixMutation.isPending}
-          variant="primary"
-          onClick={() => fixMutation.mutate(explanation.modFile as string)}
-        >
-          {t("crash.disableAndRestart")}
-        </Button>
-      ) : null}
-    </div>
+        {explanation.kind === "clientOnlyMod" && explanation.modFile ? (
+          <Group>
+            <Button
+              disabled={fixMutation.isPending}
+              variant="primary"
+              onClick={() => fixMutation.mutate(explanation.modFile as string)}
+            >
+              {t("crash.disableAndRestart")}
+            </Button>
+          </Group>
+        ) : null}
+      </Stack>
+    </Alert>
   );
 }

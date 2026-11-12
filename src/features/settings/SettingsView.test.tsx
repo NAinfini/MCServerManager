@@ -90,16 +90,18 @@ describe("SettingsView", () => {
   });
 
   it("keeps the single settings tab layer scannable and scrollable", async () => {
-    const { container } = render(<SettingsView />);
+    render(<SettingsView />);
 
     expect(
       screen.getByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
+    const navItems = within(
+      screen.getByRole("navigation", { name: "Settings" }),
+    ).getAllByRole("button");
+    expect(navItems).toHaveLength(8);
     expect(
-      container.querySelectorAll(".settings-nav-item[data-nav-group-start]")
-        .length,
-    ).toBeGreaterThanOrEqual(2);
-    expect(container.querySelectorAll(".settings-nav-item")).toHaveLength(8);
+      navItems.filter((item) => item.hasAttribute("data-nav-group-start")),
+    ).toHaveLength(2);
   });
 
   it("updates path settings through folder pickers and clears cache", async () => {

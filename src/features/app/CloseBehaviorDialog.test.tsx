@@ -93,6 +93,6 @@ describe("CloseBehaviorDialog", () => {
       />,
     );
 
-    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector("[role=dialog]")).toBeNull();
   });
 });
