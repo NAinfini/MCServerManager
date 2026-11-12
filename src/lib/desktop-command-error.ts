@@ -11,7 +11,9 @@ function translateBackendError(message: string): Error | null {
   if (!match) {
     return null;
   }
-  const detail = message.replace(BACKEND_ERROR_CODE, "").trim();
+  // Electron prefixes "Error invoking remote method 'app-command': Error: ";
+  // the backend's own words start after the tag.
+  const detail = message.slice(match.index + match[0].length).trim();
   const key = `desktop.error.${match[1]}`;
   const translated = translate(readStoredLanguage(), key, { detail });
   // translate() returns "[[key]]" for keys it does not know.

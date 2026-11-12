@@ -59,11 +59,14 @@ describe("normalizeDesktopCommandError", () => {
 
   it("keeps the backend's own detail inside the translated message", () => {
     const error = normalizeDesktopCommandError(
-      new Error("[MCSM:SERVER_PORT_IN_USE] Port 25565 is already in use."),
+      new Error(
+        "Error invoking remote method 'app-command': Error: [MCSM:SERVER_PORT_IN_USE] Port 25565 is already in use.",
+      ),
     );
 
     expect(error.message).toContain("That port is already in use");
     expect(error.message).toContain("Port 25565 is already in use.");
+    expect(error.message).not.toContain("remote method");
   });
 
   it("falls back to the backend message when a code has no translation", () => {

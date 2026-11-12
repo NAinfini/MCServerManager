@@ -22,15 +22,6 @@
   text-transform: none;
 }
 
-/* Colour marks state. A row of ordinary actions stays neutral until hovered. */
-.icon-button.button {
-  color: var(--text-muted);
-}
-
-.icon-button.button:hover:not(:disabled) {
-  color: var(--text-main);
-}
-
 .empty-state::after {
   display: none;
 }
@@ -84,13 +75,6 @@
 
 .sidebar .sidebar-footer-nav .sidebar-notifications {
   margin-left: auto;
-}
-
-/* The page's side margin must come out of its width, or the right edge clips. */
-.java-page {
-  width: calc(100% - 40px);
-  max-width: none;
-  margin-inline: 20px;
 }
 
 .java-table {
@@ -254,4 +238,39 @@
 /* Links in the mod panel are text, so the global control height doesn't fit. */
 .mods-detail-config button {
   min-height: 0;
+}
+
+/* An action error wraps under the header buttons instead of widening them
+   until the server name and status are squeezed out. */
+.server-header-actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.server-header-actions .server-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.server-header-actions .server-actions > .inline-error {
+  flex-basis: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  font-size: var(--text-xs);
+  text-align: right;
+}
+
+/* Settings > Notifications: recent events, one per row. */
+.notification-history > div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--text-sm);
+}
+
+.notification-history > div > span {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
 }

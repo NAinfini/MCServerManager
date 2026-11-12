@@ -1014,7 +1014,7 @@ select.field-control {
 }
 
 .motion-control:not(:disabled):hover {
-  transform: translateY(-1px) scale(1.012);
+  transform: none;
 }
 
 .motion-control:focus-visible {
@@ -1022,12 +1022,10 @@ select.field-control {
 }
 
 .motion-press:not(:disabled):active {
-  transform: translateY(0) scale(0.965);
+  transform: translateY(1px);
 }
 
-.motion-danger:not(:disabled):hover {
-  animation: motion-danger-nudge var(--motion-medium) var(--ease-out-quint);
-}
+
 
 .motion-popover {
   transform-origin: var(--radix-select-content-transform-origin, top center);
@@ -1086,21 +1084,6 @@ select.field-control {
   }
 }
 
-@keyframes motion-danger-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-
-  35% {
-    transform: translateX(-2px);
-  }
-
-  70% {
-    transform: translateX(2px);
-  }
-}
-
 @keyframes motion-dialog-in {
   from {
     opacity: 0;
@@ -1137,34 +1120,6 @@ select.field-control {
   padding: 0;
 }
 
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--button-height-md);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition:
-    border-color 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease,
-    opacity 140ms ease;
-}
-
-.button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.button-primary {
-  box-shadow: none;
-}
-
-.button-primary:hover:not(:disabled) {
-  box-shadow: none;
-}
-
-.button-secondary:hover:not(:disabled),
 /* The sidebar hover used to be painted here with a white wash that landed on
    almost the same colour as the selected item, and it outranked the hover rule
    further down. Hover is now owned by --bg-hover in one place. */
@@ -1973,7 +1928,13 @@ select.field-control {
   background: var(--bg-elevated);
 }
 
-.player-head-generated,
+.player-head-generated {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  color: var(--text-subtle);
+}
+
 .player-head-skin {
   position: absolute;
   inset: 0;
@@ -5015,24 +4976,6 @@ select.field-control {
    Select
    -------------------------------------------------------------------------- */
 
-.select-trigger {
-  display: inline-flex;
-  width: 100%;
-  max-width: var(--control-width-select);
-  min-height: var(--button-height-sm);
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-md);
-  padding: 0 9px;
-  color: var(--text-main);
-  background: var(--bg-elevated);
-  font: inherit;
-  font-size: var(--text-base);
-  cursor: pointer;
-}
-
 .select-trigger-value {
   display: inline-flex;
   min-width: 0;
@@ -6204,33 +6147,6 @@ select.field-control {
   transform: none;
 }
 
-.button:active:not(:disabled) {
-  transform: none;
-}
-
-.icon-button.button,
-/* The class had transitions and hover states but no base rule, so the control
-   rendered with the browser's default grey button chrome — the loudest thing on
-   the overview for its least important action. */
-.button-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  border: 0;
-  padding: 0;
-  color: var(--accent);
-  background: none;
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
-}
-
-.button-link:hover {
-  text-decoration: underline;
-}
-
-.button-link,
 .marketplace-content-option,
 .settings-nav-item,
 .cmd-suggest-item {
@@ -6243,23 +6159,17 @@ select.field-control {
     opacity var(--motion-medium) var(--ease-out-quart);
 }
 
-.icon-button.button:hover:not(:disabled),
-.button-link:hover,
 .marketplace-content-option:hover,
 .settings-nav-item:hover,
 .cmd-suggest-item:hover {
   transform: translateY(-1px);
 }
 
-.icon-button.button:active:not(:disabled),
-.button-link:active,
 .marketplace-content-option:active,
 .cmd-suggest-item:active {
   transform: scale(0.965);
 }
 
-.icon-button.button:focus-visible,
-.button-link:focus-visible,
 .marketplace-content-option:focus-visible,
 .settings-nav-item:focus-visible,
 .cmd-suggest-item:focus-visible {
@@ -6298,21 +6208,6 @@ select.field-control {
 .task-run-item:active,
 .server-card:active {
   transform: none;
-}
-
-input:not([type="checkbox"]):not([type="radio"]),
-textarea {
-  transition:
-    border-color var(--motion-medium) var(--ease-out-quart),
-    background-color var(--motion-medium) var(--ease-out-quart),
-    box-shadow var(--motion-medium) var(--ease-out-quart),
-    color var(--motion-medium) var(--ease-out-quart);
-}
-
-input:not([type="checkbox"]):not([type="radio"]):focus-visible,
-textarea:focus-visible,
-.select-trigger:focus-visible {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 /* --------------------------------------------------------------------------
@@ -6617,16 +6512,6 @@ textarea:focus-visible,
   }
 }
 
-@keyframes spinner-pulse {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 @keyframes empty-float {
   0%,
   100% {
@@ -6647,7 +6532,8 @@ textarea:focus-visible,
 }
 
 .loading-spinner svg {
-  animation: spinner-rotate 2.4s linear infinite;
+  color: var(--accent);
+  animation: spinner-rotate 0.9s linear infinite;
 }
 
 .loading-state-skeleton {
@@ -6726,24 +6612,6 @@ textarea:focus-visible,
   color: var(--text-main);
 }
 
-.spinner-block {
-  fill: var(--accent);
-  opacity: 0.25;
-  animation: spinner-pulse 1.2s ease-in-out infinite;
-}
-
-.spinner-block-1 {
-  animation-delay: 0ms;
-}
-.spinner-block-2 {
-  animation-delay: 150ms;
-}
-.spinner-block-3 {
-  animation-delay: 300ms;
-}
-.spinner-block-4 {
-  animation-delay: 450ms;
-}
 
 /* --------------------------------------------------------------------------
    Bottom Status Bar
@@ -7237,42 +7105,6 @@ textarea:focus-visible,
   }
 }
 
-/* Shared components */
-button:where(:not(.switch-root):not(.checkbox-root):not(.status-bar-action)),
-.button {
-  min-height: var(--preview-button-height);
-}
-
-.button {
-  gap: 7px;
-  border-radius: var(--radius-sm);
-  padding: 0 11px;
-  font-size: 12px;
-  font-weight: 550;
-  letter-spacing: 0;
-}
-
-.button-primary {
-  border-color: var(--accent-solid);
-  color: var(--text-inverse);
-  background: var(--accent-solid);
-}
-
-.button-primary:hover:not(:disabled) {
-  border-color: var(--accent-solid-hover);
-  background: var(--accent-solid-hover);
-}
-
-.button-secondary {
-  border-color: var(--border-subtle);
-  color: var(--text-main);
-  background: var(--bg-elevated);
-}
-
-.button-secondary:hover:not(:disabled) {
-  border-color: var(--border-strong);
-  background: color-mix(in srgb, var(--bg-elevated) 72%, var(--text-main) 6%);
-}
 
 /* What a button does, in its colour. Only the committing action of a surface is
    filled with the accent; the three consequential kinds carry their own hue as
@@ -7281,98 +7113,13 @@ button:where(:not(.switch-root):not(.checkbox-root):not(.status-bar-action)),
 
    `danger` and `ghost` had no rule at all before this — both rendered as bare
    base buttons, which made "Delete profile" and "Cancel" look identical. */
-.button-success {
-  border-color: color-mix(in srgb, var(--success) 45%, transparent);
-  color: var(--success);
-  background: color-mix(in srgb, var(--success) 14%, transparent);
-}
-
-.button-success:hover:not(:disabled) {
-  border-color: var(--success);
-  background: color-mix(in srgb, var(--success) 24%, transparent);
-}
-
-.button-warning {
-  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
-  color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 14%, transparent);
-}
-
-.button-warning:hover:not(:disabled) {
-  border-color: var(--warning);
-  background: color-mix(in srgb, var(--warning) 24%, transparent);
-}
-
-.button-danger {
-  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-  color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
-}
-
-.button-danger:hover:not(:disabled) {
-  border-color: var(--danger-solid);
-  color: var(--text-inverse);
-  background: var(--danger-solid);
-}
-
-.button-ghost {
-  border-color: transparent;
-  color: var(--text-muted);
-  background: transparent;
-}
-
-.button-ghost:hover:not(:disabled) {
-  color: var(--text-main);
-  background: var(--bg-hover);
-}
-
-/* 0.42 dropped disabled label text to 2.53:1 in the light theme. Disabled still
-   has to be readable — it is how you find out what is unavailable and why. */
-.button:disabled,
 button:disabled {
-  opacity: 0.55;
   cursor: not-allowed;
-}
-
-.icon-button,
-.row-actions .button {
-  width: 32px;
-  padding: 0;
 }
 
 .status-bar-action {
   height: 20px;
   min-height: 20px;
-}
-
-input:not([type="checkbox"]):not([type="radio"]),
-select,
-textarea,
-.select-trigger {
-  min-height: var(--preview-control-height);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-main);
-  background: var(--bg-inset);
-  font-size: 12px;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: color-mix(in srgb, var(--text-muted) 78%, var(--bg-inset));
-}
-
-input:not([type="checkbox"]):not([type="radio"]):hover,
-textarea:hover,
-.select-trigger:hover {
-  border-color: color-mix(in srgb, var(--border-strong) 72%, var(--text-main));
-}
-
-[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
-[data-theme="light"] select,
-[data-theme="light"] textarea,
-[data-theme="light"] .select-trigger {
-  background: var(--bg-raised);
 }
 
 :where(button, a, input, select, textarea, [tabindex]):focus-visible {

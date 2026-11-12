@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import { Bell, RefreshCw, Settings, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { useAppSettings } from "../../i18n";
@@ -24,9 +25,32 @@ export function NotificationCenter({
   });
   const persistentEvents = eventsQuery.data ?? [];
   const hasNotifications = items.length > 0 || persistentEvents.length > 0;
+  const detailsRef = useRef<HTMLDetailsElement | null>(null);
+
+  /* A <details> stays open until its summary is clicked again; a popover
+     should also close on a click elsewhere or Escape. */
+  useEffect(() => {
+    const close = (event: Event) => {
+      const details = detailsRef.current;
+      if (!details?.open) return;
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (
+        event instanceof PointerEvent &&
+        details.contains(event.target as Node)
+      )
+        return;
+      details.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, []);
 
   return (
-    <details className="notification-center">
+    <details className="notification-center" ref={detailsRef}>
       <summary
         aria-label={t("notifications.open")}
         className="status-bar-action notification-center-trigger"

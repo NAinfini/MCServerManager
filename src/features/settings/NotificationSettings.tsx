@@ -191,7 +191,7 @@ export function NotificationSettings() {
           </Button>
         </div>
       ) : eventsQuery.data?.length ? (
-        <div className="compatibility-list">
+        <div className="notification-history">
           {eventsQuery.data.map((event) => (
             <div key={event.id}>
               <strong>{event.title}</strong>

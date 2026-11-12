@@ -23,14 +23,6 @@ describe("motion affordance classes", () => {
     );
   });
 
-  it("marks danger buttons with shake feedback class", () => {
-    render(<Button variant="danger">Delete server</Button>);
-
-    expect(screen.getByRole("button", { name: "Delete server" })).toHaveClass(
-      "motion-danger",
-    );
-  });
-
   it("marks select triggers and popovers with motion classes", () => {
     render(
       <Select

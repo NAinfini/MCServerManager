@@ -1,3 +1,4 @@
+import { User } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../../lib/cn";
 
@@ -9,9 +10,9 @@ interface PlayerHeadProps {
 }
 
 /**
- * Rendered skins come from a public head service. The generated head below is
- * always painted first so an offline machine or an unknown player still shows a
- * head instead of an empty box; the real skin replaces it once it loads.
+ * Rendered skins come from a public head service. A plain user glyph is shown
+ * first so an offline machine or an unknown player still shows something; the
+ * real skin replaces it once it loads.
  */
 const headServiceBase = "https://mc-heads.net/avatar";
 
@@ -25,14 +26,6 @@ export function playerHeadUrl(
   return `${headServiceBase}/${encodeURIComponent(identity)}/${pixelSize}`;
 }
 
-function identityHue(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) % 360;
-  }
-  return hash;
-}
-
 export function PlayerHead({
   username,
   uuid,
@@ -42,7 +35,6 @@ export function PlayerHead({
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const source = playerHeadUrl(username, uuid, size * 2);
-  const hue = identityHue(uuid?.trim() || username);
 
   return (
     <span
@@ -50,20 +42,11 @@ export function PlayerHead({
       className={cn("player-head", className)}
       style={{ width: size, height: size }}
     >
-      <svg
+      <User
         className="player-head-generated"
-        height={size}
-        viewBox="0 0 8 8"
-        width={size}
-      >
-        <rect fill={`hsl(${hue} 34% 62%)`} height="8" width="8" />
-        <rect fill={`hsl(${hue} 38% 28%)`} height="2" width="8" />
-        <rect fill={`hsl(${hue} 38% 28%)`} height="2" width="1" y="2" />
-        <rect fill={`hsl(${hue} 38% 28%)`} height="2" width="1" x="7" y="2" />
-        <rect fill="#f5f7fa" height="1" width="1" x="2" y="3" />
-        <rect fill="#f5f7fa" height="1" width="1" x="5" y="3" />
-        <rect fill={`hsl(${hue} 30% 40%)`} height="1" width="3" x="2.5" y="5" />
-      </svg>
+        size={Math.round(size * 0.7)}
+        strokeWidth={2}
+      />
       {source && failedSrc !== source ? (
         <img
           alt=""

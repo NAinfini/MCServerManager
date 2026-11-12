@@ -1,4 +1,13 @@
-import type { PixelIconName } from "../../components/ui/pixel-icon";
+import {
+  Archive,
+  Folder,
+  Puzzle,
+  Settings,
+  SquareTerminal,
+  Timer,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import type { ServerWorkspaceSection } from "../../app/router";
 
 export interface ServerWorkspaceView {
@@ -8,7 +17,7 @@ export interface ServerWorkspaceView {
 
 export interface ServerWorkspaceDefinition {
   id: ServerWorkspaceSection;
-  icon: PixelIconName;
+  icon: LucideIcon;
   labelKey: string;
   defaultView?: string;
   views?: readonly ServerWorkspaceView[];
@@ -21,7 +30,7 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
          Performance history, diagnostics and events answer the follow-up
          question, so they sit one click away instead of on their own page. */
       id: "console",
-      icon: "console",
+      icon: SquareTerminal,
       labelKey: "server.workspace.console",
       defaultView: "terminal",
       views: [
@@ -32,7 +41,7 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
     },
     {
       id: "players",
-      icon: "players",
+      icon: Users,
       labelKey: "server.workspace.players",
       defaultView: "online",
       views: [
@@ -44,7 +53,7 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
     },
     {
       id: "content",
-      icon: "mods",
+      icon: Puzzle,
       labelKey: "server.workspace.content",
       defaultView: "installed",
       views: [
@@ -55,22 +64,22 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
     },
     {
       id: "backups",
-      icon: "chest",
+      icon: Archive,
       labelKey: "server.workspace.backups",
     },
     {
       id: "files",
-      icon: "files",
+      icon: Folder,
       labelKey: "server.workspace.files",
     },
     {
       id: "automation",
-      icon: "redstone",
+      icon: Timer,
       labelKey: "server.workspace.automation",
     },
     {
       id: "settings",
-      icon: "gear",
+      icon: Settings,
       labelKey: "server.workspace.settings",
       defaultView: "general",
       /* Version upgrade moved to the header's more menu — it is a rare, risky

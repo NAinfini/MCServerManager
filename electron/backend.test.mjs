@@ -8,6 +8,14 @@ import { finished } from "node:stream/promises";
 import zlib from "node:zlib";
 import yazl from "yazl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// Every launch forces UTF-8 console output (see legacyServerLaunch).
+const UTF8_JVM_ARGS = [
+  "-Dfile.encoding=UTF-8",
+  "-Dstdout.encoding=UTF-8",
+  "-Dstderr.encoding=UTF-8",
+  "-Dsun.stdout.encoding=UTF-8",
+  "-Dsun.stderr.encoding=UTF-8",
+];
 
 const require = createRequire(import.meta.url);
 const { createBackend } = require("./backend.cjs");
@@ -2668,7 +2676,7 @@ describe("Electron backend resource lifecycle management", () => {
 
         expect(spawnImpl).toHaveBeenCalledWith(
           server.javaPath,
-          ["-Xms1024M", "-Xmx2048M", "-jar", "server.jar", "nogui"],
+          ["-Xms1024M", "-Xmx2048M", ...UTF8_JVM_ARGS, "-jar", "server.jar", "nogui"],
           {
             cwd: targetDir,
             env: process.env,
@@ -2844,6 +2852,7 @@ describe("Electron backend resource lifecycle management", () => {
           [
             "-Xms1024M",
             "-Xmx2048M",
+            ...UTF8_JVM_ARGS,
             "@user_jvm_args.txt",
             "@libraries/net/minecraftforge/forge/1.21.4/win_args.txt",
             "nogui",
@@ -2906,6 +2915,7 @@ describe("Electron backend resource lifecycle management", () => {
           [
             "-Xms1024M",
             "-Xmx4096M",
+            ...UTF8_JVM_ARGS,
             "-jar",
             path.join(serverRoot, "server.jar"),
             "nogui",

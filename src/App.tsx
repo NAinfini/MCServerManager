@@ -40,6 +40,7 @@ import "./styles/app.css";
 import "./styles/command-studio.css";
 import "./styles/shell.css";
 import "./styles/pages.css";
+import "./styles/components.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,4 +1,7 @@
 {
+  "processEvents.forceStopRequested": "Server process force stopped",
+  "processEvents.ready": "Server is ready to join",
+  "processEvents.stopped": "Server has fully stopped",
   "content.detail.settings": "Mod settings",
   "content.detail.settingsNone": "No config file matches this mod's name. It may use another name, or have none.",
   "content.detail.openConfigFolder": "Open config folder",
@@ -1817,8 +1820,8 @@
   "activity.noEvents": "No recent events",
   "activity.loadError": "Could not load recent activity",
   "activity.noEventsDescription": "Lifecycle events show up here as the server starts, stops and restarts.",
-  "processEvents.started": "Server started.",
-  "processEvents.stopRequested": "Server stop requested.",
+  "processEvents.started": "Server process started, loading…",
+  "processEvents.stopRequested": "Stopping the server; saving the world can take a while…",
   "processEvents.autoRestartDisabled": "Automatic restart is disabled.",
   "processEvents.restartAborted": "Restart was cancelled because the previous server process did not exit.",
   "processEvents.exited": "Server exited with code {code}.",

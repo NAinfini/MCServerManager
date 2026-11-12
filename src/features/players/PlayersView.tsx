@@ -15,7 +15,6 @@ import { EmptyState } from "../../components/ui/empty-state";
 import { PlayerHead } from "../../components/ui/player-head";
 import { navigateTo } from "../../app/router";
 import { LoadingState } from "../../components/ui/loading-state";
-import { StatusBadge } from "../../components/ui/status-badge";
 import { TextField } from "../../components/ui/text-field";
 import { Checkbox } from "../../components/ui/checkbox";
 import { DialogSurface } from "../../components/ui/dialog-surface";
@@ -392,7 +391,6 @@ export function PlayersView({ server, view }: PlayersViewProps) {
               </Button>
             </form>
           ) : null}
-          <StatusBadge status={processStatus} />
         </div>
       </div>
 

@@ -21,7 +21,6 @@ export function Button({
       className={cn(
         "button motion-control motion-press",
         `button-${variant}`,
-        variant === "danger" ? "motion-danger" : undefined,
         className,
       )}
       type="button"

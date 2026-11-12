@@ -6,6 +6,9 @@ type EventTranslator = (
 const exactMessages: Record<string, string> = {
   "Server process started.": "processEvents.started",
   "Stop requested.": "processEvents.stopRequested",
+  "Force stop requested.": "processEvents.forceStopRequested",
+  "Server process ready.": "processEvents.ready",
+  "Server process stopped.": "processEvents.stopped",
   "Auto restart skipped because restart policy is disabled.":
     "processEvents.autoRestartDisabled",
   "Restart aborted because the previous server process did not exit.":

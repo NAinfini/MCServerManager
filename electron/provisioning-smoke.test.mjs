@@ -158,7 +158,18 @@ describe("deterministic desktop provisioning smoke", () => {
       );
       expect(spawn).toHaveBeenCalledWith(
         javaPath,
-        ["-Xms1024M", "-Xmx2048M", "-jar", "server.jar", "nogui"],
+        [
+          "-Xms1024M",
+          "-Xmx2048M",
+          "-Dfile.encoding=UTF-8",
+          "-Dstdout.encoding=UTF-8",
+          "-Dstderr.encoding=UTF-8",
+          "-Dsun.stdout.encoding=UTF-8",
+          "-Dsun.stderr.encoding=UTF-8",
+          "-jar",
+          "server.jar",
+          "nogui",
+        ],
         expect.objectContaining({ cwd: firstTarget, shell: false }),
       );
 

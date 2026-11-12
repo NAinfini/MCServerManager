@@ -11,6 +11,7 @@ import {
 import { processKeys } from "../process/queries";
 import { Button } from "../../components/ui/button";
 import { useAppSettings } from "../../i18n";
+import { formatProcessEventMessage } from "../process/eventMessage";
 import { useServerRuntime } from "../servers/ServerRuntimeContext";
 import {
   CommandSuggestions,
@@ -52,6 +53,12 @@ export function colorizeConsoleLine(level: string, message: string) {
               : null;
   return color ? `${color}${message}${ANSI_RESET}` : message;
 }
+
+/* The app's own lifecycle lines, said in the user's language and set apart
+   from the log, so the moment a server became joinable or finished stopping
+   is easy to spot. */
+const LIFECYCLE_LINE = /^(?:Server process|Stop requested|Force stop requested|Restart|Auto restart)/;
+const SETTLED_LINE = /^Server process (?:ready|stopped)\.$/;
 
 const quickCommands = [
   { labelKey: "console.templates.list", command: "list" },
@@ -175,6 +182,11 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
             background: "#0e1014",
             foreground: "#dfe3ea",
             selectionBackground: "#3f4450",
+            /* A thin, quiet thumb: the default slider read as a stray grey
+               box sitting at the end of the output. */
+            scrollbarSliderBackground: "rgba(143, 149, 162, 0.18)",
+            scrollbarSliderHoverBackground: "rgba(143, 149, 162, 0.32)",
+            scrollbarSliderActiveBackground: "rgba(143, 149, 162, 0.42)",
           },
         });
         const fitAddon = new FitAddon();
@@ -199,7 +211,13 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           fitAddon.fit();
         };
         fit();
-        observer = new ResizeObserver(fit);
+        /* Fitting inside the observer callback resizes what it observes, which
+           the browser reports as a "ResizeObserver loop" error on every drag. */
+        let frame = 0;
+        observer = new ResizeObserver(() => {
+          cancelAnimationFrame(frame);
+          frame = requestAnimationFrame(fit);
+        });
         observer.observe(terminalElementRef.current);
         setTerminalReadyToken((value) => value + 1);
       })
@@ -244,9 +262,13 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
         continue;
       }
       writtenEventIdsRef.current.add(event.id);
-      terminal.writeln(colorizeConsoleLine(event.level, event.message));
+      terminal.writeln(
+        LIFECYCLE_LINE.test(event.message)
+          ? `${SETTLED_LINE.test(event.message) ? ANSI.join : event.level === "error" ? ANSI.error : ANSI.info}── ${formatProcessEventMessage(event.message, t)} ──${ANSI_RESET}`
+          : colorizeConsoleLine(event.level, event.message),
+      );
     }
-  }, [eventsQuery.data, normalizedSearch, terminalReadyToken]);
+  }, [eventsQuery.data, normalizedSearch, terminalReadyToken, t]);
 
   const sendCommandMutation = useMutation({
     mutationFn: () => sendServerCommand(serverId, commandText),
@@ -419,7 +441,9 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
             placeholder={
               canSendCommand || runtime.isLoading
                 ? t("console.command.placeholder")
-                : t("console.command.startFirst")
+                : runtime.status === "stopping"
+                  ? t("processEvents.stopRequested")
+                  : t("console.command.startFirst")
             }
             value={commandText}
             onChange={(event) => {

@@ -1,6 +1,5 @@
 import { useEffect, type KeyboardEvent } from "react";
 import type { ServerWorkspaceSection } from "../../app/router";
-import { PixelIcon } from "../../components/ui/pixel-icon";
 import { useAppSettings } from "../../i18n";
 import { serverWorkspaceDefinitions } from "./serverWorkspace";
 
@@ -75,7 +74,7 @@ export function ServerWorkspaceNav({
           aria-current={section === item.id ? "page" : undefined}
           onClick={() => onNavigate(item.id, item.defaultView)}
         >
-          <PixelIcon name={item.icon} />
+          <item.icon aria-hidden="true" size={16} />
           <span>{t(item.labelKey)}</span>
         </button>
       ))}

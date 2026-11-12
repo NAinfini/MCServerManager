@@ -200,8 +200,9 @@ describe("ConsoleView", () => {
           {
             id: "1",
             level: "error",
-            message: "Server process crashed.",
+            message: "[Server thread/ERROR]: boom",
           },
+          { id: "2", level: "info", message: "Server process stopped." },
         ];
       }
       return null;
@@ -210,9 +211,13 @@ describe("ConsoleView", () => {
 
     await waitFor(() =>
       expect(terminalLines).toContain(
-        colorizeConsoleLine("error", "Server process crashed."),
+        colorizeConsoleLine("error", "[Server thread/ERROR]: boom"),
       ),
     );
+    // The app's own lifecycle lines are translated and set apart.
+    expect(
+      terminalLines.some((line) => line.includes("── Server has fully stopped ──")),
+    ).toBe(true);
   });
 });
 

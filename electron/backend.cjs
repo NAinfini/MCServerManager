@@ -3442,11 +3442,22 @@ function structuredServerLaunch(profile) {
     args: [
       profile.minMemoryMb ? `-Xms${profile.minMemoryMb}M` : null,
       profile.maxMemoryMb ? `-Xmx${profile.maxMemoryMb}M` : null,
+      ...UTF8_JVM_ARGS,
       ...spec.jvmArgs,
       ...spec.serverArgs,
     ].filter(Boolean),
   };
 }
+
+/* Java 17 writes console output in the system code page (GBK on Chinese
+   Windows), which arrives here as mojibake. Unknown -D flags are ignored. */
+const UTF8_JVM_ARGS = [
+  "-Dfile.encoding=UTF-8",
+  "-Dstdout.encoding=UTF-8",
+  "-Dstderr.encoding=UTF-8",
+  "-Dsun.stdout.encoding=UTF-8",
+  "-Dsun.stderr.encoding=UTF-8",
+];
 
 function legacyServerLaunch(profile) {
   const serverJar = path.join(profile.rootDir, "server.jar");
@@ -3462,6 +3473,7 @@ function legacyServerLaunch(profile) {
     args: [
       profile.minMemoryMb ? `-Xms${profile.minMemoryMb}M` : null,
       profile.maxMemoryMb ? `-Xmx${profile.maxMemoryMb}M` : null,
+      ...UTF8_JVM_ARGS,
       "-jar",
       serverJar,
       "nogui",
@@ -3694,6 +3706,7 @@ async function startReservedServer(db, serverId, options = {}) {
     if (!managed.ready && isServerReadyLine(line)) {
       managed.ready = true;
       managed.readyAt = nowIso();
+      addProcessEvent(db, profile.id, "info", "Server process ready.");
       try {
         if (
           probeWanted(
@@ -3766,7 +3779,9 @@ async function startReservedServer(db, serverId, options = {}) {
       db,
       profile.id,
       crashed ? "error" : "info",
-      `Server process exited with code ${code ?? "unknown"}.`,
+      crashed
+        ? `Server process exited with code ${code ?? "unknown"}.`
+        : "Server process stopped.",
     );
     if (crashed) {
       // A server that stayed healthy this long is not in a crash loop, so

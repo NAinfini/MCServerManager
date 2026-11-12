@@ -19,72 +19,6 @@
   background: var(--bg-app);
 }
 
-/* Buttons --------------------------------------------------------------- */
-
-.button {
-  gap: 6px;
-  min-height: var(--button-height-md);
-  padding: 0 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg-elevated);
-  color: var(--text-main);
-  font-weight: var(--weight-medium);
-  box-shadow: none;
-}
-
-.button:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.button-primary,
-.button-success {
-  border-color: transparent;
-  background: var(--accent-solid);
-  color: #ffffff;
-}
-
-.button-primary:hover:not(:disabled),
-.button-success:hover:not(:disabled) {
-  background: var(--accent-solid-hover);
-}
-
-.button-danger {
-  border-color: transparent;
-  background: var(--danger-solid);
-  color: #ffffff;
-}
-
-.button-danger:hover:not(:disabled) {
-  background: #c24f59;
-}
-
-.button-warning {
-  border-color: var(--border-strong);
-  background: var(--bg-elevated);
-  color: var(--text-main);
-}
-
-.button-warning:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.button-ghost {
-  border-color: transparent;
-  background: transparent;
-  color: var(--text-muted);
-}
-
-.button-ghost:hover:not(:disabled) {
-  color: var(--text-main);
-}
-
-.button-small {
-  min-height: 26px;
-  padding: 0 10px;
-  font-size: var(--text-sm);
-}
-
 /* Server list ----------------------------------------------------------- */
 
 .sidebar {
@@ -132,12 +66,14 @@
   color: var(--text-main);
 }
 
+/* Fixed to the window, above the sidebar footer: anchored to the bell it ran
+   past the sidebar edge and slid under the main content. */
 .sidebar-notifications .notification-center-panel {
-  position: absolute;
+  position: fixed;
   right: auto;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
+  bottom: 56px;
+  left: 12px;
+  z-index: 1000;
 }
 
 .server-nav-item {
@@ -762,8 +698,12 @@
   }
 }
 
-/* Application pages keep their own padding now the page frame has none. */
+/* Application pages keep their own padding now the page frame has none. The
+   width is the column minus that margin: a page section set to width: 100%
+   plus the margin ran past the window edge and was clipped. */
 .page > :not(.server-workspace):not(.create-server-page) {
+  width: auto;
+  max-width: none;
   margin-inline: var(--page-padding);
 }
 
@@ -1033,13 +973,10 @@
   margin-top: 4px;
 }
 
-.mods-detail-actions .button {
-  flex: 1;
-}
-
 @media (max-width: 1040px) {
+  /* Still side by side: stacked, the list collapsed under the detail panel. */
   .mods-layout {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 220px;
   }
 
   .mods-row-main {
@@ -1048,6 +985,16 @@
 
   .mods-row-source {
     display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .mods-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mods-list-panel {
+    min-height: 260px;
   }
 }
 

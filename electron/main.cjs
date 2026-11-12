@@ -5,6 +5,8 @@ const {
   dialog,
   shell,
   Notification,
+  Tray,
+  Menu,
 } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs");
@@ -22,6 +24,7 @@ let scheduledTaskTimer = null;
 let rendererGone = false;
 let pendingCloseTimer = null;
 let reportedFatalError = false;
+let tray = null;
 
 // The renderer decides whether the close button hides the window or quits the
 // app. A crashed or wedged renderer must never leave a window the user cannot
@@ -161,6 +164,42 @@ function rendererUrl() {
 function windowIconOption() {
   const iconPath = path.join(__dirname, "..", "public", "app-icon.ico");
   return fs.existsSync(iconPath) ? { icon: iconPath } : {};
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) mainWindow.show();
+  mainWindow.focus();
+}
+
+/* Closing the window can leave the app running in the background (servers keep
+   going), so the tray icon is the way back in and the way out. */
+function createTray() {
+  const iconPath = path.join(__dirname, "..", "public", "app-icon.ico");
+  if (!fs.existsSync(iconPath)) return;
+  // The UI language lives in the renderer; the system locale is the best guess here.
+  const chinese = app.getLocale().startsWith("zh");
+  tray = new Tray(iconPath);
+  tray.setToolTip("MC Server Manager");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: chinese ? "显示窗口" : "Show window", click: showMainWindow },
+      { type: "separator" },
+      {
+        label: chinese ? "退出（会先停止运行中的服务器）" : "Quit (stops running servers first)",
+        click: () => {
+          clearPendingCloseTimer();
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on("click", showMainWindow);
 }
 
 function isSafeExternalUrl(url) {
@@ -604,19 +643,7 @@ app.on("child-process-gone", (_event, details) => {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (!mainWindow || mainWindow.isDestroyed()) {
-      createWindow();
-      return;
-    }
-    if (mainWindow.isMinimized()) {
-      mainWindow.restore();
-    }
-    if (!mainWindow.isVisible()) {
-      mainWindow.show();
-    }
-    mainWindow.focus();
-  });
+  app.on("second-instance", showMainWindow);
 
   app.whenReady().then(() => {
     backend = createBackend(app);
@@ -649,6 +676,7 @@ if (!app.requestSingleInstanceLock()) {
       );
     }
     createWindow();
+    createTray();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

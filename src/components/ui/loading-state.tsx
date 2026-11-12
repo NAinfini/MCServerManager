@@ -1,3 +1,4 @@
+import { LoaderCircle } from "lucide-react";
 import { useAppSettings } from "../../i18n";
 
 interface LoadingStateProps {
@@ -30,40 +31,7 @@ export function LoadingState({
         </div>
       ) : (
         <div className="loading-spinner" aria-hidden="true">
-          <svg viewBox="0 0 40 40" width="40" height="40">
-            <rect
-              className="spinner-block spinner-block-1"
-              x="4"
-              y="4"
-              width="12"
-              height="12"
-              rx="2"
-            />
-            <rect
-              className="spinner-block spinner-block-2"
-              x="24"
-              y="4"
-              width="12"
-              height="12"
-              rx="2"
-            />
-            <rect
-              className="spinner-block spinner-block-3"
-              x="24"
-              y="24"
-              width="12"
-              height="12"
-              rx="2"
-            />
-            <rect
-              className="spinner-block spinner-block-4"
-              x="4"
-              y="24"
-              width="12"
-              height="12"
-              rx="2"
-            />
-          </svg>
+          <LoaderCircle size={28} strokeWidth={2} />
         </div>
       )}
       <span>{label}</span>
