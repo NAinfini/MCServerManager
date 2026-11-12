@@ -1,10 +1,11 @@
-import type { KeyboardEvent } from "react";
+import { useEffect, type KeyboardEvent } from "react";
 import type { ServerWorkspaceSection } from "../../app/router";
+import { PixelIcon } from "../../components/ui/pixel-icon";
 import { useAppSettings } from "../../i18n";
 import { serverWorkspaceDefinitions } from "./serverWorkspace";
 
 function moveFocus(event: KeyboardEvent<HTMLElement>) {
-  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
   const buttons = Array.from(
     event.currentTarget.querySelectorAll<HTMLButtonElement>("button"),
   );
@@ -16,9 +17,19 @@ function moveFocus(event: KeyboardEvent<HTMLElement>) {
       ? 0
       : event.key === "End"
         ? buttons.length - 1
-        : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+        : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) %
           buttons.length;
   buttons[index]?.focus();
+}
+
+/* Number keys must not steal input from anywhere the user is typing, which
+   includes the xterm helper textarea and Monaco's hidden input. */
+function isTypingTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)
+  );
 }
 
 export function ServerWorkspaceNav({
@@ -31,22 +42,40 @@ export function ServerWorkspaceNav({
   onNavigate: (section: ServerWorkspaceSection, view?: string) => void;
 }) {
   const { t } = useAppSettings();
+
+  useEffect(() => {
+    const handleKey = (event: globalThis.KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        isTypingTarget(event.target) ||
+        document.querySelector('[role="dialog"], [role="alertdialog"]')
+      ) {
+        return;
+      }
+      const item = serverWorkspaceDefinitions[Number(event.key) - 1];
+      if (item) onNavigate(item.id, item.defaultView);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onNavigate]);
+
   return (
     <nav
       aria-label={t("server.workspace.aria", { server: serverName })}
-      className="workspace-navigation"
+      className="workspace-tabs"
       onKeyDown={moveFocus}
     >
       {serverWorkspaceDefinitions.map((item) => (
         <button
           key={item.id}
           type="button"
-          title={t(item.labelKey)}
-          aria-label={t(item.labelKey)}
           aria-current={section === item.id ? "page" : undefined}
           onClick={() => onNavigate(item.id, item.defaultView)}
         >
-          <item.icon size={17} aria-hidden="true" />
+          <PixelIcon name={item.icon} />
           <span>{t(item.labelKey)}</span>
         </button>
       ))}

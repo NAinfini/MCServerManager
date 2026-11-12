@@ -68,6 +68,7 @@ export const test = base.extend<Fixtures>({
           });
         },
         windowAction: async () => undefined,
+        getPathForFile: (file: File) => `C:\\Imports\\${file.name}`,
         onCloseBehaviorRequested: () => () => undefined,
       };
     });

@@ -1,7 +1,7 @@
 ﻿import { invokeDesktopCommandWithErrorHandling } from "../../lib/desktop-command-error";
 
 export type ManagedProcessStatus =
-  "running" | "stopped" | "crashed" | "externalRunning";
+  "running" | "stopping" | "stopped" | "crashed" | "externalRunning";
 
 export interface ManagedProcess {
   id: string;
@@ -9,6 +9,9 @@ export interface ManagedProcess {
   pid?: number | null;
   command: string;
   status: ManagedProcessStatus;
+  /** True once the server logged its "Done" line; the status stays "running". */
+  ready?: boolean;
+  readyAt?: string | null;
   startedAt?: string | null;
   exitedAt?: string | null;
   exitCode?: number | null;
@@ -44,6 +47,43 @@ export function startServer(serverId: string) {
 export function stopServer(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<void>("stop_server", {
     serverId,
+  });
+}
+
+export function forceStopServer(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<void>("force_stop_server", {
+    serverId,
+  });
+}
+
+export type CrashKind =
+  | "clientOnlyMod"
+  | "javaVersion"
+  | "modIncompatible"
+  | "outOfMemory"
+  | "portInUse"
+  | "eula"
+  | "unknown";
+
+export interface CrashExplanation {
+  kind: CrashKind;
+  deterministic: boolean;
+  reportFile: string | null;
+  detail: string;
+  modFile?: string | null;
+  modName?: string | null;
+}
+
+export function getCrashExplanation(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<CrashExplanation | null>(
+    "get_crash_explanation",
+    { serverId },
+  );
+}
+
+export function disableCrashedMod(serverId: string, modFile: string) {
+  return invokeDesktopCommandWithErrorHandling<void>("disable_crashed_mod", {
+    input: { serverId, modFile },
   });
 }
 

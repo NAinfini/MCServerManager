@@ -478,4 +478,82 @@ describe("resumable provisioning jobs", () => {
       "eula=true\n",
     );
   });
+
+  it("keeps a pack's own eula.txt and server.properties when asked to", async () => {
+    const targetDir = tempTarget();
+    const shipped = "#By the pack\neula=true\n";
+    const { executor } = makeExecutor({
+      handlers: {
+        extracting: async ({ job }) => {
+          fs.writeFileSync(path.join(job.stagingDir, "eula.txt"), shipped);
+          fs.writeFileSync(
+            path.join(job.stagingDir, "server.properties"),
+            "motd=From the pack\nmax-players=64\nserver-port=25565\n",
+          );
+        },
+      },
+    });
+    const job = executor.createJob(
+      validPlan(targetDir, {
+        keepPackSettings: true,
+        eula: {
+          accepted: true,
+          termsUrl: "https://aka.ms/MinecraftEULA",
+          acceptedAt: "2026-01-01T00:00:00.000Z",
+          source: "pack",
+        },
+        configuration: {
+          minMemoryMb: 1024,
+          maxMemoryMb: 2048,
+          serverPort: 25570,
+          motd: "App default",
+          maxPlayers: 20,
+          gameMode: "survival",
+        },
+      }),
+    );
+
+    await executor.executeJob(job.id);
+
+    expect(fs.readFileSync(path.join(targetDir, "eula.txt"), "utf8")).toBe(
+      shipped,
+    );
+    const properties = fs.readFileSync(
+      path.join(targetDir, "server.properties"),
+      "utf8",
+    );
+    expect(properties).toContain("motd=From the pack");
+    expect(properties).toContain("max-players=64");
+    // The card already kept the pack's port unless another server had it.
+    expect(properties).toContain("server-port=25570");
+    // Not stated by the pack, so the default still applies.
+    expect(properties).toContain("gamemode=survival");
+  });
+
+  it("never agrees for a pack that claims acceptance but ships none", async () => {
+    const targetDir = tempTarget();
+    const { executor } = makeExecutor({
+      handlers: {
+        extracting: async ({ job }) => {
+          fs.writeFileSync(path.join(job.stagingDir, "eula.txt"), "eula=false\n");
+        },
+      },
+    });
+    const job = executor.createJob(
+      validPlan(targetDir, {
+        eula: {
+          accepted: true,
+          termsUrl: "https://aka.ms/MinecraftEULA",
+          acceptedAt: "2026-01-01T00:00:00.000Z",
+          source: "pack",
+        },
+      }),
+    );
+
+    const finished = await executor.executeJob(job.id).catch((error) => error);
+    expect(JSON.stringify(finished?.code ?? finished)).toContain(
+      "EULA_ACCEPTANCE_REQUIRED",
+    );
+    expect(fs.existsSync(path.join(targetDir, "eula.txt"))).toBe(false);
+  });
 });

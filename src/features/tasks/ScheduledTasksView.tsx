@@ -67,6 +67,9 @@ function runStatusLabel(status: string, t: (key: string) => string) {
   if (status === "failed" || status === "error") {
     return t("tasks.runStatus.failed");
   }
+  if (status === "skipped") {
+    return t("tasks.runStatus.skipped");
+  }
   return t("tasks.runStatus.unknown");
 }
 

@@ -10,7 +10,7 @@ test.describe("marketplace and server creation", () => {
       .click();
     await page
       .getByRole("navigation", { name: "Fabric Workshop workspace" })
-      .getByRole("button", { name: "Content", exact: true })
+      .getByRole("button", { name: "Mods", exact: true })
       .click();
     await page
       .getByRole("navigation", { name: "Workspace views" })

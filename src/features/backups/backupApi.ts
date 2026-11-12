@@ -11,7 +11,47 @@ export interface BackupRecord {
   status: "completed" | "failed";
   createdAt: string;
   error?: string | null;
+  /* Rows written before incremental snapshots (including old zip-shaped
+     rows) have none of these; they are full copies. */
+  trigger?: "manual" | "scheduled" | "pre_restart" | "pre_update";
+  format?: "full" | "incremental";
+  logicalBytes?: number;
+  newBytes?: number;
 }
+
+export interface BackupSettings {
+  serverId: string;
+  configured: boolean;
+  enabled: boolean;
+  intervalMinutes: number;
+  beforeRestart: boolean;
+  beforeUpdate: boolean;
+  keepRecent: number;
+  keepDaily: number;
+  keepWeekly: number;
+  /* Null: up to five times the world's size. */
+  maxTotalMb: number | null;
+  location: string | null;
+  nextRunAt: string | null;
+  lastSuccessAt: string | null;
+}
+
+export interface BackupStatus {
+  serverId: string;
+  settings: BackupSettings;
+  restorePointCount: number;
+  lastBackupAt: string | null;
+  lastSuccessAt: string | null;
+  nextRunAt: string | null;
+  usedBytes: number;
+  freeBytes: number | null;
+  location: string;
+}
+
+export type SaveBackupSettingsInput = Omit<
+  BackupSettings,
+  "configured" | "nextRunAt" | "lastSuccessAt"
+>;
 
 export interface CreateWorldBackupInput {
   serverId: string;
@@ -75,12 +115,27 @@ export interface PreviewBackupRestoreInput {
 export interface ExportBackupInput {
   backupId: string;
   targetDir: string;
+  format?: "zip" | "folder";
 }
 
 export function listServerBackups(serverId: string) {
   return invokeDesktopCommandWithErrorHandling<BackupRecord[]>(
     "list_server_backups",
     { serverId },
+  );
+}
+
+export function getBackupStatus(serverId: string) {
+  return invokeDesktopCommandWithErrorHandling<BackupStatus>(
+    "get_backup_status",
+    { serverId },
+  );
+}
+
+export function saveBackupSettings(input: SaveBackupSettingsInput) {
+  return invokeDesktopCommandWithErrorHandling<BackupSettings>(
+    "save_backup_settings",
+    { input },
   );
 }
 

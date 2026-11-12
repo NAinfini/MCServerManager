@@ -68,13 +68,16 @@ export interface FinalProvisioningPlan extends SourceProvisioningPlan {
     loaderType: LoaderType;
     minecraftVersion: string;
     loaderVersion?: string | null;
-    autoStart: boolean;
+    /** Start once when installation finishes; unrelated to the launch-time auto start flag. */
+    startAfterInstall: boolean;
     restartPolicy: RestartPolicy;
   };
   configuration: GuidedServerConfiguration;
   compatibilityWarnings: CompatibilityWarning[];
   acknowledgedWarningCodes: string[];
   eula: ExplicitEulaAcceptance;
+  /* A pack's own server.properties values win over these defaults. */
+  keepPackSettings?: boolean;
   javaRuntime: ValidatedJavaRuntime;
   launchSpec: ServerLaunchSpec & { validated: true };
 }

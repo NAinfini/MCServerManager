@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { inspectZip, readJsonEntry } = require("./archive.cjs");
 const { provisioningError } = require("./contracts.cjs");
+const { detectPack } = require("./pack-detect.cjs");
 
 const SCRIPT_PATTERN = /(?:^|\/)[^/]+\.(?:bat|cmd|ps1|sh)$/i;
 
@@ -192,29 +193,52 @@ function planCurseForge(packPath, inspection, manifest) {
   };
 }
 
-function planGeneric(packPath, inspection) {
+/* Conflicts and guesses must not slide through on a single click: the wizard
+   makes the user tick each of these. */
+const ACKNOWLEDGED_DETECTION_CODES = new Set([
+  "PACK_VERSION_CONFLICT",
+  "PACK_LOADER_CONFLICT",
+  "PACK_VERSION_INFERRED",
+  "PACK_MODS_INCOMPATIBLE",
+  "PACK_NO_VERSION",
+]);
+
+function planGeneric(packPath, inspection, detection) {
+  const identified = Boolean(
+    detection.kind === "serverPack" &&
+      detection.loader?.type &&
+      detection.minecraftVersion,
+  );
+  const warnings = detection.warnings.map((item) => ({
+    ...item,
+    requiresAcknowledgement: ACKNOWLEDGED_DETECTION_CODES.has(item.code),
+  }));
+  if (!identified) {
+    warnings.push({
+      code: "PACK_UNVERIFIED",
+      message: "This archive has no recognized server-pack manifest.",
+      requiresAcknowledgement: true,
+    });
+  }
   return {
     source: { kind: "localModpackFile", path: packPath },
     pack: {
       format: "generic",
-      name: path.basename(packPath, path.extname(packPath)),
+      name: detection.name,
       versionId: null,
     },
-    minecraftVersion: null,
-    loaderType: null,
-    loaderVersion: null,
-    requiredJavaMajor: null,
+    minecraftVersion: detection.minecraftVersion,
+    loaderType: detection.loader?.type ?? null,
+    loaderVersion: detection.loader?.version ?? null,
+    requiredJavaMajor: detection.javaMajor,
     artifacts: [],
     optionalFiles: [],
-    archiveLayers: [],
+    archiveLayers: detection.root
+      ? [{ prefix: detection.root, stripPrefix: true }]
+      : [],
     properties: {},
-    warnings: [
-      {
-        code: "PACK_UNVERIFIED",
-        message: "This archive has no recognized server-pack manifest.",
-        requiresAcknowledgement: true,
-      },
-    ],
+    disabledMods: detection.disabledMods,
+    warnings,
     integrity: { status: "unverified" },
     estimatedBytes: inspection.uncompressedBytes,
   };
@@ -234,6 +258,7 @@ async function planLocalPack(packPath) {
   }
   const inspection = await inspectZip(resolvedPath);
   const paths = new Set(inspection.entries.map((entry) => entry.path));
+  const detection = await detectPack(resolvedPath);
   let plan;
   if (paths.has("modrinth.index.json")) {
     plan = planModrinth(
@@ -248,10 +273,11 @@ async function planLocalPack(packPath) {
       await readJsonEntry(resolvedPath, "manifest.json"),
     );
   } else {
-    plan = planGeneric(resolvedPath, inspection);
+    plan = planGeneric(resolvedPath, inspection, detection);
   }
   return {
     ...plan,
+    detection,
     ignoredScripts: inspection.entries
       .map((entry) => entry.path)
       .filter((entryPath) => SCRIPT_PATTERN.test(entryPath)),

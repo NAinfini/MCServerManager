@@ -3155,6 +3155,9 @@ describe("Electron backend resource lifecycle management", () => {
         "data",
         "[Server thread/ERROR]: Encountered an unexpected exception\n",
       );
+      // The process gets 30s to exit by itself before it is killed.
+      expect(children[0].kill).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(30_000);
       expect(children[0].kill).toHaveBeenCalledTimes(1);
 
       await vi.advanceTimersByTimeAsync(1000);

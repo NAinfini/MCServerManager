@@ -178,7 +178,7 @@ function defaultInspectJava(javaPath) {
   if (!version || !majorMatch || result.status !== 0) {
     throw provisioningError(
       "JAVA_EXECUTABLE_INVALID",
-      "The installed Java executable could not be validated.",
+      `The installed Java executable could not be validated (exit ${result.status}): ${output.trim().split(/\r?\n/).slice(0, 3).join(" | ")}`,
     );
   }
   return {

@@ -1,0 +1,231 @@
+/* The confirmation card for a dropped pack. Spec: DESIGN.md, interaction rules. */
+
+.modal-dialog.pack-drop-dialog {
+  width: min(560px, calc(100vw - 32px));
+  gap: 0;
+  border-top: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow-overlay);
+}
+
+.pack-drop-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
+
+.pack-drop-header h2 {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.pack-drop-header p {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pack-drop-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-4);
+}
+
+.pack-drop-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.pack-drop-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.pack-drop-row dt {
+  color: var(--text-muted);
+}
+
+.pack-drop-row dd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+}
+
+.pack-drop-value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--weight-semibold);
+}
+
+.pack-drop-mono {
+  font-family: var(--font-mono);
+}
+
+.pack-drop-change {
+  border: 0;
+  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  color: var(--info);
+  background: none;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pack-drop-row .pack-drop-change,
+.pack-drop-notice .pack-drop-change {
+  flex: none;
+}
+
+.pack-drop-change:hover {
+  text-decoration: underline;
+}
+
+.pack-drop-change:focus-visible,
+.pack-drop-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.pack-drop-editor {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pack-drop-input {
+  width: 140px;
+  height: 32px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  color: var(--text-main);
+  background: var(--bg-inset);
+  font: inherit;
+  font-family: var(--font-mono);
+}
+
+.pack-drop-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.pack-drop-field-error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.pack-drop-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.pack-drop-notice {
+  display: grid;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: 9px var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.pack-drop-notice > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.pack-drop-notice-warning {
+  color: var(--console-warning);
+  background: color-mix(in srgb, var(--console-warning) 12%, transparent);
+}
+
+.pack-drop-notice-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.pack-drop-missing {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding-left: var(--space-4);
+}
+
+.pack-drop-evidence ul {
+  display: grid;
+  gap: 4px;
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-inset);
+  list-style: none;
+  font-size: 12px;
+}
+
+.pack-drop-evidence li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+}
+
+.pack-drop-evidence li > :first-child,
+.pack-drop-evidence li > :last-child {
+  color: var(--text-muted);
+}
+
+.pack-drop-status {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.pack-drop-footer {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+}
+
+.pack-drop-eula {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.pack-drop-eula a {
+  color: var(--info);
+}
+
+.pack-drop-footer .pack-drop-confirm {
+  min-height: 36px;
+  padding-inline: var(--space-5);
+  font-weight: var(--weight-semibold);
+}
+
+@media (max-width: 640px) {
+  .pack-drop-footer {
+    flex-wrap: wrap;
+  }
+
+  .pack-drop-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

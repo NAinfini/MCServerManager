@@ -3,6 +3,11 @@ import type { ProcessEvent } from "../features/process/api";
 import { processKeys } from "../features/process/queries";
 import { playerKeys } from "../features/players/queries";
 import {
+  notificationKeys,
+  type NotificationEvent,
+} from "../features/notifications/api";
+import { useNotificationStore } from "../features/notifications/notificationStore";
+import {
   performanceKeys,
   type PerformanceHistory,
   type ServerMetricSample,
@@ -49,6 +54,21 @@ export function applyDesktopServerEvent(
         ].slice(0, 120),
       }),
     );
+    return;
+  }
+
+  // A backend-raised notification (for example a failed backup): refresh the
+  // stored list and show it now. The system notification is main.cjs's job.
+  if (event.kind === "notification") {
+    const item = event.payload as Partial<NotificationEvent> | null;
+    void queryClient.invalidateQueries({ queryKey: notificationKeys.events });
+    if (item?.title) {
+      useNotificationStore.getState().push({
+        severity: item.severity === "error" ? "error" : "warning",
+        title: item.title,
+        message: item.message ?? "",
+      });
+    }
     return;
   }
 

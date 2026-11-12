@@ -27,6 +27,8 @@ export interface ExplicitEulaAcceptance {
   accepted: true;
   termsUrl: string;
   acceptedAt: string;
+  /* "pack": the pack shipped its own accepted eula.txt, which is kept as is. */
+  source?: "pack";
 }
 
 export interface ValidatedJavaRuntime {

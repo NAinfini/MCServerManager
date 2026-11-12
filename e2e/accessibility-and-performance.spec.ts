@@ -28,10 +28,14 @@ test.describe("accessibility and idle performance", () => {
       .click();
     await expectNoSeriousAxeViolations(page);
 
-    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    // The workspace has a Settings tab too, so name the application one.
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: "Settings", exact: true })
+      .click();
     await expectNoSeriousAxeViolations(page);
 
-    await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+    await page.getByRole("button", { name: "Servers", exact: true }).click();
     await page.getByRole("button", { name: "Create Server" }).click();
     await expectNoSeriousAxeViolations(page);
   });
@@ -44,7 +48,7 @@ test.describe("accessibility and idle performance", () => {
       .getByRole("button", { name: "Fabric Workshop", exact: true });
     await firstCard.focus();
     await firstCard.press("Enter");
-    await expect(page).toHaveURL(/#\/servers\/server-1\/overview/);
+    await expect(page).toHaveURL(/#\/servers\/server-1\/console/);
 
     const workspaceNav = page.getByRole("navigation", {
       name: "Fabric Workshop workspace",
@@ -67,7 +71,7 @@ test.describe("accessibility and idle performance", () => {
     );
 
     const serverSettings = workspaceNav.getByRole("button", {
-      name: "Server settings",
+      name: "Settings",
       exact: true,
     });
     await serverSettings.focus();
@@ -79,16 +83,19 @@ test.describe("accessibility and idle performance", () => {
     await worldProperties.press("Enter");
     await expect(page).toHaveURL(/#\/servers\/server-1\/settings\/properties/);
 
-    const dashboard = page.getByRole("button", {
-      name: "Dashboard",
+    const servers = page.getByRole("button", {
+      name: "Servers",
       exact: true,
     });
-    await dashboard.focus();
-    await dashboard.press("Enter");
-    const appSettings = page.getByRole("button", {
-      name: "Settings",
-      exact: true,
-    });
+    await servers.focus();
+    await servers.press("Enter");
+    await expect(page).toHaveURL(/#\/dashboard/);
+    const appSettings = page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", {
+        name: "Settings",
+        exact: true,
+      });
     await appSettings.focus();
     await appSettings.press("Enter");
 
@@ -98,6 +105,26 @@ test.describe("accessibility and idle performance", () => {
     await expect(
       page.getByRole("button", { name: "Appearance" }),
     ).toBeFocused();
+  });
+
+  test("moves between workspace tabs with the arrow keys", async ({
+    appPage: page,
+  }) => {
+    await page.goto("/#/servers/server-1/console");
+    const workspaceNav = page.getByRole("navigation", {
+      name: "Fabric Workshop workspace",
+    });
+    const tab = (name: string) =>
+      workspaceNav.getByRole("button", { name, exact: true });
+
+    await tab("Console").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(tab("Players")).toBeFocused();
+    await page.keyboard.press("End");
+    await expect(tab("Settings")).toBeFocused();
+    await page.keyboard.press("Home");
+    await expect(tab("Console")).toBeFocused();
+    await expect(page).toHaveURL(/#\/servers\/server-1\/console/);
   });
 
   test("keeps dashboard idle IPC at the two-second summary budget", async ({

@@ -12,6 +12,9 @@ const internalBackendCommands = new Set([
   "get_server_eula_acceptance",
   "get_server_source",
   "list_provisioning_jobs",
+  // Called once by the main process after launch; the renderer has no reason
+  // to start every flagged server again.
+  "start_auto_start_servers",
   // Retention is driven by the metric writer and the scheduled-task tick, so
   // the renderer has no reason to be able to delete history.
   "prune_telemetry",
@@ -23,6 +26,7 @@ const mainProcessCommands = [
   "open_app_data_folder",
   "open_app_logs_folder",
   "open_server_folder",
+  "open_playit_setup",
   "open_tunnel_application",
   "request_app_quit",
   "show_open_dialog",

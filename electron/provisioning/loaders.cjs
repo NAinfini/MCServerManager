@@ -144,9 +144,17 @@ function createAdapter(loaderType, approvedHosts, deps, methods) {
           shell: false,
         });
         if (result?.code !== 0) {
+          const reason = result?.timedOut
+            ? `${loaderType} installer did not finish in time and was stopped`
+            : `${loaderType} installer exited with code ${result?.code}`;
+          const lastLines = String(result?.output ?? "")
+            .trim()
+            .split(/\r?\n/)
+            .slice(-5)
+            .join("\n");
           throw codedError(
             "LOADER_INSTALLER_FAILED",
-            `${loaderType} installer exited with code ${result?.code}`,
+            lastLines ? `${reason}\n${lastLines}` : reason,
           );
         }
       }

@@ -199,7 +199,9 @@ describe("AppShell", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getAllByText("MC Server Manager").length).toBeGreaterThan(0);
-    expect(await screen.findByText(/1 running/i)).toBeInTheDocument();
+    expect(
+      await screen.findByRole("region", { name: "Server status summary" }),
+    ).toHaveTextContent(/Running\s*1/);
     expect(
       await screen.findByRole("heading", { name: "Servers" }),
     ).toBeInTheDocument();
@@ -213,12 +215,20 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /^settings$/i }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /java runtimes/i }),
-    ).toHaveAttribute("aria-label", "Java Runtimes");
-    expect(screen.getByRole("button", { name: /^logger$/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^java$/i })).toHaveAttribute(
       "aria-label",
-      "Logger",
+      "Java",
+    );
+    expect(screen.getByRole("button", { name: /^logs$/i })).toHaveAttribute(
+      "aria-label",
+      "Logs",
+    );
+    // There is no dashboard entry any more: the brand leads back to the list.
+    expect(
+      screen.queryByRole("button", { name: /^dashboard$/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^servers$/i })).toHaveClass(
+      "sidebar-brand",
     );
   });
 
@@ -277,7 +287,7 @@ describe("AppShell", () => {
   it("opens Java runtimes in the main content area", async () => {
     renderShell();
 
-    fireEvent.click(screen.getByRole("button", { name: /java runtimes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^java$/i }));
 
     const main = screen.getByRole("main");
     expect(
@@ -364,6 +374,49 @@ describe("AppShell", () => {
       "aria-current",
       "page",
     );
+  });
+
+  it("lands retired overview links on the Health view under Console", async () => {
+    renderShell(
+      { runningCount: 1, crashedCount: 0 },
+      "#/servers/server-1/overview",
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Survival SMP" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Console" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("button", { name: "Health" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("keeps notifications in the sidebar footer now the status bar is gone", async () => {
+    const { container } = renderShell();
+
+    const primary = screen.getByRole("navigation", { name: /primary/i });
+    expect(
+      within(primary).getByLabelText("Open notifications"),
+    ).toBeInTheDocument();
+    expect(container.querySelector(".status-bar")).toBeNull();
+  });
+
+  it("opens the create page from the sidebar drop hint", async () => {
+    renderShell();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Drop a pack to start a server" }),
+    );
+
+    expect(
+      await within(screen.getByRole("main")).findByRole("heading", {
+        name: "Create server",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("renders the create wizard progress inside the main content header", async () => {
@@ -467,7 +520,7 @@ describe("AppShell", () => {
     );
 
     await screen.findByRole("heading", { name: "Create server" });
-    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
 
     const confirmation = await screen.findByRole("alertdialog", {
       name: "Discard server creation?",
@@ -479,7 +532,7 @@ describe("AppShell", () => {
       screen.getByRole("heading", { name: "Create server" }),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
     await userEvent.click(
       within(await screen.findByRole("alertdialog")).getByRole("button", {
         name: "Discard creation",
@@ -520,7 +573,7 @@ describe("AppShell", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Download interrupted",
     );
-    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
 
     expect(
       await screen.findByRole("heading", { name: "Application Logger" }),
@@ -576,14 +629,14 @@ describe("AppShell", () => {
       name: /language/i,
     });
     expect(
-      within(themeChoices).getByRole("radio", { name: "System" }),
+      within(themeChoices).getByRole("radio", { name: "Dark" }),
     ).toHaveAttribute("aria-checked", "true");
     expect(languageSelect).toHaveTextContent("English");
     expect(
       within(themeChoices).getByRole("radio", { name: "Light" }),
     ).toBeInTheDocument();
     expect(
-      within(themeChoices).getByRole("radio", { name: "Dark" }),
+      within(themeChoices).getByRole("radio", { name: "System" }),
     ).toBeInTheDocument();
     await userEvent.click(
       within(themeChoices).getByRole("radio", { name: "System" }),
@@ -612,8 +665,9 @@ describe("AppShell", () => {
     renderShell();
 
     expect(
-      await screen.findByRole("button", { name: "Java 运行时" }),
+      await screen.findByRole("button", { name: "Java" }),
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "日志" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
     expect(
       await screen.findByRole("heading", { name: "服务器" }),
@@ -626,7 +680,7 @@ describe("AppShell", () => {
   it("opens the logger page from the sidebar", async () => {
     renderShell();
 
-    await userEvent.click(screen.getByRole("button", { name: /^logger$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^logs$/i }));
 
     expect(
       await screen.findByRole("heading", { name: "Application Logger" }),

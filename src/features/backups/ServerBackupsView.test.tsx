@@ -1,5 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "../../test/render";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "../../test/render";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { invokeDesktopCommand as invoke } from "../../lib/desktop-runtime";
@@ -44,6 +51,34 @@ const backup = {
   error: null,
 };
 
+const settings = {
+  serverId: server.id,
+  configured: true,
+  enabled: true,
+  intervalMinutes: 360,
+  beforeRestart: true,
+  beforeUpdate: true,
+  keepRecent: 8,
+  keepDaily: 5,
+  keepWeekly: 2,
+  maxTotalMb: null,
+  location: null,
+  nextRunAt: new Date(Date.now() + 3 * 3_600_000).toISOString(),
+  lastSuccessAt: null,
+};
+
+const status = {
+  serverId: server.id,
+  settings,
+  restorePointCount: 1,
+  lastBackupAt: backup.createdAt,
+  lastSuccessAt: backup.createdAt,
+  nextRunAt: settings.nextRunAt,
+  usedBytes: 4096,
+  freeBytes: 50 * 1024 ** 3,
+  location: "C:/servers/survival/backups",
+};
+
 function renderBackups(
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -68,6 +103,9 @@ describe("ServerBackupsView", () => {
       if (command === "list_backup_profiles") {
         return [];
       }
+      if (command === "get_backup_status") {
+        return status;
+      }
       if (command === "preview_backup_restore") {
         return {
           backupId: backup.id,
@@ -85,6 +123,205 @@ describe("ServerBackupsView", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("answers whether you are safe: last backup, next run and space used", async () => {
+    renderBackups();
+
+    const strip = await screen.findByTestId("backups-status");
+    // The fixture backup is from 2026-07-01, long past the expected interval.
+    await waitFor(() =>
+      expect(strip).toHaveTextContent(/longer ago than expected/),
+    );
+    expect(strip).toHaveAttribute("data-tone", "warning");
+    expect(strip).toHaveTextContent(/Next automatic backup/);
+    expect(strip).toHaveTextContent(/4\.0 KB/);
+    expect(strip).toHaveTextContent(/50\.0 GB free/);
+    expect(
+      within(strip).getByRole("button", { name: "Backup Now" }),
+    ).toBeEnabled();
+  });
+
+  it("shows a fresh backup as covered", async () => {
+    const fresh = { ...backup, createdAt: new Date().toISOString() };
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [fresh];
+      if (command === "get_backup_status")
+        return { ...status, lastSuccessAt: fresh.createdAt };
+      return [];
+    });
+    renderBackups();
+
+    const strip = await screen.findByTestId("backups-status");
+    await waitFor(() => expect(strip).toHaveAttribute("data-tone", "ok"));
+    expect(strip).toHaveTextContent(/Last backup/);
+  });
+
+  it("says so plainly when there is no backup to go back to", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [];
+      if (command === "get_backup_status")
+        return {
+          ...status,
+          restorePointCount: 0,
+          lastBackupAt: null,
+          lastSuccessAt: null,
+        };
+      return [];
+    });
+    renderBackups();
+
+    expect(await screen.findByTestId("backups-status")).toHaveTextContent(
+      "No backup yet, so there is nothing to go back to",
+    );
+  });
+
+  it("lists restore points with what triggered them and how much each added", async () => {
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups")
+        return [
+          {
+            ...backup,
+            id: "auto-1",
+            archivePath: "C:/servers/survival/backups/auto-1",
+            trigger: "pre_restart",
+            format: "incremental",
+            logicalBytes: 8 * 1024 ** 2,
+            newBytes: 2 * 1024 ** 2,
+          },
+          { ...backup, id: "old-1" },
+        ];
+      if (command === "get_backup_status") return status;
+      return [];
+    });
+    renderBackups();
+
+    const rows = await screen.findAllByTestId("backup-row");
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Before restart");
+    expect(rows[0]).toHaveTextContent("8.0 MB");
+    expect(rows[0]).toHaveTextContent("+2.0 MB new");
+    // A row from before incremental snapshots (here a zip-shaped one) still
+    // lists, with the same actions.
+    expect(rows[1]).toHaveTextContent("Full copy");
+    expect(rows[1]).toHaveTextContent("world.zip");
+    expect(
+      within(rows[1]).getByRole("button", { name: "Restore backup" }),
+    ).toBeEnabled();
+    expect(
+      within(rows[1]).getByRole("button", { name: "Export backup" }),
+    ).toBeEnabled();
+  });
+
+  it("exports a restore point as a zip into the chosen folder", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [backup];
+      if (command === "get_backup_status") return status;
+      if (command === "show_open_dialog")
+        return { canceled: false, paths: ["D:/exports"] };
+      if (command === "export_server_backup")
+        return { exportedPath: "D:/exports/world.zip" };
+      return [];
+    });
+    renderBackups();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Export backup" }),
+    );
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("export_server_backup", {
+        input: { backupId: backup.id, targetDir: "D:/exports", format: "zip" },
+      });
+    });
+    expect(
+      await screen.findByText("Exported to D:/exports/world.zip"),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps schedule, retention and location behind one collapsed settings section", async () => {
+    const user = userEvent.setup();
+    renderBackups();
+
+    const section = await screen.findByTestId("backups-settings");
+    expect(section).not.toHaveAttribute("open");
+    await waitFor(() =>
+      expect(section).toHaveTextContent(
+        "Every 6 h · keeps 8 recent, 5 daily, 2 weekly",
+      ),
+    );
+
+    await user.click(within(section).getByText("Backup settings"));
+    expect(section).toHaveAttribute("open");
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith("save_backup_settings", {
+        input: {
+          serverId: server.id,
+          enabled: true,
+          intervalMinutes: 360,
+          beforeRestart: true,
+          beforeUpdate: true,
+          keepRecent: 8,
+          keepDaily: 5,
+          keepWeekly: 2,
+          maxTotalMb: null,
+          location: null,
+        },
+      });
+    });
+    expect(await screen.findByText("Settings saved")).toBeInTheDocument();
+  });
+
+  it("lets the user pick a backup location on another disk", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [backup];
+      if (command === "get_backup_status") return status;
+      if (command === "show_open_dialog")
+        return { canceled: false, paths: ["E:/mc-backups"] };
+      if (command === "save_backup_settings")
+        return { ...settings, location: "E:/mc-backups" };
+      return [];
+    });
+    renderBackups();
+
+    const section = await screen.findByTestId("backups-settings");
+    await user.click(within(section).getByText("Backup settings"));
+    await user.click(screen.getByRole("button", { name: "Choose folder" }));
+    expect(
+      screen.getByRole("textbox", { name: "Backup location" }),
+    ).toHaveValue("E:/mc-backups");
+    await user.click(screen.getByRole("button", { name: "Save settings" }));
+
+    await waitFor(() => {
+      expect(invoke).toHaveBeenCalledWith(
+        "save_backup_settings",
+        expect.objectContaining({
+          input: expect.objectContaining({ location: "E:/mc-backups" }),
+        }),
+      );
+    });
+  });
+
+  it("surfaces a failed backup instead of hiding it", async () => {
+    const user = userEvent.setup();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "list_server_backups") return [backup];
+      if (command === "get_backup_status") return status;
+      if (command === "create_world_backup")
+        throw new Error("There is not enough free space on the backup drive.");
+      return [];
+    });
+    renderBackups();
+
+    await user.click(await screen.findByRole("button", { name: "Backup Now" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "not enough free space",
+    );
   });
 
   it("confirms before deleting a backup", async () => {

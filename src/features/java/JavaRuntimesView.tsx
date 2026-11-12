@@ -220,7 +220,7 @@ export function JavaRuntimesView() {
                   href={toAppHash({
                     name: "server",
                     serverId: item.serverId,
-                    section: "overview",
+                    section: "console",
                   })}
                 >
                   {item.serverName}
@@ -277,7 +277,6 @@ export function JavaRuntimesView() {
     <section aria-labelledby="java-runtimes-title" className="java-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">{t("java.eyebrow")}</p>
           <h1 id="java-runtimes-title" tabIndex={-1}>
             {t("java.title")}
           </h1>

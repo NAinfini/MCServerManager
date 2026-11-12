@@ -1,0 +1,298 @@
+/*
+Backups page: "am I safe, and can I go back?". Surfaces, hairlines and the one
+green accent follow DESIGN.md and the Mods page in shell.css. Panels are never
+nested: the status strip, the restore-point list and the settings are siblings.
+*/
+
+.bk-page {
+  gap: 12px;
+}
+
+.bk-status {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 12px 10px 14px;
+  background: var(--bg-panel);
+  border-radius: var(--radius-panel);
+}
+
+.bk-status-icon {
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  color: var(--accent);
+  background: var(--accent-muted);
+  border-radius: var(--radius-sm);
+  place-items: center;
+}
+
+.bk-status[data-tone="warning"] .bk-status-icon {
+  color: var(--warning);
+  background: rgba(229, 189, 90, 0.12);
+}
+
+.bk-status-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bk-status-copy strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bk-status-copy span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bk-list-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-panel);
+  border-radius: var(--radius-panel);
+}
+
+.bk-list-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 36px;
+  padding: 0 14px;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.bk-list-head span:first-child {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.bk-list {
+  max-height: min(46vh, 420px);
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.bk-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.2fr) minmax(96px, 0.8fr) minmax(88px, 0.7fr)
+    minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  padding: 4px 6px 4px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.bk-row:hover {
+  background: var(--bg-hover);
+}
+
+.bk-row-when,
+.bk-row-kind,
+.bk-row-size {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  font-size: var(--text-sm);
+}
+
+.bk-row-when strong {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.bk-row-when span,
+.bk-row small {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.bk-row-kind,
+.bk-row-size {
+  color: var(--text-muted);
+}
+
+.bk-row-path {
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bk-row.is-failed .bk-row-path {
+  color: var(--danger);
+}
+
+.bk-row-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.bk-settings {
+  flex: none;
+  background: var(--bg-panel);
+  border-radius: var(--radius-panel);
+}
+
+.bk-settings > summary,
+.bk-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--text-main);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-panel);
+}
+
+.bk-settings > summary:focus-visible,
+.bk-advanced > summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.bk-settings-summary {
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bk-settings[open] > summary {
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+}
+
+.bk-settings-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+  padding: 14px;
+}
+
+.bk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bk-field-wide,
+.bk-form-note,
+.bk-form-actions {
+  grid-column: 1 / -1;
+}
+
+.bk-field-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  grid-column: 1 / -1;
+  font-size: var(--text-sm);
+}
+
+.bk-field-label {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.bk-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--text-main);
+  font-size: var(--text-sm);
+}
+
+.bk-keep {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 120px));
+  gap: 12px;
+}
+
+.bk-keep label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.bk-help,
+.bk-form-note {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.bk-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.bk-advanced {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bk-advanced > summary {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.bk-advanced > .settings-panel {
+  padding: 0 14px 14px;
+}
+
+@media (max-width: 1100px) {
+  .bk-row {
+    grid-template-columns: minmax(140px, 1fr) minmax(88px, 0.8fr) minmax(80px, 0.7fr) auto;
+  }
+
+  .bk-row-path {
+    display: none;
+  }
+
+  .bk-settings-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bk-row,
+  .bk-status-icon {
+    transition: none;
+  }
+}

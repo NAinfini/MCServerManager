@@ -3,14 +3,12 @@ import {
   Coffee,
   FolderOpen,
   FolderPlus,
-  LayoutDashboard,
   ScrollText,
   MoveUp,
   MoveDown,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
-  Sparkles,
   Ungroup,
 } from "lucide-react";
 import {
@@ -27,14 +25,13 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import { useAppSettings } from "../../i18n";
-import { StatusBadge } from "../ui/status-badge";
 import { Button } from "../ui/button";
 import { DialogSurface } from "../ui/dialog-surface";
 import { TextField } from "../ui/text-field";
 import { ServerCover } from "../ui/server-cover";
 import type { ServerProfile } from "../../domain/server";
 import type { ManagedProcessStatus } from "../../features/process/api";
-import { LoaderPill } from "../../features/loaders/LoaderIdentity";
+import { getLoaderBranding } from "../../features/loaders/loaderBranding";
 import { type SidebarServerGroup, useSidebarStore } from "./sidebarStore";
 
 export type PrimaryPage = "servers" | "java" | "logger" | "settings";
@@ -80,7 +77,8 @@ function NavTooltip({
 }
 
 interface SidebarProps {
-  workspaceNavigation?: ReactNode;
+  notifications?: ReactNode;
+  onCreateServer?: () => void;
   servers: ServerProfile[];
   activePage: PrimaryPage;
   selectedServerId?: string;
@@ -134,7 +132,8 @@ type ContextMenuState =
   | { type: "group"; id: string; x: number; y: number };
 
 export function Sidebar({
-  workspaceNavigation,
+  notifications,
+  onCreateServer,
   servers,
   activePage,
   selectedServerId,
@@ -466,22 +465,22 @@ export function Sidebar({
                 <ServerCover
                   className="server-nav-cover"
                   loaderType={server.loaderType}
-                  size={28}
+                  size={40}
                 />
               )}
               {!collapsed && (
                 <span className="server-nav-copy">
                   <span className="server-nav-name">{server.name}</span>
                   <span className="server-nav-meta">
-                    <LoaderPill
-                      loaderType={server.loaderType}
-                      minecraftVersion={server.minecraftVersion}
-                    />
+                    {getLoaderBranding(server.loaderType).label}{" "}
+                    {server.minecraftVersion ?? ""}
+                  </span>
+                  <span
+                    className={`server-nav-status server-nav-status-${dotStatus}`}
+                  >
+                    {t(`server.statusLine.${status}`)}
                   </span>
                 </span>
-              )}
-              {!collapsed && status !== "stopped" && status !== "running" && (
-                <StatusBadge compact status={status} />
               )}
             </button>
           </NavTooltip>
@@ -647,7 +646,6 @@ export function Sidebar({
             <div className="sidebar-brand-copy">
               <p className="sidebar-title">MC Server Manager</p>
               <p className="sidebar-subtitle">
-                <Sparkles aria-hidden="true" size={11} />
                 <span>{t("nav.localRuntime")}</span>
               </p>
             </div>
@@ -670,30 +668,8 @@ export function Sidebar({
         </button>
       </div>
 
-      <nav className="sidebar-top-nav">
-        <NavTooltip enabled={collapsed} label={t("nav.dashboard")}>
-          <button
-            aria-label={t("nav.dashboard")}
-            className={
-              activePage === "servers" && !selectedServerId
-                ? "nav-item nav-item-active"
-                : "nav-item"
-            }
-            type="button"
-            onClick={() => onSelectPage("servers")}
-          >
-            <LayoutDashboard aria-hidden="true" size={18} strokeWidth={2} />
-            {!collapsed && <span>{t("nav.dashboard")}</span>}
-          </button>
-        </NavTooltip>
-      </nav>
-
       <section
-        className={
-          workspaceNavigation
-            ? "server-nav-section server-nav-section-with-workspace"
-            : "server-nav-section"
-        }
+        className="server-nav-section"
         aria-label={t("nav.serverProfiles")}
       >
         {!collapsed && (
@@ -712,7 +688,15 @@ export function Sidebar({
         </div>
       </section>
 
-      {workspaceNavigation}
+      {!collapsed && onCreateServer ? (
+        <button
+          className="sidebar-drop-hint"
+          type="button"
+          onClick={onCreateServer}
+        >
+          {t("nav.dropHint")}
+        </button>
+      ) : null}
 
       <nav
         aria-label={t("nav.primary")}
@@ -738,6 +722,9 @@ export function Sidebar({
             </button>
           </NavTooltip>
         ))}
+        {notifications ? (
+          <div className="sidebar-notifications">{notifications}</div>
+        ) : null}
       </nav>
 
       {contextMenu && menuServer && (

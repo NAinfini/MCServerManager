@@ -1,13 +1,4 @@
-import {
-  Activity,
-  Archive,
-  Bot,
-  Package,
-  Settings,
-  Terminal,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import type { PixelIconName } from "../../components/ui/pixel-icon";
 import type { ServerWorkspaceSection } from "../../app/router";
 
 export interface ServerWorkspaceView {
@@ -17,7 +8,7 @@ export interface ServerWorkspaceView {
 
 export interface ServerWorkspaceDefinition {
   id: ServerWorkspaceSection;
-  icon: LucideIcon;
+  icon: PixelIconName;
   labelKey: string;
   defaultView?: string;
   views?: readonly ServerWorkspaceView[];
@@ -26,26 +17,22 @@ export interface ServerWorkspaceDefinition {
 export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
   [
     {
-      id: "overview",
-      icon: Activity,
-      labelKey: "server.workspace.overview",
-    },
-    {
-      /* Live output and the log files on disk answer the same question — what
-         did the server say — so they sit behind one nav item instead of being
-         split across two sections. */
+      /* The default tab: someone watching a running server wants the output.
+         Performance history, diagnostics and events answer the follow-up
+         question, so they sit one click away instead of on their own page. */
       id: "console",
-      icon: Terminal,
+      icon: "console",
       labelKey: "server.workspace.console",
       defaultView: "terminal",
       views: [
         { id: "terminal", labelKey: "server.workspace.console.terminal" },
         { id: "logs", labelKey: "server.workspace.console.logs" },
+        { id: "health", labelKey: "server.workspace.console.health" },
       ],
     },
     {
       id: "players",
-      icon: Users,
+      icon: "players",
       labelKey: "server.workspace.players",
       defaultView: "online",
       views: [
@@ -57,7 +44,7 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
     },
     {
       id: "content",
-      icon: Package,
+      icon: "mods",
       labelKey: "server.workspace.content",
       defaultView: "installed",
       views: [
@@ -67,23 +54,23 @@ export const serverWorkspaceDefinitions: readonly ServerWorkspaceDefinition[] =
       ],
     },
     {
-      id: "data",
-      icon: Archive,
-      labelKey: "server.workspace.data",
-      defaultView: "backups",
-      views: [
-        { id: "backups", labelKey: "server.workspace.data.backups" },
-        { id: "files", labelKey: "server.workspace.data.files" },
-      ],
+      id: "backups",
+      icon: "chest",
+      labelKey: "server.workspace.backups",
+    },
+    {
+      id: "files",
+      icon: "files",
+      labelKey: "server.workspace.files",
     },
     {
       id: "automation",
-      icon: Bot,
+      icon: "redstone",
       labelKey: "server.workspace.automation",
     },
     {
       id: "settings",
-      icon: Settings,
+      icon: "gear",
       labelKey: "server.workspace.settings",
       defaultView: "general",
       /* Version upgrade moved to the header's more menu — it is a rare, risky

@@ -340,7 +340,7 @@ describe("backup scopes and verified restoration", () => {
     const rejection = expect(timedOut).rejects.toMatchObject({
       code: "BACKUP_SAVE_TIMEOUT",
     });
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(120_000);
     await rejection;
     expect(child.stdin.write).toHaveBeenLastCalledWith("save-on\n");
   });
@@ -898,5 +898,519 @@ describe("marketplace provider contracts", () => {
       versionName: "1.0",
     });
     expect(fs.readFileSync(installed.installedPath, "utf8")).toBe(payload);
+  });
+});
+
+/* Process lifecycle: the harness injects `spawn` and drives a fake child, so
+   nothing here launches Java or a Minecraft server. */
+function fakeChild(pid = 44444) {
+  const child = new EventEmitter();
+  child.pid = pid;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.stdin = { write: vi.fn() };
+  child.kill = vi.fn(() => child.emit("exit", 0));
+  return child;
+}
+function spawningBackend(children, firstPid = 40000) {
+  backend.close();
+  backend = createBackend({
+    getPath: () => path.join(root, "app"),
+    checkPortAvailable: async () => true,
+    collectProcessMetrics: async () => null,
+    spawn: () => {
+      const created = fakeChild(firstPid + children.length);
+      children.push(created);
+      return created;
+    },
+  });
+}
+async function managedServer(name = "server") {
+  const children = [];
+  spawningBackend(children);
+  const s = server(name);
+  write(path.join(s.rootDir, "server.jar"), "jar");
+  await backend.handle("start_server", { serverId: s.id });
+  return { s, children, child: children[0] };
+}
+const status = (s) =>
+  backend.handle("get_server_process_status", { serverId: s.id });
+const events = (s) =>
+  backend
+    .handle("list_process_events", { serverId: s.id })
+    .map((event) => event.message);
+const line = (child, text) => child.stdout.emit("data", `${text}\n`);
+
+describe("hot backup save confirmation", () => {
+  const confirmations = [
+    [
+      "Forge",
+      "[12:00:00] [Server thread/INFO] [minecraft/MinecraftServer]: Saved the game",
+    ],
+    [
+      "NeoForge",
+      "[12:00:00] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Saved the game",
+    ],
+    ["Fabric and vanilla", "[12:00:00] [Server thread/INFO]: Saved the game"],
+    ["Paper", "[12:00:00 INFO]: Saved the game"],
+    ["Fabric 26.x system chat", "[12:00:00] [Server thread/INFO]: System chat: Saved the game"],
+    ["older versions", "[12:00:00] [Server thread/INFO]: Saved the world"],
+  ];
+  it.each(confirmations)("accepts the %s log format", async (_name, text) => {
+    const { s, child } = await managedServer();
+    write(path.join(s.rootDir, "world", "level.dat"), "data");
+    const pending = call("create_world_backup", { serverId: s.id });
+    line(child, text);
+    await expect(pending).resolves.toMatchObject({ serverId: s.id });
+  });
+  const chat = [
+    "[12:00:00] [Server thread/INFO]: <Player> Saved the game",
+    "[12:00:00] [Server thread/INFO] [minecraft/MinecraftServer]: <Player> Saved the game",
+    "[12:00:00 INFO]: <Player> Saved the game",
+    "[12:00:00] [Server thread/INFO]: System chat: <Player> Saved the game",
+    "[12:00:00] [Server thread/INFO]: [Not Secure] <Player> Saved the game",
+  ];
+  it.each(chat)("rejects chat: %s", async (text) => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    const pending = call("create_world_backup", { serverId: s.id });
+    const rejection = expect(pending).rejects.toMatchObject({
+      code: "BACKUP_SAVE_TIMEOUT",
+    });
+    line(child, text);
+    await vi.advanceTimersByTimeAsync(120_000);
+    await rejection;
+  });
+  it("waits 120 seconds for large modded worlds", async () => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    let settled = false;
+    const pending = call("create_world_backup", { serverId: s.id });
+    pending.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    await vi.advanceTimersByTimeAsync(119_000);
+    expect(settled).toBe(false);
+    const rejection = expect(pending).rejects.toMatchObject({
+      code: "BACKUP_SAVE_TIMEOUT",
+    });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await rejection;
+    expect(child.stdin.write).toHaveBeenLastCalledWith("save-on\n");
+  });
+});
+
+describe("graceful stop", () => {
+  const savedGrace = process.env.MCSM_SHUTDOWN_GRACE_MS;
+  afterEach(() => {
+    if (savedGrace === undefined) delete process.env.MCSM_SHUTDOWN_GRACE_MS;
+    else process.env.MCSM_SHUTDOWN_GRACE_MS = savedGrace;
+  });
+  beforeEach(() => {
+    delete process.env.MCSM_SHUTDOWN_GRACE_MS;
+  });
+  const stop = (s) => backend.handle("stop_server", { serverId: s.id });
+
+  it("reports stopping, waits 180 seconds, and only writes stopped on real exit", async () => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    stop(s);
+    expect(child.stdin.write).toHaveBeenCalledWith("stop\n");
+    expect(status(s).status).toBe("stopping");
+    await vi.advanceTimersByTimeAsync(179_000);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(status(s)).toMatchObject({ status: "stopping", exitedAt: null });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(status(s).status).toBe("stopped");
+  });
+  it("stays stopping until the process exits by itself and never kills it", async () => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    stop(s);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(status(s).status).toBe("stopping");
+    child.emit("exit", 0);
+    expect(status(s)).toMatchObject({ status: "stopped", exitCode: 0 });
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(child.kill).not.toHaveBeenCalled();
+  });
+  it("honours MCSM_SHUTDOWN_GRACE_MS", async () => {
+    process.env.MCSM_SHUTDOWN_GRACE_MS = "2000";
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    stop(s);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(child.kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+  it("does not stack timers or repeat stop when called twice", async () => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    const before = vi.getTimerCount();
+    stop(s);
+    const afterFirst = vi.getTimerCount();
+    stop(s);
+    expect(vi.getTimerCount()).toBe(afterFirst);
+    expect(afterFirst).toBe(before + 1);
+    expect(
+      child.stdin.write.mock.calls.filter(([text]) => text === "stop\n"),
+    ).toHaveLength(1);
+  });
+  it("force_stop_server kills immediately and still waits for the real exit", async () => {
+    const { s, child } = await managedServer();
+    child.kill = vi.fn();
+    stop(s);
+    backend.handle("force_stop_server", { serverId: s.id });
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(status(s).status).toBe("stopping");
+    child.emit("exit", null);
+    expect(status(s).status).toBe("stopped");
+  });
+  it("force_stop_server works on a server that was never asked to stop", async () => {
+    const { s, child } = await managedServer();
+    backend.handle("force_stop_server", { serverId: s.id });
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(status(s).status).toBe("stopped");
+  });
+  it("keeps the server counted and unstartable while stopping", async () => {
+    const { s } = await managedServer();
+    stop(s);
+    await expect(
+      backend.handle("start_server", { serverId: s.id }),
+    ).rejects.toMatchObject({ code: "SERVER_ALREADY_RUNNING" });
+    expect(backend.handle("get_process_summary").runningCount).toBe(1);
+  });
+  it("restart waits the full grace period for the old process", async () => {
+    const { s, children, child } = await managedServer();
+    vi.useFakeTimers();
+    const restarted = backend.handle("restart_server", { serverId: s.id });
+    await vi.advanceTimersByTimeAsync(100_000);
+    expect(children).toHaveLength(1);
+    child.emit("exit", 0);
+    await restarted;
+    expect(children).toHaveLength(2);
+  });
+  it("restart gives up only after the grace period", async () => {
+    process.env.MCSM_SHUTDOWN_GRACE_MS = "10000";
+    const { s, child } = await managedServer();
+    child.kill = vi.fn();
+    vi.useFakeTimers();
+    const restarted = backend.handle("restart_server", { serverId: s.id });
+    const rejection = expect(restarted).rejects.toThrow(/did not exit/);
+    await vi.advanceTimersByTimeAsync(9_000);
+    expect(child.kill).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(10_000);
+    await rejection;
+  });
+});
+
+describe("crash detection", () => {
+  const harmless = [
+    "[12:00:00] [Server thread/INFO]: <Steve> watchdog",
+    "[12:00:00] [Server thread/INFO]: <Steve> java.lang.OutOfMemoryError",
+    "[12:00:00] [Server thread/INFO]: [Not Secure] <Steve> watchdog",
+    "[12:00:00] [Server thread/INFO]: [Server] watchdog OutOfMemoryError",
+    "[12:00:00] [Server thread/INFO] [minecraft/MinecraftServer]: <Steve> A single server tick took 60 seconds",
+    "[12:00:00 INFO]: <Steve> The server has stopped responding",
+    "[12:00:00] [Server thread/INFO]: Steve issued server command: /say watchdog OutOfMemoryError",
+    "[12:00:00] [Server thread/INFO]: * Steve OutOfMemoryError",
+    "[12:00:00] [Server thread/INFO]: Starting Watchdog helper",
+    "[12:00:00] [Server thread/INFO]: A single server tick took 5.00 seconds",
+    "<Steve> watchdog",
+  ];
+  it.each(harmless)("ignores %s", async (text) => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    line(child, text);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(events(s).some((message) => /crash/i.test(message))).toBe(false);
+  });
+  const real = [
+    "[12:00:00] [Server Watchdog/FATAL]: A single server tick took 60.00 seconds (should be max 0.05)",
+    "[12:00:00] [Server Watchdog/FATAL] [minecraft/Watchdog]: A single server tick took 60.00 seconds",
+    "java.lang.OutOfMemoryError: Java heap space",
+    "[12:00:00 ERROR]: The server has stopped responding! Please report this to https://example.invalid",
+    "[12:00:00] [Server thread/ERROR]: Encountered an unexpected exception",
+  ];
+  it.each(real)("warns, then kills after 30 seconds: %s", async (text) => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    line(child, text);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(events(s).some((message) => /crash/i.test(message))).toBe(true);
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(status(s).status).toBe("running");
+    await vi.advanceTimersByTimeAsync(1);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+  });
+  it("does not kill a process that exits by itself within the window", async () => {
+    const { s, child } = await managedServer();
+    vi.useFakeTimers();
+    line(
+      child,
+      "[12:00:00] [Server Watchdog/FATAL]: A single server tick took 60.00 seconds",
+    );
+    await vi.advanceTimersByTimeAsync(10_000);
+    child.emit("exit", 1);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(status(s).status).toBe("crashed");
+  });
+});
+
+describe("crash restart counter", () => {
+  it("still exhausts on a fast crash loop", async () => {
+    const { s, children } = await managedServer();
+    vi.useFakeTimers();
+    for (let crash = 0; crash < 3; crash++) {
+      children.at(-1).emit("exit", 1);
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+    expect(children).toHaveLength(4);
+    children.at(-1).emit("exit", 1);
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(children).toHaveLength(4);
+    expect(events(s).some((message) => /exhausted/.test(message))).toBe(true);
+  });
+  it("forgives crashes spread over time once the server stayed up 10 minutes", async () => {
+    const { s, children } = await managedServer();
+    vi.useFakeTimers();
+    for (let crash = 0; crash < 5; crash++) {
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      children.at(-1).emit("exit", 1);
+      await vi.advanceTimersByTimeAsync(30_000);
+    }
+    expect(children).toHaveLength(6);
+    expect(events(s).some((message) => /exhausted/.test(message))).toBe(false);
+    expect(
+      events(s).filter((message) => /attempt 1\/3/.test(message)),
+    ).toHaveLength(5);
+  });
+});
+
+describe("server readiness", () => {
+  const ready = [
+    '[12:00:00] [Server thread/INFO]: Done (12.345s)! For help, type "help"',
+    '[12:00:00] [Server thread/INFO] [minecraft/DedicatedServer]: Done (45.1s)! For help, type "help"',
+    '[12:00:00 INFO]: Done (3.210s)! For help, type "help"',
+  ];
+  it.each(ready)("detects %s", async (text) => {
+    const { s, child } = await managedServer();
+    expect(status(s)).toMatchObject({
+      status: "running",
+      ready: false,
+      readyAt: null,
+    });
+    line(child, text);
+    const after = status(s);
+    expect(after.status).toBe("running");
+    expect(after.ready).toBe(true);
+    expect(Date.parse(after.readyAt)).not.toBeNaN();
+    child.emit("exit", 0);
+    expect(status(s)).toMatchObject({ ready: false, readyAt: null });
+  });
+  it("ignores chat that imitates the done line", async () => {
+    const { s, child } = await managedServer();
+    line(
+      child,
+      '[12:00:00] [Server thread/INFO]: <Steve> Done (1.0s)! For help, type "help"',
+    );
+    line(
+      child,
+      "[12:00:00] [Server thread/INFO]: [Not Secure] <Steve> Done (1.0s)! For help",
+    );
+    line(child, "<Steve> Done (1.0s)! For help");
+    expect(status(s).ready).toBe(false);
+  });
+});
+
+describe("auto start versus start after install", () => {
+  it("start_auto_start_servers starts only flagged servers, staggered by 15 seconds", async () => {
+    const children = [];
+    spawningBackend(children, 50000);
+    const flagged = ["a", "b", "c"].map((name) => {
+      const s = server(name);
+      write(path.join(s.rootDir, "server.jar"), "jar");
+      return s;
+    });
+    const unflagged = server("manual");
+    write(path.join(unflagged.rootDir, "server.jar"), "jar");
+    database((db) =>
+      db
+        .prepare("UPDATE servers SET auto_start = 1 WHERE id IN (?, ?, ?)")
+        .run(...flagged.map((s) => s.id)),
+    );
+    // Running servers may not share a port, so give each its own.
+    database((db) =>
+      flagged.forEach((s, index) =>
+        db
+          .prepare("UPDATE servers SET server_port = ? WHERE id = ?")
+          .run(25570 + index, s.id),
+      ),
+    );
+    vi.useFakeTimers();
+    const settle = async () => {
+      for (let tick = 0; tick < 10; tick++)
+        await vi.advanceTimersByTimeAsync(0);
+    };
+    const all = backend.handle("start_auto_start_servers");
+    await settle();
+    expect(children).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(14_999);
+    await settle();
+    expect(children).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await settle();
+    expect(children).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await settle();
+    expect(children).toHaveLength(3);
+    await all;
+    expect(status(unflagged)).toBeNull();
+    expect(flagged.map((s) => status(s).status)).toEqual([
+      "running",
+      "running",
+      "running",
+    ]);
+  });
+  it("logs a failure and continues with the next server", async () => {
+    const children = [];
+    spawningBackend(children, 51000);
+    const broken = server("broken");
+    const fine = server("fine");
+    database((db) =>
+      db.prepare("UPDATE servers SET server_port = 25580 WHERE id = ?").run(fine.id),
+    );
+    write(path.join(fine.rootDir, "server.jar"), "jar");
+    database((db) => {
+      db.prepare("UPDATE servers SET auto_start = 1").run();
+      db.prepare("UPDATE servers SET created_at = ? WHERE id = ?").run(
+        "2020-01-01T00:00:00.000Z",
+        broken.id,
+      );
+      db.prepare("UPDATE servers SET launch_spec_json = ? WHERE id = ?").run(
+        "{not json",
+        broken.id,
+      );
+    });
+    vi.useFakeTimers();
+    const all = backend.handle("start_auto_start_servers");
+    await vi.advanceTimersByTimeAsync(60_000);
+    await all;
+    expect(status(fine).status).toBe("running");
+    expect(status(broken)).toBeNull();
+    expect(events(broken).some((message) => /auto start failed/i.test(message))).toBe(
+      true,
+    );
+  });
+  it("provisioning starts on startAfterInstall without persisting auto_start", async () => {
+    const children = [];
+    spawningBackend(children, 52000);
+    const run = async (name, profileExtras) => {
+      const targetDir = path.join(root, name);
+      const javaPath = path.join(root, `${name}-runtime`, "java.exe");
+      write(javaPath, "java");
+      write(path.join(targetDir, "server.jar"), "jar");
+      const job = call("create_provisioning_job", {
+        plan: {
+          targetDir,
+          useExistingTarget: true,
+          source: { kind: "blank" },
+          compatibilityWarnings: [],
+          acknowledgedWarningCodes: [],
+          eula: {
+            accepted: true,
+            termsUrl: "https://aka.ms/MinecraftEULA",
+            acceptedAt: "2026-07-18T12:00:00.000Z",
+          },
+          configuration: {
+            minMemoryMb: 1024,
+            maxMemoryMb: 2048,
+            serverPort: 25565 + children.length + 10,
+          },
+          javaRuntime: { path: javaPath, majorVersion: 21, validated: true },
+          launchSpec: {
+            executable: { kind: "java" },
+            jvmArgs: ["-jar", "server.jar"],
+            serverArgs: ["nogui"],
+            workingDirectory: ".",
+            validated: true,
+          },
+          profile: {
+            name,
+            loaderType: "paper",
+            minecraftVersion: "1.21.4",
+            loaderVersion: "1",
+            ...profileExtras,
+          },
+        },
+      });
+      return call("run_provisioning_job", { jobId: job.id });
+    };
+    const autoStartOf = (id) =>
+      backend.handle("list_server_profiles").find((p) => p.id === id).autoStart;
+    const fresh = await run("fresh", { startAfterInstall: true });
+    expect(children).toHaveLength(1);
+    expect(autoStartOf(fresh.serverId)).toBe(false);
+    const idle = await run("idle", { startAfterInstall: false });
+    expect(children).toHaveLength(1);
+    expect(autoStartOf(idle.serverId)).toBe(false);
+    const legacy = await run("legacy", { autoStart: true });
+    expect(children).toHaveLength(2);
+    expect(autoStartOf(legacy.serverId)).toBe(false);
+  });
+});
+
+describe("overdue scheduled tasks after downtime", () => {
+  const task = (s, overrides = {}) =>
+    call("create_scheduled_task", {
+      serverId: s.id,
+      name: "Hourly stop",
+      kind: "stop",
+      scheduleKind: "interval",
+      intervalMinutes: 60,
+      ...overrides,
+    });
+  const tasks = (s) => backend.handle("list_scheduled_tasks", { serverId: s.id });
+  it("advances overdue tasks at startup instead of firing them", async () => {
+    const s = server();
+    const due = task(s);
+    const disabled = task(s, { name: "Off", enabled: false });
+    const overdue = new Date(Date.now() - 3 * 3600_000).toISOString();
+    database((db) =>
+      db.prepare("UPDATE scheduled_tasks SET next_run_at = ?").run(overdue),
+    );
+    backend.close();
+    backend = createBackend({
+      getPath: () => path.join(root, "app"),
+      checkPortAvailable: async () => true,
+    });
+    const advanced = tasks(s).find((t) => t.id === due.id);
+    expect(Date.parse(advanced.nextRunAt)).toBeGreaterThan(Date.now());
+    expect(tasks(s).find((t) => t.id === disabled.id).nextRunAt).toBe(overdue);
+    expect(await call("run_due_scheduled_tasks")).toEqual([]);
+    const runs = backend.handle("list_scheduled_task_runs", { serverId: s.id });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      taskId: due.id,
+      status: "skipped",
+      scheduledFor: overdue,
+    });
+    expect(advanced.lastRunAt).toBeNull();
+  });
+  it("still runs tasks that become due while the app is open", async () => {
+    const s = server();
+    const due = task(s, { kind: "command", command: "list" });
+    database((db) =>
+      db
+        .prepare("UPDATE scheduled_tasks SET next_run_at = ? WHERE id = ?")
+        .run(new Date(Date.now() - 1000).toISOString(), due.id),
+    );
+    expect(await call("run_due_scheduled_tasks")).toHaveLength(1);
   });
 });

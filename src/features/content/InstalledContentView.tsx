@@ -9,16 +9,13 @@ import {
   Package,
   PackagePlus,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Checkbox } from "../../components/ui/checkbox";
 import { ConfirmDangerDialog } from "../../components/ui/ConfirmDangerDialog";
 import { EmptyState } from "../../components/ui/empty-state";
 import { LoadingState } from "../../components/ui/loading-state";
-import {
-  DataTable,
-  type DataTableColumn,
-} from "../../components/data/DataTable";
 import { useAppSettings } from "../../i18n";
 import { formatDateTime } from "../../lib/date-format";
 import { LoaderPill } from "../loaders/LoaderIdentity";
@@ -37,17 +34,42 @@ import {
   uninstallInstalledContent,
 } from "./contentApi";
 import { contentKeys } from "./queries";
+import { listServerFiles } from "../files/fileApi";
 import { useNotificationStore } from "../notifications/notificationStore";
 import "./content.css";
 
 interface InstalledContentViewProps {
   server: ServerProfile;
   onBrowse?: () => void;
+  /* Opens a server file or folder on the Files tab. */
+  onOpenFile?: (relativePath: string) => void;
+}
+
+/* Where a mod keeps its settings. A mod's config has no declared link back to
+   the mod, so the file or folder name is the only evidence available. */
+const CONFIG_ROOTS = ["config", "world/serverconfig", "defaultconfigs"];
+
+function comparable(value: string | null | undefined) {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function configFilesFor(
+  item: InstalledContent,
+  entries: { name: string; relativePath: string }[],
+) {
+  const names = [item.modId, item.name]
+    .map(comparable)
+    .filter((name) => name.length >= 3);
+  return entries.filter((entry) => {
+    const file = comparable(entry.name);
+    return names.some((name) => file.includes(name));
+  });
 }
 
 export function InstalledContentView({
   server,
   onBrowse,
+  onOpenFile,
 }: InstalledContentViewProps) {
   const { language, t } = useAppSettings();
   const queryClient = useQueryClient();
@@ -83,6 +105,9 @@ export function InstalledContentView({
   // Replacing every jar at once is the one action here that cannot be undone
   // and cannot be done item by item afterwards, so it gets its own gate.
   const [confirmUpdateAll, setConfirmUpdateAll] = useState(false);
+  const [searchText, setSearchText] = useState("");
+  const [onlyUpdates, setOnlyUpdates] = useState(false);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const contentQuery = useQuery({
     queryKey: contentKeys.installed(server.id),
     queryFn: () => listInstalledContent(server.id),
@@ -207,6 +232,17 @@ export function InstalledContentView({
       });
     },
   });
+  const configEntriesQuery = useQuery({
+    queryKey: [...contentKeys.installed(server.id), "config-files"],
+    queryFn: async () => {
+      const lists = await Promise.all(
+        CONFIG_ROOTS.map((root) =>
+          listServerFiles(server.id, root).catch(() => []),
+        ),
+      );
+      return lists.flat();
+    },
+  });
   const content = contentQuery.data ?? [];
   const updateByContentId = new Map(
     (updateCheck?.updates ?? []).map((update) => [
@@ -218,187 +254,66 @@ export function InstalledContentView({
   const selectedUpdateIds = selectedContent
     .filter((item) => updateByContentId.has(item.id))
     .map((item) => item.id);
-  const allSelected = content.length > 0 && selectedIds.size === content.length;
-  const columns: DataTableColumn<InstalledContent>[] = [
-    {
-      id: "select",
-      header: (
-        <Checkbox
-          aria-label={t("content.selection.all", { count: content.length })}
-          checked={
-            allSelected ? true : selectedIds.size > 0 ? "indeterminate" : false
-          }
-          onCheckedChange={(checked) =>
-            setSelectedIds(
-              checked === true
-                ? new Set(content.map((item) => item.id))
-                : new Set(),
-            )
-          }
-        />
-      ),
-      headerClassName: "content-select-cell",
-      cellClassName: "content-select-cell",
-      cell: (item) => (
-        <Checkbox
-          aria-label={t("content.selection.item", { name: item.name })}
-          checked={selectedIds.has(item.id)}
-          onCheckedChange={(checked) =>
-            setSelectedIds((current) => {
-              const next = new Set(current);
-              if (checked === true) next.add(item.id);
-              else next.delete(item.id);
-              return next;
-            })
-          }
-        />
-      ),
-    },
-    {
-      id: "name",
-      header: t("content.table.name"),
-      rowHeader: true,
-      sortValue: (item) => item.name,
-      cell: (item) => (
-        <span className="content-name-cell">
-          <span className="content-name-icon">
-            <Package aria-hidden="true" size={15} />
-          </span>
-          <span>
-            <span>{item.name}</span>
-            {/* The mod's own id first: it is what the jar declares and what a
-                search for it will match. The marketplace id is a fallback for
-                anything installed from inside the app. */}
-            <small>
-              {item.modId ?? item.contentId ?? t("content.installed.unknownId")}
-            </small>
-          </span>
-        </span>
-      ),
-    },
-    {
-      id: "loader",
-      header: t("content.table.loader"),
-      cell: (item) => <LoaderPill loaderType={item.loader} />,
-      sortValue: (item) => item.loader,
-    },
-    {
-      id: "version",
-      header: t("content.table.version"),
-      cell: (item) => item.version ?? t("common.unknown"),
-      sortValue: (item) => item.version,
-    },
-    {
-      id: "update",
-      header: t("content.table.update"),
-      cell: (item) => {
-        const update = updateByContentId.get(item.id);
-        return update ? (
-          <span className="content-update-cell">
-            <strong>{update.latestVersion}</strong>
-            <small>{update.provider}</small>
-          </span>
-        ) : updateCheck ? (
-          t("content.installed.current")
-        ) : (
-          /* Before a check has run the column has nothing to say about this row,
-             and repeating "Not checked" once per mod turned it into noise. The
-             toolbar button is what states the un-checked state. */
-          <span className="cell-empty">-</span>
-        );
-      },
-    },
-    {
-      id: "state",
-      header: t("content.table.state"),
-      cell: (item) =>
-        item.installedPath.endsWith(".disabled")
-          ? t("content.state.disabled")
-          : t("content.state.enabled"),
-    },
-    {
-      id: "installed",
-      header: t("content.table.installed"),
-      cell: (item) => formatDateTime(item.installedAt, language),
-      sortValue: (item) => item.installedAt,
-    },
-    {
-      id: "warnings",
-      header: t("content.table.warnings"),
-      cell: (item) =>
-        item.warnings.length === 0 ? (
-          t("common.none")
-        ) : (
-          <span className="content-warning">
-            <AlertTriangle aria-hidden="true" size={14} />
-            {item.warnings.join("; ")}
-          </span>
-        ),
-    },
-    {
-      id: "actions",
-      header: t("content.table.actions"),
-      cell: (item) => {
-        const update = updateByContentId.get(item.id);
-        return (
-          <span className="content-row-actions">
-            {item.installedPath.endsWith(".disabled") ? (
-              <Button
-                disabled={enableMutation.isPending}
-                variant="secondary"
-                onClick={() => enableMutation.mutate(item.id)}
-              >
-                {t("tunnels.actions.enable")}
-              </Button>
-            ) : (
-              <Button
-                disabled={disableMutation.isPending}
-                variant="secondary"
-                onClick={() => {
-                  disableMutation.reset();
-                  setDangerAction({ kind: "disable", item });
-                }}
-              >
-                {t("tunnels.actions.disable")}
-              </Button>
-            )}
-            <Button
-              disabled={uninstallMutation.isPending}
-              variant="ghost"
-              onClick={() => {
-                uninstallMutation.reset();
-                setDangerAction({ kind: "uninstall", item });
-              }}
-            >
-              {t("content.installed.uninstall")}
-            </Button>
-            {update ? (
-              <Button
-                aria-label={t("content.installed.updateOneAria", {
-                  content: item.name,
-                })}
-                disabled={installUpdateMutation.isPending}
-                variant="primary"
-                onClick={() => installUpdateMutation.mutate(item.id)}
-              >
-                <Download aria-hidden="true" size={14} />
-                {t("content.installed.update")}
-              </Button>
-            ) : null}
-          </span>
-        );
-      },
-    },
-  ];
+  const searchNeedle = searchText.trim().toLowerCase();
+  const visibleContent = content.filter(
+    (item) =>
+      (!onlyUpdates || updateByContentId.has(item.id)) &&
+      (searchNeedle === "" ||
+        [item.name, item.modId, item.contentId].some((value) =>
+          value?.toLowerCase().includes(searchNeedle),
+        )),
+  );
+  const allSelected =
+    visibleContent.length > 0 &&
+    visibleContent.every((item) => selectedIds.has(item.id));
+  const someSelected = visibleContent.some((item) => selectedIds.has(item.id));
+  const focused =
+    visibleContent.find((item) => item.id === focusedId) ??
+    visibleContent[0] ??
+    null;
+  const focusedUpdate = focused ? updateByContentId.get(focused.id) : undefined;
+  const isDisabled = (item: InstalledContent) =>
+    item.installedPath.endsWith(".disabled");
+  const availableUpdates = updateCheck?.updates.length ?? 0;
+  const rowStatus = (item: InstalledContent) => {
+    if (isDisabled(item)) {
+      return { key: "disabled", label: t("content.state.disabled") };
+    }
+    if (updateByContentId.has(item.id)) {
+      return { key: "update", label: t("content.status.updateAvailable") };
+    }
+    if (item.warnings.length > 0) {
+      return { key: "warning", label: t("content.status.warning") };
+    }
+    return updateCheck
+      ? { key: "current", label: t("content.installed.current") }
+      : { key: "enabled", label: t("content.state.enabled") };
+  };
 
   return (
-    <section className="content-panel" aria-label={t("content.installed.aria")}>
-      <div className="content-toolbar">
-        <div>
-          <strong>{t("content.installed.title")}</strong>
-          <span>{t("content.installed.description")}</span>
-        </div>
-        <div className="content-toolbar-actions">
+    <section className="mods-page" aria-label={t("content.installed.aria")}>
+      <div className="mods-toolbar">
+        <label className="mods-search">
+          <Search aria-hidden="true" size={15} />
+          <input
+            aria-label={t("content.search.label")}
+            placeholder={t("content.search.placeholder", {
+              count: content.length,
+            })}
+            type="search"
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+          />
+        </label>
+        {availableUpdates > 0 ? (
+          <Button
+            aria-pressed={onlyUpdates}
+            variant="secondary"
+            onClick={() => setOnlyUpdates((current) => !current)}
+          >
+            {t("content.updates.available", { count: availableUpdates })}
+          </Button>
+        ) : (
           <Button
             disabled={checkUpdatesMutation.isPending}
             variant="secondary"
@@ -407,51 +322,38 @@ export function InstalledContentView({
             <RefreshCw aria-hidden="true" size={15} />
             {t("content.installed.checkUpdates")}
           </Button>
-          <Button
-            disabled={
-              selectedUpdateIds.length === 0 ||
-              installAllUpdatesMutation.isPending
-            }
-            variant="secondary"
-            onClick={() => setConfirmUpdateAll(true)}
-          >
-            <Download aria-hidden="true" size={15} />
-            {t("content.updates.updateSelected", {
-              count: selectedUpdateIds.length,
-            })}
-          </Button>
-          <details ref={addMenuRef} className="dropdown content-add-menu">
-            <summary className="button button-primary">
-              <PackagePlus aria-hidden="true" size={15} />
-              {t("content.installed.addContent")}
-              <ChevronDown aria-hidden="true" size={14} />
-            </summary>
-            <div className="dropdown-menu" role="menu">
-              <button
-                role="menuitem"
-                type="button"
-                onClick={() => {
-                  closeAddMenu();
-                  onBrowse?.();
-                }}
-              >
-                <Compass aria-hidden="true" size={15} />
-                {t("content.installed.browseOnline")}
-              </button>
-              <button
-                role="menuitem"
-                type="button"
-                onClick={() => {
-                  closeAddMenu();
-                  setShowImport(true);
-                }}
-              >
-                <FolderOpen aria-hidden="true" size={15} />
-                {t("content.installed.importFile")}
-              </button>
-            </div>
-          </details>
-        </div>
+        )}
+        <details ref={addMenuRef} className="dropdown content-add-menu">
+          <summary className="button button-secondary">
+            <PackagePlus aria-hidden="true" size={15} />
+            {t("content.installed.addContent")}
+            <ChevronDown aria-hidden="true" size={14} />
+          </summary>
+          <div className="dropdown-menu" role="menu">
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                closeAddMenu();
+                onBrowse?.();
+              }}
+            >
+              <Compass aria-hidden="true" size={15} />
+              {t("content.installed.browseOnline")}
+            </button>
+            <button
+              role="menuitem"
+              type="button"
+              onClick={() => {
+                closeAddMenu();
+                setShowImport(true);
+              }}
+            >
+              <FolderOpen aria-hidden="true" size={15} />
+              {t("content.installed.importFile")}
+            </button>
+          </div>
+        </details>
       </div>
 
       {selectedIds.size > 0 ? (
@@ -463,6 +365,18 @@ export function InstalledContentView({
           <strong>
             {t("content.selection.count", { count: selectedIds.size })}
           </strong>
+          {selectedUpdateIds.length > 0 ? (
+            <Button
+              disabled={installAllUpdatesMutation.isPending}
+              variant="primary"
+              onClick={() => setConfirmUpdateAll(true)}
+            >
+              <Download aria-hidden="true" size={15} />
+              {t("content.updates.updateSelected", {
+                count: selectedUpdateIds.length,
+              })}
+            </Button>
+          ) : null}
           <Button
             disabled={batchMutation.isPending}
             variant="secondary"
@@ -571,17 +485,202 @@ export function InstalledContentView({
       ) : null}
 
       {content.length > 0 ? (
-        <div className="content-table-scroll">
-          <DataTable
-            caption={t("content.installed.title")}
-            className="content-table"
-            columns={columns}
-            getRowKey={(item) => item.id}
-            getRowClassName={(item) =>
-              selectedIds.has(item.id) ? "content-row-selected" : undefined
-            }
-            rows={content}
-          />
+        <div className="mods-layout">
+          <div className="mods-list-panel">
+            <div className="mods-list-head">
+              <Checkbox
+                aria-label={t("content.selection.all", {
+                  count: visibleContent.length,
+                })}
+                checked={
+                  allSelected ? true : someSelected ? "indeterminate" : false
+                }
+                onCheckedChange={(checked) =>
+                  setSelectedIds(
+                    checked === true
+                      ? new Set(visibleContent.map((item) => item.id))
+                      : new Set(),
+                  )
+                }
+              />
+              <span>
+                {t("content.list.count", { count: visibleContent.length })}
+              </span>
+            </div>
+            {visibleContent.length === 0 ? (
+              <p className="mods-no-match">{t("content.search.empty")}</p>
+            ) : (
+              <ul
+                aria-label={t("content.installed.title")}
+                className="mods-list"
+              >
+                {visibleContent.map((item) => {
+                  const status = rowStatus(item);
+                  return (
+                    <li
+                      key={item.id}
+                      className={[
+                        "mods-row",
+                        item.id === focused?.id ? "is-focused" : "",
+                        isDisabled(item) ? "is-disabled" : "",
+                      ].join(" ")}
+                    >
+                      <Checkbox
+                        aria-label={t("content.selection.item", {
+                          name: item.name,
+                        })}
+                        checked={selectedIds.has(item.id)}
+                        onCheckedChange={(checked) =>
+                          setSelectedIds((current) => {
+                            const next = new Set(current);
+                            if (checked === true) next.add(item.id);
+                            else next.delete(item.id);
+                            return next;
+                          })
+                        }
+                      />
+                      <button
+                        aria-current={
+                          item.id === focused?.id ? "true" : undefined
+                        }
+                        className="mods-row-main"
+                        type="button"
+                        onClick={() => setFocusedId(item.id)}
+                      >
+                        <span className="mods-row-icon">
+                          <Package aria-hidden="true" size={16} />
+                        </span>
+                        <span className="mods-row-name">{item.name}</span>
+                        <span className="mods-row-version">
+                          {item.version ?? t("common.unknown")}
+                        </span>
+                        <span className="mods-row-source">
+                          {item.provider ?? t("content.source.local")}
+                        </span>
+                        <span className={`mods-row-status is-${status.key}`}>
+                          {status.label}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+          {focused ? (
+            <aside aria-label={focused.name} className="mods-detail">
+              <span className="mods-detail-icon">
+                <Package aria-hidden="true" size={26} />
+              </span>
+              <h3>{focused.name}</h3>
+              <p className="mods-detail-source">
+                {t("content.detail.source", {
+                  version: focused.version ?? t("common.unknown"),
+                  source: focused.provider ?? t("content.source.local"),
+                })}
+              </p>
+              {focused.warnings.length > 0 ? (
+                <p className="mods-detail-warning">
+                  <AlertTriangle aria-hidden="true" size={14} />
+                  {focused.warnings.join("; ")}
+                </p>
+              ) : null}
+              <dl className="mods-detail-facts">
+                <div>
+                  <dt>{t("content.detail.modId")}</dt>
+                  <dd>
+                    {focused.modId ??
+                      focused.contentId ??
+                      t("content.installed.unknownId")}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t("content.table.loader")}</dt>
+                  <dd>
+                    <LoaderPill loaderType={focused.loader} />
+                  </dd>
+                </div>
+                {focusedUpdate ? (
+                  <div>
+                    <dt>{t("content.detail.latest")}</dt>
+                    <dd>{focusedUpdate.latestVersion}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>{t("content.table.installed")}</dt>
+                  <dd>{formatDateTime(focused.installedAt, language)}</dd>
+                </div>
+              </dl>
+              {onOpenFile ? (
+                <div className="mods-detail-config">
+                  <strong>{t("content.detail.settings")}</strong>
+                  {configFilesFor(focused, configEntriesQuery.data ?? []).map(
+                    (entry) => (
+                      <button
+                        key={entry.relativePath}
+                        type="button"
+                        onClick={() => onOpenFile(entry.relativePath)}
+                      >
+                        {entry.relativePath}
+                      </button>
+                    ),
+                  )}
+                  {configFilesFor(focused, configEntriesQuery.data ?? [])
+                    .length === 0 ? (
+                    <p>{t("content.detail.settingsNone")}</p>
+                  ) : null}
+                  <button type="button" onClick={() => onOpenFile("config/")}>
+                    {t("content.detail.openConfigFolder")}
+                  </button>
+                </div>
+              ) : null}
+              <div className="mods-detail-actions">
+                {focusedUpdate ? (
+                  <Button
+                    aria-label={t("content.installed.updateOneAria", {
+                      content: focused.name,
+                    })}
+                    disabled={installUpdateMutation.isPending}
+                    variant="primary"
+                    onClick={() => installUpdateMutation.mutate(focused.id)}
+                  >
+                    <Download aria-hidden="true" size={14} />
+                    {t("content.installed.update")}
+                  </Button>
+                ) : null}
+                {isDisabled(focused) ? (
+                  <Button
+                    disabled={enableMutation.isPending}
+                    variant="secondary"
+                    onClick={() => enableMutation.mutate(focused.id)}
+                  >
+                    {t("tunnels.actions.enable")}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={disableMutation.isPending}
+                    variant="secondary"
+                    onClick={() => {
+                      disableMutation.reset();
+                      setDangerAction({ kind: "disable", item: focused });
+                    }}
+                  >
+                    {t("tunnels.actions.disable")}
+                  </Button>
+                )}
+                <Button
+                  disabled={uninstallMutation.isPending}
+                  variant="ghost"
+                  onClick={() => {
+                    uninstallMutation.reset();
+                    setDangerAction({ kind: "uninstall", item: focused });
+                  }}
+                >
+                  {t("content.installed.uninstall")}
+                </Button>
+              </div>
+            </aside>
+          ) : null}
         </div>
       ) : null}
       <ConfirmDangerDialog

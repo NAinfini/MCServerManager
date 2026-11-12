@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -11,6 +12,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ServerProfile } from "../../domain/server";
 import type { ManagedProcessStatus } from "../../features/process/api";
+import en from "../../i18n/locales/en.json";
+import zhCN from "../../i18n/locales/zh-CN.json";
 import { useSidebarStore } from "./sidebarStore";
 import { Sidebar } from "./Sidebar";
 
@@ -285,22 +288,126 @@ describe("Sidebar server organization", () => {
   });
 });
 
-describe("Sidebar status badges", () => {
+describe("Sidebar status lines", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    useSidebarStore.setState({ collapsed: false });
     useSidebarStore.getState().resetServerLayout();
   });
 
-  it("shows a badge only for servers that need attention", async () => {
+  // A Record, so adding a process status without a line stops compiling here.
+  const statusLines: Record<
+    ManagedProcessStatus,
+    { en: string; zh: string; tone: string }
+  > = {
+    running: { en: "Running", zh: "运行中", tone: "running" },
+    stopping: { en: "Stopping", zh: "正在停止", tone: "stopping" },
+    stopped: { en: "Stopped", zh: "已停止", tone: "stopped" },
+    crashed: { en: "Crashed · see why", zh: "崩溃 · 查看原因", tone: "crashed" },
+    externalRunning: {
+      en: "Running externally",
+      zh: "在外部运行",
+      tone: "running",
+    },
+  };
+  const statuses = Object.keys(statusLines) as ManagedProcessStatus[];
+
+  it("makes a server that needs attention stand out from a healthy one", async () => {
     renderSidebar({ forge: "crashed", survival: "stopped" });
 
     const crashedRow = screen.getByRole("button", { name: /modded forge/i });
-    await waitFor(() =>
-      expect(within(crashedRow).getByText("Crashed")).toBeInTheDocument(),
+    const crashedLine = within(crashedRow).getByText("Crashed · see why");
+    expect(crashedLine).toHaveClass("server-nav-status-crashed");
+    expect(crashedRow.querySelector(".status-dot")).toHaveClass(
+      "status-dot-crashed",
     );
 
+    // Every row carries a line now, so calm ones must not read as alarms.
     const stoppedRow = screen.getByRole("button", { name: /survival smp/i });
-    expect(within(stoppedRow).queryByText("Stopped")).not.toBeInTheDocument();
+    expect(within(stoppedRow).getByText("Stopped")).not.toHaveClass(
+      "server-nav-status-crashed",
+    );
+    expect(within(stoppedRow).queryByText(/crashed/i)).not.toBeInTheDocument();
+  });
+
+  it("treats a server with no reported status as stopped", () => {
+    renderSidebar();
+
+    expect(
+      within(screen.getByRole("button", { name: /paper lobby/i })).getByText(
+        "Stopped",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it.each(statuses)("has a %s line in both languages", (status) => {
+    const line = statusLines[status];
+    expect(en[`server.statusLine.${status}`]).toBe(line.en);
+    expect(zhCN[`server.statusLine.${status}`]).toBe(line.zh);
+
+    renderSidebar({ survival: status });
+    const row = screen.getByRole("button", { name: /survival smp/i });
+    expect(within(row).getByText(line.en)).toHaveClass(
+      `server-nav-status-${line.tone}`,
+    );
+  });
+
+  it("still flags a crash through the dot when collapsed", () => {
+    useSidebarStore.setState({ collapsed: true });
+    renderSidebar({ forge: "crashed" });
+
+    const crashedRow = screen.getByRole("button", { name: /modded forge/i });
+    expect(within(crashedRow).queryByText(/crashed/i)).not.toBeInTheDocument();
+    expect(crashedRow.querySelector(".status-dot")).toHaveClass(
+      "status-dot-crashed",
+    );
+  });
+});
+
+describe("Sidebar footer", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+    useSidebarStore.setState({ collapsed: false });
+    useSidebarStore.getState().resetServerLayout();
+  });
+
+  function renderFooter() {
+    const onCreateServer = vi.fn();
+    render(
+      <Sidebar
+        activePage="servers"
+        notifications={<button type="button">Bell</button>}
+        onCreateServer={onCreateServer}
+        onSelectPage={vi.fn()}
+        servers={servers}
+      />,
+    );
+    return { onCreateServer };
+  }
+
+  it("has no dashboard entry and hosts notifications in the footer nav", () => {
+    renderFooter();
+
+    const primary = screen.getByRole("navigation", { name: /primary/i });
+    expect(within(primary).getByRole("button", { name: "Bell" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: /^dashboard$/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the drop hint as a create button, except when collapsed", async () => {
+    const { onCreateServer } = renderFooter();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Drop a pack to start a server" }),
+    );
+    expect(onCreateServer).toHaveBeenCalledTimes(1);
+
+    act(() => useSidebarStore.setState({ collapsed: true }));
+    expect(
+      screen.queryByRole("button", { name: "Drop a pack to start a server" }),
+    ).not.toBeInTheDocument();
   });
 });

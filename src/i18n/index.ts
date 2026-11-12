@@ -48,7 +48,7 @@ function readStoredTheme(): ThemeSetting {
   const stored = localStorage.getItem(THEME_KEY);
   return stored === "light" || stored === "dark" || stored === "system"
     ? stored
-    : "system";
+    : "dark";
 }
 
 function systemPrefersDark() {

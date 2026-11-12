@@ -38,6 +38,8 @@ import { queryKeys } from "./lib/query-keys";
 import "./styles/tokens.css";
 import "./styles/app.css";
 import "./styles/command-studio.css";
+import "./styles/shell.css";
+import "./styles/pages.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

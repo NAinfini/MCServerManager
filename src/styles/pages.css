@@ -1,0 +1,257 @@
+/* Corrections that bring the older pages in line with DESIGN.md: plain labels,
+   neutral row actions, and tables that stay inside the window. Loads last. */
+
+/* Labels are sentence case in the UI font, never shouted in monospace. */
+.java-table thead th,
+.backups-table thead th,
+.files-table thead th,
+.operation-table thead th,
+.settings-group > h3,
+.settings-panel .settings-section > legend,
+.sidebar-section-label,
+.wizard-form-section > h4,
+.wizard-source-question,
+.provisioning-detected dt,
+.marketplace-details-stats dt,
+.app-log-detail-meta dt {
+  color: var(--text-subtle);
+  font-family: inherit;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Colour marks state. A row of ordinary actions stays neutral until hovered. */
+.icon-button.button {
+  color: var(--text-muted);
+}
+
+.icon-button.button:hover:not(:disabled) {
+  color: var(--text-main);
+}
+
+.empty-state::after {
+  display: none;
+}
+
+/* Java: a wide table scrolls inside its panel and never widens the page. */
+.java-page {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.java-layout {
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.java-panel {
+  min-width: 0;
+}
+
+.java-table-scroll {
+  overflow-x: auto;
+}
+
+/* Files: enough room for the list's actions next to the open file. */
+.files-panel .files-body {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.files-table-scroll {
+  overflow-x: auto;
+}
+
+/* Sidebar footer: labels never squeeze their icons. */
+.sidebar .sidebar-footer-nav .nav-item {
+  flex: 0 1 auto;
+  padding: 0 8px;
+}
+
+.sidebar .sidebar-footer-nav .nav-item svg {
+  flex: none;
+}
+
+.sidebar .sidebar-footer-nav .nav-item-active::before {
+  display: none;
+}
+
+.sidebar .sidebar-footer-nav .nav-item-active {
+  border-left: 0;
+  box-shadow: none;
+}
+
+.sidebar .sidebar-footer-nav .sidebar-notifications {
+  margin-left: auto;
+}
+
+/* The page's side margin must come out of its width, or the right edge clips. */
+.java-page {
+  width: calc(100% - 40px);
+  max-width: none;
+  margin-inline: 20px;
+}
+
+.java-table {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The workspace already provides the gutter. */
+.server-settings.settings-sections {
+  padding: 0;
+}
+
+/* The global field style must not draw a second box inside the search field. */
+.mods-search input[type="search"] {
+  min-height: 0;
+  height: 100%;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+/* Empty states say what to do in words; no painted props. */
+.empty-state-illustration {
+  display: none;
+}
+
+.console-command-hint {
+  margin: 0;
+  padding: 6px 14px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* playit: its own card above the provider tools, with every row on one gutter. */
+.playit-setup {
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+}
+
+.playit-setup .playit-step {
+  padding: 14px 20px;
+}
+
+.playit-setup .playit-step > * {
+  max-width: 640px;
+}
+
+.playit-setup .form-actions {
+  justify-content: flex-start;
+  padding: 0;
+}
+
+.crash-banner {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 20px 8px;
+  padding: 12px 14px;
+  color: var(--crashed);
+  background: var(--bg-panel);
+  border: 1px solid var(--crashed);
+  border-radius: 8px;
+}
+
+.crash-banner > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.crash-banner-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--text-main);
+  font-size: var(--text-sm);
+}
+
+.crash-banner-body p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.crash-banner-body pre {
+  max-height: 120px;
+  margin: 4px 0 0;
+  padding: 8px;
+  overflow: auto;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  background: var(--bg-inset);
+  border-radius: 6px;
+}
+
+.crash-banner-body small {
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+/* Mods: where this mod's settings live. */
+.mods-detail-config {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding-top: 8px;
+  font-size: var(--text-xs);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mods-detail-config strong {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.mods-detail-config p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.mods-detail-config button {
+  max-width: 100%;
+  padding: 0;
+  overflow-wrap: anywhere;
+  color: var(--accent);
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.mods-detail-config button:hover {
+  text-decoration: underline;
+}
+
+.mods-detail-config button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Text fields that sit outside the form primitives need their own inset. */
+.bk-field .text-input {
+  width: 100%;
+  max-width: 260px;
+  padding-inline: 10px;
+}
+
+.console-command-form input {
+  padding-inline: 10px;
+}
+
+/* Links in the mod panel are text, so the global control height doesn't fit. */
+.mods-detail-config button {
+  min-height: 0;
+}

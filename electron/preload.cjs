@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 const allowedAppCommands = new Set([
   "rollback_server_update",
@@ -39,6 +39,9 @@ const allowedAppCommands = new Set([
   "get_app_logs_folder",
   "get_app_preferences",
   "get_attention_items",
+  "get_backup_settings",
+  "get_backup_status",
+  "save_backup_settings",
   "get_local_network_addresses",
   "get_bbsmc_project",
   "get_content_update_policy",
@@ -94,6 +97,12 @@ const allowedAppCommands = new Set([
   "open_app_logs_folder",
   "open_server_folder",
   "open_tunnel_application",
+  "open_playit_setup",
+  "get_playit_status",
+  "retry_playit_agent",
+  "save_playit_settings",
+  "get_server_share_settings",
+  "save_server_share_settings",
   "plan_java_runtime",
   "plan_server_provisioning",
   "preview_modpack_import_command",
@@ -126,6 +135,9 @@ const allowedAppCommands = new Set([
   "show_save_dialog",
   "start_server",
   "stop_server",
+  "force_stop_server",
+  "get_crash_explanation",
+  "disable_crashed_mod",
   "suggest_server_port",
   "unbind_tunnel_from_server",
   "uninstall_installed_content",
@@ -145,6 +157,15 @@ contextBridge.exposeInMainWorld("mcServerManager", {
       );
     }
     return ipcRenderer.invoke("app-command", command, args);
+  },
+  /* Electron 32 removed File.path; this is the supported way to learn where a
+     dropped file lives on disk. Returns "" for anything that is not a file. */
+  getPathForFile(file) {
+    try {
+      return webUtils.getPathForFile(file) || "";
+    } catch {
+      return "";
+    }
   },
   openExternalUrl(url) {
     return ipcRenderer.invoke("open-external-url", url);

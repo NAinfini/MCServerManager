@@ -1162,7 +1162,6 @@ export function SettingsView({
     <section aria-labelledby="settings-title" className="settings-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">{t("settings.page.eyebrow")}</p>
           <h1 id="settings-title" tabIndex={-1}>
             {t("settings.page.title")}
           </h1>

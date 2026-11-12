@@ -10,6 +10,7 @@ import { ContentUpdatesView } from "../content/ContentUpdatesView";
 import { ServerPropertiesEditor } from "../config/ServerPropertiesEditor";
 import { TunnelProvidersView } from "../tunnels/TunnelProvidersView";
 import { ServerProfileSettings } from "./ServerProfileSettings";
+import { ServerLiveRail } from "./ServerLiveRail";
 import { ServerOverviewWorkspace } from "./ServerOverviewWorkspace";
 import type { ServerProfile } from "./types";
 
@@ -69,17 +70,17 @@ export function ServerWorkspacePanel({
   let panel: React.ReactNode;
 
   switch (section) {
-    case "overview":
-      panel = (
-        <ServerOverviewWorkspace server={server} onOpenJava={onOpenJava} />
-      );
-      break;
     case "console":
       panel =
         view === "logs" ? (
           <ServerLogsView server={server} />
+        ) : view === "health" ? (
+          <ServerOverviewWorkspace server={server} onOpenJava={onOpenJava} />
         ) : (
-          <ConsoleView serverId={server.id} />
+          <div className="console-layout">
+            <ConsoleView serverId={server.id} />
+            <ServerLiveRail server={server} />
+          </div>
         );
       break;
     case "players":
@@ -95,21 +96,24 @@ export function ServerWorkspacePanel({
           <InstalledContentView
             server={server}
             onBrowse={() => onNavigate("content", "browse")}
+            onOpenFile={(relativePath) =>
+              onNavigate("files", undefined, relativePath)
+            }
           />
         );
       break;
     }
-    case "data":
-      panel =
-        view === "files" ? (
-          <ServerFilesView
-            onPathChange={(nextPath) => onNavigate("data", "files", nextPath)}
-            path={path}
-            server={server}
-          />
-        ) : (
-          <ServerBackupsView server={server} />
-        );
+    case "backups":
+      panel = <ServerBackupsView server={server} />;
+      break;
+    case "files":
+      panel = (
+        <ServerFilesView
+          onPathChange={(nextPath) => onNavigate("files", undefined, nextPath)}
+          path={path}
+          server={server}
+        />
+      );
       break;
     case "automation":
       panel = <ScheduledTasksView server={server} />;

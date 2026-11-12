@@ -1,24 +1,26 @@
 import {
   Component,
-  useEffect,
   useState,
   type ErrorInfo,
   type ReactNode,
 } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { Check, ChevronLeft, Copy, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import type { ServerWorkspaceSection } from "../../app/router";
 import { Button } from "../../components/ui/button";
 import { DialogSurface } from "../../components/ui/dialog-surface";
+import { ServerCover } from "../../components/ui/server-cover";
 import { useAppSettings } from "../../i18n";
 import { ServerUpdatesView } from "../updates/ServerUpdatesView";
 import { createWorldBackup } from "../backups/backupApi";
 import { backupKeys } from "../backups/queries";
-import { LoaderPill } from "../loaders/LoaderIdentity";
+import { getLoaderBranding } from "../loaders/loaderBranding";
 import { usePlayerViewCounts } from "../players/usePlayerViewCounts";
 import { ServerActions, ServerProcessStatusBadge } from "./ServerActions";
-import { ServerHeaderTelemetry } from "./ServerHeaderTelemetry";
+import { CrashBanner } from "./CrashBanner";
+import { ServerShareBar } from "./ServerShareBar";
+import { ServerWorkspaceNav } from "./ServerWorkspaceNav";
 import { ServerWorkspacePanel } from "./ServerWorkspacePanel";
 import { serverKeys } from "./queries";
 import { normalizeWorkspaceView, workspaceDefinition } from "./serverWorkspace";
@@ -29,7 +31,6 @@ interface ServerDetailProps {
   section?: ServerWorkspaceSection;
   view?: string;
   path?: string;
-  onBack?: () => void;
   onNavigate?: (
     section: ServerWorkspaceSection,
     view?: string,
@@ -97,20 +98,15 @@ class PanelErrorBoundary extends Component<
 
 export function ServerDetail({
   server,
-  section = "overview",
+  section = "console",
   view,
   path,
-  onBack,
   onNavigate = () => undefined,
   onOpenJava,
 }: ServerDetailProps) {
   const { t } = useAppSettings();
   const queryClient = useQueryClient();
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
-    "idle",
-  );
-  useEffect(() => setCopyState("idle"), [server.serverPort]);
   const definition = workspaceDefinition(section);
   const activeView = normalizeWorkspaceView(section, view);
   const playerViewCounts = usePlayerViewCounts(
@@ -130,57 +126,32 @@ export function ServerDetail({
       ]);
     },
   });
+  const loaderLabel = getLoaderBranding(server.loaderType).label;
 
   return (
-    <div className="detail-panel command-deck-detail">
-      <header className="detail-panel-header command-deck-header">
-        <div className="detail-panel-title">
-          <div className="detail-panel-heading">
-            {onBack ? (
-              <Button
-                aria-label={t("wizard.nav.back")}
-                className="icon-button page-header-back"
-                type="button"
-                variant="ghost"
-                onClick={onBack}
-              >
-                <ChevronLeft aria-hidden="true" size={17} />
-              </Button>
-            ) : null}
-            <div>
-              <div className="detail-panel-name-row">
-                <h1 className="detail-panel-name" id="servers-title">
-                  {server.name}
-                </h1>
-                <ServerProcessStatusBadge />
-              </div>
-              <div className="detail-panel-meta">
-                <LoaderPill loaderType={server.loaderType} />
-                <span className="detail-panel-version">
-                  {t("server.meta.mc", {
-                    version: server.minecraftVersion ?? "?",
-                  })}
-                </span>
-                <span>
-                  {t("server.meta.port", {
-                    port: server.serverPort ?? t("server.meta.unset"),
-                  })}
-                </span>
-                <span>
-                  {server.minMemoryMb ?? "?"}–{server.maxMemoryMb ?? "?"} MB
-                </span>
-              </div>
-            </div>
-          </div>
-          {section !== "overview" ? (
-            <ServerHeaderTelemetry serverId={server.id} />
-          ) : null}
+    <div className="server-workspace">
+      <header className="server-header">
+        <ServerCover loaderType={server.loaderType} size={48} />
+        <div className="server-header-identity">
+          <h1 id="servers-title">{server.name}</h1>
+          <p>
+            <span>{loaderLabel}</span>
+            {server.loaderVersion ? <span> {server.loaderVersion}</span> : null}
+            <span>
+              {" · "}
+              {t("server.meta.mc", {
+                version: server.minecraftVersion ?? "?",
+              })}
+            </span>
+            <span className="server-header-status">
+              <ServerProcessStatusBadge />
+            </span>
+          </p>
         </div>
-        <div className="detail-panel-actions">
+        <div className="server-header-actions">
           <Button variant="ghost" onClick={() => setUpgradeOpen(true)}>
             {t("server.upgrade.open")}
           </Button>
-          <ServerActions server={server} />
           <Button
             disabled={backupMutation.isPending}
             type="button"
@@ -189,6 +160,7 @@ export function ServerDetail({
           >
             {t("servers.actions.backup")}
           </Button>
+          <ServerActions server={server} />
         </div>
       </header>
 
@@ -212,128 +184,89 @@ export function ServerDetail({
       </DialogSurface>
 
       {backupMutation.error ? (
-        <p className="detail-panel-error" role="alert">
+        <p className="server-header-error" role="alert">
           {backupMutation.error.message}
         </p>
       ) : null}
+      {backupMutation.isSuccess ? (
+        <p className="visually-hidden" role="status">
+          {t("server.backup.completed")}
+        </p>
+      ) : null}
 
-      <div className="server-connection-bar">
-        <span>{t("server.connection.local")}</span>
-        <button
-          type="button"
-          disabled={!server.serverPort}
-          aria-label={t("server.connection.copy")}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(
-                `localhost:${server.serverPort}`,
-              );
-              setCopyState("copied");
-            } catch {
-              setCopyState("failed");
-            }
-          }}
-        >
-          <code>
-            {server.serverPort ? `localhost:${server.serverPort}` : "—"}
-          </code>
-          {copyState === "copied" ? (
-            <Check size={13} aria-hidden="true" />
-          ) : (
-            <Copy size={13} aria-hidden="true" />
-          )}
-        </button>
-        <span role="status">
-          {copyState === "copied"
-            ? t("server.connection.copied")
-            : copyState === "failed"
-              ? t("server.connection.copyFailed")
-              : t("server.connection.localHint")}
-        </span>
-        <button
-          className="server-connection-settings"
-          type="button"
-          onClick={() => onNavigate("settings", "network")}
-        >
-          {t("server.workspace.settings.network")}
-        </button>
-        {backupMutation.isSuccess ? (
-          <span role="status">{t("server.backup.completed")}</span>
-        ) : null}
-      </div>
+      <CrashBanner serverId={server.id} />
+      <ServerShareBar
+        server={server}
+        onOpenNetwork={() => onNavigate("settings", "network")}
+      />
 
-      <div className="server-workspace-shell">
-        <section
-          aria-label={t(definition.labelKey)}
-          className="server-workspace-main"
-        >
-          {/* The eyebrow never changed and the section title only repeated the
-              nav item already highlighted beside it, so two of the four header
-              rows were pure chrome. The section name lives on the <section>
-              label, which is what assistive technology reads anyway. */}
-          {definition.views ? (
-            <header className="server-workspace-heading">
-              <nav
-                aria-label={t("server.workspace.views")}
-                className="workspace-view-switcher"
-              >
-                {definition.views.map((item) => {
-                  const count = playerViewCounts?.[item.id];
-                  return (
-                    <button
-                      aria-current={activeView === item.id ? "page" : undefined}
-                      className={
-                        activeView === item.id
-                          ? "workspace-view-option workspace-view-option-active"
-                          : "workspace-view-option"
-                      }
-                      key={item.id}
-                      type="button"
-                      onClick={() => onNavigate(section, item.id)}
-                    >
-                      {t(item.labelKey)}
-                      {/* Decorative: the panel below announces the same totals,
-                          and a changing accessible name would be unstable. */}
-                      {count === undefined ? null : (
-                        <span
-                          aria-hidden="true"
-                          className="workspace-view-count"
-                        >
-                          {count}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
-            </header>
-          ) : null}
+      <ServerWorkspaceNav
+        serverName={server.name}
+        section={section}
+        onNavigate={onNavigate}
+      />
 
-          <motion.div
-            animate={{ opacity: 1, y: 0 }}
-            className="server-workspace-content"
-            initial={{ opacity: 0.82, y: 2 }}
-            key={`${server.id}-${section}-${activeView ?? "root"}`}
-            transition={{ duration: 0.14, ease: "easeOut" }}
+      <section
+        aria-label={t(definition.labelKey)}
+        className="server-workspace-main"
+      >
+        {definition.views ? (
+          <nav
+            aria-label={t("server.workspace.views")}
+            className="workspace-view-switcher"
           >
-            <PanelErrorBoundary
-              errorTitle={t("server.panel.errorTitle")}
-              panelLabel={t(definition.labelKey)}
-              resetKey={`${server.id}-${section}-${activeView ?? "root"}`}
-              retryLabel={t("common.retry")}
-            >
-              <ServerWorkspacePanel
-                onNavigate={onNavigate}
-                onOpenJava={onOpenJava}
-                path={path}
-                section={section}
-                server={server}
-                view={activeView}
-              />
-            </PanelErrorBoundary>
-          </motion.div>
-        </section>
-      </div>
+            {definition.views.map((item) => {
+              const count = playerViewCounts?.[item.id];
+              return (
+                <button
+                  aria-current={activeView === item.id ? "page" : undefined}
+                  className={
+                    activeView === item.id
+                      ? "workspace-view-option workspace-view-option-active"
+                      : "workspace-view-option"
+                  }
+                  key={item.id}
+                  type="button"
+                  onClick={() => onNavigate(section, item.id)}
+                >
+                  {t(item.labelKey)}
+                  {/* Decorative: the panel below announces the same totals,
+                      and a changing accessible name would be unstable. */}
+                  {count === undefined ? null : (
+                    <span aria-hidden="true" className="workspace-view-count">
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        ) : null}
+
+        <motion.div
+          animate={{ opacity: 1 }}
+          className="server-workspace-content"
+          initial={{ opacity: 0.85 }}
+          key={`${server.id}-${section}-${activeView ?? "root"}`}
+          transition={{ duration: 0.12, ease: "easeOut" }}
+        >
+          <PanelErrorBoundary
+            errorTitle={t("server.panel.errorTitle")}
+            panelLabel={t(definition.labelKey)}
+            resetKey={`${server.id}-${section}-${activeView ?? "root"}`}
+            retryLabel={t("common.retry")}
+          >
+            <ServerWorkspacePanel
+              onNavigate={onNavigate}
+              onOpenJava={onOpenJava}
+              path={path}
+              section={section}
+              server={server}
+              view={activeView}
+            />
+          </PanelErrorBoundary>
+        </motion.div>
+      </section>
     </div>
   );
 }

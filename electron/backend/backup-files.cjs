@@ -27,6 +27,11 @@ function relativePath(value, allowRoot = false) {
 }
 
 function excluded(relative, patterns) {
+  /* The running server holds this open exclusively on Windows, so copying it
+     fails with EBUSY. It is a liveness marker the server rewrites on start, and
+     has no place in a restore point. */
+  if (relative === "session.lock" || relative.endsWith("/session.lock"))
+    return true;
   return (
     relative.toLowerCase() === "backups" ||
     relative.toLowerCase().startsWith("backups/") ||
@@ -220,6 +225,14 @@ async function verifiedSnapshot(archive, expectedManifestHash) {
       "BACKUP_CHECKSUM_MISMATCH",
       "backup content does not match its manifest",
     );
+  // A file the snapshot had to skip still exists live (a locked jar): a restore
+  // must leave it alone rather than drop it with its folder.
+  if (Array.isArray(manifest.skippedFiles))
+    manifest.excludes.push(
+      ...manifest.skippedFiles
+        .filter((value) => typeof value === "string")
+        .map((value) => relativePath(value)),
+    );
   return manifest;
 }
 
@@ -295,6 +308,9 @@ async function restoreSnapshot({
       if (fs.existsSync(source))
         await fs.promises.cp(source, entry.staged, {
           recursive: true,
+          // Keeps each file's mtime so the next incremental snapshot can still
+          // recognise an untouched restored file and link instead of copy.
+          preserveTimestamps: true,
           filter: (candidate) =>
             !excluded(
               portable(path.relative(archive, candidate)),
@@ -381,4 +397,7 @@ module.exports = {
   restoreSnapshot,
   relativePath,
   excluded,
+  collapsePaths,
+  digest,
+  MANIFEST,
 };

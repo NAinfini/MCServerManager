@@ -45,6 +45,7 @@ import {
   CreateServerMarketplaceBrowser,
   type MarketplaceCreateSelection,
 } from "./CreateServerMarketplaceBrowser";
+import { droppedFilePath } from "../../lib/dropped-files";
 import { ProvisioningProgress } from "./ProvisioningProgress";
 import {
   cancelProvisioningJob,
@@ -202,7 +203,7 @@ export function CreateServerWizard({
   const [configuration, setConfiguration] =
     useState<GuidedServerConfiguration>(initialConfiguration);
   const [restartEnabled, setRestartEnabled] = useState(true);
-  const [autoStart, setAutoStart] = useState(false);
+  const [startAfterInstall, setStartAfterInstall] = useState(false);
   const [eulaAccepted, setEulaAccepted] = useState(false);
   const [job, setJob] = useState<ProvisioningJob | null>(null);
   const [isRecoveredJob, setIsRecoveredJob] = useState(false);
@@ -531,9 +532,12 @@ export function CreateServerWizard({
         setError(t("provisioning.wizard.dropSingle"));
         return;
       }
-      const file = files[0] as File & { path?: string };
+      const file = files[0];
       await planSource({
-        source: { kind: "localModpackFile", path: file.path || file.name },
+        source: {
+          kind: "localModpackFile",
+          path: droppedFilePath(file) || file.name,
+        },
       });
     },
     [planSource, t],
@@ -688,7 +692,7 @@ export function CreateServerWizard({
         loaderType,
         minecraftVersion,
         loaderVersion: loaderVersion || null,
-        autoStart,
+        startAfterInstall,
         restartPolicy: {
           enabled: restartEnabled,
           maxAttempts: 3,
@@ -1449,8 +1453,8 @@ export function CreateServerWizard({
                   />
                   <BooleanField
                     label={t("provisioning.config.autoStart")}
-                    checked={autoStart}
-                    onChange={setAutoStart}
+                    checked={startAfterInstall}
+                    onChange={setStartAfterInstall}
                   />
                 </ConfigSection>
               </details>

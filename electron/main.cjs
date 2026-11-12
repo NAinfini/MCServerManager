@@ -1,10 +1,18 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  dialog,
+  shell,
+  Notification,
+} = require("electron");
 const { autoUpdater } = require("electron-updater");
 const fs = require("node:fs");
 const path = require("node:path");
 const { createBackend } = require("./backend.cjs");
 const { createApplicationUpdater } = require("./app-updater.cjs");
 const { codedError } = require("./provisioning/contracts.cjs");
+const { showDesktopNotification } = require("./backups/desktop-notify.cjs");
 
 let mainWindow = null;
 let isQuitting = false;
@@ -429,6 +437,23 @@ async function openTunnelApplication(args) {
   return null;
 }
 
+/* Opens the playit agent in its own console so the owner can finish the
+   one-time sign-in it prints. Nothing is downloaded or installed here. */
+async function openPlayitSetup() {
+  const exePath = backend?.handle("get_playit_status")?.exePath;
+  if (!exePath) {
+    throw codedError("PLAYIT_NOT_INSTALLED", "playit is not installed");
+  }
+  const failure = await shell.openPath(exePath);
+  if (failure) {
+    throw codedError(
+      "OPEN_TUNNEL_APPLICATION_FAILED",
+      `failed to open tunnel application: ${failure}`,
+    );
+  }
+  return null;
+}
+
 function startScheduledTaskRunner() {
   if (scheduledTaskTimer) {
     return;
@@ -526,6 +551,10 @@ ipcMain.handle("app-command", async (_event, command, args) => {
       return openTunnelApplication(args);
     }
 
+    if (command === "open_playit_setup") {
+      return openPlayitSetup();
+    }
+
     if (!backend?.supports(command)) {
       throw new Error(`Unsupported Electron backend command: ${command}.`);
     }
@@ -592,6 +621,12 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     backend = createBackend(app);
     backend.onServerEvent((event) => {
+      showDesktopNotification(Notification, event, () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          if (!mainWindow.isVisible()) mainWindow.show();
+          mainWindow.focus();
+        }
+      });
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("server-event", event);
       }
@@ -599,6 +634,20 @@ if (!app.requestSingleInstanceLock()) {
     applyLaunchAtLoginPreference(backend.handle("get_app_preferences"));
     installMainConsoleLogger();
     startScheduledTaskRunner();
+    // Servers flagged auto_start come up with the app. Dev builds share the
+    // developer's data, so they must not boot real servers on every reload.
+    if (!isDev) {
+      Promise.resolve(backend.handle("start_auto_start_servers")).catch(
+        (error) => {
+          writeMainLog(
+            "error",
+            "main.autostart",
+            "Auto start of servers failed.",
+            error instanceof Error ? error.stack || error.message : String(error),
+          );
+        },
+      );
+    }
     createWindow();
 
     app.on("activate", () => {

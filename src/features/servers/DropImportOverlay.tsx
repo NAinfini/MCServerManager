@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FolderDown } from "lucide-react";
 import { useAppSettings } from "../../i18n";
+import { droppedFilePath } from "../../lib/dropped-files";
 
 interface DropImportOverlayProps {
   onDrop: (paths: string[]) => void;
@@ -42,8 +43,7 @@ export function DropImportOverlay({ onDrop }: DropImportOverlayProps) {
       if (!files || files.length === 0) return;
       const paths: string[] = [];
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const path = (file as File & { path?: string }).path;
+        const path = droppedFilePath(files[i]);
         if (path) {
           paths.push(path);
         }

@@ -274,6 +274,7 @@ async function extractLayer(archivePath, destination, layer, limits) {
     for await (const entry of zip.eachEntry()) {
       const { entryPath } = validateEntry(entry, state, limits);
       if (prefix && !entryPath.startsWith(prefix)) continue;
+      if (layer.filter && !layer.filter(entryPath, entry)) continue;
       const relativePath =
         prefix && layer.stripPrefix
           ? entryPath.slice(prefix.length)

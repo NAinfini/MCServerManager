@@ -1,36 +1,41 @@
 # MC Server Manager design
 
-MC Server Manager is a compact desktop tool for operating local Minecraft servers. The interface should make the current server, its state, and the next useful action immediately clear. The user-selected direction is a dense, readable management workspace.
+MC Server Manager is the window someone keeps open on a second screen while friends play on a modpack server at home. It should feel like a modern game-platform desktop app, in the family of Steam and Discord: dark, calm and quick to read, with the running server as the subject. Minecraft is a light seasoning in small details, never the costume.
 
-## Navigation and layout
+Use the semantic tokens in `src/styles/tokens.css` as the source of truth for colour, type, spacing and radius.
 
-One sidebar contains the server inventory, the selected server's seven workspace sections, and application settings. Do not add a second vertical navigation rail inside the workspace. The expanded sidebar is 232px wide on a large window; explicit collapse keeps accessible icon buttons. Narrow windows keep readable navigation labels until the user collapses it.
+## Layout
 
-The server header contains identity, loader/version, lifecycle actions, backup, and an explicit upgrade action. A compact connection row identifies the local Minecraft address and links to network settings. Never present localhost as an address friends can use remotely.
+A fixed server list on the left and one server workspace on the right. The workspace reads top to bottom:
 
-The active workspace occupies the remaining width. A single row of child views sits directly above it. Overview, Console, Players, Content, Files & backups, Automation, and Server settings are the primary sections. Overview contains performance, diagnostics, recent events, and online players; avoid repeating overview telemetry in its header.
+1. **Header:** server icon, name, loader and version, status, then backup, restart and one primary lifecycle button (start when stopped, stop when running).
+2. **Share bar:** the address friends use with a copy button, tunnel state, last and next backup. This is always visible because it is the question asked most often.
+3. **Tabs:** Console, Players, Mods, Backups, Files, Automation, Settings, in that order. Keys `1` to `7` switch tabs unless focus is in a text field. Secondary views sit in a small switcher under the tabs and never become a second navigation column.
+4. **Task area:** owns all remaining width. The console takes most of it, with a narrow rail for live numbers and who is online.
 
-Marketplace project details replace the browsing surface. Search controls and category filters return when the user goes back. Use a file tree/editor split only where both surfaces support the same task. Avoid permanent context columns and nested splits.
+The console is the default tab. There is no overview page. Performance history, diagnostics and events live in the console's Health view. Application pages (Java, Logs, Settings) sit in the list's footer. Windows may narrow to 960px without page-level overflow; lists and logs scroll inside their own region.
 
 ## Visual language
 
-Use the semantic tokens in `src/styles/tokens.css` as the source of truth. Light mode uses a warm off-white canvas and white task surfaces; dark mode uses neutral graphite. Blue means interaction or selection. Green, amber, red, and gray communicate operational states and always have readable text.
+Dark surfaces in three steps: list `--bg-sidebar`, canvas `--bg-app`, panels `--bg-panel`. The console sits on the darkest surface, `--bg-inset`. Separate regions with surface steps and hairlines. Shadows belong only to menus and dialogs.
 
-Use Segoe UI Variable Text, Segoe UI, and platform sans-serif for interface text. Apply the font to the root; defining a token alone does not apply it. Use Cascadia-compatible monospace for paths, commands, logs, addresses, and values users compare. Body text is approximately 13px, secondary labels 11–12px, section titles 14px, and active server titles 22px. Hierarchy comes from weight, alignment, and spacing.
+Green is the one accent: the active tab underline, primary actions and running state. Red is stop and failure, amber is warning, blue is information. Neutral grey carries selection in lists. Every status has a text label as well as a colour.
 
-Use 4px spacing increments, 34–38px controls, restrained 6px control corners, and 8px bounded surfaces. Prefer aligned table rows and flat task regions to repeated cards. Persistent surfaces do not float or animate on hover. Reserve shadows for overlapping menus and dialogs.
+Type is the system stack from `--font-sans`, with `--font-mono` reserved for logs, commands, addresses and versions users compare. Body text is 13px, secondary 12px, server name 20px semibold. Hierarchy comes from weight and surface, not from uppercase labels.
+
+Controls are 32px tall with 6px corners. The primary lifecycle button is 36px. Panels use 8px corners, dialogs 12px. Do not nest panels.
+
+**The Minecraft seasoning** is limited to pixel icons on the tabs (`PixelIcon`, drawn on a 16px grid with crisp edges), server and mod icons, and ordinary game vocabulary. Never add pixel fonts, bevelled buttons, block textures, landscape backgrounds, or Mojang assets. Mods and packs show their own icon when one exists.
 
 ## Interaction rules
 
-- Show the current server and content compatibility before installation. Provider, Minecraft version, loader, dependencies, and selected version must be understandable before committing.
-- Show pending operations, actual completion, partial failures, and restart requirements. Do not report a successful local update before its backend operation completes.
-- Keep selection after a partial batch failure only for the failed items, so retry is deliberate.
-- Review destructive actions with the actual affected names and scope. Restore previews describe archive contents, not a guessed world folder.
+- Dropping a pack anywhere opens one confirmation card: everything detected, with evidence, each editable value next to its own Change link, and warnings. EULA consent stays explicit but needs only the final button.
+- Show pending operations, real completion, partial failures and restart requirements. A stopping server says it is stopping and offers force stop only after it has been given time.
+- Review destructive actions with the affected names and scope. Restore previews describe archive contents.
 - Detect changed files before saving, and keep binary files out of text editors.
-- Preserve keyboard navigation, visible focus, labeled icon controls, and reduced motion. Status must not depend on color alone.
-- Keep narrow layouts free of page-level overflow. Tables and code regions may scroll within their task surface.
-- Use real data. Unavailable values and backend errors remain visible; placeholders must never imply success.
+- Preserve keyboard navigation, visible focus, labelled icon controls and reduced motion.
+- Use real data. Unavailable values stay visibly unavailable; placeholders must never imply success.
 
 ## Validation
 
-Check light and dark themes, the primary server workflows, marketplace list/detail transitions, and narrow desktop windows. Confirm actual computed fonts and overflow in a browser. Keep English and Simplified Chinese labels complete. Verify changes with focused behavior tests and the existing integration suite.
+Check the primary flows in the dark theme and that the light theme stays legible. Check 960px and 1280px windows. Keep English and Simplified Chinese complete, since Chinese is the primary use. Verify with focused behaviour tests and the Playwright suite.

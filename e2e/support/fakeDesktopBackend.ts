@@ -5,7 +5,8 @@ export interface FakeDesktopCall {
 
 export interface FakeDesktopState {
   calls: FakeDesktopCall[];
-  processStatus: "running" | "stopped" | "crashed";
+  processStatus: "running" | "stopping" | "stopped" | "crashed";
+  crashExplanation: Record<string, any> | null;
   preferences: Record<string, any>;
   files: Record<string, string>;
   directories: string[];
@@ -36,6 +37,7 @@ export function createFakeDesktopState(): FakeDesktopState {
   return {
     calls: [],
     processStatus: "running",
+    crashExplanation: null,
     preferences: {
       closeBehavior: "minimize",
       launchAtLogin: false,
@@ -194,7 +196,30 @@ export async function handleFakeDesktopCommand(
     case "unbind_tunnel_from_server":
     case "bind_tunnel_to_server":
     case "open_tunnel_application":
+    case "open_playit_setup":
       return null;
+    case "get_playit_status":
+    case "retry_playit_agent":
+    case "save_playit_settings":
+      return {
+        state: "not_installed",
+        exePath: null,
+        pid: null,
+        activeServerIds: [],
+        restartAttempt: 0,
+        gaveUp: false,
+        lastError: null,
+        exitCode: null,
+        stopWhenIdle: true,
+        downloadUrl: "https://playit.gg/download",
+      };
+    case "get_server_share_settings":
+    case "save_server_share_settings":
+      return {
+        serverId: (input.serverId as string) ?? "server-1",
+        publicAddress: (input.publicAddress as string | undefined) ?? null,
+        startTunnelWithServer: Boolean(input.startTunnelWithServer),
+      };
     case "list_recoverable_provisioning_jobs":
       return [];
     case "list_server_profiles":
@@ -223,7 +248,13 @@ export async function handleFakeDesktopCommand(
     case "restart_server":
       state.processStatus = "running";
       return handleFakeDesktopCommand(state, "get_server_process_status", args);
+    case "get_crash_explanation":
+      return state.crashExplanation;
+    case "disable_crashed_mod":
+      state.crashExplanation = null;
+      return null;
     case "stop_server":
+    case "force_stop_server":
       state.processStatus = "stopped";
       return null;
     case "restart_server_with_countdown":
@@ -658,6 +689,38 @@ export async function handleFakeDesktopCommand(
       return null;
     case "export_server_backup":
       return { exportedPath: "C:\\Exports\\world.zip" };
+    case "get_backup_settings":
+    case "save_backup_settings":
+      return {
+        serverId: args?.serverId ?? input?.serverId ?? "server-1",
+        configured: true,
+        enabled: input?.enabled ?? true,
+        intervalMinutes: input?.intervalMinutes ?? 360,
+        beforeRestart: input?.beforeRestart ?? true,
+        beforeUpdate: input?.beforeUpdate ?? true,
+        keepRecent: input?.keepRecent ?? 8,
+        keepDaily: input?.keepDaily ?? 5,
+        keepWeekly: input?.keepWeekly ?? 2,
+        maxTotalMb: input?.maxTotalMb ?? null,
+        location: input?.location ?? null,
+        nextRunAt: new Date(Date.now() + 6 * 3_600_000).toISOString(),
+        lastSuccessAt: state.backups[0]?.createdAt ?? null,
+      };
+    case "get_backup_status":
+      return {
+        serverId: args?.serverId ?? "server-1",
+        settings: await handleFakeDesktopCommand(state, "get_backup_settings", args),
+        restorePointCount: state.backups.length,
+        lastBackupAt: state.backups[0]?.createdAt ?? null,
+        lastSuccessAt: state.backups[0]?.createdAt ?? null,
+        nextRunAt: new Date(Date.now() + 6 * 3_600_000).toISOString(),
+        usedBytes: state.backups.reduce(
+          (sum: number, backup: { sizeBytes: number }) => sum + backup.sizeBytes,
+          0,
+        ),
+        freeBytes: 120 * 1024 ** 3,
+        location: "C:\\Servers\\survival\\backups",
+      };
     case "list_backup_profiles":
       return [];
     case "create_backup_profile":
@@ -969,6 +1032,43 @@ export async function handleFakeDesktopCommand(
         loaderVersion: input.loaderVersion ?? "0.16.10",
         requiredJavaMajor: 21,
         warnings: [],
+        // What electron/provisioning/pack-detect.cjs reports for a dropped
+        // local pack, so the drop card has something real to render.
+        ...(input.source?.kind === "localModpackFile"
+          ? {
+              detection: {
+                kind: "serverPack",
+                name: "Dropped Pack",
+                root: "",
+                loader: { type: "fabric", version: "0.16.10" },
+                minecraftVersion: "1.21.1",
+                modCount: 3,
+                modCheck: { checked: 3, incompatible: 0 },
+                memory: {
+                  maxMb: 4096,
+                  minMb: 1024,
+                  source: "recommended",
+                  statedSource: null,
+                  totalMb: 16384,
+                },
+                javaMajor: 21,
+                port: null,
+                clientOnlyMods: [],
+                disabledMods: [],
+                missing: [],
+                unfetchable: [],
+                warnings: [],
+                evidence: [
+                  {
+                    field: "minecraftVersion",
+                    value: "1.21.1",
+                    source: "variables.txt",
+                  },
+                ],
+                sizeBytes: 1048576,
+              },
+            }
+          : {}),
         launchSpec: {
           javaPath: "C:\\Java\\bin\\java.exe",
           workingDir: `C:\\Servers\\${input.name ?? "New server"}`,

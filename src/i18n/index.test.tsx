@@ -50,6 +50,26 @@ describe("i18n settings", () => {
     expect(screen.getByText("[[missing.key]]")).toBeInTheDocument();
   });
 
+  it("defaults to the dark theme until the user chooses another", () => {
+    const first = render(
+      <AppSettingsProvider>
+        <Probe />
+      </AppSettingsProvider>,
+    );
+
+    expect(screen.getByText("dark")).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    first.unmount();
+
+    localStorage.setItem("mcsm.theme", "system");
+    render(
+      <AppSettingsProvider>
+        <Probe />
+      </AppSettingsProvider>,
+    );
+    expect(screen.getByText("system")).toBeInTheDocument();
+  });
+
   it("loads Chinese language and supports system, light, and dark themes", async () => {
     render(
       <AppSettingsProvider>

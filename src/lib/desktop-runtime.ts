@@ -8,13 +8,14 @@ type ElectronBridge = {
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
   openExternalUrl: (url: string) => Promise<void>;
   windowAction: (action: DesktopWindowAction) => Promise<void>;
+  getPathForFile?: (file: File) => string;
   onCloseBehaviorRequested: (callback: () => void) => () => void;
   onServerEvent?: (callback: (event: DesktopServerEvent) => void) => () => void;
 };
 
 export type DesktopServerEvent = {
   serverId: string;
-  kind: "console" | "lifecycle" | "metrics" | "players";
+  kind: "console" | "lifecycle" | "metrics" | "notification" | "players";
   payload: unknown;
 };
 

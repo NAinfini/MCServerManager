@@ -7,7 +7,7 @@ import {
   X,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { BottomStatusBar } from "./BottomStatusBar";
+import { NotificationCenter } from "./NotificationCenter";
 import { Sidebar, type PrimaryPage } from "./Sidebar";
 import { WindowTitlebar } from "./WindowTitlebar";
 import { Button } from "../ui/button";
@@ -22,14 +22,20 @@ import {
 } from "../../features/servers/CreateServerWizard";
 import { DropImportOverlay } from "../../features/servers/DropImportOverlay";
 import { DropImportReviewDialog } from "../../features/servers/DropImportReviewDialog";
+import { PackDropCard } from "../../features/servers/PackDropCard";
+import { isPackFilePath } from "../../features/servers/packDetection";
 import { ServerList } from "../../features/servers/ServerList";
 import { ServerDetail } from "../../features/servers/ServerDetail";
-import { ServerWorkspaceNav } from "../../features/servers/ServerWorkspaceNav";
 import { ServerRuntimeProvider } from "../../features/servers/ServerRuntimeContext";
 import { WizardStepIndicator } from "../../features/servers/WizardStepIndicator";
 import type { ServerProfile } from "../../domain/server";
 import type { ProcessSummary } from "../../features/process/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNotificationStore } from "../../features/notifications/notificationStore";
 import { serverKeys } from "../../features/servers/queries";
+import { importLocalContent } from "../../features/content/contentApi";
+import { contentKeys } from "../../features/content/queries";
+import { errorMessage } from "../../lib/error-message";
 import {
   attentionKeys,
   getAttentionItems,
@@ -72,6 +78,8 @@ interface AppShellProps {
 
 export function AppShell({ processSummary }: AppShellProps) {
   const { t } = useAppSettings();
+  const queryClient = useQueryClient();
+  const pushNotification = useNotificationStore((state) => state.push);
   const route = useAppRoute();
   const routeFocusKey = window.location.hash;
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
@@ -97,6 +105,7 @@ export function AppShell({ processSummary }: AppShellProps) {
   const [createServerProgress, setCreateServerProgress] =
     useState<CreateServerWizardProgress | null>(null);
   const [droppedImportPaths, setDroppedImportPaths] = useState<string[]>([]);
+  const [droppedPackPath, setDroppedPackPath] = useState<string | null>(null);
   const [serverFilter, setServerFilter] = useState("");
   const selectedServerId = route.name === "server" ? route.serverId : null;
   const profilesQuery = useQuery({
@@ -159,8 +168,8 @@ export function AppShell({ processSummary }: AppShellProps) {
         item.kind === "update"
           ? "content"
           : item.kind === "backup"
-            ? "data"
-            : "overview",
+            ? "backups"
+            : "console",
       view:
         item.kind === "update"
           ? "updates"
@@ -224,10 +233,38 @@ export function AppShell({ processSummary }: AppShellProps) {
   }, []);
 
   const handleDropImport = useCallback((paths: string[]) => {
-    if (paths.length > 0) {
+    /* On a server's Mods tab a dropped jar is a mod for that server. */
+    if (
+      route.name === "server" &&
+      route.section === "content" &&
+      paths.length > 0 &&
+      paths.every((path) => /\.jar$/i.test(path))
+    ) {
+      const serverId = route.serverId;
+      void (async () => {
+        for (const path of paths) {
+          try {
+            await importLocalContent(serverId, path);
+          } catch (error) {
+            pushNotification({
+              severity: "error",
+              title: t("notifications.actionFailed"),
+              message: errorMessage(error),
+            });
+          }
+        }
+        await queryClient.invalidateQueries({
+          queryKey: contentKeys.installed(serverId),
+        });
+      })();
+      return;
+    }
+    if (paths.length === 1 && isPackFilePath(paths[0])) {
+      setDroppedPackPath(paths[0]);
+    } else if (paths.length > 0) {
       setDroppedImportPaths(paths);
     }
-  }, []);
+  }, [route, pushNotification, queryClient, t]);
 
   const openServersOverview = useCallback(() => {
     navigateTo({ name: "dashboard" });
@@ -291,10 +328,10 @@ export function AppShell({ processSummary }: AppShellProps) {
           action === "content"
             ? "content"
             : action === "backup"
-              ? "data"
+              ? "backups"
               : action === "network"
                 ? "settings"
-                : "overview",
+                : "console",
         view:
           action === "content"
             ? "browse"
@@ -358,6 +395,20 @@ export function AppShell({ processSummary }: AppShellProps) {
     <div className="app-shell">
       <WindowTitlebar />
       <DropImportOverlay onDrop={handleDropImport} />
+      <PackDropCard
+        path={droppedPackPath}
+        onClose={() => setDroppedPackPath(null)}
+        onCreated={(serverId) => {
+          setDroppedPackPath(null);
+          if (serverId) {
+            navigateTo({ name: "server", serverId, section: "console" });
+          }
+        }}
+        onOpenWizard={(sourcePath) => {
+          setDroppedPackPath(null);
+          requestCreateServerExit(() => openCreateServer(sourcePath));
+        }}
+      />
       <DropImportReviewDialog
         open={droppedImportPaths.length > 0}
         paths={droppedImportPaths}
@@ -385,22 +436,6 @@ export function AppShell({ processSummary }: AppShellProps) {
         }
       >
         <Sidebar
-          workspaceNavigation={
-            selectedServer && route.name === "server" ? (
-              <ServerWorkspaceNav
-                serverName={selectedServer.name}
-                section={route.section}
-                onNavigate={(section, view) =>
-                  navigateTo({
-                    name: "server",
-                    serverId: selectedServer.id,
-                    section,
-                    ...(view ? { view } : {}),
-                  })
-                }
-              />
-            ) : undefined
-          }
           activePage={activePage}
           selectedServerId={selectedServerId ?? undefined}
           serverStatuses={processSummary?.statuses}
@@ -420,12 +455,24 @@ export function AppShell({ processSummary }: AppShellProps) {
               );
             });
           }}
+          onCreateServer={() =>
+            requestCreateServerExit(() => openCreateServer())
+          }
+          notifications={
+            <NotificationCenter
+              onOpenSettings={() =>
+                requestCreateServerExit(() =>
+                  navigateTo({ name: "settings", section: "notifications" }),
+                )
+              }
+            />
+          }
           onSelectServer={(serverId) => {
             requestCreateServerExit(() => {
               navigateTo({
                 name: "server",
                 serverId,
-                section: "overview",
+                section: "console",
               });
             });
           }}
@@ -566,10 +613,9 @@ export function AppShell({ processSummary }: AppShellProps) {
               <ServerDetail
                 key={selectedServer.id}
                 server={selectedServer}
-                section={route.name === "server" ? route.section : "overview"}
+                section={route.name === "server" ? route.section : "console"}
                 view={route.name === "server" ? route.view : undefined}
                 path={route.name === "server" ? route.path : undefined}
-                onBack={openServersOverview}
                 onNavigate={(
                   section: ServerWorkspaceSection,
                   view?: string,
@@ -718,7 +764,7 @@ export function AppShell({ processSummary }: AppShellProps) {
                     navigateTo({
                       name: "server",
                       serverId,
-                      section: "overview",
+                      section: "console",
                     })
                   }
                 />
@@ -727,17 +773,6 @@ export function AppShell({ processSummary }: AppShellProps) {
           )}
         </main>
       </div>
-      <BottomStatusBar
-        runningCount={runningCount}
-        crashedCount={crashedCount}
-        selectedServer={selectedServer}
-        onOpenJava={() => requestCreateServerExit(openJavaRuntimes)}
-        onOpenNotifications={() =>
-          requestCreateServerExit(() =>
-            navigateTo({ name: "settings", section: "notifications" }),
-          )
-        }
-      />
     </div>
   );
 }

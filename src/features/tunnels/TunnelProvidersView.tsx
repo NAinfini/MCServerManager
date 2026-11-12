@@ -20,6 +20,7 @@ import { Select } from "../../components/ui/select";
 import { TextField } from "../../components/ui/text-field";
 import { useAppSettings } from "../../i18n";
 import type { ServerProfile } from "../../domain/server";
+import { PlayitSetupPanel } from "./PlayitSetupPanel";
 import { TunnelBindingEditor } from "./TunnelBindingEditor";
 import {
   listTunnelBindings,
@@ -284,6 +285,7 @@ export function TunnelProvidersView({
         </div>
       )}
 
+      {currentServer ? <PlayitSetupPanel server={currentServer} /> : null}
       <div className="tunnel-workbench">
         <section
           className="tunnel-workbench-section"

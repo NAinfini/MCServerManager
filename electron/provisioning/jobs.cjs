@@ -125,6 +125,14 @@ function writeGuidedConfiguration(fileSystem, job) {
   const existing = fileSystem.existsSync(propertiesPath)
     ? fileSystem.readFileSync(propertiesPath, "utf8")
     : "";
+  /* The pack's author chose these. The port is the exception: the caller already
+     kept the pack's port unless another server is using it. */
+  if (job.plan.keepPackSettings === true) {
+    for (const line of existing.split(/\r?\n/)) {
+      const key = line.split("=")[0].trim();
+      if (key && key !== "server-port" && !key.startsWith("#")) delete updates[key];
+    }
+  }
   const merged = mergeProperties(existing, updates);
   fileSystem.writeFileSync(propertiesPath, merged.raw, "utf8");
 }
@@ -268,11 +276,22 @@ function createJobExecutor(dependencies) {
           }
           if (stage === "awaitingEula") {
             validateCommitGates(job.plan);
-            fileSystem.writeFileSync(
-              path.join(job.stagingDir, "eula.txt"),
-              "eula=true\n",
-              "utf8",
-            );
+            const eulaPath = path.join(job.stagingDir, "eula.txt");
+            if (job.plan.eula?.source === "pack") {
+              /* Keep the pack's file exactly as shipped. If it does not actually
+                 agree, nothing here may agree in its place. */
+              const shipped = fileSystem.existsSync(eulaPath)
+                ? fileSystem.readFileSync(eulaPath, "utf8")
+                : "";
+              if (!/^\s*eula\s*=\s*true\s*$/im.test(shipped)) {
+                throw gateError(
+                  "EULA_ACCEPTANCE_REQUIRED",
+                  "The pack does not include an accepted eula.txt.",
+                );
+              }
+            } else {
+              fileSystem.writeFileSync(eulaPath, "eula=true\n", "utf8");
+            }
           }
           if (typeof handlers[stage] === "function") {
             const stagePatch = await handlers[stage]({

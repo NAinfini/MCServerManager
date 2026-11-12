@@ -59,10 +59,30 @@ describe("app hash router", () => {
     ).toEqual({
       name: "server",
       serverId: "server-1",
-      section: "data",
-      view: "files",
+      section: "files",
       path: "config/server.properties",
     });
+    expect(
+      parseAppHash("#/servers/server-1/console?view=health"),
+    ).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "console",
+      view: "health",
+    });
+  });
+
+  it("defaults a server link without a known section to the console", () => {
+    for (const hash of [
+      "#/servers/server-1",
+      "#/servers/server-1/not-a-section",
+    ]) {
+      expect(parseAppHash(hash)).toEqual({
+        name: "server",
+        serverId: "server-1",
+        section: "console",
+      });
+    }
   });
 
   it("maps retired workspace routes onto their successor", () => {
@@ -72,17 +92,37 @@ describe("app hash router", () => {
       section: "console",
       view: "logs",
     });
-    expect(parseAppHash("#/servers/server-1/monitor?view=diagnostics")).toEqual(
-      {
-        name: "server",
-        serverId: "server-1",
-        section: "overview",
-      },
-    );
-    expect(parseAppHash("#/servers/server-1/monitor")).toEqual({
+    const health = {
       name: "server",
       serverId: "server-1",
-      section: "overview",
+      section: "console",
+      view: "health",
+    };
+    // Overview and Monitor became the Health view under Console.
+    for (const retired of [
+      "overview",
+      "monitor",
+      "monitor?view=performance",
+      "monitor?view=events",
+      "monitor?view=diagnostics",
+    ]) {
+      expect(parseAppHash(`#/servers/server-1/${retired}`)).toEqual(health);
+    }
+    // "Files & backups" split into two tabs, so each old view has its own home.
+    expect(parseAppHash("#/servers/server-1/data")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "backups",
+    });
+    expect(parseAppHash("#/servers/server-1/data?view=backups")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "backups",
+    });
+    expect(parseAppHash("#/servers/server-1/data?view=files")).toEqual({
+      name: "server",
+      serverId: "server-1",
+      section: "files",
     });
     expect(parseAppHash("#/servers/server-1/settings/updates")).toEqual({
       name: "server",
@@ -131,12 +171,9 @@ describe("app hash router", () => {
       toAppHash({
         name: "server",
         serverId: "server-1",
-        section: "data",
-        view: "files",
+        section: "files",
         path: "config/server.properties",
       }),
-    ).toBe(
-      "#/servers/server-1/data?view=files&path=config%2Fserver.properties",
-    );
+    ).toBe("#/servers/server-1/files?path=config%2Fserver.properties");
   });
 });

@@ -77,7 +77,7 @@ async function buttonCenter(webContents, label) {
   return point;
 }
 
-// "Files" is also a substring of "Files & backups", so some labels can only be
+// "Files" and "Settings" appear inside longer labels, so some can only be
 // resolved by an exact match.
 async function exactButtonCenter(webContents, label) {
   const point = await webContents.executeJavaScript(`(() => {
@@ -93,6 +93,23 @@ async function exactButtonCenter(webContents, label) {
     throw new Error(
       `Expected one exact "${label}" button, found ${point.count}.`,
     );
+  }
+  return point;
+}
+
+// The application nav and the workspace tabs both have a "Settings" button, so
+// a tab has to be looked up inside the tab strip.
+async function tabCenter(webContents, label) {
+  const point = await webContents.executeJavaScript(`(() => {
+    const matches = [...document.querySelectorAll(".workspace-tabs button")].filter(
+      (button) => button.textContent.trim() === ${JSON.stringify(label)},
+    );
+    if (matches.length !== 1) return { count: matches.length };
+    const rect = matches[0].getBoundingClientRect();
+    return { count: 1, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`);
+  if (point.count !== 1) {
+    throw new Error(`Expected one "${label}" tab, found ${point.count}.`);
   }
   return point;
 }
@@ -429,6 +446,19 @@ function registerSmokeIpc() {
       case "list_notification_events":
       case "get_attention_items":
         return [];
+      case "get_playit_status":
+        return {
+          state: "not_installed",
+          exePath: null,
+          pid: null,
+          activeServerIds: [],
+          restartAttempt: 0,
+          gaveUp: false,
+          lastError: null,
+          exitCode: null,
+          stopWhenIdle: false,
+          downloadUrl: "",
+        };
       case "suggest_server_port":
         return { port: 25565, taken: [] };
       case "show_open_dialog":
@@ -551,8 +581,17 @@ async function run() {
   );
   await waitFor(
     window.webContents,
-    'document.querySelector(".server-workspace-shell .server-workspace-main")',
+    'document.querySelector(".server-workspace .server-workspace-main")',
     "the server workbench",
+  );
+  await waitFor(
+    window.webContents,
+    'document.querySelector(".console-layout .console-panel") && document.querySelector(".server-live-stats")',
+    "the live console, which is where a server opens",
+  );
+  await clickAt(
+    window.webContents,
+    await exactButtonCenter(window.webContents, "Health"),
   );
   await waitFor(
     window.webContents,
@@ -576,16 +615,17 @@ async function run() {
     "the visible overview workspace",
   );
   const desktopWorkbench = await window.webContents.executeJavaScript(`(() => {
-    const workbench = document.querySelector(".server-workspace-shell");
-    const navigation = document.querySelector(".sidebar .workspace-navigation");
+    const workbench = document.querySelector(".server-workspace");
+    const navigation = document.querySelector(".server-workspace .workspace-tabs");
     const content = document.querySelector(".server-workspace-main");
     if (!workbench || !navigation || !content) return null;
     const navigationRect = navigation.getBoundingClientRect();
     const contentRect = content.getBoundingClientRect();
     return {
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      navigationVisible: navigationRect.width >= 150,
-      contentDominates: contentRect.width > navigationRect.width * 3,
+      tabCount: navigation.querySelectorAll("button").length,
+      tabsAboveContent: navigationRect.bottom <= contentRect.top + 1,
+      contentDominates: contentRect.width > window.innerWidth / 2,
       brokenVisibleImages: [...document.images].filter((image) => {
         const rect = image.getBoundingClientRect();
         return rect.width > 0 && rect.height > 0 && (!image.complete || image.naturalWidth === 0);
@@ -596,7 +636,8 @@ async function run() {
   if (
     !desktopWorkbench ||
     desktopWorkbench.horizontalOverflow ||
-    !desktopWorkbench.navigationVisible ||
+    desktopWorkbench.tabCount !== 7 ||
+    !desktopWorkbench.tabsAboveContent ||
     !desktopWorkbench.contentDominates ||
     desktopWorkbench.brokenVisibleImages.length > 0 ||
     !desktopWorkbench.telemetryText.includes("18.4%") ||
@@ -623,20 +664,21 @@ async function run() {
 
   await setRendererViewport(window, { width: 960, height: 720 });
   const narrowWorkbench = await window.webContents.executeJavaScript(`(() => {
-    const workbench = document.querySelector(".server-workspace-shell");
+    const workbench = document.querySelector(".server-workspace");
     const navigation = document.querySelector(".sidebar");
-    const navigationItem = document.querySelector(".sidebar .workspace-navigation button");
-    if (!workbench || !navigation || !navigationItem) return null;
+    const tab = document.querySelector(".workspace-tabs button");
+    if (!workbench || !navigation || !tab) return null;
     const navigationRect = navigation.getBoundingClientRect();
-    const itemRect = navigationItem.getBoundingClientRect();
-    const itemLabel = navigationItem.querySelector("span");
+    const tabLabel = tab.querySelector("span");
+    const rowLabel = navigation.querySelector(".server-nav-name");
     return {
       horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      labeledNavigation: Math.abs(navigationRect.width - 216) <= 1 &&
-        Boolean(itemLabel && getComputedStyle(itemLabel).display !== "none"),
+      labeledNavigation: navigationRect.width >= 180 &&
+        Boolean(rowLabel && getComputedStyle(rowLabel).display !== "none") &&
+        Boolean(tabLabel && getComputedStyle(tabLabel).display !== "none"),
       viewportWidth: window.innerWidth,
       navigationWidth: navigationRect.width,
-      itemWidth: itemRect.width,
+      tabWidth: tab.getBoundingClientRect().width,
     };
   })()`);
   if (
@@ -660,9 +702,11 @@ async function run() {
     window.webContents,
     `(() => {
     const sidebar = document.querySelector(".sidebar-collapsed");
-    const label = sidebar?.querySelector(".workspace-navigation button span");
-    return sidebar && Math.abs(sidebar.getBoundingClientRect().width - 64) <= 1 &&
-      label && getComputedStyle(label).display === "none";
+    const tabLabel = document.querySelector(".workspace-tabs button span");
+    return sidebar && sidebar.getBoundingClientRect().width <= 80 &&
+      !sidebar.querySelector(".server-nav-name") &&
+      !sidebar.querySelector(".nav-item span") &&
+      tabLabel && getComputedStyle(tabLabel).display !== "none";
   })()`,
     "the explicitly collapsed sidebar",
   );
@@ -690,12 +734,12 @@ async function run() {
       text: "Scheduled tasks",
     },
     {
-      primary: "Server settings",
+      primary: "Settings",
       view: "Network & access",
       text: "Network and connections",
     },
     {
-      primary: "Server settings",
+      primary: "Settings",
       view: "General",
       text: "Server folder",
     },
@@ -707,7 +751,7 @@ async function run() {
     await setRendererViewport(window, { width: 960, height: 720 });
     await clickAt(
       window.webContents,
-      await buttonCenter(window.webContents, route.primary),
+      await tabCenter(window.webContents, route.primary),
     );
     if (route.view) {
       await waitFor(
@@ -744,16 +788,7 @@ async function run() {
   await setRendererViewport(window, { width: 1280, height: 900 });
   await clickAt(
     window.webContents,
-    await buttonCenter(window.webContents, "Files & backups"),
-  );
-  await waitFor(
-    window.webContents,
-    '[...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Files")',
-    "the Files workspace view",
-  );
-  await clickAt(
-    window.webContents,
-    await exactButtonCenter(window.webContents, "Files"),
+    await tabCenter(window.webContents, "Files"),
   );
   await waitFor(
     window.webContents,
@@ -794,8 +829,9 @@ async function run() {
   process.stdout.write("Electron UI smoke: bundled file editor verified.\n");
 
   await setRendererViewport(window, { width: 960, height: 720 });
-  await window.webContents.executeJavaScript(
-    'document.querySelector(".page-header-back")?.click()',
+  await clickAt(
+    window.webContents,
+    await elementCenter(window.webContents, ".sidebar-brand", "sidebar brand"),
   );
   await waitFor(
     window.webContents,
@@ -805,11 +841,11 @@ async function run() {
 
   for (const page of [
     {
-      label: "Java Runtimes",
+      label: "Java",
       selector: ".java-page",
     },
     {
-      label: "Logger",
+      label: "Logs",
       selector: ".logger-page",
     },
   ]) {
@@ -817,7 +853,7 @@ async function run() {
     await setRendererViewport(window, { width: 960, height: 720 });
     await clickAt(
       window.webContents,
-      await buttonCenter(window.webContents, page.label),
+      await exactButtonCenter(window.webContents, page.label),
     );
     await waitFor(
       window.webContents,
@@ -830,7 +866,7 @@ async function run() {
   await setRendererViewport(window, { width: 960, height: 720 });
   await clickAt(
     window.webContents,
-    await buttonCenter(window.webContents, "Dashboard"),
+    await elementCenter(window.webContents, ".sidebar-brand", "sidebar brand"),
   );
   await waitFor(
     window.webContents,
@@ -865,7 +901,6 @@ async function run() {
   }
   const inlineShellState = await window.webContents.executeJavaScript(`({
     hasSidebar: Boolean(document.querySelector(".sidebar")),
-    hasStatusBar: Boolean(document.querySelector(".status-bar")),
     hasTitlebar: Boolean(document.querySelector(".window-titlebar")),
     hasLoadedBrandImages: [...document.querySelectorAll(
       ".window-titlebar-mark img, .app-mark img",
@@ -875,7 +910,6 @@ async function run() {
   })`);
   if (
     !inlineShellState.hasSidebar ||
-    !inlineShellState.hasStatusBar ||
     !inlineShellState.hasTitlebar ||
     !inlineShellState.hasLoadedBrandImages ||
     inlineShellState.hasCreateDialog ||

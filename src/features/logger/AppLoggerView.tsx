@@ -91,7 +91,6 @@ export function AppLoggerView() {
     <section className="logger-page" aria-labelledby="logger-title">
       <div className="page-header">
         <div>
-          <p className="eyebrow">{t("logger.eyebrow")}</p>
           <h1 id="logger-title">{t("logger.title")}</h1>
         </div>
         <div className="page-header-actions">

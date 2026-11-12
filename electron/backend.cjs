@@ -11,11 +11,19 @@ const { createCommandRegistry } = require("./backend/command-registry.cjs");
 const { createBackendContext } = require("./backend/context.cjs");
 const serverFiles = require("./backend/server-files.cjs");
 const backupFiles = require("./backend/backup-files.cjs");
+const snapshots = require("./backups/snapshots.cjs");
+const backupSettings = require("./backups/settings.cjs");
+const { createAutoBackups } = require("./backups/auto.cjs");
+const { createActivityTracker } = require("./backups/activity.cjs");
+const { createHangProbe, probeWanted } = require("./hang-probe.cjs");
+const { zipDirectory, openLegacyZip } = require("./backups/zip-export.cjs");
 const contentVersions = require("./backend/content-versions.cjs");
 const taskSchedule = require("./backend/task-schedule.cjs");
 const { mergeProperties } = require("./provisioning/properties.cjs");
 const { planLocalPack } = require("./provisioning/sources.cjs");
 const { createLoaderRegistry } = require("./provisioning/loaders.cjs");
+const { runToCompletion } = require("./provisioning/run-process.cjs");
+const { explainServerCrash } = require("./crash-explain.cjs");
 const {
   createRuntimeManager,
   maxJavaMajorForMinecraft: runtimeMaxJavaMajor,
@@ -23,6 +31,7 @@ const {
   selectJavaRuntime,
 } = require("./provisioning/runtimes.cjs");
 const { createJobExecutor } = require("./provisioning/jobs.cjs");
+const { createPlayitService } = require("./tunnels/playit-service.cjs");
 const {
   codedError,
   provisioningError,
@@ -33,6 +42,7 @@ const {
   inspectZip,
 } = require("./provisioning/archive.cjs");
 const { readModMetadata } = require("./provisioning/mod-metadata.cjs");
+const { applyDisabledMods } = require("./provisioning/pack-detect.cjs");
 
 const managedChildren = new Map();
 const closedDatabases = new WeakSet();
@@ -343,11 +353,37 @@ function createBackend(app) {
   db.exec("PRAGMA foreign_keys = ON");
   db.exec(coreSchema);
   migrateDatabase(db);
+  backupSettings.ensureBackupSchema(db);
   ensureNotificationPreferences(db);
+  context.runtimeState.playit = createPlayitService({
+    db,
+    nowIso,
+    isServerRunning: (serverId) => managedChildren.has(serverId),
+    notifyDrop: (serverId) => {
+      addProcessEvent(
+        db,
+        serverId,
+        "warning",
+        "Playit tunnel agent stopped unexpectedly; restarting it.",
+      );
+      if (getNotificationPreferences(db).tunnelStoppedEnabled) {
+        createNotificationEvent(db, {
+          serverId,
+          kind: "tunnel_stopped",
+          severity: "warning",
+          title: "Tunnel disconnected",
+          message:
+            "The playit tunnel stopped while this server is running. Friends may not be able to join until it is back.",
+        });
+      }
+    },
+  });
+  skipOverdueScheduledTasks(db);
   const commands = createCommandRegistry(createCommandHandlers(context));
 
   const close = () => {
     closedDatabases.add(db);
+    context.runtimeState.playit.dispose();
     context.runtimeState.startingServers.clear();
     context.runtimeState.metricBaselines.clear();
     for (const [serverId, managed] of managedChildren.entries()) {
@@ -355,6 +391,7 @@ function createBackend(app) {
         clearRestartState(serverId);
         clearRestartCountdown(serverId);
         clearInterval(managed.metricTimer);
+        clearManagedTimers(managed);
         managed.stopRequested = true;
         managed.child.kill();
         managedChildren.delete(serverId);
@@ -363,7 +400,7 @@ function createBackend(app) {
     db.prepare(
       `UPDATE managed_processes
          SET status = 'stopped', exited_at = COALESCE(exited_at, ?)
-         WHERE status IN ('running', 'external_running')`,
+         WHERE status IN ('running', 'stopping', 'external_running')`,
     ).run(nowIso());
     db.close();
   };
@@ -446,6 +483,10 @@ function createCommandHandlers(context) {
     remove_java_runtime: (args) => removeJavaRuntime(db, args?.input),
     start_server: (args) => startServer(db, args?.serverId),
     stop_server: (args) => stopServer(db, args?.serverId),
+    force_stop_server: (args) => forceStopServer(db, args?.serverId),
+    get_crash_explanation: (args) => getCrashExplanation(db, args?.serverId),
+    disable_crashed_mod: (args) => disableCrashedMod(db, args?.input),
+    start_auto_start_servers: () => startAutoStartServers(db),
     restart_server: (args) => restartServer(db, args?.serverId),
     restart_server_with_countdown: (args) =>
       restartServerWithCountdown(db, args?.input),
@@ -483,6 +524,10 @@ function createCommandHandlers(context) {
       deleteBackupProfile(db, args?.profileId || args?.input?.profileId),
     create_profile_backup: (args) => createProfileBackup(db, args?.input),
     restore_world_backup: (args) => restoreWorldBackup(db, args?.input),
+    get_backup_settings: (args) =>
+      backupSettings.getBackupSettings(db, requireServerId(args?.serverId)),
+    save_backup_settings: (args) => saveBackupSettingsCommand(db, args?.input),
+    get_backup_status: (args) => getBackupStatus(db, args?.serverId),
     preview_backup_restore: (args) => previewBackupRestore(db, args?.input),
     list_players: (args) => listPlayers(db, args?.serverId),
     apply_player_change: (args) => applyPlayerChange(db, args?.input),
@@ -580,6 +625,7 @@ function createCommandHandlers(context) {
       listServerUpdateHistory(db, args?.serverId),
     create_notification_event: (args) =>
       createNotificationEvent(db, args?.input),
+    ...context.runtimeState.playit.commands,
   };
   const activeContentOperations = new Set();
   context.runtimeState.activeContentOperations = activeContentOperations;
@@ -1748,16 +1794,98 @@ function restartStateFor(serverId) {
   return state;
 }
 
+/* Vanilla, Fabric, Forge, NeoForge and Paper all prefix a line with bracketed
+   segments and a colon: "[12:00:00] [Server thread/INFO]: msg", the Forge form
+   with an extra "[minecraft/MinecraftServer]", or Paper's "[12:00:00 INFO]: msg".
+   The header says which thread logged the line; the message is what it said. */
+function parseServerLogLine(line) {
+  const match = /^((?:\[[^\]\n]*\]\s*)+):\s?([^\n]*)$/.exec(line);
+  // Some servers log command feedback as "System chat: Saved the game".
+  return match
+    ? { header: match[1], message: match[2].replace(/^System chat: /, "") }
+    : { header: "", message: line };
+}
+
+/* Anything a player can make the server print: chat, /say, /me, and the
+   command audit line. Server-health signatures must never trust these. */
+function isPlayerControlledMessage(message) {
+  return /^(?:\[Not Secure\]\s*)?<[^>\n]{1,64}>\s|^\[(?:Server|Rcon)\]\s|^\* \S+|^\S+ issued server command:/i.test(
+    message,
+  );
+}
+
 function isServerCrashSignature(line) {
+  const { header, message } = parseServerLogLine(line);
+  if (isPlayerControlledMessage(message)) return false;
+  // The watchdog thread only logs at FATAL when it has given up on the tick
+  // loop, including the "A single server tick took" line.
+  if (/\[Server Watchdog\/FATAL\]/.test(header)) return true;
   return [
     /OutOfMemoryError/i,
     /Encountered an unexpected exception/i,
     /Exception in server tick loop/i,
     /This crash report has been saved/i,
     /The server has stopped responding/i,
-    /A single server tick took/i,
-    /Watchdog/i,
-  ].some((pattern) => pattern.test(line));
+    /Crash report saved to/i,
+    /Failed to start the minecraft server/i,
+  ].some((pattern) => pattern.test(message));
+}
+
+function crashExplanationFor(db, serverId, sinceMs) {
+  try {
+    return explainServerCrash({
+      root: serverRoot(db, serverId),
+      // File times can trail the clock slightly on some volumes.
+      sinceMs: sinceMs - 5_000,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function getCrashExplanation(db, serverId) {
+  const id = requireServerId(serverId);
+  const last = db
+    .prepare(
+      "SELECT status, started_at FROM managed_processes WHERE server_id = ? ORDER BY started_at DESC LIMIT 1",
+    )
+    .get(id);
+  if (last?.status !== "crashed") return null;
+  return crashExplanationFor(db, id, new Date(last.started_at).getTime());
+}
+
+/* The file name comes from a crash report, so it is checked like any other
+   untrusted name: one plain jar directly inside mods/. */
+function disableCrashedMod(db, input) {
+  const id = requireServerId(input?.serverId);
+  const modFile = String(input?.modFile ?? "");
+  if (!/^[^\\/:*?"<>|]+\.jar$/i.test(modFile) || modFile.startsWith("."))
+    throw codedError("INVALID_MOD_FILE", "not a mod file name");
+  requireStoppedServer(db, id);
+  clearRestartState(id);
+  const { target } = safeServerPath(db, id, `mods/${modFile}`);
+  const row = db
+    .prepare(
+      "SELECT id FROM installed_content WHERE server_id = ? AND installed_path = ?",
+    )
+    .get(id, target);
+  if (row) {
+    disableInstalledContent(db, { serverId: id, contentId: row.id });
+  } else {
+    if (!fs.existsSync(target))
+      throw codedError("INVALID_MOD_FILE", "mod file is not there");
+    fs.renameSync(target, `${target}.disabled`);
+  }
+  addProcessEvent(db, id, "warning", `Disabled mod ${modFile} after a crash.`);
+  return null;
+}
+
+function isServerReadyLine(line) {
+  const { message } = parseServerLogLine(line);
+  return (
+    !isPlayerControlledMessage(message) &&
+    /^Done \(\d+(?:[.,]\d+)?s\)! For help/.test(message)
+  );
 }
 
 function scheduleCrashRestart(db, profile, reason) {
@@ -1934,6 +2062,8 @@ function createServerProfile(db, input) {
       restartPolicy.maxAttempts,
       restartPolicy.cooldownSeconds,
     );
+    // New servers are protected from the start; existing ones are left alone.
+    backupSettings.seedDefaults(db, id, createdAt);
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -2121,6 +2251,7 @@ function deleteServerProfile(db, id, deleteFromDisk = false) {
       contextFor(db).runtimeState.startingServers.has(serverId) ||
       managedChildren.has(serverId) ||
       processStatus === "running" ||
+      processStatus === "stopping" ||
       processStatus === "externalRunning"
     ) {
       throw codedError(
@@ -2177,6 +2308,7 @@ function getProcessSummary(db) {
         summary.crashedCount += 1;
       } else if (
         row.status === "running" ||
+        row.status === "stopping" ||
         row.status === "external_running"
       ) {
         summary.runningCount += 1;
@@ -2314,16 +2446,25 @@ function getServerProcessStatus(db, serverId) {
   if (!serverId) {
     throw codedError("SERVER_ID_REQUIRED", "server id is required");
   }
-  return mapProcess(
-    db
-      .prepare(
-        `SELECT * FROM managed_processes
-         WHERE server_id = ?
-         ORDER BY started_at DESC
-         LIMIT 1`,
-      )
-      .get(serverId),
-  );
+  const row = db
+    .prepare(
+      `SELECT * FROM managed_processes
+       WHERE server_id = ?
+       ORDER BY started_at DESC
+       LIMIT 1`,
+    )
+    .get(serverId);
+  const mapped = mapProcess(row);
+  if (!mapped) return mapped;
+  // Readiness belongs to the live child; a row whose process has exited is
+  // never ready, whatever it reached while it was up.
+  const managed = managedChildren.get(serverId);
+  const live = managed?.db === db && managed.id === row.id;
+  return {
+    ...mapped,
+    ready: live && managed.ready === true,
+    readyAt: live ? (managed.readyAt ?? null) : null,
+  };
 }
 
 function listProcessEvents(db, serverId) {
@@ -3389,7 +3530,7 @@ async function assertServerPortAvailable(db, profile) {
        FROM servers s
        JOIN managed_processes p ON p.server_id = s.id
        WHERE s.id <> ? AND s.server_port = ?
-         AND p.status IN ('running', 'external_running')
+         AND p.status IN ('running', 'stopping', 'external_running')
        ORDER BY p.started_at DESC
        LIMIT 1`,
     )
@@ -3508,8 +3649,13 @@ async function startReservedServer(db, serverId, options = {}) {
     crashDetected: false,
     metricTimer: null,
     stopRequested: false,
+    stopTimer: null,
+    crashTimer: null,
+    ready: false,
+    readyAt: null,
     onlinePlayers: new Set(),
   };
+  const startedMs = Date.now();
   managedChildren.set(profile.id, managed);
   managed.metricTimer = setInterval(() => {
     void sampleServerMetrics(db, profile.id).catch(() => {
@@ -3518,28 +3664,74 @@ async function startReservedServer(db, serverId, options = {}) {
   }, 5_000);
   managed.metricTimer.unref?.();
   addProcessEvent(db, profile.id, "info", "Server process started.");
+  contextFor(db).runtimeState.playit?.serverStarted(profile.id);
+  managed.hangProbe = createHangProbe({
+    parseLine: parseServerLogLine,
+    sendList: () => child.stdin.write("list\n"),
+    onHung: () => {
+      if (managedChildren.get(profile.id) !== managed || managed.stopRequested)
+        return;
+      addProcessEvent(
+        db,
+        profile.id,
+        "error",
+        "The server stopped responding (no answer to repeated probes); killing it.",
+      );
+      // Same path as a crash signature, so the restart policy applies.
+      managed.crashDetected = true;
+      managed.hangDetected = true;
+      child.kill();
+    },
+  });
   const handleOutputLine = (level, line) => {
     const joined = line.match(/\b([A-Za-z0-9_]{1,16}) joined the game\b/);
     const left = line.match(/\b([A-Za-z0-9_]{1,16}) left the game\b/);
+    activityTracker.observe(profile.id, line);
     if (joined) managed.onlinePlayers.add(joined[1]);
     if (left) managed.onlinePlayers.delete(left[1]);
-    addProcessEvent(db, profile.id, level, line);
+    if (!managed.hangProbe.onLine(line))
+      addProcessEvent(db, profile.id, level, line);
+    if (!managed.ready && isServerReadyLine(line)) {
+      managed.ready = true;
+      managed.readyAt = nowIso();
+      try {
+        if (
+          probeWanted(
+            readPropertiesFile(path.join(serverRoot(db, profile.id), "server.properties")),
+          )
+        )
+          managed.hangProbe.start();
+      } catch {
+        // No readable properties: leave the probe off.
+      }
+    }
     if (
       !managed.stopRequested &&
       !managed.crashDetected &&
       isServerCrashSignature(line)
     ) {
       managed.crashDetected = true;
-      db.prepare(
-        "UPDATE managed_processes SET status = 'crashed', exited_at = COALESCE(exited_at, ?) WHERE id = ?",
-      ).run(nowIso(), id);
+      managed.hangProbe.pause("crash");
       addProcessEvent(
         db,
         profile.id,
-        "error",
-        `Crash signature detected while process was still open: ${line}`,
+        "warning",
+        `Crash signature detected while process was still open; it has ${CRASH_EXIT_WINDOW_MS / 1000}s to exit by itself before being killed: ${line}`,
       );
-      child.kill();
+      // Minecraft's own watchdog halts the JVM on its own, so a process that
+      // is about to exit must not be killed mid-save.
+      managed.crashTimer = setTimeout(() => {
+        managed.crashTimer = null;
+        if (managedChildren.get(profile.id) !== managed) return;
+        addProcessEvent(
+          db,
+          profile.id,
+          "error",
+          "Process did not exit after the crash signature; killing it.",
+        );
+        child.kill();
+      }, CRASH_EXIT_WINDOW_MS);
+      managed.crashTimer.unref?.();
     }
   };
   child.stdout.on("data", (chunk) => {
@@ -3554,13 +3746,19 @@ async function startReservedServer(db, serverId, options = {}) {
   });
   child.on("exit", (code) => {
     clearInterval(managed.metricTimer);
+    clearManagedTimers(managed);
     contextFor(db).runtimeState.metricBaselines.delete(child.pid);
+    activityTracker.serverStopped(profile.id);
     managedChildren.delete(profile.id);
+    contextFor(db).runtimeState.playit?.serverStopped(profile.id);
     if (closedDatabases.has(db)) {
       return;
     }
+    // Exit code 0 proves nothing: Forge exits cleanly after a failed mod load. A
+    // server nobody asked to stop that never came up did not stop normally.
     const crashed =
-      !managed.stopRequested && (managed.crashDetected || code !== 0);
+      !managed.stopRequested &&
+      (managed.crashDetected || code !== 0 || !managed.ready);
     db.prepare(
       "UPDATE managed_processes SET status = ?, exited_at = ?, exit_code = ? WHERE id = ?",
     ).run(crashed ? "crashed" : "stopped", nowIso(), code, id);
@@ -3571,13 +3769,31 @@ async function startReservedServer(db, serverId, options = {}) {
       `Server process exited with code ${code ?? "unknown"}.`,
     );
     if (crashed) {
-      scheduleCrashRestart(
-        db,
-        profile,
-        managed.crashDetected
-          ? "crash signature"
-          : `exit code ${code ?? "unknown"}`,
-      );
+      // A server that stayed healthy this long is not in a crash loop, so
+      // crashes weeks apart must not add up to an exhausted restart budget.
+      if (Date.now() - startedMs >= RESTART_ATTEMPTS_RESET_UPTIME_MS) {
+        const restartState = restartRuntimeState.get(profile.id);
+        if (restartState) restartState.attempts = 0;
+      }
+      const explanation = crashExplanationFor(db, profile.id, startedMs);
+      if (explanation?.deterministic) {
+        addProcessEvent(
+          db,
+          profile.id,
+          "warning",
+          `Auto restart skipped: restarting cannot fix this (${explanation.kind}).`,
+        );
+      } else {
+        scheduleCrashRestart(
+          db,
+          profile,
+          managed.hangDetected
+            ? "server stopped responding"
+            : managed.crashDetected
+              ? "crash signature"
+              : `exit code ${code ?? "unknown"}`,
+        );
+      }
     } else {
       clearRestartState(profile.id);
     }
@@ -3585,34 +3801,137 @@ async function startReservedServer(db, serverId, options = {}) {
   return getServerProcessStatus(db, profile.id);
 }
 
+// Minecraft's own watchdog halts a hung JVM by itself (unless max-tick-time is
+// -1 or huge; hang-probe.cjs covers that), so a crash signature only earns the
+// process this long before it is killed.
+const CRASH_EXIT_WINDOW_MS = 30_000;
+// A server that stayed up this long is not in a crash loop; its restart
+// budget starts over.
+const RESTART_ATTEMPTS_RESET_UPTIME_MS = 10 * 60_000;
+// A large modpack can take minutes to write its world, so a stop waits far
+// longer than the quit path does before anything is killed.
+const DEFAULT_STOP_GRACE_MS = 180_000;
+const AUTO_START_STAGGER_MS = 15_000;
+
+function stopGraceMs() {
+  const override = Number(process.env.MCSM_SHUTDOWN_GRACE_MS);
+  return Number.isFinite(override) && override >= 0
+    ? override
+    : DEFAULT_STOP_GRACE_MS;
+}
+
+function clearManagedTimers(managed) {
+  managed.hangProbe?.stop();
+  clearTimeout(managed.stopTimer);
+  clearTimeout(managed.crashTimer);
+  managed.stopTimer = null;
+  managed.crashTimer = null;
+}
+
 function stopServer(db, serverId) {
   const id = requireServerId(serverId);
   clearRestartCountdown(id);
   const managed = managedChildren.get(id);
-  if (managed) {
+  if (managed?.db === db) {
+    if (managed.stopTimer) {
+      // Already stopping: a second request must not send another `stop` or
+      // stack a second kill timer.
+      return null;
+    }
     managed.stopRequested = true;
+    managed.hangProbe?.pause("stopping");
     clearRestartState(id);
+    clearTimeout(managed.crashTimer);
+    managed.crashTimer = null;
     managed.child.stdin?.write("stop\n");
-    setTimeout(() => {
-      if (!managed.child.killed) {
-        managed.child.kill();
-      }
-    }, 5000).unref?.();
+    const graceMs = stopGraceMs();
+    managed.stopTimer = setTimeout(() => {
+      managed.stopTimer = null;
+      if (managedChildren.get(id) !== managed) return;
+      addProcessEvent(
+        db,
+        id,
+        "error",
+        `Server did not stop within ${Math.round(graceMs / 1000)}s; killing it.`,
+      );
+      managed.child.kill();
+    }, graceMs);
+    managed.stopTimer.unref?.();
+    // The row says `stopped` only once the process has really exited.
+    db.prepare(
+      `UPDATE managed_processes
+       SET status = 'stopping'
+       WHERE id = ? AND status = 'running'`,
+    ).run(managed.id);
+  } else {
+    db.prepare(
+      `UPDATE managed_processes
+       SET status = 'stopped', exited_at = COALESCE(exited_at, ?)
+       WHERE server_id = ? AND status IN ('running', 'stopping', 'external_running')`,
+    ).run(nowIso(), id);
   }
-  db.prepare(
-    `UPDATE managed_processes
-     SET status = 'stopped', exited_at = COALESCE(exited_at, ?)
-     WHERE server_id = ? AND status IN ('running', 'external_running')`,
-  ).run(nowIso(), id);
   addProcessEvent(db, id, "info", "Stop requested.");
   return null;
+}
+
+function forceStopServer(db, serverId) {
+  const id = requireServerId(serverId);
+  const managed = managedChildren.get(id);
+  if (managed?.db !== db) {
+    return stopServer(db, id);
+  }
+  managed.stopRequested = true;
+  clearRestartState(id);
+  clearRestartCountdown(id);
+  clearManagedTimers(managed);
+  addProcessEvent(db, id, "warning", "Force stop requested.");
+  managed.child.kill();
+  return null;
+}
+
+/* Starts every server flagged auto_start, one after another. Servers boot
+   heavy (JVM, world load), so each successful start is followed by a pause
+   before the next. One server failing to start never blocks the rest. */
+function startAutoStartServers(db) {
+  const state = contextFor(db).runtimeState;
+  state.autoStartRun ||= runAutoStartServers(db);
+  return state.autoStartRun;
+}
+
+async function runAutoStartServers(db) {
+  const servers = db
+    .prepare(
+      "SELECT id FROM servers WHERE auto_start = 1 ORDER BY created_at ASC, id ASC",
+    )
+    .all();
+  const started = [];
+  const failed = [];
+  for (const { id } of servers) {
+    if (closedDatabases.has(db)) break;
+    try {
+      await startServer(db, id);
+      started.push(id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      failed.push({ serverId: id, message });
+      addProcessEvent(db, id, "error", `Auto start failed: ${message}`);
+      continue;
+    }
+    if (id !== servers.at(-1).id) {
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, AUTO_START_STAGGER_MS);
+        timer.unref?.();
+      });
+    }
+  }
+  return { started, failed };
 }
 
 // Killing a Minecraft server is not the same as stopping it: the world only
 // reaches disk when the server handles its own `stop`. Quitting used to
 // terminate every child outright, which throws away whatever was still in
 // memory. Ask each server to stop, wait, and only force the issue after that.
-const DEFAULT_SHUTDOWN_GRACE_MS = 30_000;
+const DEFAULT_SHUTDOWN_GRACE_MS = DEFAULT_STOP_GRACE_MS;
 
 function shutdownGraceMs() {
   const override = Number(process.env.MCSM_SHUTDOWN_GRACE_MS);
@@ -3626,6 +3945,7 @@ function stopManagedChildGracefully(serverId, managed, graceMs) {
   clearRestartCountdown(serverId);
   clearInterval(managed.metricTimer);
   managed.stopRequested = true;
+  managed.hangProbe?.pause("stopping");
   return new Promise((resolve) => {
     // A live child reports null for both; a finished one reports a number or a
     // signal name. Anything else means the child never ran, and waiting on an
@@ -3685,6 +4005,10 @@ function sendServerCommand(db, serverId, command) {
   return null;
 }
 
+// stopServer kills the process once the stop grace runs out; the restart wait
+// outlasts that by this much so it sees the exit the kill produces.
+const RESTART_KILL_ALLOWANCE_MS = 5_000;
+
 function waitForManagedExitBeforeRestart(db, serverId, managed) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -3704,7 +4028,7 @@ function waitForManagedExitBeforeRestart(db, serverId, managed) {
         "Restart aborted because the previous server process did not exit.",
       );
       reject(new Error("server process did not exit before restart"));
-    }, 8000);
+    }, stopGraceMs() + RESTART_KILL_ALLOWANCE_MS);
     timer.unref?.();
 
     function onExit() {
@@ -3800,7 +4124,10 @@ function restartServerWithCountdown(db, input) {
 
   const restartTimer = setTimeout(() => {
     restartCountdownTimers.delete(id);
-    Promise.resolve(restartServer(db, id)).catch((error) => {
+    Promise.resolve(input?.beforeRestart?.())
+      .catch(() => undefined)
+      .then(() => restartServer(db, id))
+      .catch((error) => {
       addProcessEvent(
         db,
         id,
@@ -3940,6 +4267,12 @@ function mapBackup(row) {
     status: row.status,
     createdAt: row.created_at,
     error: row.error,
+    // Rows written before incremental snapshots have none of these columns
+    // filled in: they are full copies, kept until the owner deletes them.
+    trigger: row.trigger_kind || "manual",
+    format: row.format || "full",
+    logicalBytes: row.logical_bytes ?? row.size_bytes,
+    newBytes: row.new_bytes ?? row.size_bytes,
   };
 }
 
@@ -3956,7 +4289,7 @@ function requireStoppedServer(db, serverId) {
   const managed = managedChildren.get(serverId);
   const persisted = db
     .prepare(
-      "SELECT 1 FROM managed_processes WHERE server_id = ? AND status IN ('running', 'external_running') LIMIT 1",
+      "SELECT 1 FROM managed_processes WHERE server_id = ? AND status IN ('running', 'stopping', 'external_running') LIMIT 1",
     )
     .get(serverId);
   if (
@@ -3971,6 +4304,20 @@ function requireStoppedServer(db, serverId) {
   }
 }
 
+// Large modded worlds can take well over half a minute to flush.
+const SAVE_CONFIRMATION_TIMEOUT_MS = 120_000;
+
+function isSaveConfirmationLine(line) {
+  const { header, message } = parseServerLogLine(line);
+  return (
+    /\bINFO\]/.test(header) &&
+    !isPlayerControlledMessage(message) &&
+    /^(?:Saved the game|Saved the world|Saved all (?:chunks|dimensions)|All dimensions are saved)[.!]?\s*$/i.test(
+      message,
+    )
+  );
+}
+
 async function flushWorldForBackup(db, serverId) {
   const managed = managedChildren.get(serverId);
   if (!managed || managed.db !== db) {
@@ -3983,11 +4330,7 @@ async function flushWorldForBackup(db, serverId) {
     let buffer = "";
     const onData = (chunk) => {
       buffer = (buffer + chunk.toString()).slice(-8192);
-      if (
-        /(?:^|\n)[^\n]*INFO(?:\]:|\])?:?\s+(?:Saved the game|Saved the world|Saved all (?:chunks|dimensions)|All dimensions are saved)[.!]?\r?(?:\n|$)/i.test(
-          buffer,
-        )
-      )
+      if (buffer.split(/\r?\n/).some(isSaveConfirmationLine))
         finish();
     };
     const onExit = () =>
@@ -4002,10 +4345,10 @@ async function flushWorldForBackup(db, serverId) {
         finish(
           codedError(
             "BACKUP_SAVE_TIMEOUT",
-            "server did not confirm save-all flush within 30 seconds",
+            "server did not confirm save-all flush within 120 seconds",
           ),
         ),
-      30_000,
+      SAVE_CONFIRMATION_TIMEOUT_MS,
     );
     finish = (error) => {
       clearTimeout(timeout);
@@ -4039,6 +4382,7 @@ async function createBackupRecord(
   serverId,
   backupProfile = null,
   operation = null,
+  options = {},
 ) {
   const profile = getServerProfile(db, requireServerId(serverId));
   const state = contextFor(db).runtimeState;
@@ -4053,11 +4397,20 @@ async function createBackupRecord(
   const id = randomUUID();
   const createdAt = nowIso();
   const root = safeServerPath(db, profile.id, ".").root;
-  const backupRoot = safeServerPath(db, profile.id, `backups/${id}`).target;
+  const trigger = options.trigger || "manual";
+  const configuredLocation = backupSettings.getBackupSettings(
+    db,
+    profile.id,
+  ).location;
+  const backupRoot = configuredLocation
+    ? path.join(configuredLocation, profile.id, id)
+    : safeServerPath(db, profile.id, `backups/${id}`).target;
   const worldName =
     readPropertiesFile(path.join(root, "server.properties"))["level-name"] ||
     "world";
-  const mode = backupProfile ? modeFromDb(backupProfile.mode) : "worldOnly";
+  const mode =
+    options.mode ||
+    (backupProfile ? modeFromDb(backupProfile.mode) : "worldOnly");
   let includes = backupProfile
     ? JSON.parse(backupProfile.include_paths || "[]")
     : [];
@@ -4072,6 +4425,10 @@ async function createBackupRecord(
   const excludes = backupProfile
     ? JSON.parse(backupProfile.exclude_paths || "[]")
     : [];
+  // Update, download and rollback staging files come and go under a running
+  // server and are not part of it.
+  if (options.mode === "fullServer")
+    excludes.push(...snapshots.TRANSIENT_EXCLUDES);
   if (mode === "worldPlusConfigs") {
     includes.push(
       ...fs
@@ -4093,10 +4450,40 @@ async function createBackupRecord(
   let savingDisabled = false,
     recorded = false;
   state.backingUpServers.add(profile.id);
+  // A flush can leave a healthy server silent for a long while.
+  const probedChild = managedChildren.get(profile.id);
+  probedChild?.hangProbe?.pause("backup");
   try {
     for (const relative of includes) safeServerPath(db, profile.id, relative);
+    // A running server must start its flush immediately, so only a stopped one
+    // is looked at first. Either way createSnapshot checks free space again
+    // before it copies a single file.
+    const running = managedChildren.get(profile.id)?.db === db;
+    let previous = null;
+    const prepare = async () => {
+      previous = await previousSnapshotFor(db, profile.id);
+      await snapshots.sweepPartials(path.dirname(backupRoot));
+    };
+    if (!running) {
+      await prepare();
+      // Refuse before touching the drive if it cannot hold the backup.
+      await snapshots
+        .planSnapshot({
+          root,
+          archive: backupRoot,
+          mode,
+          includes,
+          excludes,
+          previous,
+        })
+        .catch((error) => {
+          if (error?.code === "BACKUP_INSUFFICIENT_SPACE") throw error;
+        });
+    }
     savingDisabled = await flushWorldForBackup(db, profile.id);
-    const manifest = await backupFiles.writeSnapshot({
+    if (running) await prepare();
+    const { manifest, stats } = await snapshots.createSnapshot({
+      previous,
       root,
       archive: backupRoot,
       mode,
@@ -4122,9 +4509,13 @@ async function createBackupRecord(
             }
           : null,
     });
-    const sizeBytes = manifest.files.reduce((sum, file) => sum + file.size, 0);
+    // An automatic point identical to the one before it adds nothing.
+    if (trigger !== "manual" && stats.identical) {
+      await removeTree(backupRoot);
+      return null;
+    }
     db.prepare(
-      `INSERT INTO backups (id, server_id, profile_id, kind, archive_path, world_name, size_bytes, status, created_at, manifest_sha256) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)`,
+      `INSERT INTO backups (id, server_id, profile_id, kind, archive_path, world_name, size_bytes, status, created_at, manifest_sha256, trigger_kind, format, logical_bytes, new_bytes) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, 'incremental', ?, ?)`,
     ).run(
       id,
       profile.id,
@@ -4132,22 +4523,183 @@ async function createBackupRecord(
       mode === "worldOnly" ? "world" : mode,
       backupRoot,
       worldName,
-      sizeBytes,
+      stats.logicalBytes,
       createdAt,
       createHash("sha256").update(JSON.stringify(manifest)).digest("hex"),
+      trigger,
+      stats.logicalBytes,
+      stats.newBytes,
     );
     recorded = true;
+    if (stats.skippedFiles?.length) {
+      const shown = stats.skippedFiles.slice(0, 5).join(", ");
+      const more = stats.skippedFiles.length - 5;
+      addProcessEvent(
+        db,
+        profile.id,
+        "warning",
+        `Backup left out ${stats.skippedFiles.length} file(s) that were locked or disappeared while copying: ${shown}${more > 0 ? ` and ${more} more` : ""}.`,
+      );
+    }
     if (backupProfile?.id)
       await pruneBackupProfileRecords(db, backupProfile.id);
     return mapBackup(db.prepare("SELECT * FROM backups WHERE id = ?").get(id));
   } catch (error) {
     if (!recorded) await removeTree(backupRoot);
+    if (!["BACKUP_EMPTY", "BACKUP_IN_PROGRESS"].includes(error?.code))
+      notifyBackupFailure(db, profile.id, trigger, error);
     throw error;
   } finally {
     state.backingUpServers.delete(profile.id);
+    probedChild?.hangProbe?.resume("backup");
     if (savingDisabled && managedChildren.get(profile.id)?.db === db)
       sendServerCommand(db, profile.id, "save-on");
   }
+}
+
+/* The newest incremental snapshot that is still intact is the link source for
+   the next one. A legacy full copy has no mtimes, so it is never a source. */
+async function previousSnapshotFor(db, serverId) {
+  const rows = db
+    .prepare(
+      `SELECT * FROM backups
+        WHERE server_id = ? AND status = 'completed' AND format = 'incremental'
+        ORDER BY created_at DESC LIMIT 3`,
+    )
+    .all(serverId);
+  for (const row of rows) {
+    const manifest = await snapshots.readManifest(
+      row.archive_path,
+      row.manifest_sha256,
+    );
+    if (manifest) return { dir: row.archive_path, manifest };
+  }
+  return null;
+}
+
+/* Loud on purpose: an in-app notification (kept in the list) and, through the
+   server event, a system notification from main.cjs. */
+function notifyBackupFailure(db, serverId, trigger, error) {
+  try {
+    const name =
+      db.prepare("SELECT name FROM servers WHERE id = ?").get(serverId)?.name ||
+      serverId;
+    const reason = error instanceof Error ? error.message : String(error);
+    const preferences = getNotificationPreferences(db);
+    const event = createNotificationEvent(db, {
+      serverId,
+      kind: "backup_failed",
+      severity: "error",
+      title: "Backup failed / 备份失败",
+      message: `${name} (${trigger}): ${reason}`,
+    });
+    emitServerEvent(db, {
+      serverId,
+      kind: "notification",
+      payload: {
+        ...event,
+        desktop: preferences.desktopEnabled && preferences.backupFailedEnabled,
+      },
+    });
+  } catch {
+    // Reporting a failure must never replace the failure it reports.
+  }
+}
+
+const activityTracker = createActivityTracker({
+  parseLine: parseServerLogLine,
+  isPlayerControlled: isPlayerControlledMessage,
+});
+
+const autoBackups = createAutoBackups({
+  getActivity: (serverId) => activityTracker.snapshot(serverId),
+  createBackup: createBackupRecord,
+  deleteBackup: deleteServerBackup,
+  listBackups: listServerBackups,
+  measureBytes: async (db, id) => (await measureBackupBytes(db, id)).usedBytes,
+  notifyFailure: notifyBackupFailure,
+});
+
+function saveBackupSettingsCommand(db, input) {
+  const serverId = requireServerId(input?.serverId);
+  const root = serverRoot(db, serverId);
+  const saved = backupSettings.saveBackupSettings(
+    db,
+    { ...input, serverId },
+    root,
+  );
+  if (saved.location) {
+    try {
+      fs.mkdirSync(path.join(saved.location, serverId), { recursive: true });
+    } catch (error) {
+      throw codedError(
+        "BACKUP_LOCATION_UNAVAILABLE",
+        `backup location cannot be written: ${error?.message || error}`,
+      );
+    }
+  }
+  return saved;
+}
+
+const usedBytesCache = new Map();
+
+async function measureBackupBytes(db, id) {
+  const rows = db
+    .prepare(
+      "SELECT * FROM backups WHERE server_id = ? AND status = 'completed' ORDER BY created_at DESC",
+    )
+    .all(id);
+  const cacheKey = rows.map((row) => row.id).join(",");
+  let usedBytes =
+    usedBytesCache.get(id)?.key === cacheKey
+      ? usedBytesCache.get(id).bytes
+      : null;
+  if (usedBytes === null) {
+    const manifests = [];
+    usedBytes = 0;
+    for (const row of rows) {
+      if (row.format === "incremental") {
+        const manifest = await snapshots.readManifest(
+          row.archive_path,
+          row.manifest_sha256,
+        );
+        if (manifest) manifests.push(manifest);
+      } else usedBytes += row.size_bytes;
+    }
+    usedBytes += snapshots.uniqueBytes(manifests);
+    usedBytesCache.set(id, { key: cacheKey, bytes: usedBytes });
+  }
+  return { rows, usedBytes };
+}
+
+async function getBackupStatus(db, serverId) {
+  const id = requireServerId(serverId);
+  const settings = backupSettings.getBackupSettings(db, id);
+  const { rows, usedBytes } = await measureBackupBytes(db, id);
+  const location = settings.location
+    ? path.join(settings.location, id)
+    : path.join(serverRoot(db, id), "backups");
+  let freeBytes = null;
+  try {
+    freeBytes = snapshots.defaultFreeBytes(location);
+  } catch {
+    // The drive may be unplugged; unavailable stays visibly unavailable.
+  }
+  const lastBackupAt = rows[0]?.created_at ?? null;
+  const lastSuccessAt =
+    [lastBackupAt, settings.lastSuccessAt].filter(Boolean).sort().at(-1) ??
+    null;
+  return {
+    serverId: id,
+    settings,
+    restorePointCount: rows.length,
+    lastBackupAt,
+    lastSuccessAt,
+    nextRunAt: settings.enabled ? settings.nextRunAt : null,
+    usedBytes,
+    freeBytes,
+    location,
+  };
 }
 
 async function createWorldBackup(db, input) {
@@ -4188,6 +4740,14 @@ async function exportServerBackup(db, input) {
       `backup-${backup.id}`,
     ),
   );
+  if (input?.format === "zip") {
+    // Zip exists only as an export. An old zip-shaped row is already a zip.
+    const zipPath = `${exportedPath}.zip`;
+    if (fs.statSync(backup.archive_path).isFile())
+      await fs.promises.copyFile(backup.archive_path, zipPath);
+    else await zipDirectory(backup.archive_path, zipPath);
+    return { exportedPath: zipPath };
+  }
   await copyTree(backup.archive_path, exportedPath);
   return { exportedPath };
 }
@@ -4372,29 +4932,64 @@ async function backupRestorePlan(db, input) {
     .get(input?.backupId);
   if (!backup || (input?.serverId && backup.server_id !== input.serverId))
     throw codedError("BACKUP_NOT_FOUND", "backup not found");
-  const manifest = await backupFiles.verifiedSnapshot(
-    backup.archive_path,
-    backup.manifest_sha256,
-  );
-  const remap = backupFiles.restorePaths(manifest, input?.targetWorldDir);
-  for (const relative of manifest.includes)
-    safeServerPath(db, backup.server_id, remap(relative));
-  return { backup, manifest, remap };
+  // Old zip-shaped rows are unpacked to a scratch folder for the duration.
+  const legacy =
+    /\.zip$/i.test(backup.archive_path) &&
+    fs.existsSync(backup.archive_path) &&
+    fs.statSync(backup.archive_path).isFile()
+      ? await openLegacyZip(
+          backup.archive_path,
+          safeServerPath(
+            db,
+            backup.server_id,
+            `backups/.legacy-${randomUUID()}`,
+          ).target,
+          backup.world_name,
+        )
+      : null;
+  try {
+    const manifest =
+      legacy?.manifest ??
+      (await backupFiles.verifiedSnapshot(
+        backup.archive_path,
+        backup.manifest_sha256,
+      ));
+    const remap = backupFiles.restorePaths(manifest, input?.targetWorldDir);
+    for (const relative of manifest.includes)
+      safeServerPath(db, backup.server_id, remap(relative));
+    return {
+      backup,
+      manifest,
+      remap,
+      archive: legacy?.archive ?? backup.archive_path,
+      dispose: async () => legacy?.dispose(),
+    };
+  } catch (error) {
+    await legacy?.dispose();
+    throw error;
+  }
 }
 
 async function previewBackupRestore(db, input) {
-  const { backup, manifest, remap } = await backupRestorePlan(db, input);
-  return {
-    backupId: backup.id,
-    serverId: backup.server_id,
-    mode: manifest.mode,
-    relativePaths: backupFiles
-      .restoreScope(serverRoot(db, backup.server_id), manifest)
-      .map(remap),
-    fileCount: manifest.files.length,
-    sizeBytes: manifest.files.reduce((sum, file) => sum + file.size, 0),
-    warnings: [],
-  };
+  const { backup, manifest, remap, dispose } = await backupRestorePlan(
+    db,
+    input,
+  );
+  try {
+    return {
+      backupId: backup.id,
+      serverId: backup.server_id,
+      mode: manifest.mode,
+      relativePaths: backupFiles
+        .restoreScope(serverRoot(db, backup.server_id), manifest)
+        .map(remap),
+      fileCount: manifest.files.length,
+      sizeBytes: manifest.files.reduce((sum, file) => sum + file.size, 0),
+      warnings: [],
+    };
+  } finally {
+    await dispose();
+  }
 }
 
 function restoreBackupDatabaseState(db, serverId, root, manifest) {
@@ -4477,12 +5072,16 @@ async function restoreWorldBackup(db, input) {
       "RESTORE_NEEDS_CONFIRMATION",
       "restore requires explicit confirmation",
     );
-  const { backup, manifest } = await backupRestorePlan(db, input);
-  requireStoppedServer(db, backup.server_id);
-  await withServerFiles(db, backup.server_id, () =>
+  const { backup, manifest, archive, dispose } = await backupRestorePlan(
+    db,
+    input,
+  );
+  try {
+    requireStoppedServer(db, backup.server_id);
+    await withServerFiles(db, backup.server_id, () =>
     backupFiles.restoreSnapshot({
       root: safeServerPath(db, backup.server_id, ".").root,
-      archive: backup.archive_path,
+      archive,
       manifest,
       resolve: (relative) => safeServerPath(db, backup.server_id, relative),
       targetWorldDir: input?.targetWorldDir,
@@ -4502,7 +5101,10 @@ async function restoreWorldBackup(db, input) {
         }
       },
     }),
-  );
+    );
+  } finally {
+    await dispose();
+  }
   return null;
 }
 
@@ -5714,6 +6316,7 @@ async function installContentUpdate(db, input) {
       update?.warning ||
         "installed content is already current or its updates are disabled by policy",
     );
+  await autoBackups.run(db, profile.id, "pre_update");
   return installResolvedContentUpdate(db, content, update);
 }
 
@@ -5721,6 +6324,7 @@ async function installAllContentUpdates(db, input) {
   const profile = getServerProfile(db, requireServerId(input?.serverId));
   const plan = await checkContentUpdates(db, { serverId: profile.id });
   const installed = [];
+  if (plan.updates.length) await autoBackups.run(db, profile.id, "pre_update");
   for (const update of plan.updates) {
     if (
       Array.isArray(input.installedContentIds) &&
@@ -6193,10 +6797,43 @@ function deleteScheduledTask(db, taskId) {
   return null;
 }
 
+/* There is no catch-up after downtime: a task that came due while the app was
+   closed must not fire on the first tick after relaunch (a stop or restart
+   would hit a server nobody scheduled it for). Move each one to its next
+   future run and leave a `skipped` row so the history says why it did not run. */
+function skipOverdueScheduledTasks(db) {
+  const now = nowIso();
+  const overdue = db
+    .prepare(
+      "SELECT * FROM scheduled_tasks WHERE enabled = 1 AND next_run_at <= ?",
+    )
+    .all(now);
+  for (const task of overdue) {
+    const nextRunAt = taskSchedule.nextRun(taskSchedule.fromRow(task));
+    db.prepare(
+      `INSERT INTO scheduled_task_runs
+        (id, task_id, server_id, status, message, scheduled_for, started_at, finished_at)
+       VALUES (?, ?, ?, 'skipped', ?, ?, ?, ?)`,
+    ).run(
+      randomUUID(),
+      task.id,
+      task.server_id,
+      "Skipped: the app was not running when this task was due.",
+      task.next_run_at,
+      now,
+      now,
+    );
+    db.prepare(
+      "UPDATE scheduled_tasks SET next_run_at = ?, updated_at = ? WHERE id = ?",
+    ).run(nextRunAt, now, task.id);
+  }
+}
+
 async function runDueScheduledTasks(db) {
   // The 60-second tick is the only thing that runs when no server is up, so it
   // also carries telemetry retention. pruneTelemetry rate-limits itself.
   pruneTelemetry(db);
+  await autoBackups.runDue(db).catch(() => undefined);
   const now = nowIso();
   const tasks = db
     .prepare(
@@ -6262,7 +6899,13 @@ async function runScheduledTaskAction(db, task) {
     case "stop":
       return stopServer(db, task.server_id);
     case "restart":
-      return restartServer(db, task.server_id);
+      return restartServerWithCountdown(db, {
+        serverId: task.server_id,
+        // Taken at the moment of the restart, after players have been warned.
+        // A failed backup notifies (see notifyBackupFailure) and never blocks.
+        beforeRestart: () =>
+          autoBackups.run(db, task.server_id, "pre_restart"),
+      });
     case "world_backup":
       return task.backup_profile_id
         ? createProfileBackup(db, { profileId: task.backup_profile_id })
@@ -6314,7 +6957,7 @@ async function sampleServerMetrics(db, serverId) {
   const id = randomUUID();
   const profile = getServerProfile(db, requireServerId(serverId));
   const processStatus = getServerProcessStatus(db, profile.id);
-  const running = ["running", "externalRunning"].includes(
+  const running = ["running", "stopping", "externalRunning"].includes(
     processStatus?.status,
   );
   const managed = managedChildren.get(profile.id);
@@ -6749,7 +7392,9 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
       configuration.serverPort,
       configuration.minMemoryMb,
       configuration.maxMemoryMb,
-      profile.autoStart ? 1 : 0,
+      // auto_start means "start when the app launches"; a wizard choice to
+      // start after installation is a separate, one-time plan field.
+      0,
       JSON.stringify(plan.launchSpec),
       JSON.stringify(plan.compatibilityWarnings || []),
       createdAt,
@@ -6765,6 +7410,8 @@ function createProvisionedProfile(db, jobId, plan, targetDir) {
       restartPolicy.maxAttempts,
       restartPolicy.cooldownSeconds,
     );
+    // A server made from a pack is as new as any other: protect it from the start.
+    backupSettings.seedDefaults(db, id, createdAt);
     db.prepare(
       `INSERT INTO server_sources
         (server_id, provider, project_id, version_id, source_path, metadata_json)
@@ -6977,16 +7624,7 @@ function provisioningLoaderRegistry(db) {
       verifyProvisioningHashes(target, hashes);
     },
     runProcess: (executable, args, options) =>
-      new Promise((resolve, reject) => {
-        const child = processSpawnerFor(db)(executable, args, {
-          ...options,
-          shell: false,
-          stdio: ["ignore", "pipe", "pipe"],
-          windowsHide: true,
-        });
-        child.once("error", reject);
-        child.once("exit", (code) => resolve({ code }));
-      }),
+      runToCompletion(processSpawnerFor(db), executable, args, options),
   });
 }
 
@@ -7057,6 +7695,7 @@ async function extractProvisioningSource(job) {
     await extractZipArchive(packPath, job.stagingDir);
   }
   removeProvisioningScripts(job.stagingDir);
+  applyDisabledMods(job.stagingDir, sourcePlan.disabledMods);
 }
 
 function provisioningExecutorFor(db) {
@@ -7129,7 +7768,10 @@ function provisioningExecutorFor(db) {
         return serverId ? { serverId } : null;
       },
       starting: async ({ job, plan }) => {
-        if (plan.profile?.autoStart && job.serverId) {
+        // Plans saved before startAfterInstall existed used autoStart for this.
+        const startAfterInstall =
+          plan.profile?.startAfterInstall ?? plan.profile?.autoStart;
+        if (startAfterInstall && job.serverId) {
           await startServer(db, job.serverId);
         }
       },
@@ -8687,6 +9329,7 @@ async function installServerUpdate(db, input) {
         "SERVER_UPDATE_WARNINGS_NEED_CONFIRMATION",
         "review and acknowledge content compatibility warnings before upgrading",
       );
+    await autoBackups.run(db, profile.id, "pre_update", operation);
     const targetJar = serverJarTarget(db, profile);
     const staged = `${targetJar}.mcsm-update-${randomUUID()}`;
     let recovery = null,

@@ -35,6 +35,7 @@ interface ServerListProps {
 /** Statuses where the server is live enough to have metrics worth sampling. */
 const liveStatuses = new Set<ManagedProcessStatus>([
   "running",
+  "stopping",
   "externalRunning",
 ]);
 

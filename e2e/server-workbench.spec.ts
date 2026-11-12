@@ -10,30 +10,66 @@ async function openServer(page: import("@playwright/test").Page) {
   ).toBeVisible();
 }
 
+// The prompt glyph sits inside the label, and Playwright counts it in the name.
+function commandInput(page: import("@playwright/test").Page) {
+  return page.getByRole("textbox", { name: /Command$/ });
+}
+
 test.describe("server workbench", () => {
-  test("uses the application font and keeps workspace navigation in the sidebar", async ({
+  test("uses the application font and keeps workspace tabs in the page", async ({
     appPage: page,
   }) => {
     await openServer(page);
     expect(
       await page.evaluate(() => getComputedStyle(document.body).fontFamily),
     ).toContain("Segoe UI");
-    const sidebar = page.locator("aside.sidebar");
-    const nav = sidebar.getByRole("navigation", {
-      name: "Fabric Workshop workspace",
-    });
+    const nav = page
+      .locator("main")
+      .getByRole("navigation", { name: "Fabric Workshop workspace" });
     await expect(nav.getByRole("button")).toHaveCount(7);
     await expect(
       page
-        .locator("main")
+        .locator("aside.sidebar")
         .getByRole("navigation", { name: "Fabric Workshop workspace" }),
     ).toHaveCount(0);
     await page.getByRole("button", { name: "Collapse sidebar" }).click();
-    await nav.getByRole("button", { name: "Content", exact: true }).click();
+    await nav.getByRole("button", { name: "Mods", exact: true }).click();
     await expect(page).toHaveURL(/servers\/server-1\/content/);
     await expect(
-      nav.getByRole("button", { name: "Content", exact: true }),
+      nav.getByRole("button", { name: "Mods", exact: true }),
     ).toHaveAttribute("aria-current", "page");
+  });
+
+  test("switches tabs with the number keys, except while typing or in a dialog", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    fakeDesktop.processStatus = "running";
+    await openServer(page);
+    await expect(page).toHaveURL(/servers\/server-1\/console/);
+
+    await page.keyboard.press("4");
+    await expect(page).toHaveURL(/servers\/server-1\/backups/);
+    await page.keyboard.press("7");
+    await expect(page).toHaveURL(/servers\/server-1\/settings\/general/);
+    await page.keyboard.press("1");
+    await expect(page).toHaveURL(/servers\/server-1\/console/);
+
+    const command = commandInput(page);
+    await command.fill("");
+    await command.press("3");
+    await expect(command).toHaveValue("3");
+    await expect(page).toHaveURL(/servers\/server-1\/console/);
+    await command.fill("");
+    await command.blur();
+
+    await page.getByRole("button", { name: "Stop Fabric Workshop" }).click();
+    const confirm = page.getByRole("alertdialog");
+    await expect(confirm).toBeVisible();
+    await page.keyboard.press("2");
+    await expect(confirm).toBeVisible();
+    await expect(page).toHaveURL(/servers\/server-1\/console/);
+    await confirm.getByRole("button", { name: "Cancel" }).click();
   });
 
   test("loads all server workspaces through the fake desktop API", async ({
@@ -42,23 +78,20 @@ test.describe("server workbench", () => {
     test.setTimeout(60_000);
     await openServer(page);
     const workspaces = [
-      { section: "Overview", views: [] },
-      { section: "Console", views: ["Live output", "Log files"] },
+      { section: "Console", views: ["Live output", "Log files", "Health"] },
       {
         section: "Players",
         views: ["Online", "Operators", "Whitelist", "Bans"],
       },
       {
-        section: "Content",
+        section: "Mods",
         views: ["Installed", "Updates", "Browse"],
       },
-      {
-        section: "Files & backups",
-        views: ["Backups", "Files"],
-      },
+      { section: "Backups", views: [] },
+      { section: "Files", views: [] },
       { section: "Automation", views: [] },
       {
-        section: "Server settings",
+        section: "Settings",
         views: ["General", "World properties", "Network & access"],
       },
     ];
@@ -87,21 +120,21 @@ test.describe("server workbench", () => {
       }
 
       if (workspace.section === "Console") {
-        // The loop above finished on the log files view; the quick commands
-        // belong to the live terminal.
+        // The loop above finished on another view; the quick commands belong
+        // to the live terminal.
         await page
           .getByRole("navigation", { name: "Workspace views" })
           .getByRole("button", { name: "Live output", exact: true })
           .click();
         // A quick command has to land in the input, not just be listed.
-        await page.getByRole("combobox", { name: "World" }).click();
-        await page.getByRole("option", { name: "Set to day" }).click();
-        await expect(page.getByLabel("Command", { exact: true })).toHaveValue(
-          "time set day",
-        );
+        await page.locator(".console-quick-menu summary").click();
+        await page.getByRole("button", { name: "Set to day" }).click();
+        await expect(
+          commandInput(page),
+        ).toHaveValue("time set day");
       }
 
-      await expect(page.getByText("Could not load this panel")).toHaveCount(0);
+      await expect(page.getByText("This panel could not load")).toHaveCount(0);
     }
   });
 
@@ -143,6 +176,72 @@ test.describe("server workbench", () => {
       .toBe(true);
   });
 
+  test("explains a crash and disables the mod that caused it", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    fakeDesktop.processStatus = "crashed";
+    fakeDesktop.crashExplanation = {
+      kind: "clientOnlyMod",
+      deterministic: true,
+      reportFile: "crash-reports/crash-1.txt",
+      detail: "Attempted to load class net/minecraft/client/Minecraft",
+      modFile: "oculus-mc1.20.1-1.8.0.jar",
+      modName: "oculus",
+    };
+    await openServer(page);
+
+    const banner = page.getByRole("alert").filter({ hasText: "oculus" });
+    await expect(banner).toBeVisible();
+    await banner.getByRole("button").first().click();
+    await expect
+      .poll(() =>
+        fakeDesktop.calls.find((call) => call.command === "disable_crashed_mod")
+          ?.args?.input,
+      )
+      .toMatchObject({ modFile: "oculus-mc1.20.1-1.8.0.jar" });
+    await expect
+      .poll(() => fakeDesktop.calls.some((c) => c.command === "start_server"))
+      .toBe(true);
+  });
+
+  test("shows only the lifecycle action a server can take next", async ({
+    appPage: page,
+    fakeDesktop,
+  }) => {
+    fakeDesktop.processStatus = "stopping";
+    await openServer(page);
+
+    const start = page.getByRole("button", { name: "Start Fabric Workshop" });
+    const stop = page.getByRole("button", { name: "Stop Fabric Workshop" });
+    const restart = page.getByRole("button", {
+      name: "Restart Fabric Workshop",
+    });
+    await page
+      .getByRole("button", { name: "Force stop Fabric Workshop" })
+      .click();
+    await expect(start).toHaveCount(0);
+    await expect(stop).toHaveCount(0);
+    await expect(restart).toHaveCount(0);
+    expect(
+      fakeDesktop.calls.some((call) => call.command === "force_stop_server"),
+    ).toBe(false);
+
+    await page
+      .getByRole("alertdialog", { name: "Force stop the server?" })
+      .getByRole("button", { name: "Force stop", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        fakeDesktop.calls.some((call) => call.command === "force_stop_server"),
+      )
+      .toBe(true);
+
+    await expect(start).toBeVisible();
+    await expect(stop).toHaveCount(0);
+    await expect(restart).toHaveCount(0);
+  });
+
   test("edits a structured server file and persists it", async ({
     appPage: page,
     fakeDesktop,
@@ -150,10 +249,6 @@ test.describe("server workbench", () => {
     await openServer(page);
     await page
       .getByRole("navigation", { name: "Fabric Workshop workspace" })
-      .getByRole("button", { name: "Files & backups" })
-      .click();
-    await page
-      .getByRole("navigation", { name: "Workspace views" })
       .getByRole("button", { name: "Files", exact: true })
       .click();
     await page
@@ -177,7 +272,7 @@ test.describe("server workbench", () => {
     await openServer(page);
     await page
       .getByRole("navigation", { name: "Fabric Workshop workspace" })
-      .getByRole("button", { name: "Files & backups" })
+      .getByRole("button", { name: "Backups", exact: true })
       .click();
     await expect(page.getByText("world.zip")).toBeVisible();
 
@@ -199,10 +294,6 @@ test.describe("server workbench", () => {
     await openServer(page);
     await page
       .getByRole("navigation", { name: "Fabric Workshop workspace" })
-      .getByRole("button", { name: "Files & backups" })
-      .click();
-    await page
-      .getByRole("navigation", { name: "Workspace views" })
       .getByRole("button", { name: "Files", exact: true })
       .click();
     await page.getByRole("button", { name: "New file", exact: true }).click();
@@ -252,7 +343,7 @@ test.describe("server workbench", () => {
     await openServer(page);
     await page
       .getByRole("navigation", { name: "Fabric Workshop workspace" })
-      .getByRole("button", { name: "Files & backups" })
+      .getByRole("button", { name: "Backups", exact: true })
       .click();
     await page
       .getByRole("button", { name: "Restore backup", exact: true })
@@ -288,13 +379,13 @@ test.describe("server workbench", () => {
       name: "Fabric Workshop workspace",
     });
     const sections = [
-      "Overview",
       "Console",
       "Players",
-      "Content",
-      "Files & backups",
+      "Mods",
+      "Backups",
+      "Files",
       "Automation",
-      "Server settings",
+      "Settings",
     ];
 
     for (const viewport of [

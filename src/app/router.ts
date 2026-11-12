@@ -1,11 +1,11 @@
 import { useSyncExternalStore } from "react";
 
 export const serverWorkspaceSections = [
-  "overview",
   "console",
   "players",
   "content",
-  "data",
+  "backups",
+  "files",
   "automation",
   "settings",
 ] as const;
@@ -47,10 +47,14 @@ const retiredWorkspaceRoutes: Record<
   string,
   { section: ServerWorkspaceSection; view?: string }
 > = {
-  monitor: { section: "overview" },
-  "monitor/performance": { section: "overview" },
-  "monitor/events": { section: "overview" },
-  "monitor/diagnostics": { section: "overview" },
+  overview: { section: "console", view: "health" },
+  monitor: { section: "console", view: "health" },
+  "monitor/performance": { section: "console", view: "health" },
+  "monitor/events": { section: "console", view: "health" },
+  "monitor/diagnostics": { section: "console", view: "health" },
+  data: { section: "backups" },
+  "data/backups": { section: "backups" },
+  "data/files": { section: "files" },
   "monitor/logs": { section: "console", view: "logs" },
   "settings/updates": { section: "settings", view: "general" },
   "settings/contentPolicy": { section: "content", view: "updates" },
@@ -120,7 +124,7 @@ export function parseAppHash(hash: string): AppRoute {
     ? retired.section
     : workspaceSectionSet.has(requestedSection)
       ? (requestedSection as ServerWorkspaceSection)
-      : "overview";
+      : "console";
   const view = retired
     ? retired.view
     : section === "settings"

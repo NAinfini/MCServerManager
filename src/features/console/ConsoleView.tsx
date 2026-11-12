@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import * as Toolbar from "@radix-ui/react-toolbar";
-import * as Separator from "@radix-ui/react-separator";
-import { Copy, Eraser, RefreshCw, X } from "lucide-react";
+import { ChevronDown, Copy, Eraser } from "lucide-react";
 import {
   sendServerCommand,
   listProcessEvents,
@@ -12,9 +10,6 @@ import {
 } from "../process/api";
 import { processKeys } from "../process/queries";
 import { Button } from "../../components/ui/button";
-import { EmptyState } from "../../components/ui/empty-state";
-import { TextField } from "../../components/ui/text-field";
-import { Select } from "../../components/ui/select";
 import { useAppSettings } from "../../i18n";
 import { useServerRuntime } from "../servers/ServerRuntimeContext";
 import {
@@ -25,6 +20,37 @@ import {
 
 interface ConsoleViewProps {
   serverId: string;
+}
+
+/* Log lines carry their own severity in the text, and a modded server prints
+   hundreds per minute, so colour does the first pass of reading. */
+const ANSI_RESET = "\u001b[0m";
+const ANSI = {
+  error: "\u001b[38;2;240;113;120m",
+  warning: "\u001b[38;2;232;166;74m",
+  join: "\u001b[38;2;95;206;128m",
+  info: "\u001b[38;2;125;184;255m",
+  quiet: "\u001b[38;2;143;149;162m",
+};
+
+export function colorizeConsoleLine(level: string, message: string) {
+  const isChat = /(?:^|\]:?\s)(?:\[Not Secure\]\s)?<[^>]+>\s/.test(message);
+  const color = isChat
+    ? null
+    : level === "error" || /\/(?:ERROR|FATAL)\]/.test(message)
+      ? ANSI.error
+      : level === "warning" || /\/WARN\]/.test(message)
+        ? ANSI.warning
+        : /\b(?:joined|left) the game\b/.test(message)
+          ? ANSI.join
+          : /^(?:Server process|Stop requested|Restart|Auto restarting|>)/.test(
+                message,
+              )
+            ? ANSI.info
+            : /\/(?:INFO|DEBUG)\]/.test(message)
+              ? ANSI.quiet
+              : null;
+  return color ? `${color}${message}${ANSI_RESET}` : message;
 }
 
 const quickCommands = [
@@ -109,8 +135,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const [terminalLoadError, setTerminalLoadError] = useState<string | null>(
     null,
   );
-  const [warningsDismissed, setWarningsDismissed] = useState(false);
-  const [templateValue, setTemplateValue] = useState("");
+  const quickMenuRef = useRef<HTMLDetailsElement | null>(null);
   const normalizedSearch = searchText.trim().toLowerCase();
   const eventsQuery = useQuery({
     queryKey: processKeys.events(serverId),
@@ -138,15 +163,18 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           convertEol: true,
           cursorBlink: false,
           disableStdin: true,
-          fontFamily: "JetBrains Mono, Cascadia Mono, ui-monospace, monospace",
-          fontSize: 12,
+          fontFamily:
+            "'Cascadia Mono', Consolas, 'Microsoft YaHei UI', ui-monospace, monospace",
+          fontSize: 13,
+          lineHeight: 1.35,
           /* Opening size only. The fit below is what decides how tall the
              console actually is; a terminal pinned at ten rows showed a
              letterbox of output inside a panel several times its height. */
           rows: 10,
           theme: {
-            background: "#090f17",
-            foreground: "#e9eef4",
+            background: "#0e1014",
+            foreground: "#dfe3ea",
+            selectionBackground: "#3f4450",
           },
         });
         const fitAddon = new FitAddon();
@@ -216,8 +244,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
         continue;
       }
       writtenEventIdsRef.current.add(event.id);
-      const prefix = event.level === "error" ? "[error]" : "[info]";
-      terminal.writeln(`${prefix} ${event.message}`);
+      terminal.writeln(colorizeConsoleLine(event.level, event.message));
     }
   }, [eventsQuery.data, normalizedSearch, terminalReadyToken]);
 
@@ -260,17 +287,6 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
       ) ?? [],
     [eventsQuery.data, normalizedSearch],
   );
-  const status = runtime.status;
-  const statusLabel = t(`servers.status.${status}`);
-  const dotStatus = status === "externalRunning" ? "running" : status;
-  const recentWarnings = visibleEvents
-    .filter((event) => event.level === "error" || event.level === "warning")
-    .slice(0, 5);
-  const topWarningId = recentWarnings[0]?.id ?? null;
-  const showWarnings = recentWarnings.length > 0 && !warningsDismissed;
-  useEffect(() => {
-    setWarningsDismissed(false);
-  }, [topWarningId]);
   const copyConsole = async () => {
     await navigator.clipboard.writeText(
       [...visibleEvents]
@@ -282,92 +298,81 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
   const fillCommand = (command: string) => {
     setCommandText(command);
     setShowSuggestions(false);
+    if (quickMenuRef.current) quickMenuRef.current.open = false;
     document.getElementById(`console-command-${serverId}`)?.focus();
   };
 
   return (
     <div className="console-panel" aria-label={t("console.aria")}>
       <div className="console-toolbar">
-        <div className="console-status-strip">
-          <span
-            className={`status-dot status-dot-${dotStatus}`}
-            aria-hidden="true"
-          />
-          <span className="console-status-label">{statusLabel}</span>
-          <span className="console-status-sep" aria-hidden="true">
-            ·
-          </span>
-          <span className="console-status-events">
-            {t("console.events", { count: visibleEvents.length })}
-          </span>
-        </div>
-        <Toolbar.Root
-          className="console-toolbar-actions"
-          aria-label={t("console.actions")}
-        >
-          <TextField
-            aria-label={t("console.search")}
-            placeholder={t("console.search")}
-            value={searchText}
-            onChange={(event) => setSearchText(event.target.value)}
-          />
-          <Toolbar.Separator asChild>
-            <Separator.Root
-              orientation="vertical"
-              className="console-toolbar-separator"
-            />
-          </Toolbar.Separator>
-          <Toolbar.Button
-            className="button button-secondary"
-            type="button"
-            onClick={() => {
-              terminalRef.current?.clear();
-            }}
-          >
-            <Eraser size={14} />
-            {t("console.clear")}
-          </Toolbar.Button>
-          <Toolbar.Button
-            className="button button-secondary"
-            disabled={visibleEvents.length === 0}
-            type="button"
-            onClick={copyConsole}
-          >
-            <Copy size={14} />
-            {t("console.copy")}
-          </Toolbar.Button>
-          <Toolbar.Button
-            className="button button-secondary"
-            disabled={eventsQuery.isFetching}
-            type="button"
-            onClick={() => eventsQuery.refetch()}
-          >
-            <RefreshCw size={14} />
-            {t("common.refresh")}
-          </Toolbar.Button>
-        </Toolbar.Root>
-      </div>
-
-      {showWarnings ? (
-        <div className="console-warning-banner" role="status">
-          <div className="console-warning-banner-body">
-            <strong>{t("console.warnings.title")}</strong>
-            <ul className="console-warning-list">
-              {recentWarnings.map((event) => (
-                <li key={event.id}>{event.message}</li>
+        <input
+          aria-label={t("console.search")}
+          className="console-search"
+          placeholder={t("console.search")}
+          type="search"
+          value={searchText}
+          onChange={(event) => setSearchText(event.target.value)}
+        />
+        <span className="console-event-count">
+          {t("console.events", { count: visibleEvents.length })}
+        </span>
+        <details className="console-quick-menu" ref={quickMenuRef}>
+          <summary aria-label={t("console.templates.aria")}>
+            {t("console.templates.aria")}
+            <ChevronDown aria-hidden="true" size={13} />
+          </summary>
+          <div className="console-quick-panel">
+            <div className="console-quick-group">
+              {quickCommands.map((template) => (
+                <button
+                  key={template.command}
+                  title={template.command}
+                  type="button"
+                  onClick={() => fillCommand(template.command)}
+                >
+                  {t(template.labelKey)}
+                </button>
               ))}
-            </ul>
+            </div>
+            {commandGroups.map((group) => (
+              <div className="console-quick-group" key={group.id}>
+                <h4>{t(group.labelKey)}</h4>
+                {group.options.map((option) => (
+                  <button
+                    key={option.value}
+                    title={option.value.trim()}
+                    type="button"
+                    onClick={() => fillCommand(option.value)}
+                  >
+                    {t(option.labelKey)}
+                  </button>
+                ))}
+              </div>
+            ))}
           </div>
-          <button
-            aria-label={t("console.warnings.dismiss")}
-            className="console-warning-dismiss"
-            type="button"
-            onClick={() => setWarningsDismissed(true)}
-          >
-            <X aria-hidden="true" size={14} />
-          </button>
-        </div>
-      ) : null}
+        </details>
+        <button
+          aria-label={t("console.clear")}
+          className="console-icon-button"
+          title={t("console.clear")}
+          type="button"
+          onClick={() => {
+            terminalRef.current?.clear();
+          }}
+        >
+          <Eraser aria-hidden="true" size={15} />
+        </button>
+        <button
+          aria-label={t("console.copy")}
+          className="console-icon-button"
+          disabled={visibleEvents.length === 0}
+          title={t("console.copy")}
+          type="button"
+          onClick={copyConsole}
+        >
+          <Copy aria-hidden="true" size={15} />
+        </button>
+      </div>
 
       <div className="console-output">
         {eventsQuery.error ? (
@@ -385,49 +390,16 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           </div>
         ) : null}
         {!eventsQuery.error && eventsQuery.data?.length === 0 ? (
-          <EmptyState
-            illustration="/illustrations/no-console-output.png"
-            title={t("console.empty.title")}
-            description={t("console.empty.description")}
-          />
+          <p className="console-empty">{t("console.empty.description")}</p>
         ) : null}
         <div className="xterm-host" ref={terminalElementRef} />
       </div>
 
-      <div
-        className="command-template-bar"
-        aria-label={t("console.templates.aria")}
-      >
-        {quickCommands.map((template) => (
-          <Button
-            key={template.command}
-            title={template.command}
-            type="button"
-            variant="secondary"
-            onClick={() => fillCommand(template.command)}
-          >
-            {t(template.labelKey)}
-          </Button>
-        ))}
-        {commandGroups.map((group) => (
-          <Select
-            ariaLabel={t(group.labelKey)}
-            key={group.id}
-            placeholder={t(group.labelKey)}
-            /* Always empty: these are menus of things to do, not a setting
-               that remembers the last pick. */
-            value={templateValue}
-            options={group.options.map((option) => ({
-              value: option.value,
-              label: t(option.labelKey),
-            }))}
-            onValueChange={(value) => {
-              setTemplateValue("");
-              fillCommand(value);
-            }}
-          />
-        ))}
-      </div>
+      {commandText.trim() && !canSendCommand && !runtime.isLoading ? (
+        <p className="console-command-hint" role="status">
+          {t("console.command.startFirst")}
+        </p>
+      ) : null}
       <form
         className="console-command-form"
         onSubmit={(event) => {
@@ -435,13 +407,20 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           sendCommandMutation.mutate();
         }}
       >
-        <label htmlFor={`console-command-${serverId}`}>
-          {t("console.command.label")}
+        <label className="console-prompt" htmlFor={`console-command-${serverId}`}>
+          <span aria-hidden="true">/</span>
+          <span className="visually-hidden">{t("console.command.label")}</span>
         </label>
         <div className="cmd-suggest-container">
-          <TextField
+          <input
+            autoComplete="off"
+            className="console-command-input"
             id={`console-command-${serverId}`}
-            placeholder={t("console.command.placeholder")}
+            placeholder={
+              canSendCommand || runtime.isLoading
+                ? t("console.command.placeholder")
+                : t("console.command.startFirst")
+            }
             value={commandText}
             onChange={(event) => {
               const value = event.target.value;
@@ -488,6 +467,7 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           />
         </div>
         <Button
+          className="button-small"
           disabled={
             !canSendCommand ||
             commandText.trim().length === 0 ||
@@ -499,11 +479,6 @@ export function ConsoleView({ serverId }: ConsoleViewProps) {
           {t("console.send")}
         </Button>
       </form>
-      {!canSendCommand && !runtime.isLoading ? (
-        <div className="inline-error console-command-error" role="status">
-          {t("console.command.startFirst")}
-        </div>
-      ) : null}
       {sendCommandMutation.error ? (
         <div className="inline-error console-command-error" role="alert">
           {sendCommandMutation.error.message}
